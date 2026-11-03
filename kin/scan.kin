@@ -356,6 +356,12 @@
           (set by0 (vw-px-to-cpt views view 1 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
           (set bx1 (vw-px-to-cpt views view 0 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
           (set by1 (vw-px-to-cpt views view 1 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          ;; All four -1 cells mean an absent engine baseline. Use the same
+          ;; box-bottom layout fallback as an answer without an extension;
+          ;; the recorded answer keeps its unknown sentinel unchanged.
+          (if (and (and (== (cells-at an (+ l 4)) -1) (== (cells-at an (+ l 5)) -1))
+                   (and (== (cells-at an (+ l 6)) -1) (== (cells-at an (+ l 7)) -1)))
+            (do (set bx0 x0) (set by0 y1) (set bx1 x1) (set by1 y1)))
           (set blk (cells-at an (+ l 8)))
           (set par (cells-at an (+ l 9)))
           (set bty (cells-at an (+ l 10)))

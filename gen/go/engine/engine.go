@@ -269,16 +269,11 @@ func enPageInner(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx in
 	// left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
 	// `(fd c dry)` 1 (P10.2) makes it a DRY attempt: only the part before its first write (`pu-dry`), so the host can learn what a page will ask while the loop is
 	// on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
-	if (c.Oengine == 1) && (d.Kind == EnKindPdf()) {
-		if pageunit.PuKind(d.Plan, i) == pageunit.PkBorn() {
-			return 0
-		}
-	}
 	port.CellsDrop(d.Pscr, 0)
 	if d.Kind == EnKindPdf() {
-		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2*c.Nort)+(4*c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2*c.Nort)+(4*c.Dry))+(8*c.Oengine), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 	}
-	return rasterin.RsPage(i, idx, nbytes, c.Ocr, (2*c.Nort)+(4*c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2*c.Nort)+(4*c.Dry))+(8*c.Oengine), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 }
 
 func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
@@ -300,7 +295,7 @@ func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
 
 func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
 	var status int32 = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms)
-	ocrengine.OeTag(rq, d.Pscr, c.Oengine)
+	ocrengine.OeTag(rq, d.Pscr, 2*c.Oengine)
 	return status
 }
 
@@ -621,7 +616,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence)
 		}
 		if c.Oengine != 0 {
-			if (port.CellsLen(ev.Oruns) > 0) || (enOcrPlanned(c, d) == 1) {
+			if enOcrPlanned(c, d) == 1 {
 				ocrengine.OeEvidence(d.Evidence, c.Oengine)
 			}
 		}

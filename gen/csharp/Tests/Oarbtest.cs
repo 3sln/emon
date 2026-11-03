@@ -666,6 +666,8 @@ public static class Oarbtest {
         emon.Testport.AssertEq(Oarb.OaBlock(text, inc, candidates, 0, 2, 2, @out, work), 1, "f08-block guard");
         emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), 0, "first slot chooses the recorded candidate");
         emon.Testport.AssertEq(emon.Port.CellsAt(@out, 1), -1, "valid second slot stays incumbent");
+        emon.Testport.AssertEq(Oarb.OaBlock(text, inc, candidates, 0, 2, 1, @out, work), 1, "unique single-column solution clears the stricter guards");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), 0, "single-column closure still copies the recorded candidate");
     }
     [Xunit.Fact]
     public static void TestArbConstantColumn100ToZero() {

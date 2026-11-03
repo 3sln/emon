@@ -1098,7 +1098,7 @@ public static class Ofusetest {
         return 1;
     }
     internal static int OftFuse(emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells scr, emon.Port.Cells ofz, int image, int trigger, emon.Port.Cells r1) {
-        return Ofuse.OfFuse(1, image, trigger, runs, lines, words, text, emon.Port.NewCells(), scr, 1, ofz, r1, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        return Ofuse.OfFuse(1, image, trigger, runs, lines, words, text, emon.Port.NewCells(), scr, 1, ofz, r1, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
     }
     internal static int OftZ(emon.Port.Cells ofz, int row, int f) {
         return emon.Port.CellsAt(ofz, (row * Evidence.OzStride()) + f);

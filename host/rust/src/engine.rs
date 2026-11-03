@@ -1441,6 +1441,21 @@ impl Engine {
 
     // Convert from a transcript: no Renderer or Ocr is called; a request it has no answer for is an error.
     pub fn replay(&self, inputs: impl Into<Inputs>, opts: &Options, transcript: &Transcript) -> Result<Model, Error> {
+        // An additive PP recording also contains all incumbent Tesseract keys.
+        // Refuse that engine mismatch before those keys can be consumed and the
+        // PP key is reported merely as an unused entry. Untagged born-digital
+        // recordings remain interchangeable because PP never read their pages.
+        if opts.ocr_engine == OcrEngine::Tesseract {
+            for entry in &transcript.entries {
+                if entry.req.get(1) == Some(&plan::KIND_OCR) && entry.req.contains(&-3100) {
+                    let mut request = Cells::new();
+                    for &v in &entry.req { cells_push(&mut request, v); }
+                    if crate::emon::ocrport::op_identity_at(&mut request) >= 0 {
+                        return Err(PlanError::TranscriptMiss(entry.req.clone()).into());
+                    }
+                }
+            }
+        }
         self.convert_with(inputs.into().0, opts, Mode::Replay(transcript)).map(|(m, _)| m)
     }
 

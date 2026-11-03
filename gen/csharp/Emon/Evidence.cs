@@ -1166,6 +1166,9 @@ public static class Evidence {
     public static int OfrBlockedSlot() {
         return 7;
     }
+    public static int OfrClosureSum() {
+        return 8;
+    }
     public static int OfrEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "keep");
@@ -1193,6 +1196,10 @@ public static class Evidence {
         }
         if (code == 7) {
             emon.Port.TextAscii(t, "blocked-slot");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.TextAscii(t, "closure-sum");
             return 1;
         }
         return 0;
@@ -6882,6 +6889,8 @@ public static class Evidence {
             s = EvBegin(t, pr, 2, s, EkRule());
             if (EvGet(rows, 16, i, 9) == 2) {
                 emon.Port.TextAscii(t, "\"closure-pct\"");
+            } else if (EvGet(rows, 16, i, 9) == 3) {
+                emon.Port.TextAscii(t, "\"closure-sum\"");
             } else {
                 emon.Port.TextAscii(t, "\"line-merge\"");
             }

@@ -487,6 +487,12 @@ public final class Scan {
             by0 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 4), emon.Port.cellsAt(an, l + 5));
             bx1 = Evidence.vwPxToCpt(views, view, 0, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
             by1 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
+            if (((emon.Port.cellsAt(an, l + 4) == -1) && (emon.Port.cellsAt(an, l + 5) == -1)) && ((emon.Port.cellsAt(an, l + 6) == -1) && (emon.Port.cellsAt(an, l + 7) == -1))) {
+                bx0 = x0;
+                by0 = y1;
+                bx1 = x1;
+                by1 = y1;
+            }
             blk = emon.Port.cellsAt(an, l + 8);
             par = emon.Port.cellsAt(an, l + 9);
             bty = emon.Port.cellsAt(an, l + 10);

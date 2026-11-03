@@ -466,6 +466,7 @@ public static class Pageunit {
         int ua = -1;
         int k = 0;
         int vdec = 0;
+        int ppview = 0;
         int l0 = 0;
         int w0 = 0;
         int nw = 0;
@@ -479,6 +480,9 @@ public static class Pageunit {
         ao = Plan.AnFind(ans, oid);
         if (ao < 0) {
             Scan.ScRequest(rq, oid, did, (dpi100 + 50) / 100, loc);
+            if ((fuse & 8) == 8) {
+                Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot()), did, (dpi100 + 50) / 100, loc);
+            }
             return Plan.UsRequests();
         }
         if (Plan.AnOk(ans, ao) != 1) {
@@ -579,7 +583,7 @@ public static class Pageunit {
         }
         // RC5c (D731): guarded fusion of the recorded readings of an upright image page the receipt detector fired on, with a receipt keyword (`of-fuse`)
         if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) == run) || (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0)) {
-            nsel = Ofuse.OfFuse(i + 1, maskv, emon.Port.CellsAt(rtp, Retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr);
+            nsel = Ofuse.OfFuse(i + 1, maskv, emon.Port.CellsAt(rtp, Retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz);
         }
         if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) == run) || (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0)) {
             nsel = Oaline.OaLineFuse(i + 1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4);
@@ -591,6 +595,24 @@ public static class Pageunit {
             Oapct.PctAsk(i, dpi100, bx0, by0, emon.Port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
             ua = Oapct.PctRecord(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
             nsel = Oapct.PctFuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
+        }
+        if ((fuse & 8) == 8) {
+            ua = Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot()));
+            if ((ua >= 0) && (Plan.AnOk(ans, ua) == 1)) {
+                ppview = vdec;
+                if (rid != did) {
+                    ppview = Scan.ScPageView(epages, views, images, i + 1, did, pw, ph, Plan.AnArg(ans, ad, 0), Plan.AnArg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1);
+                }
+                Scan.ScPageEvidence(ans, ua, i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot()), ppview, dpi100, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            }
+        }
+        if ((fuse & 8) == 8) {
+            Oapp.PpSums(i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
+        }
+        if ((fuse & 8) == 8) {
+            if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) == run) || (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0)) {
+                nsel = Ofuse.OfFuse(i + 1, maskv + 8, emon.Port.CellsAt(rtp, Retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz);
+            }
         }
         Retarget.RtUpright(rtp, run, epages, i + 1);
         rotmed = Evidence.EvRotMedian(olines, l0, nl);

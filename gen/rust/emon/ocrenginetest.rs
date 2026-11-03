@@ -3,6 +3,7 @@
 
 use crate::emon::ocrengine::*;
 use crate::emon::ocrport::*;
+use crate::emon::ofuse::*;
 use crate::emon::plan::*;
 
 #[test]
@@ -97,4 +98,105 @@ fn test_actual_view_hash_disambiguates_language_shaped_hash_cells() {
     crate::testport::assert_eq(op_pp_lang_at(compact, 7, 1), 1701734144, "English retained");
     crate::testport::assert_eq(op_pp_lang_first(hashed, 1281455214, 1701734144), 9, "verified hashes are not languages");
     crate::testport::assert_eq(op_pp_lang_count(hashed, 9), 0, "hashed view has no language");
+}
+#[test]
+fn test_pp_calibrated_reading_obeys_incumbent_guards() {
+    crate::testport::assert_eq(of_rule(1, 1, 1, 1, 0, 1, 1, 883, 200), 4, "valid incumbent number stays");
+    crate::testport::assert_eq(of_rule(1, 0, 0, 0, 0, 1, 1, 883, 200), 5, "unknown lexical singleton stays");
+    crate::testport::assert_eq(of_rule(1, 0, 0, 0, 1, 1, 1, 883, 584), 0, "299 calibrated margin insufficient");
+    crate::testport::assert_eq(of_rule(1, 0, 0, 0, 1, 1, 1, 883, 583), 2, "300 calibrated margin sufficient");
+    crate::testport::assert_eq(of_rule(1, 0, 0, 0, 0, 2, 1, 883, 950), 1, "independent agreement can justify replacement");
+    crate::testport::assert_eq(of_rule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion");
+}
+#[test]
+fn test_optional_fusion_tags_only_the_additional_reading() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let first: i32 = rq_ocr(r, 272, 260, 3, 1, 0, 0, 0, 0);
+    rq_ocr_end(r, first);
+    let extra: i32 = rq_ocr(r, 279, 260, 3, 1, 0, 0, 0, 0);
+    rq_ocr_end(r, extra);
+    oe_tag(r, scratch, 2);
+    crate::testport::assert_eq(crate::port::cells_at(r, 0), 10, "Tesseract request key unchanged");
+    crate::testport::assert_eq(crate::port::cells_at(r, 10), 13 + 74, "only additional reading is tagged");
+    crate::testport::assert_eq(crate::port::cells_at(r, 20), -3100, "PP identity on additional reading");
+    oe_tag(r, scratch, 2);
+    crate::testport::assert_eq(crate::port::cells_at(r, 0), 10, "repeated rounds preserve Tesseract");
+    crate::testport::assert_eq(crate::port::cells_at(r, 10), 13 + 74, "PP tag remains canonical");
+}
+#[test]
+fn test_additional_reading_cannot_truncate_a_text_slot() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 100);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 883);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::testport::assert_eq(of_pp_choice(c, 2), -1, "agreement cannot delete a header token");
+}
+#[test]
+fn test_additional_reading_cannot_drop_a_split_number_token() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 100);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 883);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::testport::assert_eq(of_pp_choice(c, 2), -1, "format alone cannot delete a selected token");
+}
+#[test]
+fn test_additional_reading_protects_an_existing_year_range() {
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 50);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 53);
+    crate::port::cells_push(text, 45);
+    crate::port::cells_push(text, 48);
+    crate::port::cells_push(text, 54);
+    crate::testport::assert_eq(of_pp_year(text, 0, 7), 1, "2005-06 is a protected incumbent format");
+    crate::testport::assert_eq(of_pp_year(text, 0, 6), 0, "not a truncated year range");
+}
+#[test]
+fn test_pp_lexicon_membership_alone_cannot_erase_a_dictionary_incumbent() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 100);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 883);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::testport::assert_eq(of_pp_choice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
 }

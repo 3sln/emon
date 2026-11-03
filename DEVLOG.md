@@ -13900,3 +13900,67 @@ The OP1 reference remains optional and off by default; Tesseract fast is unchang
 All 201 recorded base bitmaps have nine byte-identical native port answers (three fresh processes, three readings each). All 174 final PP recordings replay byte-identically with the detector unavailable. Default-path gates and all seven package consumers pass; each of the four generated law hosts passes 1,365 laws. Other hosts/builds refuse ppocr by name. The Rust-only typed selector and the three model-loading fulfilment modules have narrow, reasoned embedding-check declarations for this stage; pure image/CTC/calibration and Engine modules remain subject to the library's no-filesystem rule. Model/runtime assets remain pinned and cached, rather than bundled into default releases. Full source-bearing audits and logs stay in external OP1 scratch; the coordinator commits and controls release activation.
 
 - [ ] **Signed off** (maintainer)
+
+### D850 — Preserve Tesseract and scope the optional PP reading to raster units
+
+OP1b keeps the option off by default and keeps the pre-registered OP1 acceptance unchanged. Born-digital page units execute their ordinary Tesseract fusion path, including evidence; they are no longer skipped by the optional selector. Only `pu-scan-core`, which serves image frames and PDF pages with no kept text-layer words, asks the additional request in page-local slot 23. All incumbent and targeted requests retain their legacy Tesseract bytes. The optional Rust port routes untagged requests to Tesseract; only the additional request carries the PP model identity. The build therefore includes Tesseract whenever PP is enabled. Replay remains inference-free.
+
+- [ ] **Signed off** (maintainer)
+
+### D851 — Add arbitration laws before admitting calibrated PP candidates
+
+The new laws assert valid incumbent numeric protection, lexical singleton refusal, the exact calibrated 300-point margin boundary, independent agreement and a valid numeric insertion. D845's frozen integer lookup remains unchanged: PP posterior is converted to the existing 0–1000 word confidence scale before evidence construction. A separate recorded run supplies PP candidates to the existing distinct-reading, geometric-slot, format, dictionary/agreement and no-deletion rules. Optional raster fusion extends the activation scope only; it does not weaken those rules. Default receipt activation is unchanged. Full qualification measurements, including any loss of OP1 gains, are still required.
+
+- [ ] **Signed off** (maintainer)
+
+### D852 — Remove Python from PP build checks and gate orchestration
+
+Policy identity, ONNX dictionary framing, frozen calibration verification, the three offline fetch contracts and serial final-gate orchestration now use babashka. Experimental calibration and live measurement scripts move under `tools/oracle/ppocr/`; the receipt measurement caller follows the move. The merged OP1 source had a stale calibration provenance hash because its asset-file comment was renumbered from D3100 to D843. Both hashes are retained and the checker reproduces the original by reversing that comment alone; model pins and calibration values are unchanged. The policy identity is regenerated for the additive routing/fusion implementation.
+
+- [ ] **Signed off** (maintainer)
+
+### D853 — Keep words in merged optional slots and preserve year-range punctuation
+
+The first uncontaminated target trial exposed two additional hazards of extending receipt fusion to full scan/table pages: geometric slots can join adjacent header words, and a source-correct year range such as 2005-06 is outside the receipt-number grammar. Optional fusion now refuses a candidate with fewer words than its incumbent, and treats a four-digit/two-digit year range as a protected incumbent format. Laws precede these additions. The default receipt decision primitive and format grammar remain unchanged. An earlier development trial was invalidated by a request-slot collision with the line retries; the reserved slot is now 23, outside all existing request ranges. Neither development trial is final acceptance evidence.
+
+- [ ] **Signed off** (maintainer)
+
+### D854 — Admit optional numeric repairs only through existing P-ARB sum closure
+
+F08's invalid 9F/I44 readings fail the normal 300-point confidence margin, and its wrong but format-valid amounts are correctly protected by RC5c. The optional path therefore proposes bounded numeric columns to the existing `oa-block` kernel rather than weakening that policy. A proposal requires right-aligned selected words, a measured horizontal rule above the total, PP candidates at calibrated confidence >=700 with at least half-box overlap, and a neighboring ruled column with the same physical rows. A neighboring identity that closes entirely on incumbents supplies support 2; otherwise the existing kernel requires exactly one solution and an absolute total of at least 100 (support 1). The existing arithmetic kernel keeps its decimal/currency/digit-count compatibility, unique-minimum, zero-term, search-cap and competing-explanation vetoes. The `OaWork` wrapper delegates to an equivalent Cells-argument kernel so page units can reuse caller-owned scratch without allocation. Accepted words are still verbatim recorded copies; `closure-sum` rows name the incumbent, source reading and identity endpoints. Scope is optional raster pages only. Source audits, receipt floors, target and cost acceptance remain mandatory.
+
+- [ ] **Signed off** (maintainer)
+
+### D855 — Validate optional lexical insertions against a pinned dictionary
+
+The first SROIE development sweep retained 270 net matched words of OP1's 1,156, but P .705343/R .742930 missed the fixed floors. PP's unknown dictionary flags prevent high-confidence unrepresented English words from entering through the existing lexical insertion rule. The combined reference now checks verbatim PP words against a dedicated, pixel-free Tesseract English lexicon instance: it never recognizes pixels or learns document words. Its `eng.traineddata` bytes must match the existing tessdata-fast SHA-256 pin before use. Positive membership is recorded as dictionary evidence; it is not guessed from the PP posterior. PP identity includes the lexicon binding and pin inventory, and producer provenance names the dictionary hash. Existing confidence, agreement, no-truncation, numeric format and P-ARB guards still govern selection. The CORD development attempt also exposed an extra-round limit; the additional PP reading now shares the first OCR round and records the original bitmap in its own correctly scaled view.
+
+- [ ] **Signed off** (maintainer)
+
+### D856 — Make the complete default fusion result the optional incumbent
+
+The first full sum/dictionary target trial reaches F08 28/28 and preserves E04's time/subtotal label and F19's NT1.1/minus, but exposes a sequencing regression in F16. PP fusion copied a line before default P-ARB line merge could repair its first split amount; the latter's source-slot guard then correctly refused a changed selection. PP recording and fusion now run after the entire default RC5c/P-ARB sequence, including percent closure. The complete default selected words are the optional incumbents. A default-correct format-valid amount is therefore protected, and PP cannot invalidate an outstanding default repair by consuming its slot first. This is a guard-order fix, not permission to relax format or arithmetic acceptance.
+
+- [ ] **Signed off** (maintainer)
+
+### D857 — Keep an unknown OCR baseline out of physical page coordinates
+
+A deeper final-Model audit invalidates the selected-evidence-only F08 28/28 claim: the repaired numeric words existed in `words` but were absent from represented Model text. PP's four -1 baseline sentinels were mapped to negative page coordinates and then mixed with Tesseract's measured baselines. The scan adapter now interprets exactly four -1 coordinates as absence and uses the existing box-bottom layout fallback, while retaining the untouched unknown values in the transcript. This is an inferred layout anchor, not a measured PP baseline. A law is written first, checking the raw answer and both evidence baseline endpoints. Known baselines are unchanged. Target scoring now requires both spatially selected evidence and represented Model text; all prior selection-only claims remain development evidence, not acceptance. The earlier 54-control sweep was stopped intentionally during control 33 after 0–32 completed so this correction can be qualified consistently.
+
+- [ ] **Signed off** (maintainer)
+
+### D858 — Keep the fixed acceptance after the represented-output qualification
+
+The final b683df68 candidate's fixed 60+60 receipt sweep gives SROIE P .701436/R .756857 and CORD P .469098/R .696764. Both precision floors fail, although both recall floors pass. Net matched-word gains retain 368/1,156 (31.83%) and 178/394 (45.18%) of OP1's gains. The frozen scorer reports five lost gold tokens over three documents, all checked against native annotations and physical crops; one quantity survives as a represented list marker but remains an official scorer loss. No receipt document has a negative net matched-word delta. Source-correct PAND replaced by PANO is a genuine loss and is not hidden by the scan-control sample.
+
+Represented F08 reaches 28/28 with occurrence accounting; F16's amounts, F19's minus/NT1.1 and E04's time/SUB-TOTAL survive. E04 adds cash 5.00 and tax values, but its wrong incumbent subtotal remains 4.36; this run does not claim a represented 4.30 recovery. All eight required born-digital bundles are byte-identical. The physical-source audit covers 92 cards, conservatively counts 69 distinct changed readable lines, and finds no new source-correct incumbent loss in that sample; all 12 previous failure bands survive. Incorrect new insertions are separately disclosed. A geometric Model-region matcher falsely excluded one complete bank row; complete represented Model text confirms its single occurrence, so it is excluded from the changed-line count.
+
+CPU also fails the unchanged limit: three SROIE pages exceed 3x (maximum 3.551x), and F16 is 4.352x. Population averages do not override these failures. The port remains experimental and off by default. Full control scope, repeated-port determinism, inference-free replay and final option-off gate results are recorded externally and in the task report when complete. Default cost references reused from earlier measurements are accepted only after exact replay under this candidate; provenance is retained rather than described as fresh inference.
+
+- [ ] **Signed off** (maintainer)
+
+### D859 — Classify an additive recording's engine mismatch before replay
+
+The final native Engine suite exposes a classification gap: a PP recording contains all the original Tesseract keys, so default replay can consume them and report only an unused-entry `transcript-bad`. The required cross-engine outcome is `transcript-miss`. Rust Engine replay now detects canonical optional-engine trailers through the shared framing helper and rejects a PP-bearing recording when Tesseract is requested. No port is called. Born-digital recordings with no PP request remain interchangeable across selectors, as the extended contract verifies. This changes only replay error classification; live selection, requests, neural answers, calibration and the measured b683df68 policy are unchanged. The changed-model request test already returned `transcript-miss`; it was the subsequent PP-to-default case that failed. The represented-HTML unknown-baseline regression passed in that run. The host boundary grants this driver only the shared `ocrport` framing helper for this check; it does not move selection, inference or a document stage into the host. The four-language core check also exposed Java's flat local scope in the new arithmetic law; its three rule handles now have distinct names. Rust's baseline law needs an intermediate extension offset to avoid nested mutable accessor borrows. Both are test-only portability fixes. The final gate runner can select named commands after such a late failure, and accepts an optional unit-only cached NuGet source override; package consumers retain their own feeds.
+
+- [ ] **Signed off** (maintainer)

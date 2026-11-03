@@ -92,4 +92,99 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrport.opPpLangFirst(hashed, 1281455214, 1701734144), 9, "verified hashes are not languages");
         emon.Testport.assertEq(Ocrport.opPpLangCount(hashed, 9), 0, "hashed view has no language");
     }
+    public static void testPpCalibratedReadingObeysIncumbentGuards() {
+        emon.Testport.assertEq(Ofuse.ofRule(1, 1, 1, 1, 0, 1, 1, 883, 200), 4, "valid incumbent number stays");
+        emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 0, 0, 1, 1, 883, 200), 5, "unknown lexical singleton stays");
+        emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 0, 1, 1, 1, 883, 584), 0, "299 calibrated margin insufficient");
+        emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 0, 1, 1, 1, 883, 583), 2, "300 calibrated margin sufficient");
+        emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 0, 0, 2, 1, 883, 950), 1, "independent agreement can justify replacement");
+        emon.Testport.assertEq(Ofuse.ofRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion");
+    }
+    public static void testOptionalFusionTagsOnlyTheAdditionalReading() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int first = Plan.rqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrEnd(r, first);
+        int extra = Plan.rqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrEnd(r, extra);
+        Ocrengine.oeTag(r, scratch, 2);
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), 10, "Tesseract request key unchanged");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 10), 13 + 74, "only additional reading is tagged");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 20), -3100, "PP identity on additional reading");
+        Ocrengine.oeTag(r, scratch, 2);
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), 10, "repeated rounds preserve Tesseract");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 10), 13 + 74, "PP tag remains canonical");
+    }
+    public static void testAdditionalReadingCannotTruncateATextSlot() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 100);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 883);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Testport.assertEq(Ofuse.ofPpChoice(c, 2), -1, "agreement cannot delete a header token");
+    }
+    public static void testAdditionalReadingCannotDropASplitNumberToken() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 100);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 883);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Testport.assertEq(Ofuse.ofPpChoice(c, 2), -1, "format alone cannot delete a selected token");
+    }
+    public static void testAdditionalReadingProtectsAnExistingYearRange() {
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.cellsPush(text, 50);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 53);
+        emon.Port.cellsPush(text, 45);
+        emon.Port.cellsPush(text, 48);
+        emon.Port.cellsPush(text, 54);
+        emon.Testport.assertEq(Ofuse.ofPpYear(text, 0, 7), 1, "2005-06 is a protected incumbent format");
+        emon.Testport.assertEq(Ofuse.ofPpYear(text, 0, 6), 0, "not a truncated year range");
+    }
+    public static void testPpLexiconMembershipAloneCannotEraseADictionaryIncumbent() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 100);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 883);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Testport.assertEq(Ofuse.ofPpChoice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
+    }
 }

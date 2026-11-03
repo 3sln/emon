@@ -3,15 +3,18 @@
   (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-cp]]
             [emon.plan :refer [pk-ocr]]
-            [kin.lang :refer [defn defdata return let set while if do comment + - * < > <= >= == != and or]]))
+            [kin.lang :refer [defn defdata return let set while if do comment + - * < > <= >= == != and or rem]]))
 
 ;; The version covers graph hashes, dictionary, ORT CPU settings, image and CTC
 ;; policy and the frozen calibration. Update on any observable adapter change.
 (defdata ^:pub oe-identity
   :emitter kin.lang/flat-array
-  :data [112 112 111 99 114 53 45 101 110 45 54 102 54 57 54 54 49 53 49 98 57 97 57 57 98 101 100 48 98 55 53 48 101 56 57 49 54 52 101 99 99 102 51 53 50 100 51 50 52 100 100 49 98 54 49 53 100 53 52 101 50 55 98 97 97 51 56 50 54 52 50 56 48 99]
+  :data [112 112 111 99 114 53 45 101 110 45 98 54 56 51 100 102 54 56 49 102 54 53 97 56 101 57 53 97 53 57 48 53 100 56 51 50 55 56 97 102 54 54 54 50 55 57 55 48 102 57 50 101 48 98 48 53 48 49 53 48 48 57 56 49 49 100 54 55 97 50 97 52 100 102]
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
+
+;; Page-local 23 is reserved for the additional PP reading; outside line/cell/witness ranges.
+(defn ^:pub ^I32 oe-request-slot [] (return 23))
 
 (defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 engine]
   (if (== engine 0) (return 0))
@@ -25,7 +28,7 @@
             ^:mut ^I32 first 10]
         ;; Queued requests may already have been tagged by an earlier page unit.
         ;; Replace a reserved trailer rather than appending a second identity.
-        (if (== kind (pk-ocr))
+        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot))))
           (do (set k first)
               (while (< (+ k 2) count)
                 (if (and (== (cells-at requests (+ at k)) -3100)
@@ -36,9 +39,9 @@
         (set i 0)
         (while (< i count)
           (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
-        (if (== kind (pk-ocr))
+        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot))))
           (do (cells-push scratch -3100)
-              (cells-push scratch engine)
+              (cells-push scratch 1)
               (cells-push scratch (oe-id-count 0))
               (set k 0)
               (while (< k (oe-id-count 0))

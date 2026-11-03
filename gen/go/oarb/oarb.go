@@ -160,7 +160,7 @@ func oaOneDigitValue(text *port.Cells, start int32, count int32, wanted int64, d
 	return 0
 }
 
-func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32, t int32, support int32, out *port.Cells, work *oarbctx.OaWork) int32 {
+func OaBlockCells(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32, t int32, support int32, out *port.Cells, options *port.Cells, offsets *port.Cells, counts *port.Cells, choices *port.Cells, best *port.Cells, im *port.Cells, cm *port.Cells, anchored *port.Cells) int32 {
 	port.CellsDrop(out, 0)
 	if ((port.CellsLen(inc) % 2) != 0) || ((port.CellsLen(candidates) % 3) != 0) {
 		return 0
@@ -168,12 +168,12 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	if (s < 0) || (((t - s) < 2) || (((t - s) > 12) || (t >= (port.CellsLen(inc) / 2)))) {
 		return 0
 	}
-	port.CellsDrop(work.Options, 0)
-	port.CellsDrop(work.Offsets, 0)
-	port.CellsDrop(work.Counts, 0)
-	port.CellsDrop(work.Choices, 0)
-	port.CellsDrop(work.Best, 0)
-	port.CellsDrop(work.Anchored, 0)
+	port.CellsDrop(options, 0)
+	port.CellsDrop(offsets, 0)
+	port.CellsDrop(counts, 0)
+	port.CellsDrop(choices, 0)
+	port.CellsDrop(best, 0)
+	port.CellsDrop(anchored, 0)
 	var r int32 = s
 	var j int32 = 0
 	var k int32 = 0
@@ -217,9 +217,9 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	}
 	for r <= t {
 		port.CellsPush(out, -1)
-		port.CellsPush(work.Best, -1)
-		port.CellsPush(work.Choices, 0)
-		port.CellsPush(work.Anchored, 0)
+		port.CellsPush(best, -1)
+		port.CellsPush(choices, 0)
+		port.CellsPush(anchored, 0)
 		a = port.CellsAt(inc, r*2)
 		an = port.CellsAt(inc, (r*2)+1)
 		seen = 0
@@ -233,11 +233,11 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 		if seen == 0 {
 			distinct += 1
 		}
-		port.CellsPush(work.Offsets, port.CellsLen(work.Options))
+		port.CellsPush(offsets, port.CellsLen(options))
 		n = 0
-		ofmt.FmtValue(text, a, an, work.Im)
-		if (port.CellsAt(work.Im, 0) == 1) && (port.CellsAt(work.Im, 4) == 0) {
-			port.CellsPush(work.Options, -1)
+		ofmt.FmtValue(text, a, an, im)
+		if (port.CellsAt(im, 0) == 1) && (port.CellsAt(im, 4) == 0) {
+			port.CellsPush(options, -1)
 			n = 1
 		}
 		j = 0
@@ -245,11 +245,11 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 			if port.CellsAt(candidates, j*3) == r {
 				b = port.CellsAt(candidates, (j*3)+1)
 				bn = port.CellsAt(candidates, (j*3)+2)
-				if (oaCompatible(text, a, an, b, bn, work.Im, work.Cm) == 1) && (port.CellsAt(work.Cm, 4) == 0) {
+				if (oaCompatible(text, a, an, b, bn, im, cm) == 1) && (port.CellsAt(cm, 4) == 0) {
 					seen = 0
-					k = port.CellsAt(work.Offsets, r-s)
-					for k < port.CellsLen(work.Options) {
-						q = port.CellsAt(work.Options, k)
+					k = port.CellsAt(offsets, r-s)
+					for k < port.CellsLen(options) {
+						q = port.CellsAt(options, k)
 						if q < 0 {
 							if oaEqual(text, a, an, b, bn) == 1 {
 								seen = 1
@@ -260,7 +260,7 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 						k += 1
 					}
 					if seen == 0 {
-						port.CellsPush(work.Options, j)
+						port.CellsPush(options, j)
 						n += 1
 					}
 				}
@@ -273,7 +273,7 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 		if n > 4 {
 			return -5
 		}
-		port.CellsPush(work.Counts, n)
+		port.CellsPush(counts, n)
 		r += 1
 	}
 	if distinct <= 2 {
@@ -292,7 +292,7 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 		dec = -1
 		r = s
 		for r <= t {
-			j = port.CellsAt(work.Options, port.CellsAt(work.Offsets, r-s)+port.CellsAt(work.Choices, r-s))
+			j = port.CellsAt(options, port.CellsAt(offsets, r-s)+port.CellsAt(choices, r-s))
 			if j < 0 {
 				a = port.CellsAt(inc, r*2)
 				an = port.CellsAt(inc, (r*2)+1)
@@ -301,11 +301,11 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 				an = port.CellsAt(candidates, (j*3)+2)
 				changed += 1
 			}
-			value = ofmt.FmtValue(text, a, an, work.Cm)
+			value = ofmt.FmtValue(text, a, an, cm)
 			if dec == -1 {
-				dec = port.CellsAt(work.Cm, 1)
+				dec = port.CellsAt(cm, 1)
 			}
-			if ((value == int64(0)) || (port.CellsAt(work.Cm, 0) == 0)) || (dec != port.CellsAt(work.Cm, 1)) {
+			if ((value == int64(0)) || (port.CellsAt(cm, 0) == 0)) || (dec != port.CellsAt(cm, 1)) {
 				valid = 0
 			}
 			if r < t {
@@ -322,7 +322,7 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 				ties = 1
 				r = s
 				for r <= t {
-					port.CellsSet(work.Best, r-s, port.CellsAt(work.Options, port.CellsAt(work.Offsets, r-s)+port.CellsAt(work.Choices, r-s)))
+					port.CellsSet(best, r-s, port.CellsAt(options, port.CellsAt(offsets, r-s)+port.CellsAt(choices, r-s)))
 					r += 1
 				}
 			} else if changed == bestchanges {
@@ -332,12 +332,12 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 		carry = 1
 		r = s
 		for (r <= t) && (carry == 1) {
-			j = port.CellsAt(work.Choices, r-s) + 1
-			if j < port.CellsAt(work.Counts, r-s) {
-				port.CellsSet(work.Choices, r-s, j)
+			j = port.CellsAt(choices, r-s) + 1
+			if j < port.CellsAt(counts, r-s) {
+				port.CellsSet(choices, r-s, j)
 				carry = 0
 			} else {
-				port.CellsSet(work.Choices, r-s, 0)
+				port.CellsSet(choices, r-s, 0)
 			}
 			r += 1
 		}
@@ -351,13 +351,13 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	if bestchanges == 0 {
 		return 0
 	}
-	j = port.CellsAt(work.Best, t-s)
+	j = port.CellsAt(best, t-s)
 	if j < 0 {
-		total = ofmt.FmtValue(text, port.CellsAt(inc, t*2), port.CellsAt(inc, (t*2)+1), work.Cm)
+		total = ofmt.FmtValue(text, port.CellsAt(inc, t*2), port.CellsAt(inc, (t*2)+1), cm)
 	} else {
-		total = ofmt.FmtValue(text, port.CellsAt(candidates, (j*3)+1), port.CellsAt(candidates, (j*3)+2), work.Cm)
+		total = ofmt.FmtValue(text, port.CellsAt(candidates, (j*3)+1), port.CellsAt(candidates, (j*3)+2), cm)
 	}
-	dec = port.CellsAt(work.Cm, 1)
+	dec = port.CellsAt(cm, 1)
 	unit = int64(1)
 	j = 0
 	for j < dec {
@@ -384,8 +384,8 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 				valid = 1
 				q = cs
 				for q <= ct {
-					value = ofmt.FmtValue(text, port.CellsAt(inc, q*2), port.CellsAt(inc, (q*2)+1), work.Cm)
-					if (port.CellsAt(work.Cm, 0) == 0) || ((port.CellsAt(work.Cm, 1) != dec) || (value == int64(0))) {
+					value = ofmt.FmtValue(text, port.CellsAt(inc, q*2), port.CellsAt(inc, (q*2)+1), cm)
+					if (port.CellsAt(cm, 0) == 0) || ((port.CellsAt(cm, 1) != dec) || (value == int64(0))) {
 						valid = 0
 					}
 					if q < ct {
@@ -399,7 +399,7 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 					q = s
 					for q <= t {
 						if (q >= cs) && (q <= ct) {
-							port.CellsSet(work.Anchored, q-s, 1)
+							port.CellsSet(anchored, q-s, 1)
 						}
 						q += 1
 					}
@@ -413,8 +413,8 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	valid = 1
 	incsum = int64(0)
 	for r <= t {
-		value = ofmt.FmtValue(text, port.CellsAt(inc, r*2), port.CellsAt(inc, (r*2)+1), work.Cm)
-		if (port.CellsAt(work.Cm, 0) == 0) || (port.CellsAt(work.Cm, 1) != dec) {
+		value = ofmt.FmtValue(text, port.CellsAt(inc, r*2), port.CellsAt(inc, (r*2)+1), cm)
+		if (port.CellsAt(cm, 0) == 0) || (port.CellsAt(cm, 1) != dec) {
 			valid = 0
 		}
 		if r < t {
@@ -427,16 +427,16 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	if valid == 1 {
 		r = s
 		for r <= t {
-			if (port.CellsAt(work.Best, r-s) < 0) && (port.CellsAt(work.Anchored, r-s) == 0) {
+			if (port.CellsAt(best, r-s) < 0) && (port.CellsAt(anchored, r-s) == 0) {
 				a = port.CellsAt(inc, r*2)
 				an = port.CellsAt(inc, (r*2)+1)
-				value = ofmt.FmtValue(text, a, an, work.Cm)
+				value = ofmt.FmtValue(text, a, an, cm)
 				if r < t {
 					need = inctotal - (incsum - value)
 				} else {
 					need = incsum
 				}
-				if oaOneDigitValue(text, a, an, need, dec, work.Cm) == 1 {
+				if oaOneDigitValue(text, a, an, need, dec, cm) == 1 {
 					return -3
 				}
 			}
@@ -445,10 +445,14 @@ func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32,
 	}
 	r = s
 	for r <= t {
-		port.CellsSet(out, r-s, port.CellsAt(work.Best, r-s))
+		port.CellsSet(out, r-s, port.CellsAt(best, r-s))
 		r += 1
 	}
 	return 1
+}
+
+func OaBlock(text *port.Cells, inc *port.Cells, candidates *port.Cells, s int32, t int32, support int32, out *port.Cells, work *oarbctx.OaWork) int32 {
+	return OaBlockCells(text, inc, candidates, s, t, support, out, work.Options, work.Offsets, work.Counts, work.Choices, work.Best, work.Im, work.Cm, work.Anchored)
 }
 
 func OaPctMeta(text *port.Cells, a int32, an int32, b int32, bn int32, p int32, pn int32, candidates *port.Cells, row int32, holds int32, rows int32, am *port.Cells, bm *port.Cells, pm *port.Cells, cm *port.Cells) int32 {

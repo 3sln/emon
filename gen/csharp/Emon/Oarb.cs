@@ -148,7 +148,7 @@ public static class Oarb {
         }
         return 0;
     }
-    public static int OaBlock(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells @out, emon.Oarbctx.OaWork work) {
+    public static int OaBlockCells(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells @out, emon.Port.Cells options, emon.Port.Cells offsets, emon.Port.Cells counts, emon.Port.Cells choices, emon.Port.Cells best, emon.Port.Cells im, emon.Port.Cells cm, emon.Port.Cells anchored) {
         emon.Port.CellsDrop(@out, 0);
         if (((emon.Port.CellsLen(inc) % 2) != 0) || ((emon.Port.CellsLen(candidates) % 3) != 0)) {
             return 0;
@@ -156,12 +156,12 @@ public static class Oarb {
         if ((s < 0) || (((t - s) < 2) || (((t - s) > 12) || (t >= (emon.Port.CellsLen(inc) / 2))))) {
             return 0;
         }
-        emon.Port.CellsDrop(work.Options, 0);
-        emon.Port.CellsDrop(work.Offsets, 0);
-        emon.Port.CellsDrop(work.Counts, 0);
-        emon.Port.CellsDrop(work.Choices, 0);
-        emon.Port.CellsDrop(work.Best, 0);
-        emon.Port.CellsDrop(work.Anchored, 0);
+        emon.Port.CellsDrop(options, 0);
+        emon.Port.CellsDrop(offsets, 0);
+        emon.Port.CellsDrop(counts, 0);
+        emon.Port.CellsDrop(choices, 0);
+        emon.Port.CellsDrop(best, 0);
+        emon.Port.CellsDrop(anchored, 0);
         int r = s;
         int j = 0;
         int k = 0;
@@ -205,9 +205,9 @@ public static class Oarb {
         }
         while (r <= t) {
             emon.Port.CellsPush(@out, -1);
-            emon.Port.CellsPush(work.Best, -1);
-            emon.Port.CellsPush(work.Choices, 0);
-            emon.Port.CellsPush(work.Anchored, 0);
+            emon.Port.CellsPush(best, -1);
+            emon.Port.CellsPush(choices, 0);
+            emon.Port.CellsPush(anchored, 0);
             a = emon.Port.CellsAt(inc, r * 2);
             an = emon.Port.CellsAt(inc, (r * 2) + 1);
             seen = 0;
@@ -221,11 +221,11 @@ public static class Oarb {
             if (seen == 0) {
                 distinct += 1;
             }
-            emon.Port.CellsPush(work.Offsets, emon.Port.CellsLen(work.Options));
+            emon.Port.CellsPush(offsets, emon.Port.CellsLen(options));
             n = 0;
-            Ofmt.FmtValue(text, a, an, work.Im);
-            if ((emon.Port.CellsAt(work.Im, 0) == 1) && (emon.Port.CellsAt(work.Im, 4) == 0)) {
-                emon.Port.CellsPush(work.Options, -1);
+            Ofmt.FmtValue(text, a, an, im);
+            if ((emon.Port.CellsAt(im, 0) == 1) && (emon.Port.CellsAt(im, 4) == 0)) {
+                emon.Port.CellsPush(options, -1);
                 n = 1;
             }
             j = 0;
@@ -233,11 +233,11 @@ public static class Oarb {
                 if (emon.Port.CellsAt(candidates, j * 3) == r) {
                     b = emon.Port.CellsAt(candidates, (j * 3) + 1);
                     bn = emon.Port.CellsAt(candidates, (j * 3) + 2);
-                    if ((OaCompatible(text, a, an, b, bn, work.Im, work.Cm) == 1) && (emon.Port.CellsAt(work.Cm, 4) == 0)) {
+                    if ((OaCompatible(text, a, an, b, bn, im, cm) == 1) && (emon.Port.CellsAt(cm, 4) == 0)) {
                         seen = 0;
-                        k = emon.Port.CellsAt(work.Offsets, r - s);
-                        while (k < emon.Port.CellsLen(work.Options)) {
-                            q = emon.Port.CellsAt(work.Options, k);
+                        k = emon.Port.CellsAt(offsets, r - s);
+                        while (k < emon.Port.CellsLen(options)) {
+                            q = emon.Port.CellsAt(options, k);
                             if (q < 0) {
                                 if (OaEqual(text, a, an, b, bn) == 1) {
                                     seen = 1;
@@ -248,7 +248,7 @@ public static class Oarb {
                             k += 1;
                         }
                         if (seen == 0) {
-                            emon.Port.CellsPush(work.Options, j);
+                            emon.Port.CellsPush(options, j);
                             n += 1;
                         }
                     }
@@ -261,7 +261,7 @@ public static class Oarb {
             if (n > 4) {
                 return -5;
             }
-            emon.Port.CellsPush(work.Counts, n);
+            emon.Port.CellsPush(counts, n);
             r += 1;
         }
         if (distinct <= 2) {
@@ -280,7 +280,7 @@ public static class Oarb {
             dec = -1;
             r = s;
             while (r <= t) {
-                j = emon.Port.CellsAt(work.Options, emon.Port.CellsAt(work.Offsets, r - s) + emon.Port.CellsAt(work.Choices, r - s));
+                j = emon.Port.CellsAt(options, emon.Port.CellsAt(offsets, r - s) + emon.Port.CellsAt(choices, r - s));
                 if (j < 0) {
                     a = emon.Port.CellsAt(inc, r * 2);
                     an = emon.Port.CellsAt(inc, (r * 2) + 1);
@@ -289,11 +289,11 @@ public static class Oarb {
                     an = emon.Port.CellsAt(candidates, (j * 3) + 2);
                     changed += 1;
                 }
-                value = Ofmt.FmtValue(text, a, an, work.Cm);
+                value = Ofmt.FmtValue(text, a, an, cm);
                 if (dec == -1) {
-                    dec = emon.Port.CellsAt(work.Cm, 1);
+                    dec = emon.Port.CellsAt(cm, 1);
                 }
-                if (((value == ((long) 0)) || (emon.Port.CellsAt(work.Cm, 0) == 0)) || (dec != emon.Port.CellsAt(work.Cm, 1))) {
+                if (((value == ((long) 0)) || (emon.Port.CellsAt(cm, 0) == 0)) || (dec != emon.Port.CellsAt(cm, 1))) {
                     valid = 0;
                 }
                 if (r < t) {
@@ -310,7 +310,7 @@ public static class Oarb {
                     ties = 1;
                     r = s;
                     while (r <= t) {
-                        emon.Port.CellsSet(work.Best, r - s, emon.Port.CellsAt(work.Options, emon.Port.CellsAt(work.Offsets, r - s) + emon.Port.CellsAt(work.Choices, r - s)));
+                        emon.Port.CellsSet(best, r - s, emon.Port.CellsAt(options, emon.Port.CellsAt(offsets, r - s) + emon.Port.CellsAt(choices, r - s)));
                         r += 1;
                     }
                 } else if (changed == bestchanges) {
@@ -320,12 +320,12 @@ public static class Oarb {
             carry = 1;
             r = s;
             while ((r <= t) && (carry == 1)) {
-                j = emon.Port.CellsAt(work.Choices, r - s) + 1;
-                if (j < emon.Port.CellsAt(work.Counts, r - s)) {
-                    emon.Port.CellsSet(work.Choices, r - s, j);
+                j = emon.Port.CellsAt(choices, r - s) + 1;
+                if (j < emon.Port.CellsAt(counts, r - s)) {
+                    emon.Port.CellsSet(choices, r - s, j);
                     carry = 0;
                 } else {
-                    emon.Port.CellsSet(work.Choices, r - s, 0);
+                    emon.Port.CellsSet(choices, r - s, 0);
                 }
                 r += 1;
             }
@@ -339,13 +339,13 @@ public static class Oarb {
         if (bestchanges == 0) {
             return 0;
         }
-        j = emon.Port.CellsAt(work.Best, t - s);
+        j = emon.Port.CellsAt(best, t - s);
         if (j < 0) {
-            total = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, t * 2), emon.Port.CellsAt(inc, (t * 2) + 1), work.Cm);
+            total = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, t * 2), emon.Port.CellsAt(inc, (t * 2) + 1), cm);
         } else {
-            total = Ofmt.FmtValue(text, emon.Port.CellsAt(candidates, (j * 3) + 1), emon.Port.CellsAt(candidates, (j * 3) + 2), work.Cm);
+            total = Ofmt.FmtValue(text, emon.Port.CellsAt(candidates, (j * 3) + 1), emon.Port.CellsAt(candidates, (j * 3) + 2), cm);
         }
-        dec = emon.Port.CellsAt(work.Cm, 1);
+        dec = emon.Port.CellsAt(cm, 1);
         unit = (long) 1;
         j = 0;
         while (j < dec) {
@@ -372,8 +372,8 @@ public static class Oarb {
                     valid = 1;
                     q = cs;
                     while (q <= ct) {
-                        value = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, q * 2), emon.Port.CellsAt(inc, (q * 2) + 1), work.Cm);
-                        if ((emon.Port.CellsAt(work.Cm, 0) == 0) || ((emon.Port.CellsAt(work.Cm, 1) != dec) || (value == ((long) 0)))) {
+                        value = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, q * 2), emon.Port.CellsAt(inc, (q * 2) + 1), cm);
+                        if ((emon.Port.CellsAt(cm, 0) == 0) || ((emon.Port.CellsAt(cm, 1) != dec) || (value == ((long) 0)))) {
                             valid = 0;
                         }
                         if (q < ct) {
@@ -387,7 +387,7 @@ public static class Oarb {
                         q = s;
                         while (q <= t) {
                             if ((q >= cs) && (q <= ct)) {
-                                emon.Port.CellsSet(work.Anchored, q - s, 1);
+                                emon.Port.CellsSet(anchored, q - s, 1);
                             }
                             q += 1;
                         }
@@ -401,8 +401,8 @@ public static class Oarb {
         valid = 1;
         incsum = (long) 0;
         while (r <= t) {
-            value = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, r * 2), emon.Port.CellsAt(inc, (r * 2) + 1), work.Cm);
-            if ((emon.Port.CellsAt(work.Cm, 0) == 0) || (emon.Port.CellsAt(work.Cm, 1) != dec)) {
+            value = Ofmt.FmtValue(text, emon.Port.CellsAt(inc, r * 2), emon.Port.CellsAt(inc, (r * 2) + 1), cm);
+            if ((emon.Port.CellsAt(cm, 0) == 0) || (emon.Port.CellsAt(cm, 1) != dec)) {
                 valid = 0;
             }
             if (r < t) {
@@ -415,16 +415,16 @@ public static class Oarb {
         if (valid == 1) {
             r = s;
             while (r <= t) {
-                if ((emon.Port.CellsAt(work.Best, r - s) < 0) && (emon.Port.CellsAt(work.Anchored, r - s) == 0)) {
+                if ((emon.Port.CellsAt(best, r - s) < 0) && (emon.Port.CellsAt(anchored, r - s) == 0)) {
                     a = emon.Port.CellsAt(inc, r * 2);
                     an = emon.Port.CellsAt(inc, (r * 2) + 1);
-                    value = Ofmt.FmtValue(text, a, an, work.Cm);
+                    value = Ofmt.FmtValue(text, a, an, cm);
                     if (r < t) {
                         need = inctotal - (incsum - value);
                     } else {
                         need = incsum;
                     }
-                    if (OaOneDigitValue(text, a, an, need, dec, work.Cm) == 1) {
+                    if (OaOneDigitValue(text, a, an, need, dec, cm) == 1) {
                         return -3;
                     }
                 }
@@ -433,10 +433,13 @@ public static class Oarb {
         }
         r = s;
         while (r <= t) {
-            emon.Port.CellsSet(@out, r - s, emon.Port.CellsAt(work.Best, r - s));
+            emon.Port.CellsSet(@out, r - s, emon.Port.CellsAt(best, r - s));
             r += 1;
         }
         return 1;
+    }
+    public static int OaBlock(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells @out, emon.Oarbctx.OaWork work) {
+        return OaBlockCells(text, inc, candidates, s, t, support, @out, work.Options, work.Offsets, work.Counts, work.Choices, work.Best, work.Im, work.Cm, work.Anchored);
     }
     public static int OaPctMeta(emon.Port.Cells text, int a, int an, int b, int bn, int p, int pn, emon.Port.Cells candidates, int row, int holds, int rows, emon.Port.Cells am, emon.Port.Cells bm, emon.Port.Cells pm, emon.Port.Cells cm) {
         if ((emon.Port.CellsLen(candidates) % 3) != 0) {

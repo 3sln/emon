@@ -732,6 +732,8 @@ func TestArbF08Block(emonT *testing.T) {
 	port.AssertEq(emonT, oarb.OaBlock(text, inc, candidates, 0, 2, 2, out, work), 1, "f08-block guard")
 	port.AssertEq(emonT, port.CellsAt(out, 0), 0, "first slot chooses the recorded candidate")
 	port.AssertEq(emonT, port.CellsAt(out, 1), -1, "valid second slot stays incumbent")
+	port.AssertEq(emonT, oarb.OaBlock(text, inc, candidates, 0, 2, 1, out, work), 1, "unique single-column solution clears the stricter guards")
+	port.AssertEq(emonT, port.CellsAt(out, 0), 0, "single-column closure still copies the recorded candidate")
 }
 
 func TestArbConstantColumn100ToZero(emonT *testing.T) {

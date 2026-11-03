@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nine actual Ocr-port readings per recorded page bitmap, serialized and compared."""
 import argparse,hashlib,json,pathlib,subprocess
-ROOT=pathlib.Path(__file__).resolve().parents[2]
+ROOT=pathlib.Path(__file__).resolve().parents[3]
 p=argparse.ArgumentParser(__doc__);p.add_argument('--manifest',type=pathlib.Path,required=True);p.add_argument('--bin',type=pathlib.Path,required=True);p.add_argument('--out',type=pathlib.Path,required=True);a=p.parse_args()
 a.out.mkdir(parents=True,exist_ok=True);rows=[]
 for item in json.loads(a.manifest.read_text()):

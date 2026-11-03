@@ -1166,6 +1166,9 @@ public final class Evidence {
     public static int ofrBlockedSlot() {
         return 7;
     }
+    public static int ofrClosureSum() {
+        return 8;
+    }
     public static int ofrEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "keep");
@@ -1193,6 +1196,10 @@ public final class Evidence {
         }
         if (code == 7) {
             emon.Port.textAscii(t, "blocked-slot");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "closure-sum");
             return 1;
         }
         return 0;
@@ -6882,6 +6889,8 @@ public final class Evidence {
             s = evBegin(t, pr, 2, s, ekRule());
             if (evGet(rows, 16, i, 9) == 2) {
                 emon.Port.textAscii(t, "\"closure-pct\"");
+            } else if (evGet(rows, 16, i, 9) == 3) {
+                emon.Port.textAscii(t, "\"closure-sum\"");
             } else {
                 emon.Port.textAscii(t, "\"line-merge\"");
             }

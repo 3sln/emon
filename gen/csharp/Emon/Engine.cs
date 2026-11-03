@@ -210,16 +210,11 @@ public static class Engine {
         // left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
         // `(fd c dry)` 1 (P10.2) makes it a DRY attempt: only the part before its first write (`pu-dry`), so the host can learn what a page will ask while the loop is
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
-        if ((c.Oengine == 1) && (d.Kind == EnKindPdf())) {
-            if (Pageunit.PuKind(d.Plan, i) == Pageunit.PkBorn()) {
-                return 0;
-            }
-        }
         emon.Port.CellsDrop(d.Pscr, 0);
         if (d.Kind == EnKindPdf()) {
-            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (2 * c.Nort) + (4 * c.Dry), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2 * c.Nort) + (4 * c.Dry)) + (8 * c.Oengine), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
         }
-        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, (2 * c.Nort) + (4 * c.Dry), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2 * c.Nort) + (4 * c.Dry)) + (8 * c.Oengine), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
     }
     internal static int EnOcrPlanned(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         if (c.Ocr == 0) {
@@ -239,7 +234,7 @@ public static class Engine {
     }
     public static int EnPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         int status = EnPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
-        Ocrengine.OeTag(rq, d.Pscr, c.Oengine);
+        Ocrengine.OeTag(rq, d.Pscr, 2 * c.Oengine);
         return status;
     }
     public static int EnAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
@@ -552,7 +547,7 @@ public static class Engine {
                 Figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence);
             }
             if (c.Oengine != 0) {
-                if ((emon.Port.CellsLen(ev.Oruns) > 0) || (EnOcrPlanned(c, d) == 1)) {
+                if (EnOcrPlanned(c, d) == 1) {
                     Ocrengine.OeEvidence(d.Evidence, c.Oengine);
                 }
             }

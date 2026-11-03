@@ -10,11 +10,15 @@ import (
 )
 
 var OeIdentity [74]int32 = [74]int32{
-	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 102, 54, 57, 54, 54,
-	49, 53, 49, 98, 57, 97, 57, 57, 98, 101, 100, 48, 98, 55, 53, 48,
-	101, 56, 57, 49, 54, 52, 101, 99, 99, 102, 51, 53, 50, 100, 51, 50,
-	52, 100, 100, 49, 98, 54, 49, 53, 100, 53, 52, 101, 50, 55, 98, 97,
-	97, 51, 56, 50, 54, 52, 50, 56, 48, 99,
+	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 98, 54, 56, 51, 100, 102,
+	54, 56, 49, 102, 54, 53, 97, 56, 101, 57, 53, 97, 53, 57, 48, 53,
+	100, 56, 51, 50, 55, 56, 97, 102, 54, 54, 54, 50, 55, 57, 55, 48,
+	102, 57, 50, 101, 48, 98, 48, 53, 48, 49, 53, 48, 48, 57, 56, 49,
+	49, 100, 54, 55, 97, 50, 97, 52, 100, 102,
+}
+
+func OeRequestSlot() int32 {
+	return 23
 }
 
 func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
@@ -31,7 +35,7 @@ func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
 		var kind int32 = port.CellsAt(requests, at+1)
 		var count int32 = n
 		var first int32 = 10
-		if kind == plan.PkOcr() {
+		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot())) {
 			k = first
 			for (k + 2) < count {
 				if (port.CellsAt(requests, at+k) == -3100) && ((port.CellsAt(requests, (at+k)+1) == 1) && (port.CellsAt(requests, (at+k)+2) == ((count - k) - 3))) {
@@ -47,9 +51,9 @@ func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
 			port.CellsPush(scratch, port.CellsAt(requests, at+i))
 			i += 1
 		}
-		if kind == plan.PkOcr() {
+		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot())) {
 			port.CellsPush(scratch, -3100)
-			port.CellsPush(scratch, engine)
+			port.CellsPush(scratch, 1)
 			port.CellsPush(scratch, 74)
 			k = 0
 			for k < 74 {

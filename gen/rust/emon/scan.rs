@@ -492,6 +492,12 @@ pub(crate) fn sc_ev_lines(an: &mut crate::port::Cells, ext: i32, view: i32, run:
         by0 = vw_px_to_cpt(views, view, 1, crate::port::cells_at(an, l + 4), crate::port::cells_at(an, l + 5));
         bx1 = vw_px_to_cpt(views, view, 0, crate::port::cells_at(an, l + 6), crate::port::cells_at(an, l + 7));
         by1 = vw_px_to_cpt(views, view, 1, crate::port::cells_at(an, l + 6), crate::port::cells_at(an, l + 7));
+        if ((crate::port::cells_at(an, l + 4) == -1) && (crate::port::cells_at(an, l + 5) == -1)) && ((crate::port::cells_at(an, l + 6) == -1) && (crate::port::cells_at(an, l + 7) == -1)) {
+            bx0 = x0;
+            by0 = y1;
+            bx1 = x1;
+            by1 = y1;
+        }
         blk = crate::port::cells_at(an, l + 8);
         par = crate::port::cells_at(an, l + 9);
         bty = crate::port::cells_at(an, l + 10);

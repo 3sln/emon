@@ -2,7 +2,7 @@
   "schema": 1,
   "policy": "source-line overlap/min(side) >= .8 and center inside gold line; ambiguous overlaps excluded; NFC/casefold ordered token alignment within annotated line; 10 equal posterior bins; empty bins conservatively zero",
   "limitation": "SROIE source annotations are line-aligned, not individual-word polygons. This is not an independent manual source audit, and requires review before production confidence use.",
-  "model_pins_sha256": "4643b5f6359232f5f357aa1ef0f263aafdeec84815afa589738861644b2ca8ff",
+  "model_pins_sha256": "89391faae62366dc905c1d2aad345fcce5be79a5c7f989dc79e07c974029d798",
   "confidence": [
     0,
     0,
@@ -654,5 +654,7 @@
     }
   ],
   "reused_ocr_outputs": true,
-  "document_timing_scope": "Label reconstruction wall time with --reuse; not inference CPU or cost measurement."
+  "document_timing_scope": "Label reconstruction wall time with --reuse; not inference CPU or cost measurement.",
+  "original_model_pins_sha256": "4643b5f6359232f5f357aa1ef0f263aafdeec84815afa589738861644b2ca8ff",
+  "pin_provenance_note": "OP1 merge renumbered assets.edn comment D3100 to D843, changing file hash only; asset pins and frozen calibration unchanged. Original hash reproduced by reversing that comment."
 }

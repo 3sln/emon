@@ -1426,6 +1426,44 @@ func OfChoice(c *port.Cells, incumbentCount int32) int32 {
 	return best
 }
 
+func OfPpYear(text *port.Cells, start int32, n int32) int32 {
+	if (n != 7) || ((start < 0) || ((start + n) > port.CellsLen(text))) {
+		return 0
+	}
+	if port.CellsAt(text, start+4) != 45 {
+		return 0
+	}
+	var j int32 = 0
+	for j < n {
+		if j != 4 {
+			if ofmt.FmtDigit(port.CellsAt(text, start+j)) == 0 {
+				return 0
+			}
+		}
+		j += 1
+	}
+	return 1
+}
+
+func OfPpChoice(c *port.Cells, incumbentCount int32) int32 {
+	var best int32 = OfChoice(c, incumbentCount)
+	if best < 1 {
+		return best
+	}
+	if OfCget(c, best, 2) < incumbentCount {
+		return -1
+	}
+	if incumbentCount > 0 {
+		if (OfCget(c, 0, 5) == 1) && ((OfCget(c, best, 7) == 0) && (OfCget(c, best, 3) < 2)) {
+			return -1
+		}
+		if (OfCget(c, best, 7) == 1) && (OfCget(c, 0, 7) == 0) {
+			return -1
+		}
+	}
+	return best
+}
+
 func OfNullVotes(runs *port.Cells, words *port.Cells, reads *port.Cells, rows *port.Cells, parents *port.Cells, root int32) int32 {
 	var i int32 = 0
 	var j int32 = 0
@@ -1722,7 +1760,7 @@ func ofLineWords(lines *port.Cells, words *port.Cells, text *port.Cells, rules *
 	return scan.ScKeptWords(words, text, rules, page, n, mark, scr)
 }
 
-func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *port.Cells, words *port.Cells, text *port.Cells, rules *port.Cells, scr *port.Cells, nsel int32, ofz *port.Cells, reads *port.Cells, rrefs *port.Cells, rows *port.Cells, parents *port.Cells, plan *port.Cells, sel *port.Cells, selk *port.Cells, c *port.Cells, crefs *port.Cells, seq *port.Cells) int32 {
+func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *port.Cells, words *port.Cells, text *port.Cells, rules *port.Cells, scr *port.Cells, nsel int32, ofz *port.Cells, reads *port.Cells, rrefs *port.Cells, rows *port.Cells, parents *port.Cells, plan *port.Cells, sel *port.Cells, selk *port.Cells, c *port.Cells, crefs *port.Cells, seq *port.Cells, arithmetic *port.Cells, oaz *port.Cells) int32 {
 	// The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
 	// input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
 	// is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
@@ -1753,16 +1791,22 @@ func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *por
 	var ng int32 = 0
 	var g int32 = 0
 	var h int32 = 0
+	var closure int32 = 0
+	var rule int32 = 0
+	var identityFirst int32 = 0
+	var identityTotal int32 = 0
 	var view int32 = 0
 	var margin int32 = 0
 	var votes int32 = 0
 	var mine int32 = 0
 	var pick int32 = 0
-	if (image != 1) || ((trigger != 1) && (trigger != 2)) {
-		return nsel
-	}
-	if OfPageKeyword(words, text, page) == 0 {
-		return nsel
+	if image < 8 {
+		if (image != 1) || ((trigger != 1) && (trigger != 2)) {
+			return nsel
+		}
+		if OfPageKeyword(words, text, page) == 0 {
+			return nsel
+		}
 	}
 	// the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
 	// the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
@@ -1871,7 +1915,38 @@ func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *por
 				ofZrow(ofz, page, x0, y0, x1, y1, port.CellsAt(sel, first), count, 6, 0, 0, 0, 0, mask)
 			} else {
 				OfCandidates(words, text, rows, parents, r, sel, reads, c, crefs, seq)
+				closure = 0
 				best = OfChoice(c, count)
+				if image >= 8 {
+					if count == 1 {
+						w = port.CellsAt(crefs, OfCget(c, 0, 1))
+						if OfPpYear(text, evidence.OwGet(words, w, evidence.HdTstart()), evidence.OwGet(words, w, evidence.HdTlen())) == 1 {
+							port.CellsSet(c, 6, 1)
+						}
+					}
+					best = OfPpChoice(c, count)
+					if count == 1 {
+						k = 0
+						for k < port.CellsLen(arithmetic) {
+							if (port.CellsAt(arithmetic, k) == port.CellsAt(sel, first)) && (port.CellsAt(arithmetic, k+1) >= 0) {
+								q = 1
+								for q < (port.CellsLen(c) / OfCstride()) {
+									if OfCget(c, q, 2) == 1 {
+										w = port.CellsAt(crefs, OfCget(c, q, 1))
+										if ofWordSame(words, text, w, port.CellsAt(arithmetic, k+1), 0) == 1 {
+											best = q
+											closure = 1
+											identityFirst = port.CellsAt(arithmetic, k+2)
+											identityTotal = port.CellsAt(arithmetic, k+3)
+										}
+									}
+									q += 1
+								}
+							}
+							k += 4
+						}
+					}
+				}
 				alt = best
 				if alt < 0 {
 					alt = ofRanked(c)
@@ -1886,7 +1961,39 @@ func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *por
 				if first >= 0 {
 					pick = port.CellsAt(sel, first)
 				}
-				zr = ofZrow(ofz, page, x0, y0, x1, y1, pick, count, OfRuleOf(c, alt, count), votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask)
+				rule = OfRuleOf(c, alt, count)
+				if (image >= 8) && ((best < 1) && (alt >= 1)) {
+					if OfCget(c, alt, 2) < count {
+						rule = 6
+					}
+					if (count > 0) && ((OfCget(c, 0, 5) == 1) && ((OfCget(c, alt, 7) == 0) && (OfCget(c, alt, 3) < 2))) {
+						rule = 5
+					}
+					if (count > 0) && ((OfCget(c, alt, 7) == 1) && (OfCget(c, 0, 7) == 0)) {
+						rule = 4
+					}
+				}
+				if closure == 1 {
+					rule = 7
+					w = port.CellsAt(crefs, OfCget(c, best, 1))
+					port.CellsPush(oaz, page)
+					port.CellsPush(oaz, x0)
+					port.CellsPush(oaz, y0)
+					port.CellsPush(oaz, x1)
+					port.CellsPush(oaz, y1)
+					port.CellsPush(oaz, pick)
+					port.CellsPush(oaz, 1)
+					port.CellsPush(oaz, w)
+					port.CellsPush(oaz, 1)
+					port.CellsPush(oaz, 3)
+					port.CellsPush(oaz, evidence.OwGet(words, w, evidence.OwfRun()))
+					port.CellsPush(oaz, OfCget(c, best, 3))
+					port.CellsPush(oaz, margin)
+					port.CellsPush(oaz, identityFirst)
+					port.CellsPush(oaz, identityTotal)
+					port.CellsPush(oaz, 0)
+				}
+				zr = ofZrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask)
 				if best >= 1 {
 					changed = 1
 					at = ofChunk(plan, zr, c, crefs, best)

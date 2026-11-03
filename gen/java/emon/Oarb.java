@@ -148,7 +148,7 @@ public final class Oarb {
         }
         return 0;
     }
-    public static int oaBlock(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells out, emon.Oarbctx.OaWork work) {
+    public static int oaBlockCells(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells out, emon.Port.Cells options, emon.Port.Cells offsets, emon.Port.Cells counts, emon.Port.Cells choices, emon.Port.Cells best, emon.Port.Cells im, emon.Port.Cells cm, emon.Port.Cells anchored) {
         emon.Port.cellsDrop(out, 0);
         if (((emon.Port.cellsLen(inc) % 2) != 0) || ((emon.Port.cellsLen(candidates) % 3) != 0)) {
             return 0;
@@ -156,12 +156,12 @@ public final class Oarb {
         if ((s < 0) || (((t - s) < 2) || (((t - s) > 12) || (t >= (emon.Port.cellsLen(inc) / 2))))) {
             return 0;
         }
-        emon.Port.cellsDrop(work.options, 0);
-        emon.Port.cellsDrop(work.offsets, 0);
-        emon.Port.cellsDrop(work.counts, 0);
-        emon.Port.cellsDrop(work.choices, 0);
-        emon.Port.cellsDrop(work.best, 0);
-        emon.Port.cellsDrop(work.anchored, 0);
+        emon.Port.cellsDrop(options, 0);
+        emon.Port.cellsDrop(offsets, 0);
+        emon.Port.cellsDrop(counts, 0);
+        emon.Port.cellsDrop(choices, 0);
+        emon.Port.cellsDrop(best, 0);
+        emon.Port.cellsDrop(anchored, 0);
         int r = s;
         int j = 0;
         int k = 0;
@@ -205,9 +205,9 @@ public final class Oarb {
         }
         while (r <= t) {
             emon.Port.cellsPush(out, -1);
-            emon.Port.cellsPush(work.best, -1);
-            emon.Port.cellsPush(work.choices, 0);
-            emon.Port.cellsPush(work.anchored, 0);
+            emon.Port.cellsPush(best, -1);
+            emon.Port.cellsPush(choices, 0);
+            emon.Port.cellsPush(anchored, 0);
             a = emon.Port.cellsAt(inc, r * 2);
             an = emon.Port.cellsAt(inc, (r * 2) + 1);
             seen = 0;
@@ -221,11 +221,11 @@ public final class Oarb {
             if (seen == 0) {
                 distinct += 1;
             }
-            emon.Port.cellsPush(work.offsets, emon.Port.cellsLen(work.options));
+            emon.Port.cellsPush(offsets, emon.Port.cellsLen(options));
             n = 0;
-            Ofmt.fmtValue(text, a, an, work.im);
-            if ((emon.Port.cellsAt(work.im, 0) == 1) && (emon.Port.cellsAt(work.im, 4) == 0)) {
-                emon.Port.cellsPush(work.options, -1);
+            Ofmt.fmtValue(text, a, an, im);
+            if ((emon.Port.cellsAt(im, 0) == 1) && (emon.Port.cellsAt(im, 4) == 0)) {
+                emon.Port.cellsPush(options, -1);
                 n = 1;
             }
             j = 0;
@@ -233,11 +233,11 @@ public final class Oarb {
                 if (emon.Port.cellsAt(candidates, j * 3) == r) {
                     b = emon.Port.cellsAt(candidates, (j * 3) + 1);
                     bn = emon.Port.cellsAt(candidates, (j * 3) + 2);
-                    if ((oaCompatible(text, a, an, b, bn, work.im, work.cm) == 1) && (emon.Port.cellsAt(work.cm, 4) == 0)) {
+                    if ((oaCompatible(text, a, an, b, bn, im, cm) == 1) && (emon.Port.cellsAt(cm, 4) == 0)) {
                         seen = 0;
-                        k = emon.Port.cellsAt(work.offsets, r - s);
-                        while (k < emon.Port.cellsLen(work.options)) {
-                            q = emon.Port.cellsAt(work.options, k);
+                        k = emon.Port.cellsAt(offsets, r - s);
+                        while (k < emon.Port.cellsLen(options)) {
+                            q = emon.Port.cellsAt(options, k);
                             if (q < 0) {
                                 if (oaEqual(text, a, an, b, bn) == 1) {
                                     seen = 1;
@@ -248,7 +248,7 @@ public final class Oarb {
                             k += 1;
                         }
                         if (seen == 0) {
-                            emon.Port.cellsPush(work.options, j);
+                            emon.Port.cellsPush(options, j);
                             n += 1;
                         }
                     }
@@ -261,7 +261,7 @@ public final class Oarb {
             if (n > 4) {
                 return -5;
             }
-            emon.Port.cellsPush(work.counts, n);
+            emon.Port.cellsPush(counts, n);
             r += 1;
         }
         if (distinct <= 2) {
@@ -280,7 +280,7 @@ public final class Oarb {
             dec = -1;
             r = s;
             while (r <= t) {
-                j = emon.Port.cellsAt(work.options, emon.Port.cellsAt(work.offsets, r - s) + emon.Port.cellsAt(work.choices, r - s));
+                j = emon.Port.cellsAt(options, emon.Port.cellsAt(offsets, r - s) + emon.Port.cellsAt(choices, r - s));
                 if (j < 0) {
                     a = emon.Port.cellsAt(inc, r * 2);
                     an = emon.Port.cellsAt(inc, (r * 2) + 1);
@@ -289,11 +289,11 @@ public final class Oarb {
                     an = emon.Port.cellsAt(candidates, (j * 3) + 2);
                     changed += 1;
                 }
-                value = Ofmt.fmtValue(text, a, an, work.cm);
+                value = Ofmt.fmtValue(text, a, an, cm);
                 if (dec == -1) {
-                    dec = emon.Port.cellsAt(work.cm, 1);
+                    dec = emon.Port.cellsAt(cm, 1);
                 }
-                if (((value == ((long) 0)) || (emon.Port.cellsAt(work.cm, 0) == 0)) || (dec != emon.Port.cellsAt(work.cm, 1))) {
+                if (((value == ((long) 0)) || (emon.Port.cellsAt(cm, 0) == 0)) || (dec != emon.Port.cellsAt(cm, 1))) {
                     valid = 0;
                 }
                 if (r < t) {
@@ -310,7 +310,7 @@ public final class Oarb {
                     ties = 1;
                     r = s;
                     while (r <= t) {
-                        emon.Port.cellsSet(work.best, r - s, emon.Port.cellsAt(work.options, emon.Port.cellsAt(work.offsets, r - s) + emon.Port.cellsAt(work.choices, r - s)));
+                        emon.Port.cellsSet(best, r - s, emon.Port.cellsAt(options, emon.Port.cellsAt(offsets, r - s) + emon.Port.cellsAt(choices, r - s)));
                         r += 1;
                     }
                 } else if (changed == bestchanges) {
@@ -320,12 +320,12 @@ public final class Oarb {
             carry = 1;
             r = s;
             while ((r <= t) && (carry == 1)) {
-                j = emon.Port.cellsAt(work.choices, r - s) + 1;
-                if (j < emon.Port.cellsAt(work.counts, r - s)) {
-                    emon.Port.cellsSet(work.choices, r - s, j);
+                j = emon.Port.cellsAt(choices, r - s) + 1;
+                if (j < emon.Port.cellsAt(counts, r - s)) {
+                    emon.Port.cellsSet(choices, r - s, j);
                     carry = 0;
                 } else {
-                    emon.Port.cellsSet(work.choices, r - s, 0);
+                    emon.Port.cellsSet(choices, r - s, 0);
                 }
                 r += 1;
             }
@@ -339,13 +339,13 @@ public final class Oarb {
         if (bestchanges == 0) {
             return 0;
         }
-        j = emon.Port.cellsAt(work.best, t - s);
+        j = emon.Port.cellsAt(best, t - s);
         if (j < 0) {
-            total = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, t * 2), emon.Port.cellsAt(inc, (t * 2) + 1), work.cm);
+            total = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, t * 2), emon.Port.cellsAt(inc, (t * 2) + 1), cm);
         } else {
-            total = Ofmt.fmtValue(text, emon.Port.cellsAt(candidates, (j * 3) + 1), emon.Port.cellsAt(candidates, (j * 3) + 2), work.cm);
+            total = Ofmt.fmtValue(text, emon.Port.cellsAt(candidates, (j * 3) + 1), emon.Port.cellsAt(candidates, (j * 3) + 2), cm);
         }
-        dec = emon.Port.cellsAt(work.cm, 1);
+        dec = emon.Port.cellsAt(cm, 1);
         unit = (long) 1;
         j = 0;
         while (j < dec) {
@@ -372,8 +372,8 @@ public final class Oarb {
                     valid = 1;
                     q = cs;
                     while (q <= ct) {
-                        value = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, q * 2), emon.Port.cellsAt(inc, (q * 2) + 1), work.cm);
-                        if ((emon.Port.cellsAt(work.cm, 0) == 0) || ((emon.Port.cellsAt(work.cm, 1) != dec) || (value == ((long) 0)))) {
+                        value = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, q * 2), emon.Port.cellsAt(inc, (q * 2) + 1), cm);
+                        if ((emon.Port.cellsAt(cm, 0) == 0) || ((emon.Port.cellsAt(cm, 1) != dec) || (value == ((long) 0)))) {
                             valid = 0;
                         }
                         if (q < ct) {
@@ -387,7 +387,7 @@ public final class Oarb {
                         q = s;
                         while (q <= t) {
                             if ((q >= cs) && (q <= ct)) {
-                                emon.Port.cellsSet(work.anchored, q - s, 1);
+                                emon.Port.cellsSet(anchored, q - s, 1);
                             }
                             q += 1;
                         }
@@ -401,8 +401,8 @@ public final class Oarb {
         valid = 1;
         incsum = (long) 0;
         while (r <= t) {
-            value = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, r * 2), emon.Port.cellsAt(inc, (r * 2) + 1), work.cm);
-            if ((emon.Port.cellsAt(work.cm, 0) == 0) || (emon.Port.cellsAt(work.cm, 1) != dec)) {
+            value = Ofmt.fmtValue(text, emon.Port.cellsAt(inc, r * 2), emon.Port.cellsAt(inc, (r * 2) + 1), cm);
+            if ((emon.Port.cellsAt(cm, 0) == 0) || (emon.Port.cellsAt(cm, 1) != dec)) {
                 valid = 0;
             }
             if (r < t) {
@@ -415,16 +415,16 @@ public final class Oarb {
         if (valid == 1) {
             r = s;
             while (r <= t) {
-                if ((emon.Port.cellsAt(work.best, r - s) < 0) && (emon.Port.cellsAt(work.anchored, r - s) == 0)) {
+                if ((emon.Port.cellsAt(best, r - s) < 0) && (emon.Port.cellsAt(anchored, r - s) == 0)) {
                     a = emon.Port.cellsAt(inc, r * 2);
                     an = emon.Port.cellsAt(inc, (r * 2) + 1);
-                    value = Ofmt.fmtValue(text, a, an, work.cm);
+                    value = Ofmt.fmtValue(text, a, an, cm);
                     if (r < t) {
                         need = inctotal - (incsum - value);
                     } else {
                         need = incsum;
                     }
-                    if (oaOneDigitValue(text, a, an, need, dec, work.cm) == 1) {
+                    if (oaOneDigitValue(text, a, an, need, dec, cm) == 1) {
                         return -3;
                     }
                 }
@@ -433,10 +433,13 @@ public final class Oarb {
         }
         r = s;
         while (r <= t) {
-            emon.Port.cellsSet(out, r - s, emon.Port.cellsAt(work.best, r - s));
+            emon.Port.cellsSet(out, r - s, emon.Port.cellsAt(best, r - s));
             r += 1;
         }
         return 1;
+    }
+    public static int oaBlock(emon.Port.Cells text, emon.Port.Cells inc, emon.Port.Cells candidates, int s, int t, int support, emon.Port.Cells out, emon.Oarbctx.OaWork work) {
+        return oaBlockCells(text, inc, candidates, s, t, support, out, work.options, work.offsets, work.counts, work.choices, work.best, work.im, work.cm, work.anchored);
     }
     public static int oaPctMeta(emon.Port.Cells text, int a, int an, int b, int bn, int p, int pn, emon.Port.Cells candidates, int row, int holds, int rows, emon.Port.Cells am, emon.Port.Cells bm, emon.Port.Cells pm, emon.Port.Cells cm) {
         if ((emon.Port.cellsLen(candidates) % 3) != 0) {

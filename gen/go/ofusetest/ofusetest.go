@@ -1153,7 +1153,7 @@ func oftPage(runs *port.Cells, lines *port.Cells, words *port.Cells, text *port.
 }
 
 func oftFuse(runs *port.Cells, lines *port.Cells, words *port.Cells, text *port.Cells, scr *port.Cells, ofz *port.Cells, image int32, trigger int32, r1 *port.Cells) int32 {
-	return ofuse.OfFuse(1, image, trigger, runs, lines, words, text, port.NewCells(), scr, 1, ofz, r1, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	return ofuse.OfFuse(1, image, trigger, runs, lines, words, text, port.NewCells(), scr, 1, ofz, r1, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 
 func oftZ(ofz *port.Cells, row int32, f int32) int32 {

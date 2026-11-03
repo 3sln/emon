@@ -1392,6 +1392,42 @@ pub fn of_choice(c: &mut crate::port::Cells, incumbent_count: i32) -> i32 {
     }
     return best;
 }
+pub fn of_pp_year(text: &mut crate::port::Cells, start: i32, n: i32) -> i32 {
+    if (n != 7) || ((start < 0) || ((start + n) > crate::port::cells_len(text))) {
+        return 0;
+    }
+    if crate::port::cells_at(text, start + 4) != 45 {
+        return 0;
+    }
+    let mut j: i32 = 0;
+    while j < n {
+        if j != 4 {
+            if fmt_digit(crate::port::cells_at(text, start + j)) == 0 {
+                return 0;
+            }
+        }
+        j += 1;
+    }
+    return 1;
+}
+pub fn of_pp_choice(c: &mut crate::port::Cells, incumbent_count: i32) -> i32 {
+    let best: i32 = of_choice(c, incumbent_count);
+    if best < 1 {
+        return best;
+    }
+    if of_cget(c, best, 2) < incumbent_count {
+        return -1;
+    }
+    if incumbent_count > 0 {
+        if (of_cget(c, 0, 5) == 1) && ((of_cget(c, best, 7) == 0) && (of_cget(c, best, 3) < 2)) {
+            return -1;
+        }
+        if (of_cget(c, best, 7) == 1) && (of_cget(c, 0, 7) == 0) {
+            return -1;
+        }
+    }
+    return best;
+}
 pub fn of_null_votes(runs: &mut crate::port::Cells, words: &mut crate::port::Cells, reads: &mut crate::port::Cells, rows: &mut crate::port::Cells, parents: &mut crate::port::Cells, root: i32) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -1671,7 +1707,7 @@ pub(crate) fn of_line_words(lines: &mut crate::port::Cells, mut words: &mut crat
     }
     return sc_kept_words(words, text, rules, page, n, mark, scr);
 }
-pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, text: &mut crate::port::Cells, rules: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, nsel: i32, mut ofz: &mut crate::port::Cells, mut reads: &mut crate::port::Cells, mut rrefs: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut parents: &mut crate::port::Cells, mut plan: &mut crate::port::Cells, mut sel: &mut crate::port::Cells, mut selk: &mut crate::port::Cells, mut c: &mut crate::port::Cells, mut crefs: &mut crate::port::Cells, mut seq: &mut crate::port::Cells) -> i32 {
+pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut words: &mut crate::port::Cells, text: &mut crate::port::Cells, rules: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, nsel: i32, mut ofz: &mut crate::port::Cells, mut reads: &mut crate::port::Cells, mut rrefs: &mut crate::port::Cells, mut rows: &mut crate::port::Cells, mut parents: &mut crate::port::Cells, mut plan: &mut crate::port::Cells, mut sel: &mut crate::port::Cells, mut selk: &mut crate::port::Cells, mut c: &mut crate::port::Cells, mut crefs: &mut crate::port::Cells, mut seq: &mut crate::port::Cells, arithmetic: &mut crate::port::Cells, mut oaz: &mut crate::port::Cells) -> i32 {
     // The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
     // input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
     // is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
@@ -1702,16 +1738,22 @@ pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::
     let mut ng: i32 = 0;
     let mut g: i32 = 0;
     let mut h: i32 = 0;
+    let mut closure: i32 = 0;
+    let mut rule: i32 = 0;
+    let mut identity_first: i32 = 0;
+    let mut identity_total: i32 = 0;
     let mut view: i32 = 0;
     let mut margin: i32 = 0;
     let mut votes: i32 = 0;
     let mut mine: i32 = 0;
     let mut pick: i32 = 0;
-    if (image != 1) || ((trigger != 1) && (trigger != 2)) {
-        return nsel;
-    }
-    if of_page_keyword(words, text, page) == 0 {
-        return nsel;
+    if image < 8 {
+        if (image != 1) || ((trigger != 1) && (trigger != 2)) {
+            return nsel;
+        }
+        if of_page_keyword(words, text, page) == 0 {
+            return nsel;
+        }
     }
     // the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
     // the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
@@ -1820,7 +1862,38 @@ pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::
                 of_zrow(ofz, page, x0, y0, x1, y1, crate::port::cells_at(sel, first), count, 6, 0, 0, 0, 0, mask);
             } else {
                 of_candidates(words, text, rows, parents, r, sel, reads, c, crefs, seq);
+                closure = 0;
                 best = of_choice(c, count);
+                if image >= 8 {
+                    if count == 1 {
+                        w = crate::port::cells_at(crefs, of_cget(c, 0, 1));
+                        if of_pp_year(text, ow_get(words, w, hd_tstart()), ow_get(words, w, hd_tlen())) == 1 {
+                            crate::port::cells_set(c, 6, 1);
+                        }
+                    }
+                    best = of_pp_choice(c, count);
+                    if count == 1 {
+                        k = 0;
+                        while k < crate::port::cells_len(arithmetic) {
+                            if (crate::port::cells_at(arithmetic, k) == crate::port::cells_at(sel, first)) && (crate::port::cells_at(arithmetic, k + 1) >= 0) {
+                                q = 1;
+                                while q < (crate::port::cells_len(c) / of_cstride()) {
+                                    if of_cget(c, q, 2) == 1 {
+                                        w = crate::port::cells_at(crefs, of_cget(c, q, 1));
+                                        if of_word_same(words, text, w, crate::port::cells_at(arithmetic, k + 1), 0) == 1 {
+                                            best = q;
+                                            closure = 1;
+                                            identity_first = crate::port::cells_at(arithmetic, k + 2);
+                                            identity_total = crate::port::cells_at(arithmetic, k + 3);
+                                        }
+                                    }
+                                    q += 1;
+                                }
+                            }
+                            k += 4;
+                        }
+                    }
+                }
                 alt = best;
                 if alt < 0 {
                     alt = of_ranked(c);
@@ -1835,7 +1908,39 @@ pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::
                 if first >= 0 {
                     pick = crate::port::cells_at(sel, first);
                 }
-                zr = of_zrow(ofz, page, x0, y0, x1, y1, pick, count, of_rule_of(c, alt, count), votes, of_cget(c, 0, 3), of_null_votes(runs, words, reads, rows, parents, r), margin, mask);
+                rule = of_rule_of(c, alt, count);
+                if (image >= 8) && ((best < 1) && (alt >= 1)) {
+                    if of_cget(c, alt, 2) < count {
+                        rule = 6;
+                    }
+                    if (count > 0) && ((of_cget(c, 0, 5) == 1) && ((of_cget(c, alt, 7) == 0) && (of_cget(c, alt, 3) < 2))) {
+                        rule = 5;
+                    }
+                    if (count > 0) && ((of_cget(c, alt, 7) == 1) && (of_cget(c, 0, 7) == 0)) {
+                        rule = 4;
+                    }
+                }
+                if closure == 1 {
+                    rule = 7;
+                    w = crate::port::cells_at(crefs, of_cget(c, best, 1));
+                    crate::port::cells_push(oaz, page);
+                    crate::port::cells_push(oaz, x0);
+                    crate::port::cells_push(oaz, y0);
+                    crate::port::cells_push(oaz, x1);
+                    crate::port::cells_push(oaz, y1);
+                    crate::port::cells_push(oaz, pick);
+                    crate::port::cells_push(oaz, 1);
+                    crate::port::cells_push(oaz, w);
+                    crate::port::cells_push(oaz, 1);
+                    crate::port::cells_push(oaz, 3);
+                    crate::port::cells_push(oaz, ow_get(words, w, owf_run()));
+                    crate::port::cells_push(oaz, of_cget(c, best, 3));
+                    crate::port::cells_push(oaz, margin);
+                    crate::port::cells_push(oaz, identity_first);
+                    crate::port::cells_push(oaz, identity_total);
+                    crate::port::cells_push(oaz, 0);
+                }
+                zr = of_zrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, of_cget(c, 0, 3), of_null_votes(runs, words, reads, rows, parents, r), margin, mask);
                 if best >= 1 {
                     changed = 1;
                     at = of_chunk(plan, zr, c, crefs, best);

@@ -3,7 +3,7 @@
 No corpus download; no baseline IDs; source-bearing outputs stay in scratch.
 """
 import argparse, ast, collections, difflib, hashlib, json, pathlib, subprocess, time, unicodedata
-ROOT=pathlib.Path(__file__).resolve().parents[2]
+ROOT=pathlib.Path(__file__).resolve().parents[3]
 def normal(s):return unicodedata.normalize('NFC',s).casefold()
 def bins(rows, table=None):
     out=[]

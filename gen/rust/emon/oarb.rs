@@ -146,7 +146,7 @@ pub(crate) fn oa_one_digit_value(text: &mut crate::port::Cells, start: i32, coun
     }
     return 0;
 }
-pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, candidates: &mut crate::port::Cells, s: i32, t: i32, support: i32, mut out: &mut crate::port::Cells, work: &mut crate::emon::oarbctx::OaWork) -> i32 {
+pub fn oa_block_cells(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, candidates: &mut crate::port::Cells, s: i32, t: i32, support: i32, mut out: &mut crate::port::Cells, mut options: &mut crate::port::Cells, mut offsets: &mut crate::port::Cells, mut counts: &mut crate::port::Cells, mut choices: &mut crate::port::Cells, mut best: &mut crate::port::Cells, mut im: &mut crate::port::Cells, mut cm: &mut crate::port::Cells, mut anchored: &mut crate::port::Cells) -> i32 {
     crate::port::cells_drop(out, 0);
     if ((crate::port::cells_len(inc) % 2) != 0) || ((crate::port::cells_len(candidates) % 3) != 0) {
         return 0;
@@ -154,12 +154,12 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     if (s < 0) || (((t - s) < 2) || (((t - s) > 12) || (t >= (crate::port::cells_len(inc) / 2)))) {
         return 0;
     }
-    crate::port::cells_drop(&mut work.options, 0);
-    crate::port::cells_drop(&mut work.offsets, 0);
-    crate::port::cells_drop(&mut work.counts, 0);
-    crate::port::cells_drop(&mut work.choices, 0);
-    crate::port::cells_drop(&mut work.best, 0);
-    crate::port::cells_drop(&mut work.anchored, 0);
+    crate::port::cells_drop(options, 0);
+    crate::port::cells_drop(offsets, 0);
+    crate::port::cells_drop(counts, 0);
+    crate::port::cells_drop(choices, 0);
+    crate::port::cells_drop(best, 0);
+    crate::port::cells_drop(anchored, 0);
     let mut r: i32 = s;
     let mut j: i32 = 0;
     let mut k: i32 = 0;
@@ -203,9 +203,9 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     }
     while r <= t {
         crate::port::cells_push(out, -1);
-        crate::port::cells_push(&mut work.best, -1);
-        crate::port::cells_push(&mut work.choices, 0);
-        crate::port::cells_push(&mut work.anchored, 0);
+        crate::port::cells_push(best, -1);
+        crate::port::cells_push(choices, 0);
+        crate::port::cells_push(anchored, 0);
         a = crate::port::cells_at(inc, r * 2);
         an = crate::port::cells_at(inc, (r * 2) + 1);
         seen = 0;
@@ -219,11 +219,11 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
         if seen == 0 {
             distinct += 1;
         }
-        crate::port::cells_push(&mut work.offsets, crate::port::cells_len(&mut work.options));
+        crate::port::cells_push(offsets, crate::port::cells_len(options));
         n = 0;
-        fmt_value(text, a, an, &mut work.im);
-        if (crate::port::cells_at(&mut work.im, 0) == 1) && (crate::port::cells_at(&mut work.im, 4) == 0) {
-            crate::port::cells_push(&mut work.options, -1);
+        fmt_value(text, a, an, im);
+        if (crate::port::cells_at(im, 0) == 1) && (crate::port::cells_at(im, 4) == 0) {
+            crate::port::cells_push(options, -1);
             n = 1;
         }
         j = 0;
@@ -231,11 +231,11 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
             if crate::port::cells_at(candidates, j * 3) == r {
                 b = crate::port::cells_at(candidates, (j * 3) + 1);
                 bn = crate::port::cells_at(candidates, (j * 3) + 2);
-                if (oa_compatible(text, a, an, b, bn, &mut work.im, &mut work.cm) == 1) && (crate::port::cells_at(&mut work.cm, 4) == 0) {
+                if (oa_compatible(text, a, an, b, bn, im, cm) == 1) && (crate::port::cells_at(cm, 4) == 0) {
                     seen = 0;
-                    k = crate::port::cells_at(&mut work.offsets, r - s);
-                    while k < crate::port::cells_len(&mut work.options) {
-                        q = crate::port::cells_at(&mut work.options, k);
+                    k = crate::port::cells_at(offsets, r - s);
+                    while k < crate::port::cells_len(options) {
+                        q = crate::port::cells_at(options, k);
                         if q < 0 {
                             if oa_equal(text, a, an, b, bn) == 1 {
                                 seen = 1;
@@ -246,7 +246,7 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
                         k += 1;
                     }
                     if seen == 0 {
-                        crate::port::cells_push(&mut work.options, j);
+                        crate::port::cells_push(options, j);
                         n += 1;
                     }
                 }
@@ -259,7 +259,7 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
         if n > 4 {
             return -5;
         }
-        crate::port::cells_push(&mut work.counts, n);
+        crate::port::cells_push(counts, n);
         r += 1;
     }
     if distinct <= 2 {
@@ -278,7 +278,7 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
         dec = -1;
         r = s;
         while r <= t {
-            j = crate::port::cells_at(&mut work.options, crate::port::cells_at(&mut work.offsets, r - s) + crate::port::cells_at(&mut work.choices, r - s));
+            j = crate::port::cells_at(options, crate::port::cells_at(offsets, r - s) + crate::port::cells_at(choices, r - s));
             if j < 0 {
                 a = crate::port::cells_at(inc, r * 2);
                 an = crate::port::cells_at(inc, (r * 2) + 1);
@@ -287,11 +287,11 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
                 an = crate::port::cells_at(candidates, (j * 3) + 2);
                 changed += 1;
             }
-            value = fmt_value(text, a, an, &mut work.cm);
+            value = fmt_value(text, a, an, cm);
             if dec == -1 {
-                dec = crate::port::cells_at(&mut work.cm, 1);
+                dec = crate::port::cells_at(cm, 1);
             }
-            if ((value == (0 as i64)) || (crate::port::cells_at(&mut work.cm, 0) == 0)) || (dec != crate::port::cells_at(&mut work.cm, 1)) {
+            if ((value == (0 as i64)) || (crate::port::cells_at(cm, 0) == 0)) || (dec != crate::port::cells_at(cm, 1)) {
                 valid = 0;
             }
             if r < t {
@@ -308,7 +308,7 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
                 ties = 1;
                 r = s;
                 while r <= t {
-                    crate::port::cells_set(&mut work.best, r - s, crate::port::cells_at(&mut work.options, crate::port::cells_at(&mut work.offsets, r - s) + crate::port::cells_at(&mut work.choices, r - s)));
+                    crate::port::cells_set(best, r - s, crate::port::cells_at(options, crate::port::cells_at(offsets, r - s) + crate::port::cells_at(choices, r - s)));
                     r += 1;
                 }
             } else if changed == bestchanges {
@@ -318,12 +318,12 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
         carry = 1;
         r = s;
         while (r <= t) && (carry == 1) {
-            j = crate::port::cells_at(&mut work.choices, r - s) + 1;
-            if j < crate::port::cells_at(&mut work.counts, r - s) {
-                crate::port::cells_set(&mut work.choices, r - s, j);
+            j = crate::port::cells_at(choices, r - s) + 1;
+            if j < crate::port::cells_at(counts, r - s) {
+                crate::port::cells_set(choices, r - s, j);
                 carry = 0;
             } else {
-                crate::port::cells_set(&mut work.choices, r - s, 0);
+                crate::port::cells_set(choices, r - s, 0);
             }
             r += 1;
         }
@@ -337,13 +337,13 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     if bestchanges == 0 {
         return 0;
     }
-    j = crate::port::cells_at(&mut work.best, t - s);
+    j = crate::port::cells_at(best, t - s);
     if j < 0 {
-        total = fmt_value(text, crate::port::cells_at(inc, t * 2), crate::port::cells_at(inc, (t * 2) + 1), &mut work.cm);
+        total = fmt_value(text, crate::port::cells_at(inc, t * 2), crate::port::cells_at(inc, (t * 2) + 1), cm);
     } else {
-        total = fmt_value(text, crate::port::cells_at(candidates, (j * 3) + 1), crate::port::cells_at(candidates, (j * 3) + 2), &mut work.cm);
+        total = fmt_value(text, crate::port::cells_at(candidates, (j * 3) + 1), crate::port::cells_at(candidates, (j * 3) + 2), cm);
     }
-    dec = crate::port::cells_at(&mut work.cm, 1);
+    dec = crate::port::cells_at(cm, 1);
     unit = 1 as i64;
     j = 0;
     while j < dec {
@@ -370,8 +370,8 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
                 valid = 1;
                 q = cs;
                 while q <= ct {
-                    value = fmt_value(text, crate::port::cells_at(inc, q * 2), crate::port::cells_at(inc, (q * 2) + 1), &mut work.cm);
-                    if (crate::port::cells_at(&mut work.cm, 0) == 0) || ((crate::port::cells_at(&mut work.cm, 1) != dec) || (value == (0 as i64))) {
+                    value = fmt_value(text, crate::port::cells_at(inc, q * 2), crate::port::cells_at(inc, (q * 2) + 1), cm);
+                    if (crate::port::cells_at(cm, 0) == 0) || ((crate::port::cells_at(cm, 1) != dec) || (value == (0 as i64))) {
                         valid = 0;
                     }
                     if q < ct {
@@ -385,7 +385,7 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
                     q = s;
                     while q <= t {
                         if (q >= cs) && (q <= ct) {
-                            crate::port::cells_set(&mut work.anchored, q - s, 1);
+                            crate::port::cells_set(anchored, q - s, 1);
                         }
                         q += 1;
                     }
@@ -399,8 +399,8 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     valid = 1;
     incsum = 0 as i64;
     while r <= t {
-        value = fmt_value(text, crate::port::cells_at(inc, r * 2), crate::port::cells_at(inc, (r * 2) + 1), &mut work.cm);
-        if (crate::port::cells_at(&mut work.cm, 0) == 0) || (crate::port::cells_at(&mut work.cm, 1) != dec) {
+        value = fmt_value(text, crate::port::cells_at(inc, r * 2), crate::port::cells_at(inc, (r * 2) + 1), cm);
+        if (crate::port::cells_at(cm, 0) == 0) || (crate::port::cells_at(cm, 1) != dec) {
             valid = 0;
         }
         if r < t {
@@ -413,16 +413,16 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     if valid == 1 {
         r = s;
         while r <= t {
-            if (crate::port::cells_at(&mut work.best, r - s) < 0) && (crate::port::cells_at(&mut work.anchored, r - s) == 0) {
+            if (crate::port::cells_at(best, r - s) < 0) && (crate::port::cells_at(anchored, r - s) == 0) {
                 a = crate::port::cells_at(inc, r * 2);
                 an = crate::port::cells_at(inc, (r * 2) + 1);
-                value = fmt_value(text, a, an, &mut work.cm);
+                value = fmt_value(text, a, an, cm);
                 if r < t {
                     need = inctotal - (incsum - value);
                 } else {
                     need = incsum;
                 }
-                if oa_one_digit_value(text, a, an, need, dec, &mut work.cm) == 1 {
+                if oa_one_digit_value(text, a, an, need, dec, cm) == 1 {
                     return -3;
                 }
             }
@@ -431,10 +431,13 @@ pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, can
     }
     r = s;
     while r <= t {
-        crate::port::cells_set(out, r - s, crate::port::cells_at(&mut work.best, r - s));
+        crate::port::cells_set(out, r - s, crate::port::cells_at(best, r - s));
         r += 1;
     }
     return 1;
+}
+pub fn oa_block(text: &mut crate::port::Cells, inc: &mut crate::port::Cells, candidates: &mut crate::port::Cells, s: i32, t: i32, support: i32, mut out: &mut crate::port::Cells, work: &mut crate::emon::oarbctx::OaWork) -> i32 {
+    return oa_block_cells(text, inc, candidates, s, t, support, out, &mut work.options, &mut work.offsets, &mut work.counts, &mut work.choices, &mut work.best, &mut work.im, &mut work.cm, &mut work.anchored);
 }
 pub fn oa_pct_meta(text: &mut crate::port::Cells, a: i32, an: i32, b: i32, bn: i32, p: i32, pn: i32, candidates: &mut crate::port::Cells, row: i32, holds: i32, rows: i32, mut am: &mut crate::port::Cells, mut bm: &mut crate::port::Cells, mut pm: &mut crate::port::Cells, mut cm: &mut crate::port::Cells) -> i32 {
     if (crate::port::cells_len(candidates) % 3) != 0 {

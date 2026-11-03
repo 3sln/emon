@@ -6,6 +6,7 @@ package ocrenginetest
 import (
 	"emon/ocrengine"
 	"emon/ocrport"
+	"emon/ofuse"
 	"emon/plan"
 	"emon/port"
 	"testing"
@@ -102,4 +103,105 @@ func TestActualViewHashDisambiguatesLanguageShapedHashCells(emonT *testing.T) {
 	port.AssertEq(emonT, ocrport.OpPpLangAt(compact, 7, 1), 1701734144, "English retained")
 	port.AssertEq(emonT, ocrport.OpPpLangFirst(hashed, 1281455214, 1701734144), 9, "verified hashes are not languages")
 	port.AssertEq(emonT, ocrport.OpPpLangCount(hashed, 9), 0, "hashed view has no language")
+}
+
+func TestPpCalibratedReadingObeysIncumbentGuards(emonT *testing.T) {
+	port.AssertEq(emonT, ofuse.OfRule(1, 1, 1, 1, 0, 1, 1, 883, 200), 4, "valid incumbent number stays")
+	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 0, 0, 1, 1, 883, 200), 5, "unknown lexical singleton stays")
+	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 0, 1, 1, 1, 883, 584), 0, "299 calibrated margin insufficient")
+	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 0, 1, 1, 1, 883, 583), 2, "300 calibrated margin sufficient")
+	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 0, 0, 2, 1, 883, 950), 1, "independent agreement can justify replacement")
+	port.AssertEq(emonT, ofuse.OfRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion")
+}
+
+func TestOptionalFusionTagsOnlyTheAdditionalReading(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var first int32 = plan.RqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrEnd(r, first)
+	var extra int32 = plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrEnd(r, extra)
+	ocrengine.OeTag(r, scratch, 2)
+	port.AssertEq(emonT, port.CellsAt(r, 0), 10, "Tesseract request key unchanged")
+	port.AssertEq(emonT, port.CellsAt(r, 10), 13+74, "only additional reading is tagged")
+	port.AssertEq(emonT, port.CellsAt(r, 20), -3100, "PP identity on additional reading")
+	ocrengine.OeTag(r, scratch, 2)
+	port.AssertEq(emonT, port.CellsAt(r, 0), 10, "repeated rounds preserve Tesseract")
+	port.AssertEq(emonT, port.CellsAt(r, 10), 13+74, "PP tag remains canonical")
+}
+
+func TestAdditionalReadingCannotTruncateATextSlot(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 100)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 883)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.AssertEq(emonT, ofuse.OfPpChoice(c, 2), -1, "agreement cannot delete a header token")
+}
+
+func TestAdditionalReadingCannotDropASplitNumberToken(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 100)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 2)
+	port.CellsPush(c, 883)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.AssertEq(emonT, ofuse.OfPpChoice(c, 2), -1, "format alone cannot delete a selected token")
+}
+
+func TestAdditionalReadingProtectsAnExistingYearRange(emonT *testing.T) {
+	var text *port.Cells = port.NewCells()
+	port.CellsPush(text, 50)
+	port.CellsPush(text, 48)
+	port.CellsPush(text, 48)
+	port.CellsPush(text, 53)
+	port.CellsPush(text, 45)
+	port.CellsPush(text, 48)
+	port.CellsPush(text, 54)
+	port.AssertEq(emonT, ofuse.OfPpYear(text, 0, 7), 1, "2005-06 is a protected incumbent format")
+	port.AssertEq(emonT, ofuse.OfPpYear(text, 0, 6), 0, "not a truncated year range")
+}
+
+func TestPpLexiconMembershipAloneCannotEraseADictionaryIncumbent(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 100)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 883)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 0)
+	port.AssertEq(emonT, ofuse.OfPpChoice(c, 1), -1, "an incumbent dictionary word needs independent agreement")
 }

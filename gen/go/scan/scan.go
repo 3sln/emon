@@ -508,6 +508,12 @@ func scEvLines(an *port.Cells, ext int32, view int32, run int32, page int32, vie
 		by0 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+4), port.CellsAt(an, l+5))
 		bx1 = evidence.VwPxToCpt(views, view, 0, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
 		by1 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
+		if ((port.CellsAt(an, l+4) == -1) && (port.CellsAt(an, l+5) == -1)) && ((port.CellsAt(an, l+6) == -1) && (port.CellsAt(an, l+7) == -1)) {
+			bx0 = x0
+			by0 = y1
+			bx1 = x1
+			by1 = y1
+		}
 		blk = port.CellsAt(an, l+8)
 		par = port.CellsAt(an, l+9)
 		bty = port.CellsAt(an, l+10)

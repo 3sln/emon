@@ -1,9 +1,10 @@
 (ns emon.ocrenginetest
   (:require [emon.lang :refer [I32 Cells]]
+            [emon.ofuse :refer [of-rule of-pp-choice of-pp-year]]
             [emon.ocrengine :refer [oe-tag oe-id-count]]
             [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
             [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
-            [emon.port :refer [cells-len cells-at]]
+            [emon.port :refer [cells-len cells-at cells-push]]
             [emon.test :refer [deftest assert-eq new-cells]]
             [kin.lang :refer [let + -]]))
 
@@ -86,3 +87,59 @@
     (assert-eq (op-pp-lang-at compact 7 1) 1701734144 "English retained")
     (assert-eq (op-pp-lang-first hashed 1281455214 1701734144) 9 "verified hashes are not languages")
     (assert-eq (op-pp-lang-count hashed 9) 0 "hashed view has no language")))
+
+;; OP1b arbitration laws precede activation: calibrated scores share the
+;; existing 0..1000 scale; a lone PP reading cannot erase guarded incumbents.
+(deftest test-pp-calibrated-reading-obeys-incumbent-guards
+  (assert-eq (of-rule 1 1 1 1 0 1 1 883 200) 4 "valid incumbent number stays")
+  (assert-eq (of-rule 1 0 0 0 0 1 1 883 200) 5 "unknown lexical singleton stays")
+  (assert-eq (of-rule 1 0 0 0 1 1 1 883 584) 0 "299 calibrated margin insufficient")
+  (assert-eq (of-rule 1 0 0 0 1 1 1 883 583) 2 "300 calibrated margin sufficient")
+  (assert-eq (of-rule 1 0 0 0 0 2 1 883 950) 1 "independent agreement can justify replacement")
+  (assert-eq (of-rule 0 1 0 1 0 1 0 883 0) 3 "calibrated valid numeric insertion"))
+
+(deftest test-optional-fusion-tags-only-the-additional-reading
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 first (rq-ocr r 272 260 3 1 0 0 0 0)]
+    (rq-ocr-end r first)
+    (let [^I32 extra (rq-ocr r 279 260 3 1 0 0 0 0)] (rq-ocr-end r extra))
+    (oe-tag r scratch 2)
+    (assert-eq (cells-at r 0) 10 "Tesseract request key unchanged")
+    (assert-eq (cells-at r 10) (+ 13 (oe-id-count 0)) "only additional reading is tagged")
+    (assert-eq (cells-at r 20) -3100 "PP identity on additional reading")
+    (oe-tag r scratch 2)
+    (assert-eq (cells-at r 0) 10 "repeated rounds preserve Tesseract")
+    (assert-eq (cells-at r 10) (+ 13 (oe-id-count 0)) "PP tag remains canonical")))
+
+;; A joined geometric slot is not permission to drop its incumbent tokens.
+(deftest test-additional-reading-cannot-truncate-a-text-slot
+  (let [^Cells c (new-cells)]
+    ;; run/ref/count/votes/conf/dictionary/format/digit
+    (cells-push c 0) (cells-push c 0) (cells-push c 2) (cells-push c 1)
+    (cells-push c 100) (cells-push c 0) (cells-push c 0) (cells-push c 0)
+    (cells-push c 1) (cells-push c 2) (cells-push c 1) (cells-push c 2)
+    (cells-push c 883) (cells-push c 1) (cells-push c 0) (cells-push c 0)
+    (assert-eq (of-pp-choice c 2) -1 "agreement cannot delete a header token")))
+
+(deftest test-additional-reading-cannot-drop-a-split-number-token
+  (let [^Cells c (new-cells)]
+    (cells-push c 0) (cells-push c 0) (cells-push c 2) (cells-push c 1)
+    (cells-push c 100) (cells-push c 0) (cells-push c 0) (cells-push c 1)
+    (cells-push c 1) (cells-push c 2) (cells-push c 1) (cells-push c 2)
+    (cells-push c 883) (cells-push c 0) (cells-push c 1) (cells-push c 1)
+    (assert-eq (of-pp-choice c 2) -1 "format alone cannot delete a selected token")))
+
+(deftest test-additional-reading-protects-an-existing-year-range
+  (let [^Cells text (new-cells)]
+    (cells-push text 50) (cells-push text 48) (cells-push text 48) (cells-push text 53)
+    (cells-push text 45) (cells-push text 48) (cells-push text 54)
+    (assert-eq (of-pp-year text 0 7) 1 "2005-06 is a protected incumbent format")
+    (assert-eq (of-pp-year text 0 6) 0 "not a truncated year range")))
+
+(deftest test-pp-lexicon-membership-alone-cannot-erase-a-dictionary-incumbent
+  (let [^Cells c (new-cells)]
+    (cells-push c 0) (cells-push c 0) (cells-push c 1) (cells-push c 1)
+    (cells-push c 100) (cells-push c 1) (cells-push c 0) (cells-push c 0)
+    (cells-push c 1) (cells-push c 1) (cells-push c 1) (cells-push c 1)
+    (cells-push c 883) (cells-push c 1) (cells-push c 0) (cells-push c 0)
+    (assert-eq (of-pp-choice c 1) -1 "an incumbent dictionary word needs independent agreement")))

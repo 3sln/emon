@@ -634,7 +634,9 @@
     (oat-candidate candidates 0 s0 2)
     (assert-eq (oa-block text inc candidates 0 2 2 out work) 1 "f08-block guard")
     (assert-eq (cells-at out 0) 0 "first slot chooses the recorded candidate")
-    (assert-eq (cells-at out 1) -1 "valid second slot stays incumbent")))
+    (assert-eq (cells-at out 1) -1 "valid second slot stays incumbent")
+    (assert-eq (oa-block text inc candidates 0 2 1 out work) 1 "unique single-column solution clears the stricter guards")
+    (assert-eq (cells-at out 0) 0 "single-column closure still copies the recorded candidate")))
 
 (deftest test-arb-constant-column-100-to-zero
   (let [^Cells text (new-cells) ^I32 s4 (oat-text-4 text) ^I32 s6 (oat-text-6 text) ^I32 s5 (oat-text-5 text) ^Cells inc (new-cells) ^Cells candidates (new-cells) ^Cells out (new-cells) ^OaWork work (new-ctx OaWork)]

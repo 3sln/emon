@@ -6,12 +6,15 @@ namespace emon;
 
 public static class Ocrengine {
     public static readonly int[] OeIdentity = new int[] {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 102, 54, 57, 54, 54,
-        49, 53, 49, 98, 57, 97, 57, 57, 98, 101, 100, 48, 98, 55, 53, 48,
-        101, 56, 57, 49, 54, 52, 101, 99, 99, 102, 51, 53, 50, 100, 51, 50,
-        52, 100, 100, 49, 98, 54, 49, 53, 100, 53, 52, 101, 50, 55, 98, 97,
-        97, 51, 56, 50, 54, 52, 50, 56, 48, 99
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 98, 54, 56, 51, 100, 102,
+        54, 56, 49, 102, 54, 53, 97, 56, 101, 57, 53, 97, 53, 57, 48, 53,
+        100, 56, 51, 50, 55, 56, 97, 102, 54, 54, 54, 50, 55, 57, 55, 48,
+        102, 57, 50, 101, 48, 98, 48, 53, 48, 49, 53, 48, 48, 57, 56, 49,
+        49, 100, 54, 55, 97, 50, 97, 52, 100, 102
     };
+    public static int OeRequestSlot() {
+        return 23;
+    }
     public static int OeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int engine) {
         if (engine == 0) {
             return 0;
@@ -26,7 +29,7 @@ public static class Ocrengine {
             int kind = emon.Port.CellsAt(requests, at + 1);
             int count = n;
             int first = 10;
-            if (kind == Plan.PkOcr()) {
+            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot()))) {
                 k = first;
                 while ((k + 2) < count) {
                     if ((emon.Port.CellsAt(requests, at + k) == -3100) && ((emon.Port.CellsAt(requests, (at + k) + 1) == 1) && (emon.Port.CellsAt(requests, (at + k) + 2) == ((count - k) - 3)))) {
@@ -42,9 +45,9 @@ public static class Ocrengine {
                 emon.Port.CellsPush(scratch, emon.Port.CellsAt(requests, at + i));
                 i += 1;
             }
-            if (kind == Plan.PkOcr()) {
+            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot()))) {
                 emon.Port.CellsPush(scratch, -3100);
-                emon.Port.CellsPush(scratch, engine);
+                emon.Port.CellsPush(scratch, 1);
                 emon.Port.CellsPush(scratch, 74);
                 k = 0;
                 while (k < 74) {

@@ -98,4 +98,105 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ocrport.OpPpLangFirst(hashed, 1281455214, 1701734144), 9, "verified hashes are not languages");
         emon.Testport.AssertEq(Ocrport.OpPpLangCount(hashed, 9), 0, "hashed view has no language");
     }
+    [Xunit.Fact]
+    public static void TestPpCalibratedReadingObeysIncumbentGuards() {
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 1, 1, 1, 0, 1, 1, 883, 200), 4, "valid incumbent number stays");
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 0, 0, 1, 1, 883, 200), 5, "unknown lexical singleton stays");
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 0, 1, 1, 1, 883, 584), 0, "299 calibrated margin insufficient");
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 0, 1, 1, 1, 883, 583), 2, "300 calibrated margin sufficient");
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 0, 0, 2, 1, 883, 950), 1, "independent agreement can justify replacement");
+        emon.Testport.AssertEq(Ofuse.OfRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion");
+    }
+    [Xunit.Fact]
+    public static void TestOptionalFusionTagsOnlyTheAdditionalReading() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int first = Plan.RqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrEnd(r, first);
+        int extra = Plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrEnd(r, extra);
+        Ocrengine.OeTag(r, scratch, 2);
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), 10, "Tesseract request key unchanged");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 10), 13 + 74, "only additional reading is tagged");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 20), -3100, "PP identity on additional reading");
+        Ocrengine.OeTag(r, scratch, 2);
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), 10, "repeated rounds preserve Tesseract");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 10), 13 + 74, "PP tag remains canonical");
+    }
+    [Xunit.Fact]
+    public static void TestAdditionalReadingCannotTruncateATextSlot() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 100);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 883);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Testport.AssertEq(Ofuse.OfPpChoice(c, 2), -1, "agreement cannot delete a header token");
+    }
+    [Xunit.Fact]
+    public static void TestAdditionalReadingCannotDropASplitNumberToken() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 100);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 883);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Testport.AssertEq(Ofuse.OfPpChoice(c, 2), -1, "format alone cannot delete a selected token");
+    }
+    [Xunit.Fact]
+    public static void TestAdditionalReadingProtectsAnExistingYearRange() {
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 50);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 53);
+        emon.Port.CellsPush(text, 45);
+        emon.Port.CellsPush(text, 48);
+        emon.Port.CellsPush(text, 54);
+        emon.Testport.AssertEq(Ofuse.OfPpYear(text, 0, 7), 1, "2005-06 is a protected incumbent format");
+        emon.Testport.AssertEq(Ofuse.OfPpYear(text, 0, 6), 0, "not a truncated year range");
+    }
+    [Xunit.Fact]
+    public static void TestPpLexiconMembershipAloneCannotEraseADictionaryIncumbent() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 100);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 883);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Testport.AssertEq(Ofuse.OfPpChoice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
+    }
 }

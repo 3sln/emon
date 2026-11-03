@@ -1195,6 +1195,9 @@ func OfrBlockedLexicon() int32 {
 func OfrBlockedSlot() int32 {
 	return 7
 }
+func OfrClosureSum() int32 {
+	return 8
+}
 func OfrEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "keep")
@@ -1222,6 +1225,10 @@ func OfrEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 7 {
 		port.TextAscii(t, "blocked-slot")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "closure-sum")
 		return 1
 	}
 	return 0
@@ -7469,6 +7476,8 @@ func EvEmitOarb(t *strings.Builder, pr int32, started int32, rows *port.Cells) i
 		s = EvBegin(t, pr, 2, s, EkRule())
 		if evGet(rows, 16, i, 9) == 2 {
 			port.TextAscii(t, "\"closure-pct\"")
+		} else if evGet(rows, 16, i, 9) == 3 {
+			port.TextAscii(t, "\"closure-sum\"")
 		} else {
 			port.TextAscii(t, "\"line-merge\"")
 		}

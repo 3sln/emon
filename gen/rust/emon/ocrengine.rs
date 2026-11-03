@@ -4,12 +4,15 @@
 use crate::emon::plan::*;
 
 pub static OE_IDENTITY: [i32; 74] = [
-    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 102, 54, 57, 54, 54,
-    49, 53, 49, 98, 57, 97, 57, 57, 98, 101, 100, 48, 98, 55, 53, 48,
-    101, 56, 57, 49, 54, 52, 101, 99, 99, 102, 51, 53, 50, 100, 51, 50,
-    52, 100, 100, 49, 98, 54, 49, 53, 100, 53, 52, 101, 50, 55, 98, 97,
-    97, 51, 56, 50, 54, 52, 50, 56, 48, 99
+    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 98, 54, 56, 51, 100, 102,
+    54, 56, 49, 102, 54, 53, 97, 56, 101, 57, 53, 97, 53, 57, 48, 53,
+    100, 56, 51, 50, 55, 56, 97, 102, 54, 54, 54, 50, 55, 57, 55, 48,
+    102, 57, 50, 101, 48, 98, 48, 53, 48, 49, 53, 48, 48, 57, 56, 49,
+    49, 100, 54, 55, 97, 50, 97, 52, 100, 102
 ];
+pub fn oe_request_slot() -> i32 {
+    return 23;
+}
 pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells, engine: i32) -> i32 {
     if engine == 0 {
         return 0;
@@ -24,7 +27,7 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
         let kind: i32 = crate::port::cells_at(requests, at + 1);
         let mut count: i32 = n;
         let mut first: i32 = 10;
-        if kind == pk_ocr() {
+        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot())) {
             k = first;
             while (k + 2) < count {
                 if (crate::port::cells_at(requests, at + k) == -3100) && ((crate::port::cells_at(requests, (at + k) + 1) == 1) && (crate::port::cells_at(requests, (at + k) + 2) == ((count - k) - 3))) {
@@ -40,9 +43,9 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
             crate::port::cells_push(scratch, crate::port::cells_at(requests, at + i));
             i += 1;
         }
-        if kind == pk_ocr() {
+        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot())) {
             crate::port::cells_push(scratch, -3100);
-            crate::port::cells_push(scratch, engine);
+            crate::port::cells_push(scratch, 1);
             crate::port::cells_push(scratch, 74);
             k = 0;
             while k < 74 {

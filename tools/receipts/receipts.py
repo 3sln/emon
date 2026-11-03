@@ -240,7 +240,7 @@ def main():
                 raise RuntimeError('missing receipt replay: '+str(transcript))
             cpu_before=resource.getrusage(resource.RUSAGE_CHILDREN)
             command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine=ppocr'),'--out=bundle',*extra,str(image)]
-            if a.measure_cost: command=[sys.executable,str(ROOT/'tools/ppocr/measure.py'),*command]
+            if a.measure_cost: command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),*command]
             r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=180))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)
             if r.returncode: raise RuntimeError(g['id']+': '+r.stderr[-1000:])

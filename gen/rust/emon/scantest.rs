@@ -1331,3 +1331,27 @@ fn test_selected_rerotated_lines_use_the_selected_runs_upright_frame() {
     crate::testport::assert_eq(ln_get(lines, 72, lh_rot()), 9000, "twenty-three nonempty lines still keep the previous frame");
     crate::testport::assert_eq(ln_get(lines, 72, lf_src()) & ls_frame(), 0, "empty rows cannot activate recovery");
 }
+#[test]
+fn test_unknown_ocr_baseline_uses_box_bottom_without_rewriting_the_answer() {
+    let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = three_lines(an, 2);
+    let ext: i32 = ox_find(an, at);
+    let l: i32 = ox_line_at(an, ext, 0);
+    crate::port::cells_set(an, l + 4, -1);
+    crate::port::cells_set(an, l + 5, -1);
+    crate::port::cells_set(an, l + 6, -1);
+    crate::port::cells_set(an, l + 7, -1);
+    crate::port::cells_set(an, l + 11, -1);
+    crate::port::cells_set(an, l + 12, -1);
+    crate::port::cells_set(an, l + 13, -1);
+    page_of(an, at, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), lines, words, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_eq(crate::port::cells_at(an, l + 4), -1, "raw answer still records absence");
+    crate::testport::assert_eq(crate::port::cells_at(an, l + 5), -1, "no measured baseline is invented in the transcript");
+    crate::testport::assert_eq(ol_get(lines, 0, lh_by0()), 66 * 24, "layout fallback is the measured line box bottom");
+    crate::testport::assert_eq(ow_get(words, 0, hd_by0()), 66 * 24, "word layout does not interpolate minus one pixels");
+    crate::testport::assert_eq(ow_get(words, 0, hd_by1()), 66 * 24, "both ends use the same fallback");
+}

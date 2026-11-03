@@ -1,0 +1,151 @@
+;; Optional PP sum proposals. Ruled, right-aligned numeric columns only;
+;; arithmetic decisions are the existing P-ARB kernel, never invented text.
+(ns emon.oapp
+  (:require [emon.lang :refer [I32 I64 Cells i64]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
+            [emon.evidence :refer [ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf or-count or-get orf-request orf-wfirst orf-wcount
+                                   ol-get lh-first lh-count lh-dir ev-overlap-small rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-conf]]
+            [emon.scan :refer [sc-sel-base sc-xtra-base sc-sel-max sc-line-words sc-kept-words sc-fate-base]]
+            [emon.ofmt :refer [fmt-value fmt-digit]]
+            [emon.oarb :refer [oa-block-cells]]
+            [kin.lang :refer [defn return let set while if do + - * quot rem < > <= >= == != and or]]))
+
+(defn ^I32 pp-abs [^I32 x] (if (< x 0) (return (- 0 x))) (return x))
+(defn ^I32 pp-height [^Cells words ^I32 w] (return (- (ow-get words w (hd-y1)) (ow-get words w (hd-y0)))))
+(defn ^I32 pp-mid [^Cells words ^I32 w] (return (quot (+ (ow-get words w (hd-y0)) (ow-get words w (hd-y1))) 2)))
+(defn ^I32 pp-same-col [^Cells words ^I32 a ^I32 b]
+  (let [^I32 h (pp-height words a)]
+    (if (<= (pp-abs (- (ow-get words a (hd-x1)) (ow-get words b (hd-x1)))) (quot h 2)) (return 1))
+    (return 0)))
+(defn ^I32 pp-digit-word [^Cells words ^Cells text ^I32 w]
+  (let [^I32 s (ow-get words w (hd-tstart)) ^I32 n (ow-get words w (hd-tlen)) ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (if (== (fmt-digit (cells-at text (+ s i))) 1) (return 1)) (set i (+ i 1))))
+    (return 0)))
+
+;; A physical rule immediately above the proposed total is required; random
+;; coincidental sums in prose and identifiers do not propose an identity.
+(defn ^:pub ^I32 pp-total-rule [^Cells rules ^Cells words ^I32 page ^I32 w]
+  (let [^:mut ^I32 i 0 ^I32 x0 (ow-get words w (hd-x0)) ^I32 x1 (ow-get words w (hd-x1))
+        ^I32 y (ow-get words w (hd-y0)) ^I32 h (pp-height words w)]
+    (while (< i (rl-count rules))
+      (do (if (and (== (rl-get rules i (rlf-page)) page) (>= (rl-get rules i (rlf-conf)) 700))
+            (if (and (<= (rl-get rules i (rlf-y1)) y) (<= (- y (rl-get rules i (rlf-y1))) (* h 2)))
+              (if (and (<= (rl-get rules i (rlf-x0)) x0) (>= (rl-get rules i (rlf-x1)) x1)) (return 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 pp-sums [^I32 page ^I32 request ^Cells runs ^Cells lines ^:mut ^Cells words ^Cells text ^Cells rules
+                          ^:mut ^Cells scr ^I32 nsel ^:mut ^Cells approved
+                          ^:mut ^Cells rows ^:mut ^Cells col ^:mut ^Cells inc ^:mut ^Cells candidates ^:mut ^Cells sources ^:mut ^Cells out
+                          ^:mut ^Cells options ^:mut ^Cells offsets ^:mut ^Cells counts ^:mut ^Cells choices ^:mut ^Cells best
+                          ^:mut ^Cells im ^:mut ^Cells cm ^:mut ^Cells anchored]
+  (cells-drop approved 0) (cells-drop rows 0)
+  (let [^:mut ^I32 run -1 ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 k 0 ^:mut ^I32 l 0 ^:mut ^I32 xl -1 ^:mut ^I32 n 0
+        ^:mut ^I32 w 0 ^:mut ^I32 p 0 ^:mut ^I32 end 0 ^:mut ^I32 seed 0 ^:mut ^I32 s 0 ^:mut ^I32 t 0 ^:mut ^I32 r 0
+        ^:mut ^I32 candidate -1 ^:mut ^I32 found 0 ^:mut ^I32 support 0 ^:mut ^I32 partner 0 ^:mut ^I32 other -1
+        ^:mut ^I32 geometry 0 ^:mut ^I32 contiguous 0 ^:mut ^I32 valid 0 ^:mut ^I32 dec -1 ^:mut ^I32 d 0 ^:mut ^I32 old 0
+        ^:mut ^I64 sum (i64 0) ^:mut ^I64 value (i64 0)]
+    (while (< i (or-count runs))
+      (do (if (== (or-get runs i (orf-request)) request) (set run i)) (set i (+ i 1))))
+    (if (< run 0) (return 0))
+    ;; Exactly the words the current selection would emit, including partners.
+    (set k 0)
+    (while (< k nsel)
+      (do (set l (cells-at scr (+ (sc-sel-base) k))) (set xl -1)
+          (set j (- l (cells-at scr (sc-xtra-base))))
+          (if (and (>= j 0) (< j (sc-sel-max))) (set xl (- (cells-at scr (+ (sc-xtra-base) (+ j 1))) 1)))
+          (if (!= (ol-get lines l (lh-dir)) 0) (set xl -1))
+          (set n (sc-line-words lines words text l xl scr))
+          (if (== n 0) (return 0))
+          (set n (sc-kept-words words text rules page n 0 scr)) (set j 0)
+          (while (< j n)
+            (do (set w (cells-at scr (+ (sc-fate-base) j)))
+                (if (== (pp-digit-word words text w) 1)
+                  (do (set i 0) (set found 0)
+                      (while (< i (cells-len rows)) (do (if (== (cells-at rows i) w) (set found 1)) (set i (+ i 1))))
+                      (if (== found 0) (cells-push rows w))))
+                (set j (+ j 1))))
+          (set k (+ k 1))))
+    (if (> (cells-len rows) 64) (return 0))
+    (set seed 0)
+    (while (< seed (cells-len rows))
+      (do (set w (cells-at rows seed)) (cells-drop col 0) (set i 0)
+          (while (< i (cells-len rows))
+            (do (set p (cells-at rows i))
+                (if (== (pp-same-col words w p) 1)
+                  (do (set j (cells-len col)) (cells-push col p)
+                      (while (and (> j 0) (> (pp-mid words (cells-at col (- j 1))) (pp-mid words p)))
+                        (do (cells-set col j (cells-at col (- j 1))) (set j (- j 1))))
+                      (cells-set col j p)))
+                (set i (+ i 1))))
+          ;; Each column is visited only from its topmost selected word.
+          (if (and (and (>= (cells-len col) 3) (<= (cells-len col) 32)) (== (cells-at col 0) w))
+            (do (cells-drop inc 0) (cells-drop candidates 0) (cells-drop sources 0) (set i 0)
+                (while (< i (cells-len col))
+                  (do (set w (cells-at col i))
+                      (cells-push inc (ow-get words w (hd-tstart))) (cells-push inc (ow-get words w (hd-tlen)))
+                      (set p (or-get runs run (orf-wfirst))) (set end (+ p (or-get runs run (orf-wcount))))
+                      (while (< p end)
+                        (do (if (and (>= (ow-get words p (hd-conf)) 700)
+                                     (>= (ev-overlap-small (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))
+                                                            (ow-get words p (hd-x0)) (ow-get words p (hd-y0)) (ow-get words p (hd-x1)) (ow-get words p (hd-y1))) 500))
+                              (do (cells-push candidates i) (cells-push candidates (ow-get words p (hd-tstart))) (cells-push candidates (ow-get words p (hd-tlen))) (cells-push sources p)))
+                            (set p (+ p 1))))
+                      (set i (+ i 1))))
+                (set t 2)
+                (while (< t (cells-len col))
+                  (do (if (== (pp-total-rule rules words page (cells-at col t)) 1)
+                        (do (set s 0) (if (> t 12) (set s (- t 12)))
+                            (while (<= s (- t 2))
+                              (do (set support 0) (set partner 0) (set contiguous 1) (set r (+ s 1))
+                                  (while (<= r t)
+                                    (do (set w (cells-at col r))
+                                        (set old (pp-mid words (cells-at col (- r 1))))
+                                        (if (or (<= (pp-mid words w) old) (> (- (pp-mid words w) old) (* 4 (pp-height words w)))) (set contiguous 0))
+                                        (set r (+ r 1))))
+                                  ;; Neighboring column, same physical rows, holds
+                                  ;; entirely on incumbent readings (support=2).
+                                  (while (and (== contiguous 1) (and (< partner (cells-len rows)) (== support 0)))
+                                    (do (set other (cells-at rows partner))
+                                        (if (and (== (pp-same-col words (cells-at col s) other) 0)
+                                                 (<= (pp-abs (- (pp-mid words other) (pp-mid words (cells-at col s)))) (pp-height words other)))
+                                          (do (set sum (i64 0)) (set geometry 1) (set valid 1) (set dec -1) (set r s)
+                                              (while (<= r t)
+                                                (do (set w -1) (set i 0)
+                                                    (while (< i (cells-len rows))
+                                                      (do (set p (cells-at rows i))
+                                                          (if (and (== (pp-same-col words other p) 1)
+                                                                   (<= (pp-abs (- (pp-mid words p) (pp-mid words (cells-at col r)))) (quot (pp-height words p) 2)))
+                                                            (if (< w 0) (set w p) (set valid 0)))
+                                                          (set i (+ i 1))))
+                                                    (if (< w 0) (do (set valid 0) (set geometry 0))
+                                                      (do (set value (fmt-value text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen)) cm))
+                                                          (set d (cells-at cm 1)) (if (< dec 0) (set dec d))
+                                                          (if (or (== (cells-at cm 0) 0) (or (!= dec d) (== value (i64 0)))) (set valid 0))
+                                                          (if (< r t) (set sum (+ sum value)) (set sum (- sum value)))))
+                                                    (set r (+ r 1))))
+                                              (if (and (== geometry 1) (>= w 0))
+                                                (if (== (pp-total-rule rules words page w) 1)
+                                                  (do (set support 1)
+                                                      (if (and (== valid 1) (== sum (i64 0))) (set support 2)))))))
+                                        (set partner (+ partner 1))))
+                                  (if (>= support 1)
+                                    (if (== (oa-block-cells text inc candidates s t support out options offsets counts choices best im cm anchored) 1)
+                                      (do (set r s)
+                                          (while (<= r t)
+                                            (do (set candidate (cells-at out (- r s)))
+                                                (if (>= candidate 0)
+                                                  (do (set w (cells-at col r)) (set p (cells-at sources candidate)) (set found 0) (set j 0)
+                                                      (while (< j (cells-len approved))
+                                                        (do (if (== (cells-at approved j) w)
+                                                              (do (set found 1) (if (!= (cells-at approved (+ j 1)) p) (cells-set approved (+ j 1) -1))))
+                                                            (set j (+ j 4))))
+                                                      (if (== found 0)
+                                                        (do (cells-push approved w) (cells-push approved p)
+                                                            (cells-push approved (cells-at col s)) (cells-push approved (cells-at col t))))))
+                                                (set r (+ r 1)))))))
+                                  (set s (+ s 1))))))
+                      (set t (+ t 1))))))
+          (set seed (+ seed 1))))
+    (return (quot (cells-len approved) 4))))

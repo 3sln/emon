@@ -5,6 +5,8 @@ use crate::emon::evidence::*;
 use crate::emon::health::*;
 use crate::emon::oaline::*;
 use crate::emon::oapct::*;
+use crate::emon::oapp::*;
+use crate::emon::ocrengine::*;
 use crate::emon::ofuse::*;
 use crate::emon::pageink::*;
 use crate::emon::pdfdoc::*;
@@ -481,6 +483,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     let mut ua: i32 = -1;
     let mut k: i32 = 0;
     let mut vdec: i32 = 0;
+    let mut ppview: i32 = 0;
     let mut l0: i32 = 0;
     let mut w0: i32 = 0;
     let mut nw: i32 = 0;
@@ -494,6 +497,9 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     ao = an_find(ans, oid);
     if ao < 0 {
         sc_request(rq, oid, did, (dpi100 + 50) / 100, loc);
+        if (fuse & 8) == 8 {
+            sc_request(rq, pu_id(i, oe_request_slot()), did, (dpi100 + 50) / 100, loc);
+        }
         return us_requests();
     }
     if an_ok(ans, ao) != 1 {
@@ -594,7 +600,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     // RC5c (D731): guarded fusion of the recorded readings of an upright image page the receipt detector fired on, with a receipt keyword (`of-fuse`)
     if (crate::port::cells_at(rtp, rtp_primary()) == run) || (crate::port::cells_at(rtp, rtp_q()) == 0) {
-        nsel = of_fuse(i + 1, maskv, crate::port::cells_at(rtp, rtp_trigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr);
+        nsel = of_fuse(i + 1, maskv, crate::port::cells_at(rtp, rtp_trigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz);
     }
     if (crate::port::cells_at(rtp, rtp_primary()) == run) || (crate::port::cells_at(rtp, rtp_q()) == 0) {
         nsel = oa_line_fuse(i + 1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4);
@@ -606,6 +612,24 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         pct_ask(i, dpi100, bx0, by0, crate::port::bms_get(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
         ua = pct_record(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         nsel = pct_fuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
+    }
+    if (fuse & 8) == 8 {
+        ua = an_find(ans, pu_id(i, oe_request_slot()));
+        if (ua >= 0) && (an_ok(ans, ua) == 1) {
+            ppview = vdec;
+            if rid != did {
+                ppview = sc_page_view(epages, views, images, i + 1, did, pw, ph, an_arg(ans, ad, 0), an_arg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1);
+            }
+            sc_page_evidence(ans, ua, i + 1, pu_id(i, oe_request_slot()), ppview, dpi100, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+        }
+    }
+    if (fuse & 8) == 8 {
+        pp_sums(i + 1, pu_id(i, oe_request_slot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
+    }
+    if (fuse & 8) == 8 {
+        if (crate::port::cells_at(rtp, rtp_primary()) == run) || (crate::port::cells_at(rtp, rtp_q()) == 0) {
+            nsel = of_fuse(i + 1, maskv + 8, crate::port::cells_at(rtp, rtp_trigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz);
+        }
     }
     rt_upright(rtp, run, epages, i + 1);
     rotmed = ev_rot_median(olines, l0, nl);

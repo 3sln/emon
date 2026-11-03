@@ -1166,6 +1166,9 @@ pub fn ofr_blocked_lexicon() -> i32 {
 pub fn ofr_blocked_slot() -> i32 {
     return 7;
 }
+pub fn ofr_closure_sum() -> i32 {
+    return 8;
+}
 pub fn ofr_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "keep");
@@ -1193,6 +1196,10 @@ pub fn ofr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 7 {
         crate::port::text_ascii(t, "blocked-slot");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "closure-sum");
         return 1;
     }
     return 0;
@@ -6882,6 +6889,8 @@ pub fn ev_emit_oarb(mut t: &mut String, pr: i32, started: i32, rows: &mut crate:
         s = ev_begin(t, pr, 2, s, ek_rule());
         if ev_get(rows, 16, i, 9) == 2 {
             crate::port::text_ascii(t, "\"closure-pct\"");
+        } else if ev_get(rows, 16, i, 9) == 3 {
+            crate::port::text_ascii(t, "\"closure-sum\"");
         } else {
             crate::port::text_ascii(t, "\"line-merge\"");
         }

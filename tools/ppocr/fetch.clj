@@ -24,7 +24,7 @@
       (println "verified" file)
       (let [tmp (fs/create-temp-file {:dir root :prefix "download-"})]
         (try
-          (shell "curl" "--fail" "--location" "--silent" "--show-error" "--retry" "3"
+          (shell {:shutdown nil} "curl" "--fail" "--location" "--silent" "--show-error" "--retry" "3"
                  "--connect-timeout" "30" "--max-time" "600" "--output" (str tmp) url)
           (when-not (valid? tmp) (throw (ex-info "asset size or sha256 mismatch" {:file file})))
           (fs/move tmp dest {:replace-existing true})

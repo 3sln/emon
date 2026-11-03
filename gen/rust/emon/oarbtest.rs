@@ -665,6 +665,8 @@ fn test_arb_f08_block() {
     crate::testport::assert_eq(oa_block(text, inc, candidates, 0, 2, 2, out, work), 1, "f08-block guard");
     crate::testport::assert_eq(crate::port::cells_at(out, 0), 0, "first slot chooses the recorded candidate");
     crate::testport::assert_eq(crate::port::cells_at(out, 1), -1, "valid second slot stays incumbent");
+    crate::testport::assert_eq(oa_block(text, inc, candidates, 0, 2, 1, out, work), 1, "unique single-column solution clears the stricter guards");
+    crate::testport::assert_eq(crate::port::cells_at(out, 0), 0, "single-column closure still copies the recorded candidate");
 }
 #[test]
 fn test_arb_constant_column_100_to_zero() {

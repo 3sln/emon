@@ -1274,4 +1274,27 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.lnGet(lines, 72, Evidence.lhRot()), 9000, "twenty-three nonempty lines still keep the previous frame");
         emon.Testport.assertEq(Evidence.lnGet(lines, 72, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "empty rows cannot activate recovery");
     }
+    public static void testUnknownOcrBaselineUsesBoxBottomWithoutRewritingTheAnswer() {
+        emon.Port.Cells an = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        int at = threeLines(an, 2);
+        int ext = Ocr.oxFind(an, at);
+        int l = Ocr.oxLineAt(an, ext, 0);
+        emon.Port.cellsSet(an, l + 4, -1);
+        emon.Port.cellsSet(an, l + 5, -1);
+        emon.Port.cellsSet(an, l + 6, -1);
+        emon.Port.cellsSet(an, l + 7, -1);
+        emon.Port.cellsSet(an, l + 11, -1);
+        emon.Port.cellsSet(an, l + 12, -1);
+        emon.Port.cellsSet(an, l + 13, -1);
+        pageOf(an, at, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), lines, words, emon.Port.newCells(), emon.Port.newCells());
+        emon.Testport.assertEq(emon.Port.cellsAt(an, l + 4), -1, "raw answer still records absence");
+        emon.Testport.assertEq(emon.Port.cellsAt(an, l + 5), -1, "no measured baseline is invented in the transcript");
+        emon.Testport.assertEq(Evidence.olGet(lines, 0, Evidence.lhBy0()), 66 * 24, "layout fallback is the measured line box bottom");
+        emon.Testport.assertEq(Evidence.owGet(words, 0, Evidence.hdBy0()), 66 * 24, "word layout does not interpolate minus one pixels");
+        emon.Testport.assertEq(Evidence.owGet(words, 0, Evidence.hdBy1()), 66 * 24, "both ends use the same fallback");
+    }
 }

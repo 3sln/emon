@@ -8,6 +8,8 @@ import (
 	"emon/health"
 	"emon/oaline"
 	"emon/oapct"
+	"emon/oapp"
+	"emon/ocrengine"
 	"emon/ofuse"
 	"emon/pageink"
 	"emon/pdfdoc"
@@ -502,6 +504,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	var ua int32 = -1
 	var k int32 = 0
 	var vdec int32 = 0
+	var ppview int32 = 0
 	var l0 int32 = 0
 	var w0 int32 = 0
 	var nw int32 = 0
@@ -515,6 +518,9 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	ao = plan.AnFind(ans, oid)
 	if ao < 0 {
 		scan.ScRequest(rq, oid, did, (dpi100+50)/100, loc)
+		if (fuse & 8) == 8 {
+			scan.ScRequest(rq, plan.PuId(i, ocrengine.OeRequestSlot()), did, (dpi100+50)/100, loc)
+		}
 		return plan.UsRequests()
 	}
 	if plan.AnOk(ans, ao) != 1 {
@@ -615,7 +621,7 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	}
 	// RC5c (D731): guarded fusion of the recorded readings of an upright image page the receipt detector fired on, with a receipt keyword (`of-fuse`)
 	if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {
-		nsel = ofuse.OfFuse(i+1, maskv, port.CellsAt(rtp, retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr)
+		nsel = ofuse.OfFuse(i+1, maskv, port.CellsAt(rtp, retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz)
 	}
 	if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {
 		nsel = oaline.OaLineFuse(i+1, rtp, oruns, olines, owords, etext, scr, nsel, oaz, s1, s2, s3, s4)
@@ -627,6 +633,24 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		oapct.PctAsk(i, dpi100, bx0, by0, port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6)
 		ua = oapct.PctRecord(i, dpi100, bx0, by0, ans, loc, s2, vdec, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 		nsel = oapct.PctFuse(i+1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri)
+	}
+	if (fuse & 8) == 8 {
+		ua = plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot()))
+		if (ua >= 0) && (plan.AnOk(ans, ua) == 1) {
+			ppview = vdec
+			if rid != did {
+				ppview = scan.ScPageView(epages, views, images, i+1, did, pw, ph, plan.AnArg(ans, ad, 0), plan.AnArg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1)
+			}
+			scan.ScPageEvidence(ans, ua, i+1, plan.PuId(i, ocrengine.OeRequestSlot()), ppview, dpi100, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+		}
+	}
+	if (fuse & 8) == 8 {
+		oapp.PpSums(i+1, plan.PuId(i, ocrengine.OeRequestSlot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri)
+	}
+	if (fuse & 8) == 8 {
+		if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {
+			nsel = ofuse.OfFuse(i+1, maskv+8, port.CellsAt(rtp, retarget.RtpTrigger()), oruns, olines, owords, etext, rules, scr, nsel, ofz, s1, s2, s3, s4, s5, s6, rn, ri, cs, vr, aux, oaz)
+		}
 	}
 	retarget.RtUpright(rtp, run, epages, i+1)
 	rotmed = evidence.EvRotMedian(olines, l0, nl)

@@ -36,6 +36,8 @@ extern "C" {
     fn TessVersion() -> *const c_char;
     fn TessBaseAPICreate() -> Api;
     fn TessBaseAPIDelete(h: Api);
+    #[cfg(ppocr)]
+    fn TessBaseAPIIsValidWord(h: Api, word: *const c_char) -> c_int;
     fn TessBaseAPIInit3(h: Api, datapath: *const c_char, lang: *const c_char) -> c_int;
     fn TessBaseAPISetVariable(h: Api, name: *const c_char, value: *const c_char) -> c_int;
     fn TessBaseAPISetPageSegMode(h: Api, mode: c_int);
@@ -212,6 +214,14 @@ unsafe impl Send for Tess {}
 impl Tess {
     pub fn new(tessdata: &str, dpi: i32) -> Tess {
         Tess { tessdata: tessdata.to_string(), apis: HashMap::new(), dpi, notes: Vec::new(), only: None }
+    }
+
+    #[cfg(ppocr)]
+    pub(crate) fn valid_english_word(&mut self, word: &str) -> bool {
+        // This dedicated instance never recognizes pixels or learns document
+        // words. Only the pinned English model's lexicon can certify a word.
+        let Ok(word) = CString::new(word) else { return false; };
+        self.api("eng").map(|h| unsafe { TessBaseAPIIsValidWord(h, word.as_ptr()) > 0 }).unwrap_or(false)
     }
 
     fn installed(&self) -> Vec<String> {
@@ -582,6 +592,8 @@ pub struct TessOcr {
 
 #[cfg(feature = "tesseract")]
 impl TessOcr {
+    #[cfg(ppocr)]
+    pub(crate) fn data_dir(&self) -> &str { &self.tessdata }
     // `tessdata` is the directory of the `.traineddata` files and `langs` the models (`eng`, `deu`) the engine may read with: the ones
     // not in the directory are an Err naming them. (The CLI's `--lang`, P11.4b.)
     pub fn with_languages(tessdata: &str, langs: &[String]) -> Result<TessOcr, String> {

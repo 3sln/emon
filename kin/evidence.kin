@@ -291,7 +291,8 @@
    [ofr-insert 4 "insert"]
    [ofr-blocked-format 5 "blocked-format"]
    [ofr-blocked-lexicon 6 "blocked-lexicon"]
-   [ofr-blocked-slot 7 "blocked-slot"]])
+   [ofr-blocked-slot 7 "blocked-slot"]
+   [ofr-closure-sum 8 "closure-sum"]])
 
 (defenum ^:pub ofo
   [[ofo-keep 1 "keep"]
@@ -3150,7 +3151,8 @@
           (set s (ev-frun t pr 2 rows 16 i 5 (ek-incumbent) s))
           (set s (ev-frun t pr 2 rows 16 i 7 (ek-choice) s))
           (set s (ev-begin t pr 2 s (ek-rule)))
-          (if (== (ev-get rows 16 i 9) 2) (emit-ascii t "\"closure-pct\"") (emit-ascii t "\"line-merge\""))
+          (if (== (ev-get rows 16 i 9) 2) (emit-ascii t "\"closure-pct\"")
+            (if (== (ev-get rows 16 i 9) 3) (emit-ascii t "\"closure-sum\"") (emit-ascii t "\"line-merge\"")))
           (set s (ev-fint t pr 2 rows 16 i 10 (ek-run) -1 s))
           (set s (ev-fint t pr 2 rows 16 i 11 (ek-votes) 0 s))
           (set s (ev-fint t pr 2 rows 16 i 12 (ek-margin) -2147483648 s))

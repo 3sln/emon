@@ -1327,4 +1327,28 @@ public static class Scantest {
         emon.Testport.AssertEq(Evidence.LnGet(lines, 72, Evidence.LhRot()), 9000, "twenty-three nonempty lines still keep the previous frame");
         emon.Testport.AssertEq(Evidence.LnGet(lines, 72, Evidence.LfSrc()) & Evidence.LsFrame(), 0, "empty rows cannot activate recovery");
     }
+    [Xunit.Fact]
+    public static void TestUnknownOcrBaselineUsesBoxBottomWithoutRewritingTheAnswer() {
+        emon.Port.Cells an = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        int at = ThreeLines(an, 2);
+        int ext = Ocr.OxFind(an, at);
+        int l = Ocr.OxLineAt(an, ext, 0);
+        emon.Port.CellsSet(an, l + 4, -1);
+        emon.Port.CellsSet(an, l + 5, -1);
+        emon.Port.CellsSet(an, l + 6, -1);
+        emon.Port.CellsSet(an, l + 7, -1);
+        emon.Port.CellsSet(an, l + 11, -1);
+        emon.Port.CellsSet(an, l + 12, -1);
+        emon.Port.CellsSet(an, l + 13, -1);
+        PageOf(an, at, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), lines, words, emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertEq(emon.Port.CellsAt(an, l + 4), -1, "raw answer still records absence");
+        emon.Testport.AssertEq(emon.Port.CellsAt(an, l + 5), -1, "no measured baseline is invented in the transcript");
+        emon.Testport.AssertEq(Evidence.OlGet(lines, 0, Evidence.LhBy0()), 66 * 24, "layout fallback is the measured line box bottom");
+        emon.Testport.AssertEq(Evidence.OwGet(words, 0, Evidence.HdBy0()), 66 * 24, "word layout does not interpolate minus one pixels");
+        emon.Testport.AssertEq(Evidence.OwGet(words, 0, Evidence.HdBy1()), 66 * 24, "both ends use the same fallback");
+    }
 }

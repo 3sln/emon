@@ -1058,7 +1058,7 @@ public final class Ofusetest {
         return 1;
     }
     public static int oftFuse(emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells scr, emon.Port.Cells ofz, int image, int trigger, emon.Port.Cells r1) {
-        return Ofuse.ofFuse(1, image, trigger, runs, lines, words, text, emon.Port.newCells(), scr, 1, ofz, r1, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        return Ofuse.ofFuse(1, image, trigger, runs, lines, words, text, emon.Port.newCells(), scr, 1, ofz, r1, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
     }
     public static int oftZ(emon.Port.Cells ofz, int row, int f) {
         return emon.Port.cellsAt(ofz, (row * Evidence.ozStride()) + f);

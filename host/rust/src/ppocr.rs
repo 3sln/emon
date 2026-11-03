@@ -11,6 +11,8 @@ use std::sync::Mutex;
 
 pub struct PpOcr {
     pipeline: Mutex<Pipeline>,
+    incumbent: crate::tess::TessOcr,
+    lexicon: Mutex<crate::tess::Tess>,
     calibration: Calibration,
     identity: String,
 }
@@ -57,8 +59,14 @@ impl PpOcr {
         }
         // Filled only after the independent training-pool calibration finishes.
         let calibration = Calibration::new(include!("ppocr_calibration.rs"))?;
+        let incumbent = crate::tess::TessOcr::new(None)?;
+        verify(&Path::new(incumbent.data_dir()).join("eng.traineddata"),
+               "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2")?;
+        let lexicon = Mutex::new(crate::tess::Tess::new(incumbent.data_dir(), 0));
         Ok(Self {
             pipeline: Mutex::new(Pipeline::open(dir, include_str!("ppocr_dictionary.txt"))?),
+            incumbent,
+            lexicon,
             calibration,
             identity: identity(),
         })
@@ -74,14 +82,17 @@ fn unsupported(req: &Request) -> Answer {
 }
 impl Ocr for PpOcr {
     fn producer(&self) -> Vec<(String, String)> {
-        vec![
-            ("ocr-engine".into(), "ppocr".into()),
+        let mut p = self.incumbent.producer();
+        p.extend(vec![
+            ("ocr-engine".into(), "tesseract+ppocr".into()),
             ("ocr-model".into(), self.identity.clone()),
+            ("pp-lexicon".into(), "tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2".into()),
             (
                 "onnxruntime".into(),
                 "1.22.0 CPU sequential intra=1 inter=1".into(),
             ),
-        ]
+        ]);
+        p
     }
     fn fulfil(
         &self,
@@ -93,6 +104,9 @@ impl Ocr for PpOcr {
         let mut r = Cells::new();
         for &v in &req.rec {
             crate::port::cells_push(&mut r, v);
+        }
+        if crate::emon::ocrport::op_identity_at(&mut r) < 0 {
+            return self.incumbent.fulfil(req, bitmaps, _keep_binary);
         }
         let marker = usize::try_from(crate::emon::ocrport::op_identity_at(&mut r))
             .map_err(|_| fail("PP-OCR request has no model identity"))?;
@@ -230,8 +244,10 @@ impl Ocr for PpOcr {
         for b in &reading.lines {
             crate::emon::ocr::ox_block(&mut out, b[0] + dx, b[1] + dy, b[2], b[3], 0, -1, -1);
         }
-        for _ in &reading.words {
-            crate::emon::ocr::ox_word(&mut out, 0, 1701734144, -1, 0);
+        let mut lexicon = self.lexicon.lock().map_err(|_| fail("PP lexicon lock poisoned"))?;
+        for word in &reading.words {
+            let flags = if lexicon.valid_english_word(&word.text) { crate::emon::ocr::ocw_dict() } else { 0 };
+            crate::emon::ocr::ox_word(&mut out, 0, 1701734144, -1, flags);
         }
         crate::emon::plan::an_ocr_end(&mut out, at);
         Ok(Answer {

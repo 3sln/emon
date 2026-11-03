@@ -6,12 +6,15 @@ package emon;
 
 public final class Ocrengine {
     public static final int[] OE_IDENTITY = {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 102, 54, 57, 54, 54,
-        49, 53, 49, 98, 57, 97, 57, 57, 98, 101, 100, 48, 98, 55, 53, 48,
-        101, 56, 57, 49, 54, 52, 101, 99, 99, 102, 51, 53, 50, 100, 51, 50,
-        52, 100, 100, 49, 98, 54, 49, 53, 100, 53, 52, 101, 50, 55, 98, 97,
-        97, 51, 56, 50, 54, 52, 50, 56, 48, 99
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 98, 54, 56, 51, 100, 102,
+        54, 56, 49, 102, 54, 53, 97, 56, 101, 57, 53, 97, 53, 57, 48, 53,
+        100, 56, 51, 50, 55, 56, 97, 102, 54, 54, 54, 50, 55, 57, 55, 48,
+        102, 57, 50, 101, 48, 98, 48, 53, 48, 49, 53, 48, 48, 57, 56, 49,
+        49, 100, 54, 55, 97, 50, 97, 52, 100, 102
     };
+    public static int oeRequestSlot() {
+        return 23;
+    }
     public static int oeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int engine) {
         if (engine == 0) {
             return 0;
@@ -26,7 +29,7 @@ public final class Ocrengine {
             int kind = emon.Port.cellsAt(requests, at + 1);
             int count = n;
             int first = 10;
-            if (kind == Plan.pkOcr()) {
+            if ((kind == Plan.pkOcr()) && ((engine == 1) || ((emon.Port.cellsAt(requests, at + 2) % 256) == oeRequestSlot()))) {
                 k = first;
                 while ((k + 2) < count) {
                     if ((emon.Port.cellsAt(requests, at + k) == -3100) && ((emon.Port.cellsAt(requests, (at + k) + 1) == 1) && (emon.Port.cellsAt(requests, (at + k) + 2) == ((count - k) - 3)))) {
@@ -42,9 +45,9 @@ public final class Ocrengine {
                 emon.Port.cellsPush(scratch, emon.Port.cellsAt(requests, at + i));
                 i += 1;
             }
-            if (kind == Plan.pkOcr()) {
+            if ((kind == Plan.pkOcr()) && ((engine == 1) || ((emon.Port.cellsAt(requests, at + 2) % 256) == oeRequestSlot()))) {
                 emon.Port.cellsPush(scratch, -3100);
-                emon.Port.cellsPush(scratch, engine);
+                emon.Port.cellsPush(scratch, 1);
                 emon.Port.cellsPush(scratch, 74);
                 k = 0;
                 while (k < 74) {

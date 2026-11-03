@@ -1099,7 +1099,7 @@ pub(crate) fn oft_page(mut runs: &mut crate::port::Cells, mut lines: &mut crate:
     return 1;
 }
 pub(crate) fn oft_fuse(runs: &mut crate::port::Cells, lines: &mut crate::port::Cells, words: &mut crate::port::Cells, text: &mut crate::port::Cells, scr: &mut crate::port::Cells, ofz: &mut crate::port::Cells, image: i32, trigger: i32, r1: &mut crate::port::Cells) -> i32 {
-    return of_fuse(1, image, trigger, runs, lines, words, text, &mut crate::port::Cells::new(), scr, 1, ofz, r1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    return of_fuse(1, image, trigger, runs, lines, words, text, &mut crate::port::Cells::new(), scr, 1, ofz, r1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
 }
 pub(crate) fn oft_z(ofz: &mut crate::port::Cells, row: i32, f: i32) -> i32 {
     return crate::port::cells_at(ofz, (row * oz_stride()) + f);

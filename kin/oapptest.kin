@@ -1,0 +1,18 @@
+;; OP1b proposal guards, written before activation in the page unit.
+(ns emon.oapptest
+  (:require [emon.lang :refer [Cells I32]]
+            [emon.oapp :refer [pp-total-rule]]
+            [emon.evidence :refer [ow-new rl-new rl-set rlf-conf]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [kin.lang :refer [let]]))
+
+(deftest test-pp-arithmetic-requires-a-source-rule-above-its-total
+  (let [^Cells rules (new-cells) ^Cells words (new-cells)
+        ^I32 w (ow-new words 1 1000 2000 1500 2200 0 0 0 0 0 0 0 3 0 900 -1)]
+    (assert-eq (pp-total-rule rules words 1 w) 0 "prose has no total rule")
+    (let [^I32 other-page (rl-new rules 2 900 1900 1600 1950 0)] (rl-set rules other-page (rlf-conf) 1000))
+    (assert-eq (pp-total-rule rules words 1 w) 0 "another page supplies no rule")
+    (let [^I32 short-rule (rl-new rules 1 1100 1900 1400 1950 0)] (rl-set rules short-rule (rlf-conf) 1000))
+    (assert-eq (pp-total-rule rules words 1 w) 0 "a short stroke does not span the total")
+    (let [^I32 total-rule (rl-new rules 1 900 1900 1600 1950 0)] (rl-set rules total-rule (rlf-conf) 1000))
+    (assert-eq (pp-total-rule rules words 1 w) 1 "source rule spans the total")))

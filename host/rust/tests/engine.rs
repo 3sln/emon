@@ -1215,11 +1215,12 @@ fn optional_ocr_engine_identity_separates_transcripts_and_replay_never_calls_a_p
     let default = Options::default();
     let optional = Options { ocr_engine: emon::OcrEngine::PpOcr, ..Options::default() };
     let (expected, transcript) = with_ocr().record(Input::bytes(bytes.clone()), &optional).unwrap();
-    assert!(transcript.entries.iter().filter(|e| e.req[1] == 3).all(|e| e.req.contains(&-3100)));
+    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && e.req.contains(&-3100)));
+    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && !e.req.contains(&-3100)));
     let replay = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &transcript).unwrap();
     assert_eq!(json(&expected), json(&replay));
     let mut other_model = transcript.clone();
-    let entry = other_model.entries.iter_mut().find(|e| e.req[1] == 3).unwrap();
+    let entry = other_model.entries.iter_mut().find(|e| e.req[1] == 3 && e.req.contains(&-3100)).unwrap();
     *entry.req.last_mut().unwrap() ^= 1;
     let miss = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &other_model).err().unwrap();
     assert_eq!(miss.name(), "transcript-miss");
@@ -1236,9 +1237,11 @@ fn optional_ocr_leaves_born_digital_auto_models_and_evidence_unchanged() {
     let default = Options { ocr: OcrPolicy::Auto, keep_evidence: true, ..Options::default() };
     let optional = Options { ocr_engine: emon::OcrEngine::PpOcr, ..default.clone() };
     let a = with_ocr().convert(Input::bytes(bytes.clone()), &default).unwrap();
-    let b = with_ocr().convert(Input::bytes(bytes), &optional).unwrap();
+    let (b, recording) = with_ocr().record(Input::bytes(bytes.clone()), &optional).unwrap();
     assert_eq!(json(&a), json(&b));
     assert_eq!(a.evidence(), b.evidence());
+    let replay = Engine::new(Config::default()).replay(Input::bytes(bytes), &default, &recording).unwrap();
+    assert_eq!(json(&a), json(&replay), "a selector that issued no PP request does not change the recording's engine");
 }
 
 #[cfg(ppocr)]
@@ -1272,4 +1275,32 @@ fn optional_ocr_evidence_names_the_requested_engine_when_reading_is_unsupported(
     let o = Options { ocr_engine: emon::OcrEngine::PpOcr, keep_evidence: true, ..Options::default() };
     let m = e.convert(Input::bytes(image("png-phys300.png")), &o).unwrap();
     assert!(m.evidence().unwrap().contains("\"ocr-engine\":{\"name\":\"ppocr\""));
+}
+
+#[test]
+fn unknown_ocr_baseline_reaches_represented_html_and_replays() {
+    struct UnknownBaseline;
+    impl Ocr for UnknownBaseline {
+        fn fulfil(&self, req: &emon::plan::Request, _: &emon::plan::Bitmaps, _: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+            use emon::port::{Cells, cells_at, cells_len};
+            let mut out = Cells::new();
+            let at = emon::emon::plan::an_ocr(&mut out, req.id());
+            let word = emon::emon::plan::an_ocr_word(&mut out, at, 5, 5, 30, 12, 950, 0, 0);
+            for cp in "BASELINE".chars() { emon::emon::plan::an_ocr_cp(&mut out, word, cp as i32); }
+            emon::emon::ocr::ox_begin(&mut out, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
+            emon::emon::ocr::ox_line(&mut out, 5, 5, 30, 12, -1, -1, -1, -1, 0, 0, 0, -1, -1, -1);
+            emon::emon::ocr::ox_block(&mut out, 5, 5, 30, 12, 0, 0, 0);
+            emon::emon::ocr::ox_word(&mut out, 0, 1701734144, -1, 1);
+            emon::emon::plan::an_ocr_end(&mut out, at);
+            Ok(emon::plan::Answer { rec: (0..cells_len(&out)).map(|i| cells_at(&out, i)).collect(), bitmap: None })
+        }
+    }
+    let engine = Engine::new(Config { ocr: Some(OcrPort(std::sync::Arc::new(UnknownBaseline))), ..Config::default() });
+    let options = Options { no_retarget: true, ..Options::default() };
+    let bytes = image("png-phys300.png");
+    let (model, transcript) = engine.record(Input::bytes(bytes.clone()), &options).unwrap();
+    let html = model.to_html(&HtmlOptions::default());
+    assert!(html.contains("BASELINE"), "selected evidence alone is insufficient: the word must be represented");
+    let replay = Engine::new(Config::default()).replay(Input::bytes(bytes), &options, &transcript).unwrap();
+    assert_eq!(replay.to_html(&HtmlOptions::default()), html);
 }

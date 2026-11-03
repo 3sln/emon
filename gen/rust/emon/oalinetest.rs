@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::oaline::*;
+use crate::emon::ofuse::*;
 use crate::emon::retarget::*;
 use crate::emon::scan::*;
 
@@ -96,6 +97,12 @@ fn test_line_retry_merges_only_the_supported_amount_slot() {
     crate::testport::assert_eq(crate::port::cells_at(rows, 6), 2, "exactly two incumbent words displaced");
     crate::testport::assert_eq(crate::port::cells_at(rows, 7), 3, "choice is a recorded reading");
     crate::testport::assert_eq(crate::port::cells_at(rows, 12), 606, "confidence margin is preserved");
+    or_set(runs, 0, orf_pass(), op_first());
+    ow_set(words, 3, owf_run(), 1);
+    ow_set(words, 4, owf_run(), 1);
+    crate::testport::assert_eq(of_fuse(1, 9, 0, runs, lines, words, text, &mut crate::port::Cells::new(), scr, 1, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), rows), 1, "optional fusion keeps one selected line");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 2, "default repaired line is still selected");
+    crate::testport::assert_eq(ow_get(words, ol_get(lines, 2, lh_first()), hd_tstart()), 16, "default-correct amount remains source backed");
 }
 #[test]
 fn test_line_retry_cannot_concatenate_two_valid_numeric_cells() {

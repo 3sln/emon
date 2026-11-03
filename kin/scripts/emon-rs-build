@@ -47,6 +47,7 @@ fi
 if [ "${EMON_RS_PPOCR:-}" = 1 ]; then
   [ -z "$cli_mode" ] || { echo "ppocr is unsupported by the CLI; use the Rust reference driver" >&2; exit 1; }
   crate="$crate-ppocr"
+  live=1
 fi
 mkdir -p "$crate/src/emon"
 

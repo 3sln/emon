@@ -1175,6 +1175,25 @@
           (set i (+ i 1))))
     (return best)))
 
+(defn ^:pub ^I32 of-pp-year [^Cells text ^I32 start ^I32 n]
+  (if (or (!= n 7) (or (< start 0) (> (+ start n) (cells-len text)))) (return 0))
+  (if (!= (cells-at text (+ start 4)) 45) (return 0))
+  (let [^:mut ^I32 j 0]
+    (while (< j n)
+      (do (if (!= j 4)
+            (if (== (fmt-digit (cells-at text (+ start j))) 0) (return 0)))
+          (set j (+ j 1)))))
+  (return 1))
+
+(defn ^:pub ^I32 of-pp-choice [^Cells c ^I32 incumbent-count]
+  (let [^I32 best (of-choice c incumbent-count)]
+    (if (< best 1) (return best))
+    (if (< (of-cget c best 2) incumbent-count) (return -1))
+    (if (> incumbent-count 0)
+      (do (if (and (== (of-cget c 0 5) 1) (and (== (of-cget c best 7) 0) (< (of-cget c best 3) 2))) (return -1))
+          (if (and (== (of-cget c best 7) 1) (== (of-cget c 0 7) 0)) (return -1))))
+    (return best)))
+
 (defn ^:pub ^I32 of-null-votes [^Cells runs ^Cells words ^Cells reads ^Cells rows ^Cells parents ^I32 root]
   (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 found 0 ^:mut ^I32 count 0 ^:mut ^I32 run 0]
     (while (< i (cells-len reads))
@@ -1339,7 +1358,7 @@
                           ^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^Cells text ^Cells rules
                           ^:mut ^Cells scr ^I32 nsel ^:mut ^Cells ofz
                           ^:mut ^Cells reads ^:mut ^Cells rrefs ^:mut ^Cells rows ^:mut ^Cells parents ^:mut ^Cells plan
-                          ^:mut ^Cells sel ^:mut ^Cells selk ^:mut ^Cells c ^:mut ^Cells crefs ^:mut ^Cells seq]
+                          ^:mut ^Cells sel ^:mut ^Cells selk ^:mut ^Cells c ^:mut ^Cells crefs ^:mut ^Cells seq ^Cells arithmetic ^:mut ^Cells oaz]
   (comment "The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image")
   (comment "input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch")
   (comment "is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.")
@@ -1347,9 +1366,11 @@
         ^:mut ^I32 ns 0 ^:mut ^I32 r 0 ^:mut ^I32 count 0 ^:mut ^I32 first 0 ^:mut ^I32 best 0 ^:mut ^I32 alt 0
         ^:mut ^I32 x0 0 ^:mut ^I32 y0 0 ^:mut ^I32 x1 0 ^:mut ^I32 y1 0 ^:mut ^I32 mask 0 ^:mut ^I32 zr 0 ^:mut ^I32 at 0
         ^:mut ^I32 changed 0 ^:mut ^I32 fr 0 ^:mut ^I32 nl 0 ^:mut ^I32 n2 0 ^:mut ^I32 ng 0 ^:mut ^I32 g 0 ^:mut ^I32 h 0
+        ^:mut ^I32 closure 0 ^:mut ^I32 rule 0 ^:mut ^I32 identity-first 0 ^:mut ^I32 identity-total 0
         ^:mut ^I32 view 0 ^:mut ^I32 margin 0 ^:mut ^I32 votes 0 ^:mut ^I32 mine 0 ^:mut ^I32 pick 0]
-    (if (or (!= image 1) (and (!= trigger 1) (!= trigger 2))) (return nsel))
-    (if (== (of-page-keyword words text page) 0) (return nsel))
+    (if (< image 8)
+      (do (if (or (!= image 1) (and (!= trigger 1) (!= trigger 2))) (return nsel))
+          (if (== (of-page-keyword words text page) 0) (return nsel))))
     (comment "the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without")
     (comment "the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged")
     (comment "now exactly as the emission flags them (it would flag the same words of the same lines), so a replaced line's kept-out words keep their ledger fate.")
@@ -1401,14 +1422,49 @@
                 (if (> count (of-slot-max))
                   (of-zrow ofz page x0 y0 x1 y1 (cells-at sel first) count 6 0 0 0 0 mask)
                   (do (of-candidates words text rows parents r sel reads c crefs seq)
+                      (set closure 0)
                       (set best (of-choice c count))
+                      (if (>= image 8)
+                        (do (if (== count 1)
+                              (do (set w (cells-at crefs (of-cget c 0 1)))
+                                  (if (== (of-pp-year text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 1)
+                                    (cells-set c 6 1))))
+                            (set best (of-pp-choice c count))
+                            ;; P-ARB approved a unique source-recorded assignment
+                            ;; under an exact, independently supported column sum.
+                            (if (== count 1)
+                              (do (set k 0)
+                                  (while (< k (cells-len arithmetic))
+                                    (do (if (and (== (cells-at arithmetic k) (cells-at sel first)) (>= (cells-at arithmetic (+ k 1)) 0))
+                                          (do (set q 1)
+                                              (while (< q (quot (cells-len c) (of-cstride)))
+                                                (do (if (== (of-cget c q 2) 1)
+                                                      (do (set w (cells-at crefs (of-cget c q 1)))
+                                                          (if (== (of-word-same words text w (cells-at arithmetic (+ k 1)) 0) 1)
+                                                            (do (set best q) (set closure 1)
+                                                                (set identity-first (cells-at arithmetic (+ k 2)))
+                                                                (set identity-total (cells-at arithmetic (+ k 3)))))))
+                                                    (set q (+ q 1))))))
+                                        (set k (+ k 4))))))))
                       (set alt best)
                       (if (< alt 0) (set alt (of-ranked c)))
                       (set votes 0) (set margin 0)
                       (if (>= alt 1) (do (set votes (of-cget c alt 3)) (set margin (- (of-cget c alt 4) (of-cget c 0 4)))))
                       (set pick -1)
                       (if (>= first 0) (set pick (cells-at sel first)))
-                      (set zr (of-zrow ofz page x0 y0 x1 y1 pick count (of-rule-of c alt count)
+                      (set rule (of-rule-of c alt count))
+                      (if (and (>= image 8) (and (< best 1) (>= alt 1)))
+                        (do (if (< (of-cget c alt 2) count) (set rule 6))
+                            (if (and (> count 0) (and (== (of-cget c 0 5) 1) (and (== (of-cget c alt 7) 0) (< (of-cget c alt 3) 2)))) (set rule 5))
+                            (if (and (> count 0) (and (== (of-cget c alt 7) 1) (== (of-cget c 0 7) 0))) (set rule 4))))
+                      (if (== closure 1)
+                        (do (set rule 7)
+                            (set w (cells-at crefs (of-cget c best 1)))
+                            (cells-push oaz page) (cells-push oaz x0) (cells-push oaz y0) (cells-push oaz x1) (cells-push oaz y1)
+                            (cells-push oaz pick) (cells-push oaz 1) (cells-push oaz w) (cells-push oaz 1) (cells-push oaz 3)
+                            (cells-push oaz (ow-get words w (owf-run))) (cells-push oaz (of-cget c best 3)) (cells-push oaz margin)
+                            (cells-push oaz identity-first) (cells-push oaz identity-total) (cells-push oaz 0)))
+                      (set zr (of-zrow ofz page x0 y0 x1 y1 pick count rule
                                        votes (of-cget c 0 3) (of-null-votes runs words reads rows parents r) margin mask))
                       (if (>= best 1)
                         (do (set changed 1)

@@ -1392,6 +1392,42 @@ public static class Ofuse {
         }
         return best;
     }
+    public static int OfPpYear(emon.Port.Cells text, int start, int n) {
+        if ((n != 7) || ((start < 0) || ((start + n) > emon.Port.CellsLen(text)))) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(text, start + 4) != 45) {
+            return 0;
+        }
+        int j = 0;
+        while (j < n) {
+            if (j != 4) {
+                if (Ofmt.FmtDigit(emon.Port.CellsAt(text, start + j)) == 0) {
+                    return 0;
+                }
+            }
+            j += 1;
+        }
+        return 1;
+    }
+    public static int OfPpChoice(emon.Port.Cells c, int incumbentCount) {
+        int best = OfChoice(c, incumbentCount);
+        if (best < 1) {
+            return best;
+        }
+        if (OfCget(c, best, 2) < incumbentCount) {
+            return -1;
+        }
+        if (incumbentCount > 0) {
+            if ((OfCget(c, 0, 5) == 1) && ((OfCget(c, best, 7) == 0) && (OfCget(c, best, 3) < 2))) {
+                return -1;
+            }
+            if ((OfCget(c, best, 7) == 1) && (OfCget(c, 0, 7) == 0)) {
+                return -1;
+            }
+        }
+        return best;
+    }
     public static int OfNullVotes(emon.Port.Cells runs, emon.Port.Cells words, emon.Port.Cells reads, emon.Port.Cells rows, emon.Port.Cells parents, int root) {
         int i = 0;
         int j = 0;
@@ -1671,7 +1707,7 @@ public static class Ofuse {
         }
         return Scan.ScKeptWords(words, text, rules, page, n, mark, scr);
     }
-    public static int OfFuse(int page, int image, int trigger, emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells rules, emon.Port.Cells scr, int nsel, emon.Port.Cells ofz, emon.Port.Cells reads, emon.Port.Cells rrefs, emon.Port.Cells rows, emon.Port.Cells parents, emon.Port.Cells plan, emon.Port.Cells sel, emon.Port.Cells selk, emon.Port.Cells c, emon.Port.Cells crefs, emon.Port.Cells seq) {
+    public static int OfFuse(int page, int image, int trigger, emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells rules, emon.Port.Cells scr, int nsel, emon.Port.Cells ofz, emon.Port.Cells reads, emon.Port.Cells rrefs, emon.Port.Cells rows, emon.Port.Cells parents, emon.Port.Cells plan, emon.Port.Cells sel, emon.Port.Cells selk, emon.Port.Cells c, emon.Port.Cells crefs, emon.Port.Cells seq, emon.Port.Cells arithmetic, emon.Port.Cells oaz) {
         // The guarded fusion of page `page` (1-based) whose `nsel` selected lines are at `scr` `sc-sel-base`: answers the new count. `image` 1 an image
         // input page read upright, `trigger` the receipt detector's lane (1 photo, 2 thermal). A page outside the gate is left exactly as it is and no scratch
         // is touched; a gated page with fewer than two distinct readings gets only the no-text flags its emission sets anyway. The ten scratch arenas are the caller's.
@@ -1702,16 +1738,22 @@ public static class Ofuse {
         int ng = 0;
         int g = 0;
         int h = 0;
+        int closure = 0;
+        int rule = 0;
+        int identityFirst = 0;
+        int identityTotal = 0;
         int view = 0;
         int margin = 0;
         int votes = 0;
         int mine = 0;
         int pick = 0;
-        if ((image != 1) || ((trigger != 1) && (trigger != 2))) {
-            return nsel;
-        }
-        if (OfPageKeyword(words, text, page) == 0) {
-            return nsel;
+        if (image < 8) {
+            if ((image != 1) || ((trigger != 1) && (trigger != 2))) {
+                return nsel;
+            }
+            if (OfPageKeyword(words, text, page) == 0) {
+                return nsel;
+            }
         }
         // the selected words, line by line as `sc-emit-vetted` will emit them: a body-ink partner's words in their place along the line, and without
         // the words `sc-fates` will keep out as no text (`sc-kept-words`): what is not emitted is no incumbent and is not copied. Those words are flagged
@@ -1820,7 +1862,38 @@ public static class Ofuse {
                     OfZrow(ofz, page, x0, y0, x1, y1, emon.Port.CellsAt(sel, first), count, 6, 0, 0, 0, 0, mask);
                 } else {
                     OfCandidates(words, text, rows, parents, r, sel, reads, c, crefs, seq);
+                    closure = 0;
                     best = OfChoice(c, count);
+                    if (image >= 8) {
+                        if (count == 1) {
+                            w = emon.Port.CellsAt(crefs, OfCget(c, 0, 1));
+                            if (OfPpYear(text, Evidence.OwGet(words, w, Evidence.HdTstart()), Evidence.OwGet(words, w, Evidence.HdTlen())) == 1) {
+                                emon.Port.CellsSet(c, 6, 1);
+                            }
+                        }
+                        best = OfPpChoice(c, count);
+                        if (count == 1) {
+                            k = 0;
+                            while (k < emon.Port.CellsLen(arithmetic)) {
+                                if ((emon.Port.CellsAt(arithmetic, k) == emon.Port.CellsAt(sel, first)) && (emon.Port.CellsAt(arithmetic, k + 1) >= 0)) {
+                                    q = 1;
+                                    while (q < (emon.Port.CellsLen(c) / OfCstride())) {
+                                        if (OfCget(c, q, 2) == 1) {
+                                            w = emon.Port.CellsAt(crefs, OfCget(c, q, 1));
+                                            if (OfWordSame(words, text, w, emon.Port.CellsAt(arithmetic, k + 1), 0) == 1) {
+                                                best = q;
+                                                closure = 1;
+                                                identityFirst = emon.Port.CellsAt(arithmetic, k + 2);
+                                                identityTotal = emon.Port.CellsAt(arithmetic, k + 3);
+                                            }
+                                        }
+                                        q += 1;
+                                    }
+                                }
+                                k += 4;
+                            }
+                        }
+                    }
                     alt = best;
                     if (alt < 0) {
                         alt = OfRanked(c);
@@ -1835,7 +1908,39 @@ public static class Ofuse {
                     if (first >= 0) {
                         pick = emon.Port.CellsAt(sel, first);
                     }
-                    zr = OfZrow(ofz, page, x0, y0, x1, y1, pick, count, OfRuleOf(c, alt, count), votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask);
+                    rule = OfRuleOf(c, alt, count);
+                    if ((image >= 8) && ((best < 1) && (alt >= 1))) {
+                        if (OfCget(c, alt, 2) < count) {
+                            rule = 6;
+                        }
+                        if ((count > 0) && ((OfCget(c, 0, 5) == 1) && ((OfCget(c, alt, 7) == 0) && (OfCget(c, alt, 3) < 2)))) {
+                            rule = 5;
+                        }
+                        if ((count > 0) && ((OfCget(c, alt, 7) == 1) && (OfCget(c, 0, 7) == 0))) {
+                            rule = 4;
+                        }
+                    }
+                    if (closure == 1) {
+                        rule = 7;
+                        w = emon.Port.CellsAt(crefs, OfCget(c, best, 1));
+                        emon.Port.CellsPush(oaz, page);
+                        emon.Port.CellsPush(oaz, x0);
+                        emon.Port.CellsPush(oaz, y0);
+                        emon.Port.CellsPush(oaz, x1);
+                        emon.Port.CellsPush(oaz, y1);
+                        emon.Port.CellsPush(oaz, pick);
+                        emon.Port.CellsPush(oaz, 1);
+                        emon.Port.CellsPush(oaz, w);
+                        emon.Port.CellsPush(oaz, 1);
+                        emon.Port.CellsPush(oaz, 3);
+                        emon.Port.CellsPush(oaz, Evidence.OwGet(words, w, Evidence.OwfRun()));
+                        emon.Port.CellsPush(oaz, OfCget(c, best, 3));
+                        emon.Port.CellsPush(oaz, margin);
+                        emon.Port.CellsPush(oaz, identityFirst);
+                        emon.Port.CellsPush(oaz, identityTotal);
+                        emon.Port.CellsPush(oaz, 0);
+                    }
+                    zr = OfZrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask);
                     if (best >= 1) {
                         changed = 1;
                         at = OfChunk(plan, zr, c, crefs, best);

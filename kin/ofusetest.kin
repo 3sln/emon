@@ -884,7 +884,7 @@
 
 (defn ^I32 oft-fuse [^Cells runs ^Cells lines ^Cells words ^Cells text ^Cells scr ^Cells ofz ^I32 image ^I32 trigger ^Cells r1]
   (return (of-fuse 1 image trigger runs lines words text (new-cells) scr 1 ofz r1 (new-cells) (new-cells) (new-cells) (new-cells)
-                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
+                   (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))))
 
 (defn ^I32 oft-z [^Cells ofz ^I32 row ^I32 f] (return (cells-at ofz (+ (* row (oz-stride)) f))))
 

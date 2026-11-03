@@ -37,6 +37,8 @@
                                    ev-page-row ep-get epf-width epf-height
                                    or-count op-region op-first op-upscaled]]
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
+            [emon.ocrengine :refer [oe-request-slot]]
+            [emon.oapp :refer [pp-sums]]
             [emon.ofuse :refer [of-fuse]]
             [emon.oaline :refer [oa-line-fuse]]
             [emon.oapct :refer [pct-ask pct-record pct-rows pct-plan pct-fuse]]
@@ -436,6 +438,7 @@
         ^:mut ^I32 ua -1
         ^:mut ^I32 k 0
         ^:mut ^I32 vdec 0
+        ^:mut ^I32 ppview 0
         ^:mut ^I32 l0 0
         ^:mut ^I32 w0 0
         ^:mut ^I32 nw 0
@@ -449,6 +452,8 @@
     (set ao (an-find ans oid))
     (if (< ao 0)
       (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
+          (if (== (bit-and fuse 8) 8)
+            (sc-request rq (pu-id i (oe-request-slot)) did (quot (+ dpi100 50) 100) loc))
           (return (us-requests))))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (if (== (pu-dry fuse) 1) (return (us-done)))
@@ -528,7 +533,7 @@
     (comment "RC5c (D731): guarded fusion of the recorded readings of an upright image page the receipt detector fired on, with a receipt keyword (`of-fuse`)")
     (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
       (set nsel (of-fuse (+ i 1) maskv (cells-at rtp (rtp-trigger)) oruns olines owords etext rules scr nsel ofz
-                         s1 s2 s3 s4 s5 s6 rn ri cs vr)))
+                         s1 s2 s3 s4 s5 s6 rn ri cs vr aux oaz)))
     (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
       (set nsel (oa-line-fuse (+ i 1) rtp oruns olines owords etext scr nsel oaz s1 s2 s3 s4)))
     (if (== (cells-at rtp (rtp-q)) 0)
@@ -538,6 +543,24 @@
           (pct-ask i dpi100 bx0 by0 (bms-get bms did) ans loc bms owords etext w0 nw rq s1 s2 s3 s4 s5 s6)
           (set ua (pct-record i dpi100 bx0 by0 ans loc s2 vdec views epages etext oruns oblocks olines owords osyms oalts feats))
           (set nsel (pct-fuse (+ i 1) s2 s1 ua etext oruns olines owords scr nsel oaz s3 s4 s5 s6 ri))))
+    (if (== (bit-and fuse 8) 8)
+      (do (set ua (an-find ans (pu-id i (oe-request-slot))))
+          (if (and (>= ua 0) (== (an-ok ans ua) 1))
+            (do (set ppview vdec)
+                (if (!= rid did)
+                  (set ppview (sc-page-view epages views images (+ i 1) did pw ph (an-arg ans ad 0) (an-arg ans ad 1) dpi100
+                                           bx0 by0 obj bx0 by0 bx1 by1)))
+                (sc-page-evidence ans ua (+ i 1) (pu-id i (oe-request-slot)) ppview dpi100 (sc-lang loc)
+                                  views epages etext oruns oblocks olines owords osyms oalts feats)))))
+    (if (== (bit-and fuse 8) 8)
+      (pp-sums (+ i 1) (pu-id i (oe-request-slot)) oruns olines owords etext rules scr nsel aux
+               ws sv snap pc sg mem s1 s2 s3 s4 s5 s6 rn ri))
+    ;; Preserve the default RC5c/P-ARB selected words before admitting PP.
+    ;; In particular, a previously repaired numeric slot is the incumbent.
+    (if (== (bit-and fuse 8) 8)
+      (if (or (== (cells-at rtp (rtp-primary)) run) (== (cells-at rtp (rtp-q)) 0))
+        (set nsel (of-fuse (+ i 1) (+ maskv 8) (cells-at rtp (rtp-trigger)) oruns olines owords etext rules scr nsel ofz
+                           s1 s2 s3 s4 s5 s6 rn ri cs vr aux oaz))))
     (rt-upright rtp run epages (+ i 1))
     (set rotmed (ev-rot-median olines l0 nl))
     (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines etext rules comps inks)

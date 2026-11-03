@@ -6,6 +6,7 @@ package oalinetest
 import (
 	"emon/evidence"
 	"emon/oaline"
+	"emon/ofuse"
 	"emon/port"
 	"emon/retarget"
 	"emon/scan"
@@ -102,6 +103,12 @@ func TestLineRetryMergesOnlyTheSupportedAmountSlot(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(rows, 6), 2, "exactly two incumbent words displaced")
 	port.AssertEq(emonT, port.CellsAt(rows, 7), 3, "choice is a recorded reading")
 	port.AssertEq(emonT, port.CellsAt(rows, 12), 606, "confidence margin is preserved")
+	evidence.OrSet(runs, 0, evidence.OrfPass(), evidence.OpFirst())
+	evidence.OwSet(words, 3, evidence.OwfRun(), 1)
+	evidence.OwSet(words, 4, evidence.OwfRun(), 1)
+	port.AssertEq(emonT, ofuse.OfFuse(1, 9, 0, runs, lines, words, text, port.NewCells(), scr, 1, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), rows), 1, "optional fusion keeps one selected line")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 2, "default repaired line is still selected")
+	port.AssertEq(emonT, evidence.OwGet(words, evidence.OlGet(lines, 2, evidence.LhFirst()), evidence.HdTstart()), 16, "default-correct amount remains source backed")
 }
 
 func TestLineRetryCannotConcatenateTwoValidNumericCells(emonT *testing.T) {

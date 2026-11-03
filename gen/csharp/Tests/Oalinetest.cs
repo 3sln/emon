@@ -95,6 +95,12 @@ public static class Oalinetest {
         emon.Testport.AssertEq(emon.Port.CellsAt(rows, 6), 2, "exactly two incumbent words displaced");
         emon.Testport.AssertEq(emon.Port.CellsAt(rows, 7), 3, "choice is a recorded reading");
         emon.Testport.AssertEq(emon.Port.CellsAt(rows, 12), 606, "confidence margin is preserved");
+        Evidence.OrSet(runs, 0, Evidence.OrfPass(), Evidence.OpFirst());
+        Evidence.OwSet(words, 3, Evidence.OwfRun(), 1);
+        Evidence.OwSet(words, 4, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Ofuse.OfFuse(1, 9, 0, runs, lines, words, text, emon.Port.NewCells(), scr, 1, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), rows), 1, "optional fusion keeps one selected line");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 2, "default repaired line is still selected");
+        emon.Testport.AssertEq(Evidence.OwGet(words, Evidence.OlGet(lines, 2, Evidence.LhFirst()), Evidence.HdTstart()), 16, "default-correct amount remains source backed");
     }
     [Xunit.Fact]
     public static void TestLineRetryCannotConcatenateTwoValidNumericCells() {

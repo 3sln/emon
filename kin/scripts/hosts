@@ -35,7 +35,7 @@
 
 (def stage-allow
   (mapv (fn [[role file mods]] {:role role :file file :mods (set (remove str/blank? (str/split mods #"\s+")))})
-        [[:driver  "host/rust/src/engine.rs"            "config enctx engine html json model plan planloop"]
+        [[:driver  "host/rust/src/engine.rs"            "config enctx engine html json model ocrport plan planloop"]
          [:machine "host/rust/src/plan.rs"              "plan planctx planloop pngcheck pngread transcript transcriptctx"]
          [:driver  "host/rust/src/session.rs"           "ocr ocrport plan"]
          [:port    "host/rust/src/imgdec.rs"            "ccitt imgcheck pngcheck tiffcheck"]

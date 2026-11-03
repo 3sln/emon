@@ -7,8 +7,9 @@
             [emon.scan :refer [sc-prep sc-sel-base]]
             [emon.retarget :refer [rt-prep rtp-nl rtp-line0 rtp-q]]
             [emon.oaline :refer [oa-line-fuse]]
-            [emon.evidence :refer [or-new or-set or-get or-count orf-pass orf-wfirst orf-wcount orf-lfirst orf-lcount op-line op-arb
-                                   ol-new ol-set ol-get olf-run lh-first lh-count ow-new ow-get ow-count owf-from hd-tstart]]
+            [emon.ofuse :refer [of-fuse]]
+            [emon.evidence :refer [or-new or-set or-get or-count orf-pass orf-wfirst orf-wcount orf-lfirst orf-lcount op-line op-arb op-first
+                                   ol-new ol-set ol-get olf-run lh-first lh-count ow-new ow-get ow-set ow-count owf-run owf-from hd-tstart]]
             [kin.lang :refer [defn return let +]]))
 
 (defn ^I32 oalt-text [^:mut ^Cells text]
@@ -82,7 +83,14 @@
     (assert-eq (cells-at rows 5) 0 "incumbent range starts at zero")
     (assert-eq (cells-at rows 6) 2 "exactly two incumbent words displaced")
     (assert-eq (cells-at rows 7) 3 "choice is a recorded reading")
-    (assert-eq (cells-at rows 12) 606 "confidence margin is preserved")))
+    (assert-eq (cells-at rows 12) 606 "confidence margin is preserved")
+    ;; OP1b: optional fusion runs after the complete default repair. Its
+    ;; incumbent is the repaired atomic number, never the earlier split slot.
+    (or-set runs 0 (orf-pass) (op-first))
+    (ow-set words 3 (owf-run) 1) (ow-set words 4 (owf-run) 1)
+    (assert-eq (of-fuse 1 9 0 runs lines words text (new-cells) scr 1 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) rows) 1 "optional fusion keeps one selected line")
+    (assert-eq (cells-at scr (sc-sel-base)) 2 "default repaired line is still selected")
+    (assert-eq (ow-get words (ol-get lines 2 (lh-first)) (hd-tstart)) 16 "default-correct amount remains source backed")))
 
 (deftest test-line-retry-cannot-concatenate-two-valid-numeric-cells
   (let [^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells)

@@ -94,6 +94,12 @@ public final class Oalinetest {
         emon.Testport.assertEq(emon.Port.cellsAt(rows, 6), 2, "exactly two incumbent words displaced");
         emon.Testport.assertEq(emon.Port.cellsAt(rows, 7), 3, "choice is a recorded reading");
         emon.Testport.assertEq(emon.Port.cellsAt(rows, 12), 606, "confidence margin is preserved");
+        Evidence.orSet(runs, 0, Evidence.orfPass(), Evidence.opFirst());
+        Evidence.owSet(words, 3, Evidence.owfRun(), 1);
+        Evidence.owSet(words, 4, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Ofuse.ofFuse(1, 9, 0, runs, lines, words, text, emon.Port.newCells(), scr, 1, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), rows), 1, "optional fusion keeps one selected line");
+        emon.Testport.assertEq(emon.Port.cellsAt(scr, Scan.scSelBase()), 2, "default repaired line is still selected");
+        emon.Testport.assertEq(Evidence.owGet(words, Evidence.olGet(lines, 2, Evidence.lhFirst()), Evidence.hdTstart()), 16, "default-correct amount remains source backed");
     }
     public static void testLineRetryCannotConcatenateTwoValidNumericCells() {
         emon.Port.Cells runs = emon.Port.newCells();

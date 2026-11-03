@@ -14,7 +14,7 @@ runtime archive is macOS arm64 only; other native platform archives still need
 qualification. Model files and runtime binaries are not bundled into releases.
 
 Build the reference driver with `EMON_RS_PPOCR=1 kin/scripts/emon-rs-build`.
-`EMON_RS_LIVE=1` also includes the incumbent Tesseract adapter for paired work;
+The optional build includes the incumbent Tesseract adapter automatically;
 `EMON_RS_PDFIUM=.cache/pdfium/current/lib` adds the PDF renderer. Build caches
 stay in the worktree. Run it from the worktree root with
 `--ocr-engine=ppocr`. `--ocr-engine=tesseract` is the default and retains the
@@ -38,10 +38,12 @@ Word x extents come from the CTC label support timesteps, undo tensor padding
 and resize, and map through the actual crop transform. Integer pixel bounds
 round outward and clip to the request bitmap. They are never evenly divided
 from a line polygon. Line-height extents are the detector crop extents; source
-alignment still needs acceptance review. Font, dictionary membership, symbol
-alternatives and baselines remain unknown.
+alignment still needs acceptance review. Font, symbol alternatives and baselines remain unknown. Verbatim PP words
+are checked against a dedicated, pixel-free English Tesseract lexicon instance;
+its model bytes must match the tessdata-fast English SHA-256 pin. Positive
+membership is recorded explicitly and the pin appears in producer provenance.
 
-`calibrate.py` uses existing SROIE train annotations and explicitly excludes
+`tools/oracle/ppocr/calibrate.py` uses existing SROIE train annotations and explicitly excludes
 baseline IDs. Its fit and validation populations are disjoint (40 pages each).
 It aligns each predicted word to an unambiguous annotated source line by
 geometry, then aligns ordered NFC/casefolded tokens within that line. It does
@@ -55,16 +57,43 @@ posteriors are never used as Tesseract confidence.
 
 The PP-OCR request trailer contains engine and policy identity. Its tail is parsed independently of the legacy language offset; actual bitmap hashes distinguish compact crops over a view from fully hashed view requests. Repeated tagging is canonical and idempotent. The identity
 covers models, vocabulary pin, runtime policy, preprocessing, geometry,
-decoding, calibration and answer construction. `identity.py` checks it;
-`identity.py --write` regenerates it after a deliberate policy change, followed
+decoding, calibration and answer construction. `identity.clj` checks it;
+`bb tools/ppocr/identity.clj --write` regenerates it after a deliberate policy change, followed
 by `bb emit`. Changing an identity invalidates recordings. Legacy Tesseract
 request bytes stay unchanged for existing replay fixtures. PP-OCR evidence
-names the identity when OCR is planned or a reading exists; born-digital text-layer pages
-are skipped. Each reading follows the existing `oruns`/`owords` and guarded
-fusion/adoption paths. Replays use recorded integer answers and do not create
+names the identity on eligible image/scanned pages. Born-digital pages retain their
+ordinary Tesseract processing and evidence. One additional PP reading is recorded
+separately in `oruns`/`owords`; all incumbent and targeted requests stay Tesseract.
+The additional reading enters guarded per-word fusion, with format and
+dictionary/agreement protection unchanged. Replays use recorded integer answers and do not create
 a PP-OCR port or execute inference.
 
 `bb receipts --ocr-engine=ppocr --n 60 --measure-cost` selects the reference in
 the existing receipt scorer. Use `EMON_RECEIPTS_OUT` for external outputs.
 `--measure-cost` captures per-process peak RSS using the owned child's `wait4` resource result (macOS byte units, Linux KiB converted to bytes);
 CPU includes process/session initialization and all existing emon passes.
+
+The optional path shares its extra full-raster request with the first Tesseract
+OCR round. If Tesseract later enlarges its own view, PP keeps the original
+bitmap's view and scale. RC5c numeric protection remains in force. Optional
+P-ARB sum proposals require ruled numeric columns and a neighboring ruled column, then use the existing bounded arithmetic kernel's
+compatibility, uniqueness and competing-explanation guards. An incumbent-only
+neighbor identity supplies independent support; otherwise the stricter unique
+solution and minimum-total rules for single-column arithmetic apply. Source words are
+copied verbatim and `closure-sum` decisions name the identity endpoints.
+The option also refuses shortened slot replacements and protects year ranges;
+a dictionary-backed incumbent needs independent agreement for lexical
+replacement, while a dictionary-backed
+insertion still needs calibrated confidence >=700.
+
+Run option-off verification serially with
+`bb tools/ppocr/final_gates.clj --out EXTERNAL-DIR`. It snapshots the review
+index under `.cache`, leaves the real index untouched and stops on the first
+failed command. Live experiments and measurements are under
+`tools/oracle/ppocr/`; they are not gates.
+
+PP leaves all four raw baseline coordinates at -1. The shared adapter treats
+that as absence and uses the measured line-box bottom for layout only; it is
+not a measured engine baseline. Acceptance scoring checks represented Model
+text as well as selected evidence, with separate occurrence budgets for repeated
+numeric slots, so evidence-only repairs cannot be counted as output gains.

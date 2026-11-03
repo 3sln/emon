@@ -6,7 +6,7 @@
             [emon.port :refer [cells-len cells-at cells-push cells-set src-of-blob]]
             [emon.pdfdoc :refer [pd-open]]
             [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
-            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
+            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi ox-find ox-line-at]]
             [emon.evidence :refer [or-new or-set orf-wcount orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap olf-run ls-frame owf-sfirst owf-scount
                                    co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
@@ -14,7 +14,7 @@
                                    ob-count ob-get vw-px-to-cpt
                                    lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
                                    wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
-                                   hd-x0 hd-x1 hd-y0 hd-y1 hd-conf owf-run olf-xheight olf-asc olf-desc owf-psize owf-flags
+                                   hd-x0 hd-x1 hd-y0 hd-y1 hd-by0 hd-by1 hd-conf owf-run olf-xheight olf-asc olf-desc owf-psize owf-flags
                                    orf-request owf-lang orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
@@ -1187,3 +1187,18 @@
     (assert-eq (sc-emit-sel ol ow (new-cells) 24 1 27000 scr words lines et (new-cells) (new-cells) (new-cells)) 23 "empty OCR rows do not count toward dense-region evidence")
     (assert-eq (ln-get lines 72 (lh-rot)) 9000 "twenty-three nonempty lines still keep the previous frame")
     (assert-eq (bit-and (ln-get lines 72 (lf-src)) (ls-frame)) 0 "empty rows cannot activate recovery")))
+
+;; OP1b: absence is metadata, never a negative physical page coordinate.
+(deftest test-unknown-ocr-baseline-uses-box-bottom-without-rewriting-the-answer
+  (let [^Cells an (new-cells) ^Cells et (new-cells) ^Cells runs (new-cells)
+        ^Cells lines (new-cells) ^Cells words (new-cells)
+        ^I32 at (three-lines an 2) ^I32 ext (ox-find an at) ^I32 l (ox-line-at an ext 0)]
+    (cells-set an (+ l 4) -1) (cells-set an (+ l 5) -1)
+    (cells-set an (+ l 6) -1) (cells-set an (+ l 7) -1)
+    (cells-set an (+ l 11) -1) (cells-set an (+ l 12) -1) (cells-set an (+ l 13) -1)
+    (page-of an at (new-cells) (new-cells) et (new-cells) (new-cells) runs (new-cells) lines words (new-cells) (new-cells))
+    (assert-eq (cells-at an (+ l 4)) -1 "raw answer still records absence")
+    (assert-eq (cells-at an (+ l 5)) -1 "no measured baseline is invented in the transcript")
+    (assert-eq (ol-get lines 0 (lh-by0)) (* 66 24) "layout fallback is the measured line box bottom")
+    (assert-eq (ow-get words 0 (hd-by0)) (* 66 24) "word layout does not interpolate minus one pixels")
+    (assert-eq (ow-get words 0 (hd-by1)) (* 66 24) "both ends use the same fallback")))

@@ -663,6 +663,8 @@ public final class Oarbtest {
         emon.Testport.assertEq(Oarb.oaBlock(text, inc, candidates, 0, 2, 2, out, work), 1, "f08-block guard");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 0, "first slot chooses the recorded candidate");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 1), -1, "valid second slot stays incumbent");
+        emon.Testport.assertEq(Oarb.oaBlock(text, inc, candidates, 0, 2, 1, out, work), 1, "unique single-column solution clears the stricter guards");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 0, "single-column closure still copies the recorded candidate");
     }
     public static void testArbConstantColumn100ToZero() {
         emon.Port.Cells text = emon.Port.newCells();
