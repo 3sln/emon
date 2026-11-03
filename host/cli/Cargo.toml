@@ -27,7 +27,7 @@ zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(pdfium_dl)", "cfg(codecs)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(pdfium_dl)", "cfg(codecs)", "cfg(ppocr)"] }
 
 [profile.release]
 opt-level = 3

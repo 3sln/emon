@@ -1,5 +1,5 @@
 """Live, non-gate receipt measurement. Corpus text stays in external scratch."""
-import argparse, collections, json, os, pathlib, re, subprocess, unicodedata, resource
+import argparse, collections, json, os, pathlib, re, subprocess, unicodedata, resource, sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRATCH = pathlib.Path(os.environ.get('EMON_RECEIPTS_OUT','/Volumes/SSK SSD/emon-scratch/rc'))
 def words(s):
@@ -199,11 +199,13 @@ def baseline_comparison(dataset, rows, totals, baseline):
 def main():
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--n',type=int,default=60)
+    p.add_argument('--ocr-engine',choices=('tesseract','ppocr'),default='tesseract')
     p.add_argument('--set',default='sroie,cord')
     p.add_argument('--report',action='store_true')
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
     p.add_argument('--bin',default=os.environ.get('EMON_RECEIPTS_BIN',str(ROOT/'.cache/emon-rs-live/target/release/emon-rs')))
     p.add_argument('--rescore',action='store_true')
+    p.add_argument('--measure-cost',action='store_true',help='isolated child CPU/peak RSS via wait4')
     p.add_argument('--bounds',action='store_true',help='report optimistic raw/selected word completeness ceilings')
     transcripts=p.add_mutually_exclusive_group()
     transcripts.add_argument('--record-transcripts',action='store_true',help='record external transcripts and count OCR reads (default for live runs)')
@@ -211,6 +213,8 @@ def main():
     p.add_argument('--transcript-dir',help='separate external transcript directory; defaults to the output directory')
     p.add_argument('--save',default=str(SCRATCH/'baseline.json'))
     a=p.parse_args()
+    if a.ocr_engine=='ppocr' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
+        a.bin=str(ROOT/'.cache/emon-rs-live-ppocr/target/release/emon-rs')
     if a.n<1: p.error('--n must be positive')
     if a.rescore and (a.record_transcripts or a.replay_transcripts):
         p.error('--rescore cannot record or replay transcripts')
@@ -235,7 +239,9 @@ def main():
             if a.replay_transcripts and not (transcript/'transcript.edn').is_file():
                 raise RuntimeError('missing receipt replay: '+str(transcript))
             cpu_before=resource.getrusage(resource.RUSAGE_CHILDREN)
-            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run([a.bin,'--tesseract','--out=bundle',*extra,str(image)],capture_output=True,text=True,timeout=180))
+            command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine=ppocr'),'--out=bundle',*extra,str(image)]
+            if a.measure_cost: command=[sys.executable,str(ROOT/'tools/ppocr/measure.py'),*command]
+            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=180))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)
             if r.returncode: raise RuntimeError(g['id']+': '+r.stderr[-1000:])
             sections=dict(re.findall(r'== ([^\n]+)\n(.*?)(?=\n== |\Z)',r.stdout,re.S))
@@ -246,6 +252,10 @@ def main():
                 measurements[g['id']]['ocr_reads']=len(re.findall(r':kind\s+:ocr\b',(transcript/'transcript.edn').read_text()))
             if not a.rescore:
                 measurements[g['id']]['cpu_seconds']=(cpu_after.ru_utime+cpu_after.ru_stime-cpu_before.ru_utime-cpu_before.ru_stime)
+                if a.measure_cost:
+                    match=re.search(r'^emon-cost:(.*)$',r.stderr,re.M)
+                    if not match: raise RuntimeError('isolated RSS measurement unavailable')
+                    measurements[g['id']].update(json.loads(match.group(1)))
             rows[g['id']]=score(g,model,ev,entities,items)
             if a.bounds:
                 bounds[g['id']]=completeness_bounds(g,ev,entities,items)

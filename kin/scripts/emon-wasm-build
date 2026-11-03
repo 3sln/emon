@@ -91,7 +91,7 @@ zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", "cfg(ppocr)"] }
 
 # the same arithmetic as the native hosts: overflow checks stay on (a breach is a named limit)
 [profile.release]

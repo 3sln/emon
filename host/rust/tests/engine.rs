@@ -1208,3 +1208,68 @@ fn a_session_refuses_a_render_answer_that_is_not_what_it_owes() {
     assert!(usage(s.answer_render(reqs[0][2], 40, 40, &[0u8; 4800])).contains("pixels limit"));
     assert!(s.answer_render(reqs[0][2], 30, 33, &[0u8; 2970]).is_ok(), "990 pixels are within 1000");
 }
+
+#[test]
+fn optional_ocr_engine_identity_separates_transcripts_and_replay_never_calls_a_port() {
+    let bytes = image("png-phys300.png");
+    let default = Options::default();
+    let optional = Options { ocr_engine: emon::OcrEngine::PpOcr, ..Options::default() };
+    let (expected, transcript) = with_ocr().record(Input::bytes(bytes.clone()), &optional).unwrap();
+    assert!(transcript.entries.iter().filter(|e| e.req[1] == 3).all(|e| e.req.contains(&-3100)));
+    let replay = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &transcript).unwrap();
+    assert_eq!(json(&expected), json(&replay));
+    let mut other_model = transcript.clone();
+    let entry = other_model.entries.iter_mut().find(|e| e.req[1] == 3).unwrap();
+    *entry.req.last_mut().unwrap() ^= 1;
+    let miss = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &other_model).err().unwrap();
+    assert_eq!(miss.name(), "transcript-miss");
+    let miss = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &default, &transcript).err().unwrap();
+    assert_eq!(miss.name(), "transcript-miss");
+    let (_, legacy) = with_ocr().record(Input::bytes(bytes.clone()), &default).unwrap();
+    let miss = Engine::new(Config::default()).replay(Input::bytes(bytes), &optional, &legacy).err().unwrap();
+    assert_eq!(miss.name(), "transcript-miss");
+}
+
+#[test]
+fn optional_ocr_leaves_born_digital_auto_models_and_evidence_unchanged() {
+    let bytes = synth("h-plain");
+    let default = Options { ocr: OcrPolicy::Auto, keep_evidence: true, ..Options::default() };
+    let optional = Options { ocr_engine: emon::OcrEngine::PpOcr, ..default.clone() };
+    let a = with_ocr().convert(Input::bytes(bytes.clone()), &default).unwrap();
+    let b = with_ocr().convert(Input::bytes(bytes), &optional).unwrap();
+    assert_eq!(json(&a), json(&b));
+    assert_eq!(a.evidence(), b.evidence());
+}
+
+#[cfg(ppocr)]
+#[test]
+fn optional_ocr_refuses_tesseract_best_and_unavailable_scripts_without_inference() {
+    use emon::port::{Cells, cells_at, cells_len};
+    let port = emon::ppocr::PpOcr::new(std::path::Path::new("../../.cache/ppocr")).unwrap();
+    for (flags, language) in [(4, [101, 110, 103, 0]), (0, [97, 114, 97, 0])] {
+        let mut r = Cells::new();
+        let at = emon::emon::plan::rq_ocr(&mut r, 2, 1, 3, flags, 0, 0, 0, 0);
+        emon::emon::plan::rq_ocr_lang(&mut r, language[0], language[1], language[2], language[3]);
+        emon::emon::plan::rq_ocr_end(&mut r, at);
+        emon::emon::ocrengine::oe_tag(&mut r, &mut Cells::new(), 1);
+        let request = emon::plan::Request::new((0..cells_len(&r)).map(|i| cells_at(&r, i)).collect());
+        let answer = port.fulfil(&request, &emon::plan::Bitmaps::new(), false).unwrap();
+        assert_eq!(answer.status(), 2, "no bitmap is supplied: inference cannot run");
+    }
+}
+
+#[test]
+fn optional_ocr_evidence_names_the_requested_engine_when_reading_is_unsupported() {
+    struct Unavailable;
+    impl Ocr for Unavailable {
+        fn fulfil(&self, req: &emon::plan::Request, _: &emon::plan::Bitmaps, _: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+            let mut out = emon::port::Cells::new();
+            emon::emon::plan::an_fail(&mut out, 3, req.id(), 2);
+            Ok(emon::plan::Answer { rec: (0..emon::port::cells_len(&out)).map(|i| emon::port::cells_at(&out, i)).collect(), bitmap: None })
+        }
+    }
+    let e = Engine::new(Config { ocr: Some(OcrPort(std::sync::Arc::new(Unavailable))), ..Config::default() });
+    let o = Options { ocr_engine: emon::OcrEngine::PpOcr, keep_evidence: true, ..Options::default() };
+    let m = e.convert(Input::bytes(image("png-phys300.png")), &o).unwrap();
+    assert!(m.evidence().unwrap().contains("\"ocr-engine\":{\"name\":\"ppocr\""));
+}

@@ -1,0 +1,88 @@
+(ns emon.ocrenginetest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.ocrengine :refer [oe-tag oe-id-count]]
+            [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
+            [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [kin.lang :refer [let + -]]))
+
+(deftest test-default-ocr-request-is-unchanged
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (oe-tag r scratch 0)
+    (assert-eq (cells-len r) 11 "legacy request length unchanged")
+    (assert-eq (cells-at r 0) 11 "record header unchanged")
+    (assert-eq (op-lang-count r) 1 "one legacy language")))
+
+(deftest test-optional-engine-identity-is-in-the-request-not-the-language-list
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (oe-tag r scratch 1)
+    (assert-eq (cells-len r) (+ 14 (oe-id-count 0)) "identity extends request key")
+    (assert-eq (cells-at r 0) (cells-len r) "record length includes identity")
+    (assert-eq (cells-at r 11) -3100 "identity marker")
+    (assert-eq (cells-at r 12) 1 "PP-OCR engine")
+    (assert-eq (op-lang-count r) 1 "identity is not a language")
+    (assert-eq (op-lang-at r 0) 1701734144 "English language unchanged")))
+
+(deftest test-queued-ocr-requests-are-tagged-idempotently
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (oe-tag r scratch 1)
+    (oe-tag r scratch 1)
+    (assert-eq (cells-len r) (+ 14 (oe-id-count 0)) "exactly one identity trailer")
+    (assert-eq (cells-at r 0) (cells-len r) "canonical record length")
+    (assert-eq (op-lang-count r) 1 "English remains the only language")))
+
+(deftest test-mixed-queued-views-keep-hashes-and-exactly-one-trailer
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 first (+ 14 (oe-id-count 0))
+        ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (let [^I32 view (rq-ocr-view r 13 (+ (view-base) 1) 99 -3100 3 1 0 0 0 0)]
+      (rq-ocr-lang r 101 110 103 0)
+      (rq-ocr-end r view))
+    (oe-tag r scratch 1)
+    (oe-tag r scratch 1)
+    (assert-eq (cells-at r 0) first "first request length")
+    (assert-eq (cells-at r first) (+ 16 (oe-id-count 0)) "view request length")
+    (assert-eq (cells-len r) (+ (+ 30 (oe-id-count 0)) (oe-id-count 0)) "two canonical records")
+    (assert-eq (cells-at r (+ first 11)) -3100 "hash cell is not a trailer marker")
+    (assert-eq (cells-at r (+ first 13)) -3100 "view trailer follows its language")))
+
+(deftest test-compact-crops-over-views-have-an-independent-identity-tail
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr r 12 (+ (view-base) 120) 7 1 1536 18 144 57)]
+    (rq-ocr-end r at)
+    (oe-tag r scratch 1)
+    (oe-tag r scratch 1)
+    (assert-eq (op-identity-at r) 10 "compact view has no hash cells or languages")
+    (assert-eq (op-lang-first r) 7 "tagged compact layout")
+    (assert-eq (op-lang-count r) 0 "shared helper excludes the trailer")
+    (assert-eq (op-pp-lang-first r 123 456) 7 "compact layout")
+    (assert-eq (op-pp-lang-count r 7) 0 "identity is not parsed as language")
+    (assert-eq (cells-len r) (+ 13 (oe-id-count 0)) "one canonical trailer")))
+
+(deftest test-actual-view-hash-disambiguates-language-shaped-hash-cells
+  (let [^Cells compact (new-cells) ^Cells hashed (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr compact 12 (+ (view-base) 1) 7 1 0 0 0 0)]
+    (rq-ocr-lang compact 76 97 116 110)
+    (rq-ocr-lang compact 101 110 103 0)
+    (rq-ocr-end compact at)
+    (oe-tag compact scratch 1)
+    (let [^I32 view (rq-ocr-view hashed 13 (+ (view-base) 1) 1281455214 1701734144 7 1 0 0 0 0)]
+      (rq-ocr-end hashed view))
+    (oe-tag hashed scratch 1)
+    (assert-eq (op-pp-lang-first compact 123 456) 7 "two compact languages")
+    (assert-eq (op-pp-lang-count compact 7) 2 "both languages retained")
+    (assert-eq (op-pp-lang-at compact 7 1) 1701734144 "English retained")
+    (assert-eq (op-pp-lang-first hashed 1281455214 1701734144) 9 "verified hashes are not languages")
+    (assert-eq (op-pp-lang-count hashed 9) 0 "hashed view has no language")))

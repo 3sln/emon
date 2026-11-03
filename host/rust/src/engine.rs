@@ -170,6 +170,14 @@ impl OcrPolicy {
     }
 }
 
+/// Optional OCR port selection; Tesseract remains the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OcrEngine { Tesseract, PpOcr }
+impl OcrEngine {
+    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1 } }
+    fn from_code(code: i32) -> Self { if code == 1 { Self::PpOcr } else { Self::Tesseract } }
+}
+
 // THE `Ocr` PORT (SPEC 7.2; D008, D095, D211): fulfils one `ocr` request. A host brings its engine (Tesseract through
 // `tess.rs` under the `tesseract` feature; anything else that answers in the layout of `emon.ocr`). It is LIVE only: a
 // gate replays a transcript and never calls it. With no port a request is answered `unsupported`, a page
@@ -257,6 +265,8 @@ pub struct Options {
     // A BCP 47 hint, written to the Model's `settings.locale`; none by default. It decides nothing yet.
     pub locale: Option<String>,
     pub ocr: OcrPolicy,
+    /// Optional OCR engine identity; defaults to Tesseract.
+    pub ocr_engine: OcrEngine,
     pub assets: Assets,
     // The settings that go with `assets` (SPEC 10.11), written to the Model's header when it is on: the render-crop resolution
     // (150, 36..600), pixels per asset (2048 squared), encoded bytes per asset (4 MiB) and per document (32 MiB), and whether a
@@ -398,6 +408,7 @@ fn options_of(c: &Cfg) -> Options {
     Options {
         locale: if c.haveloc == 1 { Some(string_of_cells(&c.lcl, 0, cells_len(&c.lcl))) } else { None },
         ocr: OcrPolicy::from_code(c.ocr),
+        ocr_engine: OcrEngine::from_code(c.oengine),
         assets: Assets::from_level(c.level),
         asset_dpi: c.dpi,
         asset_pixels: c.pixels,
@@ -423,6 +434,9 @@ fn config_of(c: &Cfg) -> Config {
 // host has. An Err is the sentence a driver prints after `usage`.
 pub fn parse_options(text: &str) -> Result<Parsed, String> {
     let c = parse_cfg(text)?;
+    if c.oengine != 0 && !cfg!(ppocr) {
+        return Err("ocr-engine=ppocr is unsupported in this Rust build".into());
+    }
     let mut producer = Vec::new();
     let mut at = 0;
     while at < cells_len(&c.prod) {
@@ -1117,6 +1131,7 @@ fn finished(r: i32, mut doc: Doc, m: Arenas, info: Intake, opts: &Options) -> Ou
 fn cfg_of(opts: &Options) -> Cfg {
     let mut c = Cfg::new();
     c.ocr = opts.ocr.code();
+    c.oengine = opts.ocr_engine.code();
     c.scope = opts.ocr_scope.code();
     c.furn = opts.furniture.mode();
     c.level = opts.assets.level();

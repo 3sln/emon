@@ -173,16 +173,53 @@
 
 ;; ------------------------------------------------------------------ the request
 
-(defn ^:pub ^I32 op-lang-first [^Cells req]
+(defn ^I32 op-lang-first-legacy [^Cells req]
   (comment "The argument index of a request's first language: after the pixel hash of a kin-made view (its bitmap id is from")
   (comment "`view-base`, D196), else straight after the region.")
   (if (>= (rq-arg req 0 0) (view-base)) (return 9))
   (return 7))
 
+(defn ^:pub ^I32 op-identity-at [^Cells req]
+  (comment "Absolute cell of a canonical optional-engine trailer, independently of legacy view layout; -1 when absent.")
+  (let [^I32 n (cells-len req) ^:mut ^I32 at 10]
+    (while (< (+ at 2) n)
+      (do (if (and (== (cells-at req at) -3100)
+                   (and (== (cells-at req (+ at 1)) 1) (== (cells-at req (+ at 2)) (- (- n at) 3))))
+            (return at))
+          (set at (+ at 1))))
+    (return -1)))
+
+(defn ^:pub ^I32 op-lang-first [^Cells req]
+  (comment "The historical layout unless a tagged compact view ends before a hashed-view prefix could fit. Ambiguous view layouts use op-pp-lang-first with the actual bitmap hash.")
+  (let [^I32 first (op-lang-first-legacy req)
+        ^I32 marker (op-identity-at req)]
+    (if (and (>= marker 0) (< marker (+ 3 first))) (return 7))
+    (return first)))
+
+(defn ^:pub ^I32 op-pp-lang-first [^Cells req ^I32 hhi ^I32 hlo]
+  (comment "PP accepts compact crop requests over a view as well as hashed-view requests. Verify the latter against the actual bitmap hash; never guess from language-shaped integers.")
+  (let [^I32 marker (op-identity-at req)]
+    (if (and (>= (rq-arg req 0 0) (view-base)) (>= marker 12))
+      (if (and (== (rq-arg req 0 7) hhi) (== (rq-arg req 0 8) hlo)) (return 9)))
+    (return 7)))
+
+(defn ^:pub ^I32 op-pp-lang-count [^Cells req ^I32 first]
+  (let [^I32 marker (op-identity-at req)]
+    (if (< marker (+ 3 first)) (return 0))
+    (return (- (- marker 3) first))))
+
+(defn ^:pub ^I32 op-pp-lang-at [^Cells req ^I32 first ^I32 i]
+  (return (rq-arg req 0 (+ first i))))
+
 (defn ^:pub ^I32 op-lang-count [^Cells req]
   (comment "How many languages the request names (record `req`: `[len kind id arg...]`).")
-  (let [^I32 n (- (- (cells-len req) 3) (op-lang-first req))]
+  (let [^I32 first (op-lang-first req)
+        ^I32 n (- (- (cells-len req) 3) first)]
     (if (< n 0) (return 0))
+    (let [^:mut ^I32 i 0]
+      (while (< i n)
+        (do (if (== (rq-arg req 0 (+ first i)) -3100) (return i))
+            (set i (+ i 1)))))
     (return n)))
 
 (defn ^:pub ^I32 op-lang-at [^Cells req ^I32 i]

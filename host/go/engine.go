@@ -406,6 +406,7 @@ func ParseOptions(text string) (*Parsed, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.Oengine != 0 { return nil, errors.New("ocr-engine=ppocr is unsupported on Go") }
 	p := &Parsed{Options: optionsOf(c), Config: configOf(c), Record: c.Rec != 0, JsOcr: c.Jsocr != 0, JsRender: c.Jsrender != 0}
 	for at := int32(0); at < port.CellsLen(c.Prod); {
 		kl, vl := port.CellsAt(c.Prod, at), port.CellsAt(c.Prod, at+1)

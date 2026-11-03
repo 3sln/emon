@@ -392,7 +392,7 @@ public final class Ocrport {
         98, 111, 114, 105, 103, 105, 110, 97, 108, 0, 1130458739, 3, 99, 104, 105, 95,
         115, 105, 109, 0, 1667789568, 3, 99, 104, 105, 95, 116, 114, 97, 0, 1667789824
     };
-    public static int opLangFirst(emon.Port.Cells req) {
+    public static int opLangFirstLegacy(emon.Port.Cells req) {
         // The argument index of a request's first language: after the pixel hash of a kin-made view (its bitmap id is from
         // `view-base`, D196), else straight after the region.
         if (Plan.rqArg(req, 0, 0) >= Plan.viewBase()) {
@@ -400,11 +400,60 @@ public final class Ocrport {
         }
         return 7;
     }
+    public static int opIdentityAt(emon.Port.Cells req) {
+        // Absolute cell of a canonical optional-engine trailer, independently of legacy view layout; -1 when absent.
+        int n = emon.Port.cellsLen(req);
+        int at = 10;
+        while ((at + 2) < n) {
+            if ((emon.Port.cellsAt(req, at) == -3100) && ((emon.Port.cellsAt(req, at + 1) == 1) && (emon.Port.cellsAt(req, at + 2) == ((n - at) - 3)))) {
+                return at;
+            }
+            at += 1;
+        }
+        return -1;
+    }
+    public static int opLangFirst(emon.Port.Cells req) {
+        // The historical layout unless a tagged compact view ends before a hashed-view prefix could fit. Ambiguous view layouts use op-pp-lang-first with the actual bitmap hash.
+        int first = opLangFirstLegacy(req);
+        int marker = opIdentityAt(req);
+        if ((marker >= 0) && (marker < (3 + first))) {
+            return 7;
+        }
+        return first;
+    }
+    public static int opPpLangFirst(emon.Port.Cells req, int hhi, int hlo) {
+        // PP accepts compact crop requests over a view as well as hashed-view requests. Verify the latter against the actual bitmap hash; never guess from language-shaped integers.
+        int marker = opIdentityAt(req);
+        if ((Plan.rqArg(req, 0, 0) >= Plan.viewBase()) && (marker >= 12)) {
+            if ((Plan.rqArg(req, 0, 7) == hhi) && (Plan.rqArg(req, 0, 8) == hlo)) {
+                return 9;
+            }
+        }
+        return 7;
+    }
+    public static int opPpLangCount(emon.Port.Cells req, int first) {
+        int marker = opIdentityAt(req);
+        if (marker < (3 + first)) {
+            return 0;
+        }
+        return (marker - 3) - first;
+    }
+    public static int opPpLangAt(emon.Port.Cells req, int first, int i) {
+        return Plan.rqArg(req, 0, first + i);
+    }
     public static int opLangCount(emon.Port.Cells req) {
         // How many languages the request names (record `req`: `[len kind id arg...]`).
-        int n = (emon.Port.cellsLen(req) - 3) - opLangFirst(req);
+        int first = opLangFirst(req);
+        int n = (emon.Port.cellsLen(req) - 3) - first;
         if (n < 0) {
             return 0;
+        }
+        int i = 0;
+        while (i < n) {
+            if (Plan.rqArg(req, 0, first + i) == -3100) {
+                return i;
+            }
+            i += 1;
         }
         return n;
     }

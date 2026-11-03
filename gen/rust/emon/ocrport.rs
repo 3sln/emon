@@ -391,7 +391,7 @@ pub static OP_NAMES: [i32; 639] = [
     98, 111, 114, 105, 103, 105, 110, 97, 108, 0, 1130458739, 3, 99, 104, 105, 95,
     115, 105, 109, 0, 1667789568, 3, 99, 104, 105, 95, 116, 114, 97, 0, 1667789824
 ];
-pub fn op_lang_first(req: &mut crate::port::Cells) -> i32 {
+pub(crate) fn op_lang_first_legacy(req: &mut crate::port::Cells) -> i32 {
     // The argument index of a request's first language: after the pixel hash of a kin-made view (its bitmap id is from
     // `view-base`, D196), else straight after the region.
     if rq_arg(req, 0, 0) >= view_base() {
@@ -399,11 +399,60 @@ pub fn op_lang_first(req: &mut crate::port::Cells) -> i32 {
     }
     return 7;
 }
+pub fn op_identity_at(req: &mut crate::port::Cells) -> i32 {
+    // Absolute cell of a canonical optional-engine trailer, independently of legacy view layout; -1 when absent.
+    let n: i32 = crate::port::cells_len(req);
+    let mut at: i32 = 10;
+    while (at + 2) < n {
+        if (crate::port::cells_at(req, at) == -3100) && ((crate::port::cells_at(req, at + 1) == 1) && (crate::port::cells_at(req, at + 2) == ((n - at) - 3))) {
+            return at;
+        }
+        at += 1;
+    }
+    return -1;
+}
+pub fn op_lang_first(req: &mut crate::port::Cells) -> i32 {
+    // The historical layout unless a tagged compact view ends before a hashed-view prefix could fit. Ambiguous view layouts use op-pp-lang-first with the actual bitmap hash.
+    let first: i32 = op_lang_first_legacy(req);
+    let marker: i32 = op_identity_at(req);
+    if (marker >= 0) && (marker < (3 + first)) {
+        return 7;
+    }
+    return first;
+}
+pub fn op_pp_lang_first(req: &mut crate::port::Cells, hhi: i32, hlo: i32) -> i32 {
+    // PP accepts compact crop requests over a view as well as hashed-view requests. Verify the latter against the actual bitmap hash; never guess from language-shaped integers.
+    let marker: i32 = op_identity_at(req);
+    if (rq_arg(req, 0, 0) >= view_base()) && (marker >= 12) {
+        if (rq_arg(req, 0, 7) == hhi) && (rq_arg(req, 0, 8) == hlo) {
+            return 9;
+        }
+    }
+    return 7;
+}
+pub fn op_pp_lang_count(req: &mut crate::port::Cells, first: i32) -> i32 {
+    let marker: i32 = op_identity_at(req);
+    if marker < (3 + first) {
+        return 0;
+    }
+    return (marker - 3) - first;
+}
+pub fn op_pp_lang_at(req: &mut crate::port::Cells, first: i32, i: i32) -> i32 {
+    return rq_arg(req, 0, first + i);
+}
 pub fn op_lang_count(req: &mut crate::port::Cells) -> i32 {
     // How many languages the request names (record `req`: `[len kind id arg...]`).
-    let n: i32 = (crate::port::cells_len(req) - 3) - op_lang_first(req);
+    let first: i32 = op_lang_first(req);
+    let n: i32 = (crate::port::cells_len(req) - 3) - first;
     if n < 0 {
         return 0;
+    }
+    let mut i: i32 = 0;
+    while i < n {
+        if rq_arg(req, 0, first + i) == -3100 {
+            return i;
+        }
+        i += 1;
     }
     return n;
 }

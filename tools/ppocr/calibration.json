@@ -1,0 +1,658 @@
+{
+  "schema": 1,
+  "policy": "source-line overlap/min(side) >= .8 and center inside gold line; ambiguous overlaps excluded; NFC/casefold ordered token alignment within annotated line; 10 equal posterior bins; empty bins conservatively zero",
+  "limitation": "SROIE source annotations are line-aligned, not individual-word polygons. This is not an independent manual source audit, and requires review before production confidence use.",
+  "model_pins_sha256": "4643b5f6359232f5f357aa1ef0f263aafdeec84815afa589738861644b2ca8ff",
+  "confidence": [
+    0,
+    0,
+    0,
+    0,
+    42,
+    179,
+    439,
+    415,
+    521,
+    883
+  ],
+  "fit": {
+    "words": 4466,
+    "raw_brier": 0.13268750764912407,
+    "calibrated_brier": 0.11411092454097625,
+    "calibrated_ece": 2.6197939991044085e-05,
+    "bins": [
+      {
+        "bin": 0,
+        "n": 0,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": null
+      },
+      {
+        "bin": 1,
+        "n": 5,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.1521212
+      },
+      {
+        "bin": 2,
+        "n": 17,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.25713588235294116
+      },
+      {
+        "bin": 3,
+        "n": 23,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.34771039130434783
+      },
+      {
+        "bin": 4,
+        "n": 24,
+        "correct": 1,
+        "confidence": 42,
+        "raw_mean": 0.4541655
+      },
+      {
+        "bin": 5,
+        "n": 28,
+        "correct": 5,
+        "confidence": 179,
+        "raw_mean": 0.5578287142857143
+      },
+      {
+        "bin": 6,
+        "n": 41,
+        "correct": 18,
+        "confidence": 439,
+        "raw_mean": 0.659153
+      },
+      {
+        "bin": 7,
+        "n": 94,
+        "correct": 39,
+        "confidence": 415,
+        "raw_mean": 0.7575708617021276
+      },
+      {
+        "bin": 8,
+        "n": 234,
+        "correct": 122,
+        "confidence": 521,
+        "raw_mean": 0.8616271111111111
+      },
+      {
+        "bin": 9,
+        "n": 4000,
+        "correct": 3532,
+        "confidence": 883,
+        "raw_mean": 0.9865497402500001
+      }
+    ]
+  },
+  "validation": {
+    "words": 3764,
+    "raw_brier": 0.1403445213588608,
+    "calibrated_brier": 0.12097067587672689,
+    "calibrated_ece": 0.007488841657810876,
+    "bins": [
+      {
+        "bin": 0,
+        "n": 0,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": null
+      },
+      {
+        "bin": 1,
+        "n": 1,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.137165
+      },
+      {
+        "bin": 2,
+        "n": 3,
+        "correct": 1,
+        "confidence": 333,
+        "raw_mean": 0.2676
+      },
+      {
+        "bin": 3,
+        "n": 10,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.3611573
+      },
+      {
+        "bin": 4,
+        "n": 14,
+        "correct": 0,
+        "confidence": 0,
+        "raw_mean": 0.4634372857142857
+      },
+      {
+        "bin": 5,
+        "n": 17,
+        "correct": 5,
+        "confidence": 294,
+        "raw_mean": 0.5459651176470588
+      },
+      {
+        "bin": 6,
+        "n": 47,
+        "correct": 22,
+        "confidence": 468,
+        "raw_mean": 0.658546170212766
+      },
+      {
+        "bin": 7,
+        "n": 87,
+        "correct": 42,
+        "confidence": 483,
+        "raw_mean": 0.756823459770115
+      },
+      {
+        "bin": 8,
+        "n": 227,
+        "correct": 118,
+        "confidence": 520,
+        "raw_mean": 0.8580397048458149
+      },
+      {
+        "bin": 9,
+        "n": 3358,
+        "correct": 2948,
+        "confidence": 878,
+        "raw_mean": 0.9878563344252531
+      }
+    ]
+  },
+  "documents": [
+    {
+      "id": "sroie-train-sroie_00000",
+      "aligned": 93,
+      "unassigned": 2,
+      "seconds": 0.0029870416037738323
+    },
+    {
+      "id": "sroie-train-sroie_00001",
+      "aligned": 78,
+      "unassigned": 13,
+      "seconds": 0.0030017918907105923
+    },
+    {
+      "id": "sroie-train-sroie_00002",
+      "aligned": 119,
+      "unassigned": 3,
+      "seconds": 0.004270458128303289
+    },
+    {
+      "id": "sroie-train-sroie_00003",
+      "aligned": 95,
+      "unassigned": 5,
+      "seconds": 0.003636083099991083
+    },
+    {
+      "id": "sroie-train-sroie_00004",
+      "aligned": 138,
+      "unassigned": 2,
+      "seconds": 0.004864959046244621
+    },
+    {
+      "id": "sroie-train-sroie_00005",
+      "aligned": 55,
+      "unassigned": 1,
+      "seconds": 0.0016514169983565807
+    },
+    {
+      "id": "sroie-train-sroie_00006",
+      "aligned": 144,
+      "unassigned": 3,
+      "seconds": 0.006400625221431255
+    },
+    {
+      "id": "sroie-train-sroie_00007",
+      "aligned": 69,
+      "unassigned": 1,
+      "seconds": 0.0019165840931236744
+    },
+    {
+      "id": "sroie-train-sroie_00008",
+      "aligned": 150,
+      "unassigned": 10,
+      "seconds": 0.007532334420830011
+    },
+    {
+      "id": "sroie-train-sroie_00009",
+      "aligned": 121,
+      "unassigned": 0,
+      "seconds": 0.003769124858081341
+    },
+    {
+      "id": "sroie-train-sroie_00010",
+      "aligned": 115,
+      "unassigned": 3,
+      "seconds": 0.004334957804530859
+    },
+    {
+      "id": "sroie-train-sroie_00011",
+      "aligned": 130,
+      "unassigned": 4,
+      "seconds": 0.0043826657347381115
+    },
+    {
+      "id": "sroie-train-sroie_00012",
+      "aligned": 98,
+      "unassigned": 4,
+      "seconds": 0.003328540828078985
+    },
+    {
+      "id": "sroie-train-sroie_00013",
+      "aligned": 93,
+      "unassigned": 5,
+      "seconds": 0.0034178332425653934
+    },
+    {
+      "id": "sroie-train-sroie_00014",
+      "aligned": 180,
+      "unassigned": 5,
+      "seconds": 0.009808540809899569
+    },
+    {
+      "id": "sroie-train-sroie_00015",
+      "aligned": 83,
+      "unassigned": 19,
+      "seconds": 0.003126624971628189
+    },
+    {
+      "id": "sroie-train-sroie_00016",
+      "aligned": 161,
+      "unassigned": 8,
+      "seconds": 0.008294208906590939
+    },
+    {
+      "id": "sroie-train-sroie_00017",
+      "aligned": 160,
+      "unassigned": 10,
+      "seconds": 0.006686832755804062
+    },
+    {
+      "id": "sroie-train-sroie_00018",
+      "aligned": 161,
+      "unassigned": 8,
+      "seconds": 0.0063756247982382774
+    },
+    {
+      "id": "sroie-train-sroie_00019",
+      "aligned": 92,
+      "unassigned": 3,
+      "seconds": 0.0031699161045253277
+    },
+    {
+      "id": "sroie-train-sroie_00020",
+      "aligned": 99,
+      "unassigned": 1,
+      "seconds": 0.0035855830647051334
+    },
+    {
+      "id": "sroie-train-sroie_00021",
+      "aligned": 117,
+      "unassigned": 1,
+      "seconds": 0.004603333305567503
+    },
+    {
+      "id": "sroie-train-sroie_00022",
+      "aligned": 86,
+      "unassigned": 2,
+      "seconds": 0.002513499930500984
+    },
+    {
+      "id": "sroie-train-sroie_00023",
+      "aligned": 107,
+      "unassigned": 4,
+      "seconds": 0.0036192922852933407
+    },
+    {
+      "id": "sroie-train-sroie_00024",
+      "aligned": 117,
+      "unassigned": 7,
+      "seconds": 0.005343915894627571
+    },
+    {
+      "id": "sroie-train-sroie_00025",
+      "aligned": 113,
+      "unassigned": 8,
+      "seconds": 0.004587958101183176
+    },
+    {
+      "id": "sroie-train-sroie_00026",
+      "aligned": 166,
+      "unassigned": 7,
+      "seconds": 0.007407375145703554
+    },
+    {
+      "id": "sroie-train-sroie_00027",
+      "aligned": 92,
+      "unassigned": 6,
+      "seconds": 0.003164582885801792
+    },
+    {
+      "id": "sroie-train-sroie_00028",
+      "aligned": 74,
+      "unassigned": 2,
+      "seconds": 0.001997666899114847
+    },
+    {
+      "id": "sroie-train-sroie_00029",
+      "aligned": 116,
+      "unassigned": 2,
+      "seconds": 0.003962916322052479
+    },
+    {
+      "id": "sroie-train-sroie_00030",
+      "aligned": 80,
+      "unassigned": 1,
+      "seconds": 0.00538279116153717
+    },
+    {
+      "id": "sroie-train-sroie_00031",
+      "aligned": 96,
+      "unassigned": 2,
+      "seconds": 0.002706875093281269
+    },
+    {
+      "id": "sroie-train-sroie_00032",
+      "aligned": 73,
+      "unassigned": 1,
+      "seconds": 0.003512958064675331
+    },
+    {
+      "id": "sroie-train-sroie_00033",
+      "aligned": 82,
+      "unassigned": 1,
+      "seconds": 0.002419165801256895
+    },
+    {
+      "id": "sroie-train-sroie_00034",
+      "aligned": 214,
+      "unassigned": 12,
+      "seconds": 0.010981124825775623
+    },
+    {
+      "id": "sroie-train-sroie_00035",
+      "aligned": 81,
+      "unassigned": 1,
+      "seconds": 0.002409874927252531
+    },
+    {
+      "id": "sroie-train-sroie_00036",
+      "aligned": 83,
+      "unassigned": 1,
+      "seconds": 0.002495167311280966
+    },
+    {
+      "id": "sroie-train-sroie_00037",
+      "aligned": 104,
+      "unassigned": 3,
+      "seconds": 0.003333666827529669
+    },
+    {
+      "id": "sroie-train-sroie_00038",
+      "aligned": 101,
+      "unassigned": 2,
+      "seconds": 0.003999916836619377
+    },
+    {
+      "id": "sroie-train-sroie_00039",
+      "aligned": 130,
+      "unassigned": 1,
+      "seconds": 0.00528733292594552
+    },
+    {
+      "id": "sroie-train-sroie_00040",
+      "aligned": 78,
+      "unassigned": 1,
+      "seconds": 0.002541332971304655
+    },
+    {
+      "id": "sroie-train-sroie_00041",
+      "aligned": 76,
+      "unassigned": 2,
+      "seconds": 0.002283249981701374
+    },
+    {
+      "id": "sroie-train-sroie_00042",
+      "aligned": 117,
+      "unassigned": 1,
+      "seconds": 0.0038355831056833267
+    },
+    {
+      "id": "sroie-train-sroie_00043",
+      "aligned": 86,
+      "unassigned": 8,
+      "seconds": 0.003116500098258257
+    },
+    {
+      "id": "sroie-train-sroie_00044",
+      "aligned": 83,
+      "unassigned": 2,
+      "seconds": 0.002688916865736246
+    },
+    {
+      "id": "sroie-train-sroie_00045",
+      "aligned": 85,
+      "unassigned": 2,
+      "seconds": 0.00286004226654768
+    },
+    {
+      "id": "sroie-train-sroie_00046",
+      "aligned": 102,
+      "unassigned": 1,
+      "seconds": 0.004765749908983707
+    },
+    {
+      "id": "sroie-train-sroie_00047",
+      "aligned": 26,
+      "unassigned": 2,
+      "seconds": 0.0010113329626619816
+    },
+    {
+      "id": "sroie-train-sroie_00048",
+      "aligned": 119,
+      "unassigned": 4,
+      "seconds": 0.004804249852895737
+    },
+    {
+      "id": "sroie-train-sroie_00049",
+      "aligned": 103,
+      "unassigned": 3,
+      "seconds": 0.0036134589463472366
+    },
+    {
+      "id": "sroie-train-sroie_00050",
+      "aligned": 113,
+      "unassigned": 2,
+      "seconds": 0.004464832600206137
+    },
+    {
+      "id": "sroie-train-sroie_00051",
+      "aligned": 77,
+      "unassigned": 2,
+      "seconds": 0.00239362521097064
+    },
+    {
+      "id": "sroie-train-sroie_00052",
+      "aligned": 87,
+      "unassigned": 2,
+      "seconds": 0.002579249907284975
+    },
+    {
+      "id": "sroie-train-sroie_00053",
+      "aligned": 84,
+      "unassigned": 2,
+      "seconds": 0.0026833340525627136
+    },
+    {
+      "id": "sroie-train-sroie_00054",
+      "aligned": 80,
+      "unassigned": 5,
+      "seconds": 0.003169749863445759
+    },
+    {
+      "id": "sroie-train-sroie_00055",
+      "aligned": 78,
+      "unassigned": 2,
+      "seconds": 0.002464165911078453
+    },
+    {
+      "id": "sroie-train-sroie_00056",
+      "aligned": 85,
+      "unassigned": 4,
+      "seconds": 0.002621749881654978
+    },
+    {
+      "id": "sroie-train-sroie_00057",
+      "aligned": 83,
+      "unassigned": 2,
+      "seconds": 0.002854833845049143
+    },
+    {
+      "id": "sroie-train-sroie_00058",
+      "aligned": 81,
+      "unassigned": 2,
+      "seconds": 0.002409040927886963
+    },
+    {
+      "id": "sroie-train-sroie_00059",
+      "aligned": 53,
+      "unassigned": 3,
+      "seconds": 0.0015740827657282352
+    },
+    {
+      "id": "sroie-train-sroie_00060",
+      "aligned": 115,
+      "unassigned": 0,
+      "seconds": 0.0036551672965288162
+    },
+    {
+      "id": "sroie-train-sroie_00061",
+      "aligned": 134,
+      "unassigned": 4,
+      "seconds": 0.005799999926239252
+    },
+    {
+      "id": "sroie-train-sroie_00062",
+      "aligned": 68,
+      "unassigned": 0,
+      "seconds": 0.0017931247130036354
+    },
+    {
+      "id": "sroie-train-sroie_00063",
+      "aligned": 90,
+      "unassigned": 0,
+      "seconds": 0.0026727919466793537
+    },
+    {
+      "id": "sroie-train-sroie_00064",
+      "aligned": 87,
+      "unassigned": 2,
+      "seconds": 0.002496166154742241
+    },
+    {
+      "id": "sroie-train-sroie_00065",
+      "aligned": 93,
+      "unassigned": 7,
+      "seconds": 0.003120874986052513
+    },
+    {
+      "id": "sroie-train-sroie_00066",
+      "aligned": 125,
+      "unassigned": 1,
+      "seconds": 0.004651417024433613
+    },
+    {
+      "id": "sroie-train-sroie_00067",
+      "aligned": 113,
+      "unassigned": 1,
+      "seconds": 0.004174166824668646
+    },
+    {
+      "id": "sroie-train-sroie_00068",
+      "aligned": 96,
+      "unassigned": 0,
+      "seconds": 0.0026576248928904533
+    },
+    {
+      "id": "sroie-train-sroie_00069",
+      "aligned": 69,
+      "unassigned": 0,
+      "seconds": 0.001636458095163107
+    },
+    {
+      "id": "sroie-train-sroie_00070",
+      "aligned": 87,
+      "unassigned": 3,
+      "seconds": 0.001939042005687952
+    },
+    {
+      "id": "sroie-train-sroie_00071",
+      "aligned": 106,
+      "unassigned": 0,
+      "seconds": 0.003603542223572731
+    },
+    {
+      "id": "sroie-train-sroie_00072",
+      "aligned": 136,
+      "unassigned": 0,
+      "seconds": 0.00464187515899539
+    },
+    {
+      "id": "sroie-train-sroie_00073",
+      "aligned": 104,
+      "unassigned": 1,
+      "seconds": 0.0028614578768610954
+    },
+    {
+      "id": "sroie-train-sroie_00074",
+      "aligned": 83,
+      "unassigned": 1,
+      "seconds": 0.0022925841622054577
+    },
+    {
+      "id": "sroie-train-sroie_00075",
+      "aligned": 105,
+      "unassigned": 3,
+      "seconds": 0.0030149156227707863
+    },
+    {
+      "id": "sroie-train-sroie_00076",
+      "aligned": 90,
+      "unassigned": 4,
+      "seconds": 0.002986209001392126
+    },
+    {
+      "id": "sroie-train-sroie_00077",
+      "aligned": 122,
+      "unassigned": 0,
+      "seconds": 0.0033835838548839092
+    },
+    {
+      "id": "sroie-train-sroie_00078",
+      "aligned": 111,
+      "unassigned": 7,
+      "seconds": 0.004703707993030548
+    },
+    {
+      "id": "sroie-train-sroie_00079",
+      "aligned": 134,
+      "unassigned": 2,
+      "seconds": 0.004866374656558037
+    }
+  ],
+  "reused_ocr_outputs": true,
+  "document_timing_scope": "Label reconstruction wall time with --reuse; not inference CPU or cost measurement."
+}

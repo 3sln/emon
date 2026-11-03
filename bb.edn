@@ -72,6 +72,10 @@
              :depends [corpus-guard]
              :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "png-check" *command-line-args*)
                    (apply shell "kin/scripts/png-check" *command-line-args*))}
+  ppocr-check {:doc "Offline optional PP-OCR native prototype checks (not an acceptance gate)"
+               :task (shell "bb" "tools/ppocr/check.clj")}
+  ppocr-fetch {:doc "Fetch pinned, SHA-256 checked optional PP-OCRv5 assets into .cache/ppocr (not a gate)"
+               :task (apply shell "bb" "tools/ppocr/fetch.clj" *command-line-args*)}
   tessdata-fetch {:doc "Fetch pinned, SHA-256 checked Apache-2.0 OCR models into .cache/tessdata. bb tessdata-fetch [--langs eng,spa,...]"
                   :task (apply shell "bb" "tools/tessdata/fetch.clj" *command-line-args*)}
   ink {:doc "How well do kin's ink layers separate body ink from stamps, seals, signatures and watermarks, and how close is the deskew, on P6.6's colour and overlay scans of known truth (P6.3, D197). NOT a gate; needs poppler, ImageMagick and corpus/.  bb ink [--go] [--limit N] [--rebuild]"

@@ -887,6 +887,8 @@ numeric flags and point size, orientation, script, and whether the answer's `bit
 no `Ocr` port answers `unsupported`, which is an answer (a page then has no text); a transcript names the engine that answered in
 `:producer`. A `decode` of a PDF's embedded JPEG has `filter` 1 (DCT): the span is a JPEG file.
 
+Optional PP-OCR requests append `-3100 1 N identity-codepoints...` after their languages (D846/D848). The marker is reserved, language counting stops before it, and queued requests are tagged canonically once. The complete record, including the identity, is the transcript key. The identity covers the pinned graphs, dictionaries, runtime, image/CTC policy, calibration and answer construction. Producer provenance uses `ocr-engine`, `ocr-model` and `onnxruntime`; evidence names the identity when OCR is planned or a reading exists. Legacy Tesseract request bytes remain compatible. PP-OCR does not fulfil Tesseract's `eng_best` selector; that optional request is unsupported, as are scripts outside the English reference's scope. Replay uses recorded integer answers without constructing the port or executing inference.
+
 Assets (D117) add two kinds, both transcribed like `render`: **`crop`** 5
 (`input page dpi layer px py pw ph`, answered as a render) and
 **`decode-img`** 6 (a PDF image codestream with the parameters a codec
@@ -3461,6 +3463,7 @@ Settings (all named, all with defaults, all in the Model header):
 | --- | --- | --- |
 | `locale` | BCP 47 or none | none |
 | `ocr` | `always` / `auto` / `never` | **`always`** — every page, born-digital included (D038); `auto` OCRs only where text-layer health, image coverage or hidden text call for it |
+| `ocr-engine` | Optional reference OCR port: `tesseract` / `ppocr` (D843). PP-OCR is Rust-only in an explicitly built optional adapter, carries pinned request/producer identity, skips born-digital text-layer pages, and uses held-out calibrated CTC word scores. Unsupported hosts reject it by name. Default-engine acceptance is separate. | `tesseract` |
 | `tables` | Experimental comparison-driver engine selection through option text and `--tables=legacy|scored`; recorded only in evidence | `legacy` |
 | `ocr-scope` | `full` / `witness`: what `ocr: always` reads of a born-digital page (§8.3, §9.8, D200); written to the Model's `settings` only when not `full` | `full` |
 | `sources` | subset of text/ocr/trace | all available |

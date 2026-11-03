@@ -149,6 +149,7 @@ type Cfg struct {
 	Dry      int32
 	Jsrender int32
 	Tabl     int32
+	Oengine  int32
 }
 
 func NewCfg() *Cfg {
@@ -179,6 +180,7 @@ func NewCfg() *Cfg {
 		Dry:      0,
 		Jsrender: 0,
 		Tabl:     0,
+		Oengine:  0,
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -209,6 +211,7 @@ func (d *Cfg) Clone() *Cfg {
 	c.Dry = d.Dry
 	c.Jsrender = d.Jsrender
 	c.Tabl = d.Tabl
+	c.Oengine = d.Oengine
 	return c
 }
 

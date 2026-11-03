@@ -107,6 +107,7 @@ public static class Enctx {
         public int Dry = 0;
         public int Jsrender = 0;
         public int Tabl = 0;
+        public int Oengine = 0;
         public Cfg() {
         }
         public Cfg Clone() {
@@ -137,6 +138,7 @@ public static class Enctx {
             c.Dry = this.Dry;
             c.Jsrender = this.Jsrender;
             c.Tabl = this.Tabl;
+            c.Oengine = this.Oengine;
             return c;
         }
     }

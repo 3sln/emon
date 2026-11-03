@@ -190,7 +190,7 @@
 ;; ------------------------------------------------------------------ the grammar's tables
 
 (deftest test-the-keys-have-their-names-in-kin
-  (assert-eq (ck-row-count 0) 21 "twenty-one keys")
+  (assert-eq (ck-row-count 0) 22 "twenty-two keys")
   (t-key-name (test-t) 0 "locale")
   (t-key-name (test-t) 1 "ocr")
   (t-key-name (test-t) 2 "furniture")
@@ -211,10 +211,11 @@
   (t-key-name (test-t) 17 "producer.")
   (t-key-name (test-t) 18 "parallel")
   (t-key-name (test-t) 19 "js-render")
-  (t-key-name (test-t) 20 "tables"))
+  (t-key-name (test-t) 20 "tables")
+  (t-key-name (test-t) 21 "ocr-engine"))
 
 (deftest test-the-words-have-their-names-and-codes-in-kin
-  (assert-eq (cv-row-count 0) 15 "fifteen words")
+  (assert-eq (cv-row-count 0) 17 "seventeen words")
   (t-word-name (test-t) 0 1 2 "always")
   (t-word-name (test-t) 1 1 1 "auto")
   (t-word-name (test-t) 2 1 0 "never")
@@ -229,7 +230,9 @@
   (t-word-name (test-t) 11 10 0 "full")
   (t-word-name (test-t) 12 10 1 "witness")
   (t-word-name (test-t) 13 20 0 "legacy")
-  (t-word-name (test-t) 14 20 1 "scored"))
+  (t-word-name (test-t) 14 20 1 "scored")
+  (t-word-name (test-t) 15 21 0 "tesseract")
+  (t-word-name (test-t) 16 21 1 "ppocr"))
 
 (deftest test-a-key-is-found-by-its-whole-name-or-its-prefix
   (t-is-key (test-t) (text-blob "ocr") 1 "ocr")
@@ -442,3 +445,13 @@
     (assert-eq (t-parse c (text-blob "tables=legacy")) 0 "legacy parses")
     (assert-eq (fd c tabl) 0 "legacy code"))
   (t-refused (test-t) (text-blob "tables=other") "tables is legacy or scored"))
+
+(deftest test-optional-ocr-engine-is-explicit-and-defaults-to-tesseract
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c (text-blob "")) 0 "default parses")
+    (assert-eq (fd c oengine) 0 "Tesseract remains default")
+    (assert-eq (t-parse c (text-blob "ocr-engine=ppocr")) 0 "PP-OCR parses")
+    (assert-eq (fd c oengine) 1 "explicit optional engine")
+    (assert-eq (t-parse c (text-blob "ocr-engine=ppocr\nocr-engine=tesseract")) 0 "last engine wins")
+    (assert-eq (fd c oengine) 0 "explicit Tesseract")
+    (t-refused (test-t) (text-blob "ocr-engine=unknown") "ocr-engine is tesseract or ppocr")))

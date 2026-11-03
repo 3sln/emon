@@ -127,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 21 {
+    while i < 22 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -196,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(21, 21, "twenty-one keys");
+    crate::testport::assert_eq(22, 22, "twenty-two keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -218,10 +218,11 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 18, "parallel");
     t_key_name(0, 19, "js-render");
     t_key_name(0, 20, "tables");
+    t_key_name(0, 21, "ocr-engine");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
-    crate::testport::assert_eq(15, 15, "fifteen words");
+    crate::testport::assert_eq(17, 17, "seventeen words");
     t_word_name(0, 0, 1, 2, "always");
     t_word_name(0, 1, 1, 1, "auto");
     t_word_name(0, 2, 1, 0, "never");
@@ -237,6 +238,8 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 12, 10, 1, "witness");
     t_word_name(0, 13, 20, 0, "legacy");
     t_word_name(0, 14, 20, 1, "scored");
+    t_word_name(0, 15, 21, 0, "tesseract");
+    t_word_name(0, 16, 21, 1, "ppocr");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
@@ -459,4 +462,15 @@ fn test_table_engine_option() {
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("tables=legacy")[..]), 0, "legacy parses");
     crate::testport::assert_eq(c.tabl, 0, "legacy code");
     t_refused(0, &crate::testport::text_blob("tables=other")[..], "tables is legacy or scored");
+}
+#[test]
+fn test_optional_ocr_engine_is_explicit_and_defaults_to_tesseract() {
+    let c: &mut crate::emon::enctx::Cfg = &mut crate::emon::enctx::Cfg::new();
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("")[..]), 0, "default parses");
+    crate::testport::assert_eq(c.oengine, 0, "Tesseract remains default");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr")[..]), 0, "PP-OCR parses");
+    crate::testport::assert_eq(c.oengine, 1, "explicit optional engine");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr\nocr-engine=tesseract")[..]), 0, "last engine wins");
+    crate::testport::assert_eq(c.oengine, 0, "explicit Tesseract");
+    t_refused(0, &crate::testport::text_blob("ocr-engine=unknown")[..], "ocr-engine is tesseract or ppocr");
 }

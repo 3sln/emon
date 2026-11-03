@@ -221,7 +221,11 @@
 
 (def rust-only
   "[kind Type member] on the Rust side with no Go twin, and why."
-  {[:method "Engine" "start_pushed"]
+  {[:type "OcrEngine" nil]
+   "D843: the optional PP-OCR reference selector is Rust-only in stage1; Go parses the shared option but refuses ppocr by name until its adapter is ported"
+   [:field "Options" "ocr_engine"]
+   "D843: typed native reference selection in Rust; other hosts retain tesseract and explicitly refuse the ppocr option by name in this stage"
+   [:method "Engine" "start_pushed"]
    "the step-wise run for an embedder that owns the loop (the browser build, P9.3, D356: a JS read is a promise, so the engine is stepped and the bytes it misses are pushed in): an extra way in over `emon::engine::{Run, ChunkCache}`, not part of SPEC 13's Engine; Go's loop is `plan.Run` over a blocking `io.ReaderAt` and needs none"
    [:type "Inputs" nil]
    "a conversion wrapper for Rust's `impl Into<Inputs>` (a bare buffer, one Input or a Vec): Go has no overloading, takes `[]Input`, and `BytesInput(b)` is the bare-buffer shorthand (SPEC 13)"
@@ -516,7 +520,9 @@
   (let [g (fn [d pat] (map str (fs/glob d pat)))
         ;; host/c/src/native.rs (D552) is a binding like tess.rs: it finds the pdfium library and the Tesseract models of the C library's and the pod's own archive
         ;; (EMON_PDFIUM_LIB, EMON_TESSDATA, `lib/` and `share/emon/tessdata` beside the library); the Engine layers and the ports still never see a path
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
+        ;; D843: these three optional OCR fulfilment modules load/verify pinned model files, like tess.rs.
+        ;; The image/CTC/calibration modules and every Engine/library module remain covered.
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/ppocr\.rs|/ppocr_runtime\.rs|/ppocr_pipeline\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs") (g "host/c/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))

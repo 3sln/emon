@@ -415,7 +415,9 @@
 
 ;; ------------------------------------------------------------------------------------------------ the notices
 
-(defn- fence [s] (str "````text\n" (str/trimr s) "\n````"))
+;; Preserve licence words; normalize trailing whitespace only in generated Markdown.
+(defn- fence [s]
+  (str "````text\n" (str/join "\n" (map str/trimr (str/split-lines (str/trimr s)))) "\n````"))
 
 (defn- carried [inv c]
   (let [nm #(get-in inv [:artifacts %] (name %))

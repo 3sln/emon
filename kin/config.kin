@@ -40,7 +40,7 @@
          114 101 99 111 114 100 106 115 45 111 99 114 99 104 117 110
          107 108 105 109 105 116 46 112 114 111 100 117 99 101 114 46
          112 97 114 97 108 108 101 108 106 115 45 114 101 110 100 101
-         114 116 97 98 108 101 115]
+         114 116 97 98 108 101 115 111 99 114 45 101 110 103 105 110 101]
   :accessors {^I32 ck-char-at [^I32 ignored ^I32 i]})
 
 ;; a key is a row's index: [shape lo hi name-offset name-length]. Shapes: 0 a string, 1 a number in lo..hi, 2 a word of `cv-rows`, 3 a flag,
@@ -68,7 +68,8 @@
          5 0 0 151 9                                ;; 17 producer.
          1 1 2147483647 160 8                       ;; 18 parallel (P10.2: the workers a conversion may use; 1 is serial, the default; `limit.workers` caps it)
          3 0 0 168 9                                ;; 19 js-render (P11.4c: the host owes render and crop)
-         2 0 0 177 6]                               ;; 20 tables (experimental comparison engine)
+         2 0 0 177 6
+         2 0 0 183 10]                               ;; 20 tables (experimental comparison engine)
   :accessors {^I32 ck-row-count [^I32 ignored]
               ^I32 ck-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -77,7 +78,7 @@
   :data [97 108 119 97 121 115 97 117 116 111 110 101 118 101 114 112
          111 108 105 99 121 107 101 101 112 100 114 111 112 110 111 110
          101 105 109 97 103 101 115 102 105 103 117 114 101 115 111 110
-         111 102 102 102 117 108 108 119 105 116 110 101 115 115 108 101 103 97 99 121 115 99 111 114 101 100]
+         111 102 102 102 117 108 108 119 105 116 110 101 115 115 108 101 103 97 99 121 115 99 111 114 101 100 116 101 115 115 101 114 97 99 116 112 112 111 99 114]
   :accessors {^I32 cv-char-at [^I32 ignored ^I32 i]})
 
 ;; a word of an enum key: [key code name-offset name-length], in the order the sentence lists them.
@@ -98,7 +99,9 @@
          10 0 51 4                                  ;; ocr-scope     full
          10 1 55 7                                  ;;               witness
          20 0 62 6                                  ;; tables        legacy
-         20 1 68 6]                                 ;;               scored
+         20 1 68 6
+         21 0 74 9
+         21 1 83 5]                                 ;;               scored
   :accessors {^I32 cv-row-count [^I32 ignored]
               ^I32 cv-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -121,6 +124,7 @@
 (defconst ^I32 K_PAR 18)
 (defconst ^I32 K_JSRENDER 19)
 (defconst ^I32 K_TABLES 20)
+(defconst ^I32 K_OENGINE 21)
 
 (defconst ^I32 SH_STR 0)
 (defconst ^I32 SH_NUM 1)
@@ -152,6 +156,7 @@
   (set (fd c jsocr) 0)
   (set (fd c jsrender) 0)
   (set (fd c tabl) 0)
+  (set (fd c oengine) 0)
   (set (fd c par) 1)
   (set (fd c dry) 0)
   (return 0))
@@ -324,6 +329,7 @@
   (if (== k K_SIGS) (set (fd c sigs) v))
   (if (== k K_SCOPE) (set (fd c scope) v))
   (if (== k K_TABLES) (set (fd c tabl) v))
+  (if (== k K_OENGINE) (set (fd c oengine) v))
   (return 0))
 
 (defn ^I32 cf-set-flag [^Cfg c ^I32 k ^I32 v]

@@ -37,7 +37,19 @@ pub mod wasm;
 #[cfg(feature = "tesseract")]
 pub mod tess;
 
-pub use engine::{is_option_key, parse_options, Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrPolicy, OcrPort, OcrScope, Options, Output, Page, Parsed, Region, RunStats, Transcript};
+pub use engine::{is_option_key, parse_options, Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrEngine, OcrPolicy, OcrPort, OcrScope, Options, Output, Page, Parsed, Region, RunStats, Transcript};
 pub use pdfimg::{CodecFail, PdfCodecs, Pix};
 pub use render::{Clip, KindMux, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};
 pub use source::{ByteSource, BytesSource, Input, Inputs, SeekSource, SpoolSource};
+
+// Optional OP1 reference only; normal builds carry no ORT dependency.
+#[cfg(ppocr)]
+pub mod ppocr;
+#[cfg(ppocr)]
+mod ppocr_ctc;
+#[cfg(ppocr)]
+mod ppocr_image;
+#[cfg(ppocr)]
+mod ppocr_pipeline;
+#[cfg(ppocr)]
+mod ppocr_runtime;

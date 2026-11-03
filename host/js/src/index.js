@@ -43,6 +43,7 @@ const optionLines = (o, chunk, record) => {
   const put = (k, v) => v !== undefined && v !== null && L.push(`${k}=${v}`);
   put('locale', o.locale);
   put('ocr', o.ocr);
+  put('ocr-engine', o.ocrEngine);
   put('furniture', o.furniture);
   put('assets', o.assets);
   put('asset-dpi', o.assetDpi);

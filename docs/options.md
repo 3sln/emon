@@ -45,10 +45,12 @@ Defaults are what a conversion does when the text is empty.
 | `locale` | text | none | A BCP 47 language hint (`en`, `de`, `fr-CA`), written to the Model's `settings.locale`. It decides how a drop cap joins its first word when the letter could be a word of its own. |
 | `max-rounds` | integer 0..2147483647 | `5` | Most plan/fulfil rounds one page unit may take (the engine asks the ports for renders and OCR in rounds). |
 | `ocr` | `always`, `auto`, `never` | `always` | When pages are read with OCR. `always`: every page, born-digital ones too (the text layer and the reading are fused). `auto`: only a page whose text layer is unhealthy, that carries images, or that hides text. `never`: no OCR. With no renderer or no OCR engine configured a request is answered `unsupported` and the text layer stands alone. |
+| `ocr-engine` | `ppocr`, `tesseract` | `tesseract` | OCR port: `tesseract` is the default. `ppocr` selects the optional PP-OCRv5 mobile English Rust reference when built with it; other hosts report it unsupported. Its readings use the existing guarded adoption policies. PP-OCR skips born-digital text-layer pages, including at `ocr=always`. |
 | `ocr-scope` | `witness`, `full` | `full` | What `ocr=always` reads of a born-digital page. `full`: the whole render, text included. `witness`: the render without its text plus a few witness lines of each font (a fraction of the OCR time; a font whose witnesses disagree with its text escalates the page to `full`). |
 | `parallel` | integer 1..2147483647 | `1` | How many workers one conversion may spread its fulfilment over. 1 is serial. The limit `workers` caps it. The Model is byte-identical at any N. |
 | `producer.NAME` | `producer.NAME=VALUE` | none | `producer.NAME=VALUE` is written into a recorded transcript to say what produced it. The engine does not read it. |
 | `record` | `1` or `0` | `0` | Keep a transcript of the conversion's port answers, so it can be replayed without the ports. A session option: the one-shot calls of the C library refuse it. |
+| `tables` | `scored`, `legacy` | `legacy` | Experimental table engine for the comparison driver: legacy or scored. Legacy stays the default until the pre-registered A/B criteria accept scored. The engine is recorded in evidence, outside Model settings. |
 <!-- bb docs:end options-table -->
 
 A password is not an option. It travels with its input, and it is never written to a Model, an evidence dump or

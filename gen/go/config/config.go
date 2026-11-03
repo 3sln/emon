@@ -9,7 +9,7 @@ import (
 	"emon/port"
 )
 
-var CkChars [183]int32 = [183]int32{
+var CkChars [193]int32 = [193]int32{
 	108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
 	114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
 	105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -21,10 +21,11 @@ var CkChars [183]int32 = [183]int32{
 	114, 101, 99, 111, 114, 100, 106, 115, 45, 111, 99, 114, 99, 104, 117, 110,
 	107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
 	112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
-	114, 116, 97, 98, 108, 101, 115,
+	114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
+	101,
 }
 
-var CkRows [105]int32 = [105]int32{
+var CkRows [110]int32 = [110]int32{
 	0, 0, 0, 0, 6,
 	2, 0, 0, 6, 3,
 	2, 0, 0, 9, 9,
@@ -46,17 +47,19 @@ var CkRows [105]int32 = [105]int32{
 	1, 1, 2147483647, 160, 8,
 	3, 0, 0, 168, 9,
 	2, 0, 0, 177, 6,
+	2, 0, 0, 183, 10,
 }
 
-var CvChars [74]int32 = [74]int32{
+var CvChars [88]int32 = [88]int32{
 	97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
 	111, 108, 105, 99, 121, 107, 101, 101, 112, 100, 114, 111, 112, 110, 111, 110,
 	101, 105, 109, 97, 103, 101, 115, 102, 105, 103, 117, 114, 101, 115, 111, 110,
 	111, 102, 102, 102, 117, 108, 108, 119, 105, 116, 110, 101, 115, 115, 108, 101,
-	103, 97, 99, 121, 115, 99, 111, 114, 101, 100,
+	103, 97, 99, 121, 115, 99, 111, 114, 101, 100, 116, 101, 115, 115, 101, 114,
+	97, 99, 116, 112, 112, 111, 99, 114,
 }
 
-var CvRows [60]int32 = [60]int32{
+var CvRows [68]int32 = [68]int32{
 	1, 2, 0, 6,
 	1, 1, 6, 4,
 	1, 0, 10, 5,
@@ -72,6 +75,8 @@ var CvRows [60]int32 = [60]int32{
 	10, 1, 55, 7,
 	20, 0, 62, 6,
 	20, 1, 68, 6,
+	21, 0, 74, 9,
+	21, 1, 83, 5,
 }
 
 const kLocale int32 = 0
@@ -112,6 +117,8 @@ const kJsrender int32 = 19
 
 const kTables int32 = 20
 
+const kOengine int32 = 21
+
 const shStr int32 = 0
 
 const shNum int32 = 1
@@ -145,6 +152,7 @@ func CfDefaults(c *enctx.Cfg) int32 {
 	c.Jsocr = 0
 	c.Jsrender = 0
 	c.Tabl = 0
+	c.Oengine = 0
 	c.Par = 1
 	c.Dry = 0
 	return 0
@@ -174,7 +182,7 @@ func cfKeyIs(t *port.Cells, from int32, to int32, k int32) int32 {
 func CfKeyFind(t *port.Cells, from int32, to int32) int32 {
 	// The key t[from, to) names, or -1.
 	var k int32 = 0
-	for k < 21 {
+	for k < 22 {
 		if cfKeyIs(t, from, to, k) == 1 {
 			return k
 		}
@@ -215,7 +223,7 @@ func CfLimitFind(t *port.Cells, from int32, to int32) int32 {
 func cfWord(t *port.Cells, from int32, to int32, key int32) int32 {
 	// The code of the word t[from, to) is for enum key `key`, or -1.
 	var r int32 = 0
-	for r < 15 {
+	for r < 17 {
 		if CvRows[r*4+0] == key {
 			var nl int32 = CvRows[r*4+3]
 			var off int32 = CvRows[r*4+2]
@@ -313,14 +321,14 @@ func cfFailEnum(k int32, c *enctx.Cfg) int32 {
 	var m int32 = 0
 	var seen int32 = 0
 	var r int32 = 0
-	for r < 15 {
+	for r < 17 {
 		if CvRows[r*4+0] == k {
 			m += 1
 		}
 		r += 1
 	}
 	r = 0
-	for r < 15 {
+	for r < 17 {
 		if CvRows[r*4+0] == k {
 			if seen > 0 {
 				if seen == (m - 1) {
@@ -402,6 +410,9 @@ func cfSetWord(c *enctx.Cfg, k int32, v int32) int32 {
 	}
 	if k == kTables {
 		c.Tabl = v
+	}
+	if k == kOengine {
+		c.Oengine = v
 	}
 	return 0
 }

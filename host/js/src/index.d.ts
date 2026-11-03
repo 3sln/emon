@@ -87,6 +87,8 @@ export interface Renderer {
 export interface ConvertOptions {
   locale?: string;
   ocr?: 'always' | 'auto' | 'never' | string;
+  /** PP-OCR is unsupported in the browser; Tesseract remains the default. */
+  ocrEngine?: 'tesseract' | 'ppocr' | string;
   furniture?: 'policy' | 'keep' | 'drop' | string;
   assets?: 'none' | 'images' | 'figures' | string;
   assetDpi?: number;

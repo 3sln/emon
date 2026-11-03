@@ -259,6 +259,7 @@ public final class Options {
         if (emon.Config.cfParse(cellsOf(text), c) != 0) {
             throw new IllegalArgumentException(c.msg.toString());
         }
+        if (c.oengine != 0) throw new IllegalArgumentException("ocr-engine=ppocr is unsupported on Java");
         Options o = new Options();
         o.ocr = OcrPolicy.of(c.ocr);
         o.assets = Assets.values()[c.level];

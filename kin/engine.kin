@@ -26,7 +26,8 @@
             [emon.para :refer [pa-pages pa-build]]
             [emon.pdfdoc :refer [pd-pg-count pd-open-pw pd-pages pd-need-bytes pd-version-major pd-version-minor pd-encrypted]]
             [emon.pdfcontent :refer [pc-document]]
-            [emon.pageunit :refer [pu-plan pu-run-pdf]]
+            [emon.pageunit :refer [pu-plan pu-run-pdf pu-kind pk-born pk-scan]]
+            [emon.ocrengine :refer [oe-tag oe-evidence]]
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfmeta :refer [pm-run]]
             [emon.pdfannot :refer [pa-run]]
@@ -223,11 +224,13 @@
 
 ;; ----------------------------------------------------------------------------------------------- the page unit
 
-(defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
+(defn ^I32 en-page-inner [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
   (comment "One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is")
   (comment "left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.")
   (comment "`(fd c dry)` 1 (P10.2) makes it a DRY attempt: only the part before its first write (`pu-dry`), so the host can learn what a page will ask while the loop is")
   (comment "on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).")
+  (if (and (== (fd c oengine) 1) (== (fd d kind) (en-kind-pdf)))
+    (if (== (pu-kind (fd d plan) i) (pk-born)) (return 0)))
   (cells-drop (fd d pscr) 0)
   (if (== (fd d kind) (en-kind-pdf))
     (return (pu-run-pdf i idx (fd c ocr) (fd d plan) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
@@ -244,6 +247,20 @@
                    (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
                    (fd d ys0) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
                    (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18) (fd ev ofuse) (fd ev oarb))))
+
+(defn ^I32 en-ocr-planned [^Cfg c ^Doc d]
+  (if (== (fd c ocr) 0) (return 0))
+  (if (!= (fd d kind) (en-kind-pdf)) (return 1))
+  (let [^:mut ^I32 i 0]
+    (while (< i (fd d ipages))
+      (do (if (== (pu-kind (fd d plan) i) (pk-scan)) (return 1))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
+  (let [^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
+    (oe-tag rq (fd d pscr) (fd c oengine))
+    (return status)))
 
 ;; ----------------------------------------------------------------------------------------------- the asset unit
 
@@ -478,6 +495,9 @@
       (en-figures m s d (fd c level)))
     (if (!= (fd c keep) 0)
       (do (if (== kind 0) (fc-emit-budget (fd s fcand) (fd s ffd) (fd d evidence)))
+          (if (!= (fd c oengine) 0)
+            (if (or (> (cells-len (fd ev oruns)) 0) (== (en-ocr-planned c d) 1))
+              (oe-evidence (fd d evidence) (fd c oengine))))
           (emit-ascii (fd d evidence) "}")))
     ;; restructuring (kin/restruct.kin, P4.5, P4.6): the body is copied into new arenas, in document order, and they replace the old ones
       (rs-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s rn) (fd s ra) (fd s rr) (fd s rnm) (fd s rstk) (fd s rused) (fd s rout)

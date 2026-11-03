@@ -126,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 21) {
+        while (i < 22) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -190,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(21, 21, "twenty-one keys");
+        emon.Testport.assertEq(22, 22, "twenty-two keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -212,9 +212,10 @@ public final class Configtest {
         tKeyName(0, 18, "parallel");
         tKeyName(0, 19, "js-render");
         tKeyName(0, 20, "tables");
+        tKeyName(0, 21, "ocr-engine");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(15, 15, "fifteen words");
+        emon.Testport.assertEq(17, 17, "seventeen words");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -230,6 +231,8 @@ public final class Configtest {
         tWordName(0, 12, 10, 1, "witness");
         tWordName(0, 13, 20, 0, "legacy");
         tWordName(0, 14, 20, 1, "scored");
+        tWordName(0, 15, 21, 0, "tesseract");
+        tWordName(0, 16, 21, 1, "ppocr");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");
@@ -438,5 +441,15 @@ public final class Configtest {
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("tables=legacy")), 0, "legacy parses");
         emon.Testport.assertEq(c.tabl, 0, "legacy code");
         tRefused(0, emon.Testport.textBlob("tables=other"), "tables is legacy or scored");
+    }
+    public static void testOptionalOcrEngineIsExplicitAndDefaultsToTesseract() {
+        emon.Enctx.Cfg c = new emon.Enctx.Cfg();
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("")), 0, "default parses");
+        emon.Testport.assertEq(c.oengine, 0, "Tesseract remains default");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr")), 0, "PP-OCR parses");
+        emon.Testport.assertEq(c.oengine, 1, "explicit optional engine");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins");
+        emon.Testport.assertEq(c.oengine, 0, "explicit Tesseract");
+        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr");
     }
 }

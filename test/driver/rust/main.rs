@@ -341,6 +341,18 @@ fn main() {
         input = input.with_password(p.into_bytes());
     }
 
+    if opts.ocr_engine == emon::OcrEngine::PpOcr {
+        if tess.is_some() { usage("ocr-engine=ppocr cannot use --tesseract or --tessdata"); }
+        if replay.is_none() {
+            #[cfg(ppocr)]
+            {
+                let port = emon::ppocr::PpOcr::new(std::path::Path::new(".cache/ppocr")).unwrap_or_else(|e| usage(&e));
+                cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
+            }
+            #[cfg(not(ppocr))]
+            usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_PPOCR=1)");
+        }
+    }
     if let Some(dir) = &tess {
         #[cfg(feature = "tesseract")]
         {
@@ -398,11 +410,15 @@ fn main() {
                     println!("{} {}.{} pages={} encrypted={} bytes={}", i.format, i.version.0, i.version.1, i.pages, i.encrypted, i.bytes);
                 }
             }
-            Err(e) => fail(e),
+            Err(e) => {
+                if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
+                fail(e)
+            },
         }
         return;
     }
     if !matches!(out.as_str(), "json" | "html" | "evidence" | "bundle" | "pixels") {
+        if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
         usage("--out is json, html, evidence, bundle, pixels or intake");
     }
     let transcript = replay.as_ref().map(|dir| {
@@ -472,7 +488,11 @@ fn main() {
     }
     let (text, rs) = match results.swap_remove(0) {
         Ok(x) => x,
-        Err(e) => fail(e),
+        Err(e) => {
+            // ORT sessions must close before process::exit skips Rust destructors.
+            if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
+            fail(e)
+        },
     };
     if stats {
         eprintln!(

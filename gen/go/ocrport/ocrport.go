@@ -401,7 +401,7 @@ var OpNames [639]int32 = [639]int32{
 	115, 105, 109, 0, 1667789568, 3, 99, 104, 105, 95, 116, 114, 97, 0, 1667789824,
 }
 
-func OpLangFirst(req *port.Cells) int32 {
+func opLangFirstLegacy(req *port.Cells) int32 {
 	// The argument index of a request's first language: after the pixel hash of a kin-made view (its bitmap id is from
 	// `view-base`, D196), else straight after the region.
 	if plan.RqArg(req, 0, 0) >= plan.ViewBase() {
@@ -410,11 +410,65 @@ func OpLangFirst(req *port.Cells) int32 {
 	return 7
 }
 
+func OpIdentityAt(req *port.Cells) int32 {
+	// Absolute cell of a canonical optional-engine trailer, independently of legacy view layout; -1 when absent.
+	var n int32 = port.CellsLen(req)
+	var at int32 = 10
+	for (at + 2) < n {
+		if (port.CellsAt(req, at) == -3100) && ((port.CellsAt(req, at+1) == 1) && (port.CellsAt(req, at+2) == ((n - at) - 3))) {
+			return at
+		}
+		at += 1
+	}
+	return -1
+}
+
+func OpLangFirst(req *port.Cells) int32 {
+	// The historical layout unless a tagged compact view ends before a hashed-view prefix could fit. Ambiguous view layouts use op-pp-lang-first with the actual bitmap hash.
+	var first int32 = opLangFirstLegacy(req)
+	var marker int32 = OpIdentityAt(req)
+	if (marker >= 0) && (marker < (3 + first)) {
+		return 7
+	}
+	return first
+}
+
+func OpPpLangFirst(req *port.Cells, hhi int32, hlo int32) int32 {
+	// PP accepts compact crop requests over a view as well as hashed-view requests. Verify the latter against the actual bitmap hash; never guess from language-shaped integers.
+	var marker int32 = OpIdentityAt(req)
+	if (plan.RqArg(req, 0, 0) >= plan.ViewBase()) && (marker >= 12) {
+		if (plan.RqArg(req, 0, 7) == hhi) && (plan.RqArg(req, 0, 8) == hlo) {
+			return 9
+		}
+	}
+	return 7
+}
+
+func OpPpLangCount(req *port.Cells, first int32) int32 {
+	var marker int32 = OpIdentityAt(req)
+	if marker < (3 + first) {
+		return 0
+	}
+	return (marker - 3) - first
+}
+
+func OpPpLangAt(req *port.Cells, first int32, i int32) int32 {
+	return plan.RqArg(req, 0, first+i)
+}
+
 func OpLangCount(req *port.Cells) int32 {
 	// How many languages the request names (record `req`: `[len kind id arg...]`).
-	var n int32 = (port.CellsLen(req) - 3) - OpLangFirst(req)
+	var first int32 = OpLangFirst(req)
+	var n int32 = (port.CellsLen(req) - 3) - first
 	if n < 0 {
 		return 0
+	}
+	var i int32 = 0
+	for i < n {
+		if plan.RqArg(req, 0, first+i) == -3100 {
+			return i
+		}
+		i += 1
 	}
 	return n
 }

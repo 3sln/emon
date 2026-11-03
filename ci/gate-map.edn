@@ -116,7 +116,7 @@
   ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
   {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
    :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
-  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest}.kin"
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest,ocrengine,ocrenginetest}.kin"
    :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
   {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
   {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]
@@ -194,7 +194,7 @@
   {:glob "tools/import/**" :gates [] :why "public-dataset importers: the corpus is not in git, nothing here is a gate"}
   {:glob "tools/lib/**" :gates ["repeat" "fuzz" "accuracy" "@replay"] :why "libraries: extra_hosts (every replay gate's other hosts), pdfreverse (repeat), nfc and the python formatters (the synthetic corpus)"}
   {:glob "tools/limits/**" :gates [] :why "`bb limits` is a report, not a gate"}
-  {:glob "tools/{native,tessdata}/**" :gates ["release-audit"] :why "`bb native` (P11.5, D540): the pinned source tarballs and the CMake builds of static Tesseract and Leptonica for the release CLI, run by .github/workflows/native.yml and by hand; not a gate. The fast core's release-audit holds the inventory and licence texts it feeds; `bb native --check` holds its pins"}
+  {:glob "tools/{native,tessdata,ppocr}/**" :gates ["release-audit"] :why "`bb native` (P11.5, D540): the pinned source tarballs and the CMake builds of static Tesseract and Leptonica for the release CLI, run by .github/workflows/native.yml and by hand; not a gate. The fast core's release-audit holds the inventory and licence texts it feeds; `bb native --check` holds its pins"}
   {:glob "tools/ocr/**" :gates ["ocr"] :why "the OCR recorders, CER and gold sampler"}
   {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
   {:glob "tools/parbench/**" :gates [] :why "a benchmark"}

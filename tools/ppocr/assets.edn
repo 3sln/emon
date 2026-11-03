@@ -1,0 +1,21 @@
+;; PP-OCRv5 mobile English reference assets (OP1, D843).
+;; Recognizer dictionary is embedded ONNX metadata, covered by the graph hash.
+{:schema 1 :identity "ppocr5-mobile-en-rapid3100-v1"
+ :dictionary {:file "en-dictionary.txt"
+              :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/en_PP-OCRv5_rec_mobile.onnx" :licence "Apache-2.0" :source "en_PP-OCRv5_rec_mobile.onnx metadata_props.character"
+              :sha256 "e025a66d31f327ba0c232e03f407ae8d105e1e709e7ccb3f408aa778c24e70d6" :bytes 1416}
+ :orientation-dictionary {:file "orientation-labels.txt" :source "RapidOCR v3.10.0 classifier label_list, classes 0 and 180"
+                          :url "https://github.com/RapidAI/RapidOCR/tree/v3.10.0" :licence "Apache-2.0"
+                          :sha256 "7ac7ce66bfdee83c7886404426adf5efae11cc84183b94491e7ae33a865161fb" :bytes 6}
+ :assets [
+  {:file "en_PP-OCRv5_rec_mobile.onnx" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/en_PP-OCRv5_rec_mobile.onnx"
+   :sha256 "c3461add59bb4323ecba96a492ab75e06dda42467c9e3d0c18db5d1d21924be8" :bytes 7872351 :licence "Apache-2.0"}
+  {:file "ch_PP-OCRv5_det_mobile.onnx" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx"
+   :sha256 "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae" :bytes 4819576 :licence "Apache-2.0"}
+  {:file "ch_ppocr_mobile_v2.0_cls_mobile.onnx" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx"
+   :sha256 "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c" :bytes 585532 :licence "Apache-2.0"}
+  {:file "onnxruntime-osx-arm64-1.22.0.tgz"
+   :url "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-arm64-1.22.0.tgz"
+   :sha256 "cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07"
+   :bytes 25943843 :licence "MIT" :target "aarch64-apple-darwin"}
+]}

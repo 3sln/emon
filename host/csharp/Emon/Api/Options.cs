@@ -240,6 +240,7 @@ public sealed class Options {
         if (emon.Config.CfParse(CellsOf(text), c) != 0) {
             throw new System.ArgumentException(c.Msg.ToString());
         }
+        if (c.Oengine != 0) throw new System.ArgumentException("ocr-engine=ppocr is unsupported on C#");
         var o = new Options();
         o.Ocr = (OcrPolicy) (c.Ocr == 0 ? 2 : c.Ocr == 1 ? 1 : 0);
         o.Assets = (AssetsLevel) c.Level;

@@ -13854,3 +13854,49 @@ All requested gates pass after environment-only reruns: C# uses the existing loc
 Rust, Go, Java and C# each pass all 1,358 laws. The final legacy arm's 857 outputs match the saved baseline bytes. Final rederive changes no tracked patch or untracked contents. Criteria, baseline and populations are unchanged. Full verdict: /Volumes/SSK SSD/emon-scratch/trd/compare-tr1-final-a-tr1-final-b.json. Per-population checkpoints and logs remain external for review.
 
 - [ ] **Signed off** (maintainer)
+
+### D843 — Optional PP-OCRv5 reference port; Tesseract fast stays the default
+
+Maintainer decision of 2026-10-30: PP-OCRv5 mobile through ONNX Runtime is approved as an optional second OCR port, off by default. Stage 1 is the native Rust reference; Go, Java, C#, C, pod, CLI and browser support follow in later stages. Default use requires separate acceptance and is outside OP1. Engine-only OE measurements are not integrated acceptance evidence. The coordinator's 2026-11-02 receipt, control, target, determinism and cost requirements remain unchanged. Word boxes require measured CTC alignment and confidence requires a frozen held-out reliability calibration before guarded adoption.
+
+- [ ] **Signed off** (maintainer)
+
+### D844 — Optional pinned PP-OCR assets and the ORT C API reference
+
+`bb ppocr-fetch` is a non-gate, SHA-256/size-checked fetch into the worktree's `.cache/ppocr`. The PP-OCRv5 mobile detector and English recognizer, v2 mobile orientation classifier, and verbatim embedded recognizer dictionary are pinned in `tools/ppocr/assets.edn`. The classifier vocabulary is `0`/`180`. Model copyrights and Apache-2.0 texts remain separate from emon's MIT licence; the release inventory and generated notices retain them. The reference uses the official macOS arm64 ORT 1.22.0 archive, its MIT licence and complete distribution ThirdPartyNotices. Other runtime platform archives are not yet qualified. The C ABI shim owns sessions/tensors; Rust owns image preprocessing, DB geometry, crops, orientation and CTC. There is no Python inference dependency, runtime auto-download, accelerator provider or new Cargo dependency.
+
+The reference policy is deliberately explicit rather than claiming RapidOCR image-to-word equivalence: RGB bilinear byte rounding; max-side 960 detection, dimensions rounded to multiples of 32; DB .3 threshold, 2x2 dilation, .5 component score, convex offset at area*1.6/perimeter and a minimum-area rectangle; stable ordering; height-48 recognition with measured CTC support, fixed vocabulary and lowest-index ties. Integer boxes map back through the actual crop and round outward. ORT uses CPU sequential execution, one intra-op and one inter-op thread. All of these choices participate in the recording identity and require the OP1 live acceptance measurements.
+
+- [ ] **Signed off** (maintainer)
+
+### D845 — Separate English CTC reliability calibration
+
+The first 80 existing SROIE train IDs, none in the receipt baseline, are split into 40 fit and 40 validation pages. Unambiguous geometric assignment to an annotated source line precedes ordered NFC/casefold token alignment within that line. This yields 4,466 fit and 3,764 validation predicted words. Ten equal posterior bins freeze integer source-word correctness estimates in `host/rust/src/ppocr_calibration.rs`; empty low-posterior bins map conservatively to zero. Validation ECE is .007489 and Brier .120971. IDs, reliability bins, policy and limitations are retained in `tools/ppocr/calibration.json`; source-bearing labels remain external. These are line-aligned source annotations, not fabricated individual gold word polygons or a manual changed-control source audit. Annotation errors and the narrow English/SROIE calibration population remain limitations. Raw CTC posteriors are never passed to emon's adoption/fusion policies as Tesseract confidence.
+
+- [ ] **Signed off** (maintainer)
+
+### D846 — Optional engine identity and default compatibility
+
+The shared grammar recognizes `ocr-engine=tesseract|ppocr`, default Tesseract. Explicit optional Rust builds provide the reference; unimplemented hosts reject PP-OCR by name. Each PP request carries an engine/policy identity trailer, excluded from its language list, and full request keys make cross-engine/model recordings miss. Producer provenance and evidence identify the PP policy, which covers graph/runtime/dictionary pins, preprocessing, decoding, calibration and answer construction. Replay consumes recorded integer answers without constructing the reference port or running inference. Legacy Tesseract requests retain their existing bytes so the option-off replay fixtures remain compatible. PP-OCR skips born-digital text-layer pages; engine evidence is omitted on untargeted pages; unsupported OCR targets still identify the requested port. All readings continue through the existing separate `oruns`/`owords`, D699 accounting, RC5c fusion, P-ARB and D716/D789 guards. None of these changes authorizes default use or declares acceptance.
+
+- [ ] **Signed off** (maintainer)
+
+### D847 — Review the optional engine's additive API surface
+
+The maintainer-authorized engine option adds eight frozen public surface entries: the shared option key and its two values, Rust's `OcrEngine` and root re-export, its two variants, and `Options::ocr_engine`. JavaScript also declares and forwards `ConvertOptions.ocrEngine` so unsupported engines are rejected by name; the existing surface extractor records the interface rather than its members. `bb api-diff --allow-additions` verifies there are no removals or signature changes of existing public entries; the deliberate additive update is then recorded with `bb api-diff --write`, following D527. Other additions are provisional/accidental/internal reference plumbing. No version bump or change to the shipping default is made here; the coordinator commits and controls release activation.
+
+- [ ] **Signed off** (maintainer)
+
+### D848 — Canonical queued identities and explicit unsupported model selectors
+
+The first control sweep found a compact crop request over an enlarged view whose identity was missed by the legacy hashed-view language offset. PP parsing now locates its trailing identity independently and verifies the actual bitmap hash to distinguish compact and hashed view layouts. Tagging also replaces the reserved trailer and is idempotent; a law holds the canonical length and language count after repeated tagging. PP-OCR also answers Tesseract's explicit `eng_best` selector and unavailable scripts as unsupported rather than returning a PP reading under the wrong model label. These failures remain available to the existing guarded policies and unread-content accounting. The corrected policy has a new identity and the affected live measurements are rerun; preliminary v1 evidence is retained separately. The reference driver closes ORT sessions before an error exit, because `process::exit` otherwise bypasses Rust destructors. Defaults and Tesseract's selector semantics are unchanged.
+
+- [ ] **Signed off** (maintainer)
+
+### D849 — Keep the PP-OCR reference experimental after native qualification
+
+The OP1 reference remains optional and off by default; Tesseract fast is unchanged. The pre-registered acceptance is not met. On the fixed 60+60 receipt population PP-OCR word P/R is .839835/.868836 (SROIE) and .824549/.859293 (CORD), but CORD line-item integrity falls from 22/151 to 0. The 54-control sweep and 49 distinct readable changed-line source reviews find new source-correct incumbent losses; text-layer PDF skips also violate the strict born-digital byte-identity condition. F16's amounts and F19's minus survive, F08 repairs all five wrong numeric slots, but F19 loses its source-correct NT 1.1. Individual-page CPU exceeds 3x fast. These findings do not authorize default activation or weaker acceptance criteria.
+
+All 201 recorded base bitmaps have nine byte-identical native port answers (three fresh processes, three readings each). All 174 final PP recordings replay byte-identically with the detector unavailable. Default-path gates and all seven package consumers pass; each of the four generated law hosts passes 1,365 laws. Other hosts/builds refuse ppocr by name. The Rust-only typed selector and the three model-loading fulfilment modules have narrow, reasoned embedding-check declarations for this stage; pure image/CTC/calibration and Engine modules remain subject to the library's no-filesystem rule. Model/runtime assets remain pinned and cached, rather than bundled into default releases. Full source-bearing audits and logs stay in external OP1 scratch; the coordinator commits and controls release activation.
+
+- [ ] **Signed off** (maintainer)

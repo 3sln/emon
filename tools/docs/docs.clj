@@ -64,6 +64,7 @@
   {"tables" "Experimental table engine for the comparison driver: legacy or scored. Legacy stays the default until the pre-registered A/B criteria accept scored. The engine is recorded in evidence, outside Model settings."
    "locale" "A BCP 47 language hint (`en`, `de`, `fr-CA`), written to the Model's `settings.locale`. It decides how a drop cap joins its first word when the letter could be a word of its own."
    "ocr" "When pages are read with OCR. `always`: every page, born-digital ones too (the text layer and the reading are fused). `auto`: only a page whose text layer is unhealthy, that carries images, or that hides text. `never`: no OCR. With no renderer or no OCR engine configured a request is answered `unsupported` and the text layer stands alone."
+   "ocr-engine" "OCR port: `tesseract` is the default. `ppocr` selects the optional PP-OCRv5 mobile English Rust reference when built with it; other hosts report it unsupported. Its readings use the existing guarded adoption policies. PP-OCR skips born-digital text-layer pages, including at `ocr=always`."
    "furniture" "What to do with running headers, footers and page numbers. `policy`: drop what the output already says and keep the rest as asides. `keep`: leave all of it in the flow. `drop`: take all of it out (the ledger says what)."
    "assets" "Pixels for figures, seals and signatures. `none`: no pixels. `images`: a figure or seal that is one embedded image gets it. `figures`: also the others, cropped from a render (needs a renderer)."
    "asset-dpi" "Resolution of the renders cropped for `assets=figures`."
@@ -85,7 +86,7 @@
 
 ;; the field of kin's `cf-defaults` each option key is set by
 (def default-field
-  {"ocr" "ocr" "ocr-scope" "scope" "furniture" "furn" "assets" "level" "asset-dpi" "dpi" "asset-pixels" "pixels" "asset-bytes" "abyte"
+  {"ocr" "ocr" "ocr-engine" "oengine" "ocr-scope" "scope" "furniture" "furn" "assets" "level" "asset-dpi" "dpi" "asset-pixels" "pixels" "asset-bytes" "abyte"
    "assets-bytes" "tbyte" "asset-signatures" "sigs" "keep-evidence" "keep" "chunk" "chunk" "max-rounds" "maxr" "fetch-rounds" "fetchr"
    "record" "rec" "js-ocr" "jsocr" "js-render" "jsrender" "parallel" "par" "tables" "tabl"})
 

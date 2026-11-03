@@ -44,6 +44,10 @@ if [ -n "$cli_mode" ]; then
   [ -n "$native_dir" ] || { echo "emon-rs-build: EMON_CLI=1 needs EMON_NATIVE=<prefix> (bb native builds it)" >&2; exit 1; }
   crate=.cache/emon-cli
 fi
+if [ "${EMON_RS_PPOCR:-}" = 1 ]; then
+  [ -z "$cli_mode" ] || { echo "ppocr is unsupported by the CLI; use the Rust reference driver" >&2; exit 1; }
+  crate="$crate-ppocr"
+fi
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -103,7 +107,7 @@ zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", "cfg(ppocr)"] }
 
 [profile.release]
 opt-level = 3
@@ -112,6 +116,23 @@ debug = false
 TOML
 if [ -n "$cli_mode" ]; then put host/cli/Cargo.toml "$crate/Cargo.toml"; else put "$crate/Cargo.toml.new" "$crate/Cargo.toml"; fi
 rm -f "$crate/Cargo.toml.new"
+
+# Optional Rust reference port only. Assets/runtime must already be fetched and verified.
+ppocr_mode="${EMON_RS_PPOCR:-}"
+if [ "$ppocr_mode" = 1 ]; then
+  EMON_CS_SHARED_COMPILATION=false bb tools/ppocr/check.clj >&2
+  for f in ppocr ppocr_ctc ppocr_image ppocr_pipeline ppocr_runtime ppocr_calibration; do
+    put "host/rust/src/$f.rs" "$crate/src/$f.rs"
+  done
+  put tools/ppocr/en-dictionary.txt "$crate/src/ppocr_dictionary.txt"
+  put tools/ppocr/repeat.rs "$crate/src/ppocr-repeat.rs"
+  cat >> "$crate/Cargo.toml" <<'PPOCR'
+
+[[bin]]
+name = "ppocr-repeat"
+path = "src/ppocr-repeat.rs"
+PPOCR
+fi
 
 flags="-A warnings"
 [ "${EMON_RS_WARN:-}" = 1 ] && flags=""
@@ -127,6 +148,9 @@ if [ "$live" = 1 ]; then
     flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
   fi
   cargo_features="--features tesseract$hooks"
+fi
+if [ "$ppocr_mode" = 1 ]; then
+  flags="$flags --cfg ppocr -L native=$PWD/.cache/ppocr -L native=$PWD/.cache/ppocr/onnxruntime-osx-arm64-1.22.0/lib -C link-arg=-Wl,-rpath,$PWD/.cache/ppocr/onnxruntime-osx-arm64-1.22.0/lib"
 fi
 if [ -n "$cli_mode" ]; then
   # pdfium is loaded by path at run time, not linked; the deployment target is the one `bb native` built the libraries for

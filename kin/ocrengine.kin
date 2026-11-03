@@ -1,0 +1,61 @@
+;; Optional OCR request identity (OP1, D843). Legacy requests remain byte-identical.
+(ns emon.ocrengine
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-cp]]
+            [emon.plan :refer [pk-ocr]]
+            [kin.lang :refer [defn defdata return let set while if do comment + - * < > <= >= == != and or]]))
+
+;; The version covers graph hashes, dictionary, ORT CPU settings, image and CTC
+;; policy and the frozen calibration. Update on any observable adapter change.
+(defdata ^:pub oe-identity
+  :emitter kin.lang/flat-array
+  :data [112 112 111 99 114 53 45 101 110 45 54 102 54 57 54 54 49 53 49 98 57 97 57 57 98 101 100 48 98 55 53 48 101 56 57 49 54 52 101 99 99 102 51 53 50 100 51 50 52 100 100 49 98 54 49 53 100 53 52 101 50 55 98 97 97 51 56 50 54 52 50 56 48 99]
+  :accessors {^I32 oe-id-count [^I32 ignored]
+              ^I32 oe-id-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 engine]
+  (if (== engine 0) (return 0))
+  (cells-drop scratch 0)
+  (let [^:mut ^I32 at 0 ^:mut ^I32 i 0 ^:mut ^I32 k 0]
+    (while (< at (cells-len requests))
+      (let [^I32 n (cells-at requests at)
+            ^I32 out (cells-len scratch)
+            ^I32 kind (cells-at requests (+ at 1))
+            ^:mut ^I32 count n
+            ^:mut ^I32 first 10]
+        ;; Queued requests may already have been tagged by an earlier page unit.
+        ;; Replace a reserved trailer rather than appending a second identity.
+        (if (== kind (pk-ocr))
+          (do (set k first)
+              (while (< (+ k 2) count)
+                (if (and (== (cells-at requests (+ at k)) -3100)
+                         (and (== (cells-at requests (+ (+ at k) 1)) 1)
+                              (== (cells-at requests (+ (+ at k) 2)) (- (- count k) 3))))
+                  (do (set count k) (set k first))
+                  (set k (+ k 1))))))
+        (set i 0)
+        (while (< i count)
+          (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
+        (if (== kind (pk-ocr))
+          (do (cells-push scratch -3100)
+              (cells-push scratch engine)
+              (cells-push scratch (oe-id-count 0))
+              (set k 0)
+              (while (< k (oe-id-count 0))
+                (do (cells-push scratch (oe-id-at 0 k)) (set k (+ k 1))))
+              (cells-set scratch out (- (cells-len scratch) out))))
+        (set at (+ at n))))
+    (cells-drop requests 0)
+    (set i 0)
+    (while (< i (cells-len scratch))
+      (do (cells-push requests (cells-at scratch i)) (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 oe-evidence [^Text out ^I32 engine]
+  (if (== engine 0) (return 0))
+  (emit-ascii out ",\"ocr-engine\":{\"name\":\"ppocr\",\"model\":\"")
+  (let [^:mut ^I32 k 0]
+    (while (< k (oe-id-count 0))
+      (do (text-cp out (oe-id-at 0 k)) (set k (+ k 1)))))
+  (emit-ascii out "\"}")
+  (return 0))

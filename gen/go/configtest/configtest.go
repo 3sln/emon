@@ -143,7 +143,7 @@ func tNegativeRows() int32 {
 	var n int32 = 0
 	var i int32 = 0
 	var k int32 = 0
-	for i < 21 {
+	for i < 22 {
 		if (config.CkRows[i*5+0] == 1) && (config.CkRows[i*5+1] < 0) {
 			n += 1
 		}
@@ -212,7 +212,7 @@ func TestTheSettingsHaveTheirNamesDefaultsAndRangesInKin(emonT *testing.T) {
 }
 
 func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 21, 21, "twenty-one keys")
+	port.AssertEq(emonT, 22, 22, "twenty-two keys")
 	tKeyName(emonT, 0, "locale")
 	tKeyName(emonT, 1, "ocr")
 	tKeyName(emonT, 2, "furniture")
@@ -234,10 +234,11 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 	tKeyName(emonT, 18, "parallel")
 	tKeyName(emonT, 19, "js-render")
 	tKeyName(emonT, 20, "tables")
+	tKeyName(emonT, 21, "ocr-engine")
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 15, 15, "fifteen words")
+	port.AssertEq(emonT, 17, 17, "seventeen words")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -253,6 +254,8 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 12, 10, 1, "witness")
 	tWordName(emonT, 13, 20, 0, "legacy")
 	tWordName(emonT, 14, 20, 1, "scored")
+	tWordName(emonT, 15, 21, 0, "tesseract")
+	tWordName(emonT, 16, 21, 1, "ppocr")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
@@ -475,4 +478,15 @@ func TestTableEngineOption(emonT *testing.T) {
 	port.AssertEq(emonT, tParse(c, port.TextBlob("tables=legacy")), 0, "legacy parses")
 	port.AssertEq(emonT, c.Tabl, 0, "legacy code")
 	tRefused(emonT, port.TextBlob("tables=other"), "tables is legacy or scored")
+}
+
+func TestOptionalOcrEngineIsExplicitAndDefaultsToTesseract(emonT *testing.T) {
+	var c *enctx.Cfg = enctx.NewCfg()
+	port.AssertEq(emonT, tParse(c, port.TextBlob("")), 0, "default parses")
+	port.AssertEq(emonT, c.Oengine, 0, "Tesseract remains default")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr")), 0, "PP-OCR parses")
+	port.AssertEq(emonT, c.Oengine, 1, "explicit optional engine")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins")
+	port.AssertEq(emonT, c.Oengine, 0, "explicit Tesseract")
+	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr")
 }
