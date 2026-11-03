@@ -38,7 +38,7 @@
             [emon.para :refer [pa-pages pa-build]]
             [emon.columns :refer [lc-copy]]
             [emon.initial :refer [in-detect]]
-            [emon.table :refer [tb-build tb-count tb-model-col tb-words-raw tb-caption]]
+            [emon.table :refer [tb-build tb-scored tb-count tb-model-col tb-words-raw tb-caption]]
             [emon.gfuse :refer [gf-doc gfx-mode]]
             [emon.heading :refer [hd-analyze]]
             [kin.lang :refer [defn return let set while if do comment
@@ -4488,3 +4488,38 @@
       (assert-eq (cells-at tc (+ (* (+ first 3) 16) 10)) 0 "234 is a body value")
       (assert-eq (tt-word-owner tb 0 tc tw 0) first "123 owns its original first column")
       (assert-eq (tt-word-owner tb 0 tc tw 4) (+ first 37) "the original total stays in its second column"))))
+
+(defn ^I32 tt-run-scored-an [^Cells wd ^Cells ln ^Cells et ^Cells pa ^:mut ^Text t ^I32 np ^Cells an]
+  (comment "`tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).")
+  (let [^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells) ^Cells text (new-cells)
+        ^Cells pages (new-cells) ^Cells ledger (new-cells) ^Cells layout (new-cells)
+        ^Cells ord (new-cells) ^Cells raw (new-cells) ^Cells tmp (new-cells) ^Cells fr (new-cells)
+        ^Cells gp (new-cells) ^Cells st (new-cells) ^Cells ii (new-cells) ^Cells al (new-cells)
+        ^Cells lt (new-cells) ^Cells ls (new-cells) ^Cells sd (new-cells) ^Cells it (new-cells)
+        ^Cells io (new-cells) ^Cells rw (new-cells) ^Cells gu (new-cells) ^Cells ac (new-cells)
+        ^Cells tm (new-cells) ^Cells cf (new-cells) ^Cells lo (new-cells) ^Cells pr (new-cells) ^Cells dbg (new-cells) ^Cells hc (new-cells)
+        ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells tx (new-cells)
+        ^Cells s0 (new-cells) ^Cells s1 (new-cells) ^Cells s2 (new-cells) ^Cells s3 (new-cells) ^Cells s4 (new-cells)
+        ^Cells s5 (new-cells) ^Cells s6 (new-cells) ^Cells s7 (new-cells) ^Cells s8 (new-cells) ^Cells s9 (new-cells)
+        ^Cells s10 (new-cells) ^Cells s11 (new-cells) ^Cells s12 (new-cells) ^Cells s13 (new-cells) ^Cells s14 (new-cells)
+        ^Cells s15 (new-cells) ^Cells s16 (new-cells) ^Cells s17 (new-cells) ^Cells s18 (new-cells)
+        ^Cells grl (new-cells) ^Cells gfl (new-cells) ^Cells cand (new-cells) ^Cells gpts (new-cells) ^Cells gmk (new-cells) ^Cells gim (new-cells) ^Cells t0e (new-cells) ^Cells t1e (new-cells) ^Cells t2e (new-cells) ^Cells t3e (new-cells) ^Cells t4e (new-cells) ^Cells t5e (new-cells) ^Cells t6e (new-cells) ^Cells t7e (new-cells) ^Cells t8e (new-cells) ^Cells t9e (new-cells) ^Cells t10e (new-cells) ^Cells t11e (new-cells) ^Cells t12e (new-cells)]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 61200 79200 0 (pk-vector))
+    (if (== np 2) (page-new pages 2 61200 79200 0 (pk-vector)))
+    (gf-doc pa gpts gmk gim np (gfx-mode) grl gfl cand (new-cells))
+    (tb-scored wd ln et grl gfl np tb tc tw tq tx (new-cells) (new-cells) s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages t0e t1e t2e t3e t4e t5e t6e t7e t8e t9e t10e t11e t12e an)
+    (if (!= (tt-body-audit wd et tb tc tw) 0) (return 7))
+    (lc-copy ln lt)
+    (pa-build wd et np pages layout nodes attrs regions text ord raw tmp fr gp lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells))
+    (tt-brief t nodes attrs text)
+    (return (model-check nodes attrs regions text pages ledger layout st))))
+
+(deftest test-scored-lattice-refuses-unexplained-prose
+  (let [^Cells wd (new-cells) ^Cells ln (new-cells) ^Cells et (new-cells) ^Cells pa (new-cells)
+        ^Text t (new-text)]
+    (tt-zebra wd ln et pa)
+    (tt-at wd ln et (text-blob "Orders ship free of charge") 7600 10000 0 0)
+    (assert-eq (tt-run-scored-an wd ln et pa t 1 (new-cells)) 0 "scored lattice prose: well formed")
+    (assert-text t "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];"
+                 "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D503)")))

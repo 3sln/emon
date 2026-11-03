@@ -153,6 +153,7 @@ final class Units {
         c.sigs = boolInt(opts.assetSignatures);
         c.keep = boolInt(opts.keepEvidence);
         c.nort = boolInt(opts.noRetarget);
+        c.tabl = boolInt(opts.tablesScored);
         if (!opts.locale.isEmpty()) {
             c.haveloc = 1;
             c.lcl = localeCells(opts);

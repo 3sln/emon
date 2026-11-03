@@ -67,11 +67,23 @@
   (let [f (get (pop n) "flags")]
     (get-in @manifest ["flags" (or f (if (= n "synth") "synth" "live"))])))
 
+(def measurement-command
+  (delay
+    (let [probe (p/sh ["/usr/bin/time" "-l" "/usr/bin/true"])]
+      (if (zero? (:exit probe))
+        ["/usr/bin/time" "-l" "-o"]
+        (let [bin (str root "/.cache/table-time")
+              _ (fs/create-dirs (fs/parent bin))
+              build (p/sh ["cc" "-O2" "-Wall" "-Wextra" "-Werror" "tools/table/time.c" "-o" bin])]
+          (when-not (zero? (:exit build)) (throw (ex-info "measurement helper build failed" build)))
+          (println "MEASUREMENT wait4 fallback: macOS time -l unavailable")
+          [bin])))))
+
 (defn time-run
-  "Run CMD with stdout to OUT and stderr to ERR under /usr/bin/time -l: {:exit :user :sys :rss}."
+  "Run CMD with stdout to OUT and stderr to ERR; measure child CPU/RSS: {:exit :user :sys :rss}."
   [cmd out err env]
   (let [tfile (str err ".time")
-        r @(p/process (into ["/usr/bin/time" "-l" "-o" tfile] cmd)
+        r @(p/process (into (conj @measurement-command tfile) cmd)
                       {:out (fs/file out) :err (fs/file err) :extra-env env})
         t (if (fs/exists? tfile) (slurp tfile) "")
         num (fn [re] (some-> (re-find re t) second parse-double))]
@@ -142,7 +154,8 @@
         env (if (= mode "live") {"OMP_THREAD_LIMIT" "1"} {"OMP_THREAD_LIMIT" "1"})
         cmd (fn [how] (into [bin] (concat (flags-of n) extra (when (= how :replay) [(str "--replay=" rec)]) [input])))]
     (fs/create-dirs dir)
-    (if (and (fs/exists? (str base ".cost.json")) (fs/exists? out) (not (flag? "--force")))
+    (if (and (fs/exists? (str base ".cost.json")) (fs/exists? out)
+             (not (or (flag? "--force") (= "ab" (first args)))))
       (json/parse-string (slurp (str base ".cost.json")) true)
       (do
         (guard-disk!)
@@ -252,17 +265,20 @@
     "run" (run! (or (opt "--label") (throw (ex-info "--label" {}))) (or (opt "--bin") (default-bin))
                 (vec (remove str/blank? (str/split (or (opt "--args") "") #"\s+"))))
     "score" (score! (opt "--label"))
-    "baseline" (baseline! (opt "--label"))
+    "baseline" (when (pos? (or (baseline! (opt "--label")) 0)) (System/exit 1))
     "compare" (compare! (opt "--a") (opt "--b"))
-    "ab" (let [bin (or (opt "--bin") (default-bin))]
+    "ab" (let [bin (or (opt "--bin") (default-bin))
+               la (or (opt "--a") "A") lb (or (opt "--b") "B")
+               extras (fn [key fallback] (vec (remove str/blank? (str/split (or (opt key) fallback) #"\s+"))))]
            (if-not (supports-switch? bin)
              (do (println "  FAIL" bin "has no `--tables=` switch: the scored engine is not built yet (run `bb tables-ab run --label NAME` for the current engine)")
                  (System/exit 2))
-             (do (run! "A" bin ["--tables=legacy"]) (score! "A")
-                 (run! "B" bin ["--tables=scored"]) (score! "B")
+             (do (run! la bin (extras "--a-args" "--tables=legacy")) (score! la)
+                 (run! lb bin (extras "--b-args" "--tables=scored")) (score! lb)
                  ;; the legacy path of the new build must still be the frozen engine: a switch that moves A is not a switch
-                 (let [moved (baseline! "A")]
-                   (when (pos? moved) (println "  FAIL engine A moved off the frozen baseline: the comparison below is void"))
-                   (compare! "A" "B")
-                   (when (pos? moved) (System/exit 1))))))
+                 (let [moved (baseline! la)]
+                   (when (pos? moved)
+                     (println "  FAIL engine A moved off the frozen baseline: comparison is void")
+                     (System/exit 1))
+                   (compare! la lb)))))
     (println (:doc (meta (the-ns 'table.ab))))))

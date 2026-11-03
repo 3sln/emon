@@ -19,9 +19,8 @@
     checks             named: the share of source-reviewed expectations met (test/tables-ab/named.json)
     cpu-page           (user + sys) seconds per page of the conversion; rss-max / rss-med: peak resident bytes"
   (:require [accuracy.score :as S]
+            [table.ab-checks :as C]
             [accuracy.graphics :as G]
-            [babashka.fs :as fs]
-            [babashka.process :as p]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
@@ -361,15 +360,10 @@
           m (metrics c)]
       {"counts" c "metrics" m "headline" (r6 (headline pop m)) "cost" (cost docs) "n" (count docs)})))
 
-;; ------------------------------------------------------------------ the python checks
-
-(defn- py [& xs]
-  (let [r (apply p/sh "python3" xs)]
-    (when-not (zero? (:exit r)) (throw (ex-info (str "python failed: " (:err r)) {})))
-    (json/parse-string (:out r))))
+;; ------------------------------------------------------------------ structural ownership and word accounting
 
 (defn ownership [dir named]
-  (let [o (py "tools/table/ab_checks.py" "ownership" (get named "triples") "test/tables-ab/repairs.json" dir)]
+  (let [o (C/ownership-files (get named "triples") "test/tables-ab/repairs.json" dir)]
     {"docs" o "total" (reduce + (map #(get % "total" 0) (vals o)))
      "preserved" (reduce + (map #(+ (get % "kept" 0) (get % "extended" 0)) (vals o)))
      "repaired" (reduce + (map #(get % "repaired" 0) (vals o)))
@@ -379,13 +373,10 @@
 (defn control-words
   ([dir items] (control-words dir nil items))
   ([dir dir-b items]
-   (let [f (str (fs/create-temp-file {:suffix ".json"}))]
-     (spit f (json/generate-string items))
-     (let [o (if dir-b (py "tools/table/ab_checks.py" "words" f dir dir-b) (py "tools/table/ab_checks.py" "words" f dir))]
-       (fs/delete f)
+   (let [o (C/word-files items dir dir-b)]
        {"docs" o "words" (reduce + (keep #(get % "words") (vals o)))
         "lost" (reduce + (keep #(get % "lost") (vals o))) "gained" (reduce + (keep #(get % "gained") (vals o)))
-        "failed" (count (filter #(get % "failed") (vals o)))}))))
+        "failed" (count (filter #(get % "failed") (vals o)))})))
 
 ;; ------------------------------------------------------------------ printing, baseline, comparison
 

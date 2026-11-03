@@ -155,6 +155,7 @@ internal static class Units {
         c.Sigs = BoolInt(opts.AssetSignatures);
         c.Keep = BoolInt(opts.KeepEvidence);
         c.Nort = BoolInt(opts.NoRetarget);
+        c.Tabl = BoolInt(opts.TablesScored);
         if (opts.Locale.Length > 0) {
             c.Haveloc = 1;
             c.Lcl = LocaleCells(opts);

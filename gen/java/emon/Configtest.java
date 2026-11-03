@@ -126,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 20) {
+        while (i < 21) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -190,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(20, 20, "twenty keys");
+        emon.Testport.assertEq(21, 21, "twenty-one keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -211,9 +211,10 @@ public final class Configtest {
         tKeyName(0, 17, "producer.");
         tKeyName(0, 18, "parallel");
         tKeyName(0, 19, "js-render");
+        tKeyName(0, 20, "tables");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(13, 13, "thirteen words");
+        emon.Testport.assertEq(15, 15, "fifteen words");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -227,6 +228,8 @@ public final class Configtest {
         tWordName(0, 10, 8, 0, "off");
         tWordName(0, 11, 10, 0, "full");
         tWordName(0, 12, 10, 1, "witness");
+        tWordName(0, 13, 20, 0, "legacy");
+        tWordName(0, 14, 20, 1, "scored");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");
@@ -425,5 +428,15 @@ public final class Configtest {
     }
     public static void testFontsPerDocCannotBeRaisedPastItsSlab() {
         tRefused(0, emon.Testport.textBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512");
+    }
+    public static void testTableEngineOption() {
+        emon.Enctx.Cfg c = new emon.Enctx.Cfg();
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("")), 0, "default parses");
+        emon.Testport.assertEq(c.tabl, 0, "legacy default");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("tables=scored")), 0, "scored parses");
+        emon.Testport.assertEq(c.tabl, 1, "scored code");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("tables=legacy")), 0, "legacy parses");
+        emon.Testport.assertEq(c.tabl, 0, "legacy code");
+        tRefused(0, emon.Testport.textBlob("tables=other"), "tables is legacy or scored");
     }
 }

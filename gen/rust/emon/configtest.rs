@@ -127,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 20 {
+    while i < 21 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -196,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(20, 20, "twenty keys");
+    crate::testport::assert_eq(21, 21, "twenty-one keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -217,10 +217,11 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 17, "producer.");
     t_key_name(0, 18, "parallel");
     t_key_name(0, 19, "js-render");
+    t_key_name(0, 20, "tables");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
-    crate::testport::assert_eq(13, 13, "thirteen words");
+    crate::testport::assert_eq(15, 15, "fifteen words");
     t_word_name(0, 0, 1, 2, "always");
     t_word_name(0, 1, 1, 1, "auto");
     t_word_name(0, 2, 1, 0, "never");
@@ -234,6 +235,8 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 10, 8, 0, "off");
     t_word_name(0, 11, 10, 0, "full");
     t_word_name(0, 12, 10, 1, "witness");
+    t_word_name(0, 13, 20, 0, "legacy");
+    t_word_name(0, 14, 20, 1, "scored");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
@@ -445,4 +448,15 @@ fn test_the_limits_of_p10_4_are_found_by_their_names() {
 #[test]
 fn test_fonts_per_doc_cannot_be_raised_past_its_slab() {
     t_refused(0, &crate::testport::text_blob("limit.fonts-per-doc=513")[..], "limit.fonts-per-doc is out of range 0..512");
+}
+#[test]
+fn test_table_engine_option() {
+    let c: &mut crate::emon::enctx::Cfg = &mut crate::emon::enctx::Cfg::new();
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("")[..]), 0, "default parses");
+    crate::testport::assert_eq(c.tabl, 0, "legacy default");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("tables=scored")[..]), 0, "scored parses");
+    crate::testport::assert_eq(c.tabl, 1, "scored code");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("tables=legacy")[..]), 0, "legacy parses");
+    crate::testport::assert_eq(c.tabl, 0, "legacy code");
+    t_refused(0, &crate::testport::text_blob("tables=other")[..], "tables is legacy or scored");
 }

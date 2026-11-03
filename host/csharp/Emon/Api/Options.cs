@@ -46,6 +46,8 @@ public sealed class Options {
     /// <summary>A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D542): internal; the gates'
     /// driver is compiled into the same assembly, the published package's is not.</summary>
     internal bool NoRetarget;
+    // Experimental comparison-driver option state.
+    internal bool TablesScored;
 
     private Options() {
     }
@@ -69,6 +71,7 @@ public sealed class Options {
         o.KeepEvidence = KeepEvidence;
         o.OcrScope = OcrScope;
         o.NoRetarget = NoRetarget;
+        o.TablesScored = TablesScored;
         return o;
     }
 
@@ -248,6 +251,7 @@ public sealed class Options {
         o.Furniture = (FurnitureMode) c.Furn;
         o.KeepEvidence = c.Keep != 0;
         o.OcrScope = (OcrScopes) c.Scope;
+        o.TablesScored = c.Tabl == 1;
         if (c.Haveloc == 1) {
             o.Locale = StringOf(c.Lcl, 0, emon.Port.CellsLen(c.Lcl));
         }

@@ -8226,6 +8226,221 @@ public static class Table {
         emon.Port.CellsSet(tb, b + 31, emon.Port.CellsAt(tb, b + 31) | 1);
         return nh;
     }
+    internal static int TsHeadSpan(emon.Port.Cells rm, emon.Port.Cells rw, int r, emon.Port.Cells sg, int sb, emon.Port.Cells tx, int cuts, int ncols, int size) {
+        // Bind a header label through the shortest covering sub-rule below it; otherwise use covered column anchors.
+        int lx = emon.Port.CellsAt(sg, sb + 1);
+        int rx = emon.Port.CellsAt(sg, sb + 2);
+        int bottom = emon.Port.CellsAt(rw, (r * Rws) + 7);
+        int x0 = lx;
+        int x1 = rx;
+        int shortest = 2000000000;
+        int i = 0;
+        int col = 0;
+        int first = -1;
+        int last = -1;
+        while (i < TbRowsOf(rm, Rls)) {
+            if ((emon.Port.CellsAt(rm, i * Rls) == 0) && ((emon.Port.CellsAt(rm, (i * Rls) + 1) >= (bottom - PosTol)) && ((emon.Port.CellsAt(rm, (i * Rls) + 1) <= (bottom + (size * 2))) && ((emon.Port.CellsAt(rm, (i * Rls) + 2) <= (lx + PosTol)) && (emon.Port.CellsAt(rm, (i * Rls) + 3) >= (rx - PosTol)))))) {
+                int width = emon.Port.CellsAt(rm, (i * Rls) + 3) - emon.Port.CellsAt(rm, (i * Rls) + 2);
+                if ((width > 0) && (width < shortest)) {
+                    shortest = width;
+                    x0 = emon.Port.CellsAt(rm, (i * Rls) + 2);
+                    x1 = emon.Port.CellsAt(rm, (i * Rls) + 3);
+                }
+            }
+            i += 1;
+        }
+        while (col < ncols) {
+            if ((emon.Port.CellsAt(tx, cuts + col) < (x1 - PosTol)) && (emon.Port.CellsAt(tx, cuts + (col + 1)) > (x0 + PosTol))) {
+                if (first < 0) {
+                    first = col;
+                }
+                last = col;
+            }
+            col += 1;
+        }
+        if ((first < 0) || (last < first)) {
+            return -1;
+        }
+        return (first * 1000) + last;
+    }
+    internal static int TsHeadlat(int page, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, int w0, int w1, emon.Port.Cells an, emon.Port.Cells tb, int k, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells wl, emon.Port.Cells rw, emon.Port.Cells sg, emon.Port.Cells seen, emon.Port.Cells pr, emon.Port.Cells so, emon.Port.Cells rm) {
+        int b = k * Tagtable.Tbs;
+        int profile = emon.Port.CellsAt(tb, b + 5);
+        int top = emon.Port.CellsAt(tb, b + 2);
+        int ncols = emon.Port.CellsAt(tb, b + 8);
+        int first = emon.Port.CellsAt(tb, b + 9);
+        int count = emon.Port.CellsAt(tb, b + 10);
+        int cuts = emon.Port.CellsAt(tb, b + 16);
+        int size = 1000;
+        int pitch = 0;
+        int a = 0;
+        int r = 0;
+        int q = 0;
+        int j = 0;
+        int col = 0;
+        int endcol = 0;
+        int cover = 0;
+        int ok = 1;
+        int nh = 0;
+        int c = 0;
+        int field = 0;
+        int other = 0;
+        if ((profile == PfRuled) || ((profile == PfStruct) || (emon.Port.CellsAt(tb, b + 25) >= 0))) {
+            return 0;
+        }
+        if (TbFieldCells(tc, first, first + count, an, page) > 0) {
+            return 0;
+        }
+        int body = TbRows(wd, et, w0, w1, emon.Port.CellsAt(tb, b + 1), top, emon.Port.CellsAt(tb, b + 3), emon.Port.CellsAt(tb, b + 4), wl, rw, sg);
+        if (body < 2) {
+            return 0;
+        }
+        pitch = TbMedianPitch(rw, 0, body, seen);
+        emon.Port.CellsDrop(seen, 0);
+        while (r < body) {
+            emon.Port.CellsPush(seen, emon.Port.CellsAt(rw, (r * Rws) + 3));
+            r += 1;
+        }
+        TbSortNums(seen);
+        size = emon.Port.CellsAt(seen, body / 2);
+        if (pitch <= 0) {
+            return 0;
+        }
+        int nr = TbRows(wd, et, w0, w1, emon.Port.CellsAt(tb, b + 1), top - ((pitch * 8) + PosTol), emon.Port.CellsAt(tb, b + 3), top - 1, wl, rw, sg);
+        a = nr;
+        r = nr - 1;
+        while ((r >= 0) && (nh < 8)) {
+            emon.Port.CellsDrop(seen, 0);
+            col = 0;
+            while (col < ncols) {
+                emon.Port.CellsPush(seen, 0);
+                col += 1;
+            }
+            ok = 1;
+            if ((emon.Port.CellsAt(rw, (r * Rws) + 9) < 2) || ((emon.Port.CellsAt(rw, (r * Rws) + 3) * 100) >= (size * TbGapSize))) {
+                ok = 0;
+            }
+            other = 0;
+            while (other < TbRowsOf(tb, Tagtable.Tbs)) {
+                if ((other != k) && (emon.Port.CellsAt(tb, other * Tagtable.Tbs) == page)) {
+                    int ob = other * Tagtable.Tbs;
+                    int y = emon.Port.CellsAt(rw, (r * Rws) + 2);
+                    if (((y >= emon.Port.CellsAt(tb, ob + 2)) && (y <= emon.Port.CellsAt(tb, ob + 4))) && ((emon.Port.CellsAt(rw, (r * Rws) + 4) < emon.Port.CellsAt(tb, ob + 3)) && (emon.Port.CellsAt(rw, (r * Rws) + 5) > emon.Port.CellsAt(tb, ob + 1)))) {
+                        ok = 0;
+                    }
+                }
+                other += 1;
+            }
+            q = 0;
+            while (q < emon.Port.CellsAt(rw, (r * Rws) + 9)) {
+                int sb = (emon.Port.CellsAt(rw, (r * Rws) + 8) + q) * Sgs;
+                int from = emon.Port.CellsAt(sg, sb + 3);
+                int n = emon.Port.CellsAt(sg, sb + 4);
+                field = TsHeadSpan(rm, rw, r, sg, sb, tx, cuts, ncols, size);
+                col = -1;
+                endcol = -1;
+                if (field >= 0) {
+                    col = field / 1000;
+                    endcol = field % 1000;
+                }
+                if ((col < 0) || (endcol < col)) {
+                    ok = 0;
+                } else {
+                    j = col;
+                    while (j <= endcol) {
+                        emon.Port.CellsSet(seen, j, 1);
+                        j += 1;
+                    }
+                }
+                if (TbHeadShort(wd, et, wl, from, n) == 0) {
+                    ok = 0;
+                }
+                j = 0;
+                while (j < n) {
+                    int w = emon.Port.CellsAt(wl, from + j);
+                    if (TbHeadLineWhole(wd, ln, wl, emon.Port.CellsAt(rw, r * Rws), emon.Port.CellsAt(rw, (r * Rws) + 1), w) == 0) {
+                        ok = 0;
+                    }
+                    j += 1;
+                }
+                q += 1;
+            }
+            cover = 0;
+            col = 0;
+            while (col < ncols) {
+                cover += emon.Port.CellsAt(seen, col);
+                col += 1;
+            }
+            if ((ok == 0) || ((cover < 2) || ((cover * 2) < ncols))) {
+                r = -1;
+            } else {
+                a = r;
+                nh += 1;
+                r -= 1;
+            }
+        }
+        if (nh == 0) {
+            return 0;
+        }
+        int newfirst = TbRowsOf(tc, Tcs);
+        emon.Port.CellsDrop(pr, 0);
+        r = a;
+        while (r < nr) {
+            col = 0;
+            while (col < ncols) {
+                TbCellAdd(tc, r - a, col, 1, 1, emon.Port.CellsAt(tx, cuts + col), emon.Port.CellsAt(rw, (r * Rws) + 6), emon.Port.CellsAt(tx, (cuts + col) + 1), emon.Port.CellsAt(rw, (r * Rws) + 7));
+                col += 1;
+            }
+            q = 0;
+            while (q < emon.Port.CellsAt(rw, (r * Rws) + 9)) {
+                int sb = (emon.Port.CellsAt(rw, (r * Rws) + 8) + q) * Sgs;
+                int from = emon.Port.CellsAt(sg, sb + 3);
+                int n = emon.Port.CellsAt(sg, sb + 4);
+                field = TsHeadSpan(rm, rw, r, sg, sb, tx, cuts, ncols, size);
+                col = field / 1000;
+                endcol = field % 1000;
+                c = newfirst + (((r - a) * ncols) + col);
+                emon.Port.CellsSet(tc, (c * Tcs) + 3, (endcol - col) + 1);
+                emon.Port.CellsSet(tc, (c * Tcs) + 6, emon.Port.CellsAt(tx, cuts + (endcol + 1)));
+                j = col + 1;
+                while (j <= endcol) {
+                    emon.Port.CellsSet(tc, ((newfirst + (((r - a) * ncols) + j)) * Tcs) + 12, 1);
+                    j += 1;
+                }
+                j = 0;
+                while (j < n) {
+                    TbPairAdd(pr, wd, c, emon.Port.CellsAt(wl, from + j));
+                    j += 1;
+                }
+                q += 1;
+            }
+            r += 1;
+        }
+        TbFlushPairs(pr, so, wd, tc, tw);
+        c = first;
+        while (c < (first + count)) {
+            field = 0;
+            while (field < Tcs) {
+                emon.Port.CellsPush(tc, emon.Port.CellsAt(tc, (c * Tcs) + field));
+                field += 1;
+            }
+            emon.Port.CellsSet(tc, emon.Port.CellsLen(tc) - Tcs, emon.Port.CellsAt(tc, c * Tcs) + nh);
+            c += 1;
+        }
+        emon.Port.CellsSet(tb, b + 9, newfirst);
+        emon.Port.CellsSet(tb, b + 10, count + (nh * ncols));
+        emon.Port.CellsSet(tb, b + 7, emon.Port.CellsAt(tb, b + 7) + nh);
+        emon.Port.CellsSet(tb, b + 11, emon.Port.CellsAt(tb, b + 11) + nh);
+        emon.Port.CellsSet(tb, b + 22, emon.Port.CellsAt(tb, b + 11));
+        c = newfirst;
+        while (c < (newfirst + (nh * ncols))) {
+            emon.Port.CellsSet(tc, (c * Tcs) + 10, 1);
+            c += 1;
+        }
+        emon.Port.CellsSet(tb, b + 2, emon.Port.CellsAt(rw, (a * Rws) + 6));
+        emon.Port.CellsSet(tb, b + 31, emon.Port.CellsAt(tb, b + 31) | 1);
+        return nh;
+    }
     internal static int TbHeadAmounts(emon.Port.Cells tb, int k, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells groups, emon.Port.Cells pr, emon.Port.Cells so) {
         int b = k * Tagtable.Tbs;
         int model = emon.Port.CellsAt(tb, b + 28);
@@ -9663,7 +9878,7 @@ public static class Table {
         }
         return 0;
     }
-    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
+    internal static int TbBuildMode(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an, int scored) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -9765,7 +9980,11 @@ public static class Table {
                     int head = TbHeadRows(tb, k, wd, et, tc, tw);
                     emon.Port.CellsSet(tb, (k * Tagtable.Tbs) + 11, head);
                     TbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
-                    TbHeadBind(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3);
+                    if (scored == 1) {
+                        TsHeadlat(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3, s1);
+                    } else {
+                        TbHeadBind(p, wd, et, ln, wi, wj, an, tb, k, tc, tw, tx, tbk, s10, s11, s12, s13, s7, s3);
+                    }
                     TbFinish(tb, k, wd, et, tc, tw, ln, li, lj, tq, g1, g2, g3, wi, g4);
                     TbModel(tb, k, wd, et, tc, tw, tx, tbk, g4);
                     TbDescriptionSpill(p, wd, et, wi, wj, tb, k, tc, tw, tx, s10, s11, s12, s7, s3);
@@ -9827,5 +10046,11 @@ public static class Table {
         }
         TeRecord(tb, tc, tw, tbk, wd, et, s0);
         return TbRowsOf(tb, Tagtable.Tbs);
+    }
+    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
+        return TbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0);
+    }
+    public static int TbScored(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
+        return TbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1);
     }
 }

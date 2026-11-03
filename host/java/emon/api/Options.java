@@ -73,6 +73,8 @@ public final class Options {
     /** A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D542): package-private; the gates' driver
      *  reaches it through `emon.api.TestHooks` (test/driver/java/emon/api/TestHooks.java), which is not part of the published jar. */
     boolean noRetarget;
+    // Experimental comparison-driver option state.
+    boolean tablesScored;
 
     private Options() {
     }
@@ -96,6 +98,7 @@ public final class Options {
         o.keepEvidence = keepEvidence;
         o.ocrScope = ocrScope;
         o.noRetarget = noRetarget;
+        o.tablesScored = tablesScored;
         return o;
     }
 
@@ -267,6 +270,7 @@ public final class Options {
         o.furniture = Furniture.values()[c.furn];
         o.keepEvidence = c.keep != 0;
         o.ocrScope = OcrScope.values()[c.scope];
+        o.tablesScored = c.tabl == 1;
         if (c.haveloc == 1) {
             o.locale = stringOf(c.lcl, 0, Port.cellsLen(c.lcl));
         }

@@ -266,6 +266,8 @@ type Options struct {
 	// passes (a measurement's baseline; an embedder never needs it). NOT PUBLIC API (P11.4, D542): unexported, set only by `SetNoRetarget`, which
 	// exists under the build tag `emontest` (testhooks.go; the gates' builds pass it, a consumer's never does).
 	noRetarget bool
+	// Experimental option-text state; no exported table setting.
+	tablesScored bool
 }
 
 // DefaultOptions is SPEC 13's defaults: kin's (`emon.config`'s `cf-defaults`), the parse of the empty text.
@@ -381,6 +383,7 @@ func optionsOf(c *enctx.Cfg) Options {
 		Furniture:       Furniture(c.Furn),
 		KeepEvidence:    c.Keep != 0,
 		OcrScope:        OcrScope(c.Scope),
+		tablesScored:    c.Tabl == 1,
 	}
 	if c.Haveloc == 1 {
 		o.Locale = stringOfCells(c.Lcl, 0, port.CellsLen(c.Lcl))
@@ -1053,6 +1056,7 @@ func cfgOf(opts Options) *enctx.Cfg {
 	c.Sigs = boolInt(opts.AssetSignatures)
 	c.Keep = boolInt(opts.KeepEvidence)
 	c.Nort = boolInt(opts.noRetarget)
+	c.Tabl = boolInt(opts.tablesScored)
 	if opts.Locale != "" {
 		c.Haveloc = 1
 		c.Lcl = localeCells(opts)

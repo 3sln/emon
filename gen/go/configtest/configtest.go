@@ -143,7 +143,7 @@ func tNegativeRows() int32 {
 	var n int32 = 0
 	var i int32 = 0
 	var k int32 = 0
-	for i < 20 {
+	for i < 21 {
 		if (config.CkRows[i*5+0] == 1) && (config.CkRows[i*5+1] < 0) {
 			n += 1
 		}
@@ -212,7 +212,7 @@ func TestTheSettingsHaveTheirNamesDefaultsAndRangesInKin(emonT *testing.T) {
 }
 
 func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 20, 20, "twenty keys")
+	port.AssertEq(emonT, 21, 21, "twenty-one keys")
 	tKeyName(emonT, 0, "locale")
 	tKeyName(emonT, 1, "ocr")
 	tKeyName(emonT, 2, "furniture")
@@ -233,10 +233,11 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 	tKeyName(emonT, 17, "producer.")
 	tKeyName(emonT, 18, "parallel")
 	tKeyName(emonT, 19, "js-render")
+	tKeyName(emonT, 20, "tables")
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 13, 13, "thirteen words")
+	port.AssertEq(emonT, 15, 15, "fifteen words")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -250,6 +251,8 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 10, 8, 0, "off")
 	tWordName(emonT, 11, 10, 0, "full")
 	tWordName(emonT, 12, 10, 1, "witness")
+	tWordName(emonT, 13, 20, 0, "legacy")
+	tWordName(emonT, 14, 20, 1, "scored")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
@@ -461,4 +464,15 @@ func TestTheLimitsOfP104AreFoundByTheirNames(emonT *testing.T) {
 
 func TestFontsPerDocCannotBeRaisedPastItsSlab(emonT *testing.T) {
 	tRefused(emonT, port.TextBlob("limit.fonts-per-doc=513"), "limit.fonts-per-doc is out of range 0..512")
+}
+
+func TestTableEngineOption(emonT *testing.T) {
+	var c *enctx.Cfg = enctx.NewCfg()
+	port.AssertEq(emonT, tParse(c, port.TextBlob("")), 0, "default parses")
+	port.AssertEq(emonT, c.Tabl, 0, "legacy default")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("tables=scored")), 0, "scored parses")
+	port.AssertEq(emonT, c.Tabl, 1, "scored code")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("tables=legacy")), 0, "legacy parses")
+	port.AssertEq(emonT, c.Tabl, 0, "legacy code")
+	tRefused(emonT, port.TextBlob("tables=other"), "tables is legacy or scored")
 }

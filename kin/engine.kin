@@ -44,6 +44,7 @@
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
             [emon.table :refer [tb-build]]
+            [emon.tscore :refer [ts-build]]
             [emon.columns :refer [lc-copy lc-mark-asides]]
             [emon.initial :refer [in-detect]]
             [emon.heading :refer [hd-prior-outline hd-analyze]]
@@ -353,21 +354,27 @@
     (fu-find (fd d fw) (fd d fl) (fd d et) (fd d gl) (fd d mk) (fd m pages) np (fd d txt) (fd d md) (fd d lb) trust (fd c furn) (fd s cd) (fd s sl)
          (fd s gr) (fd s ford) (fd s tx) (fd s bh) (fd s fo) (fd s fp) (fd s ft) (fd s pl))
     ;; Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`). The tagged tables' scratch and verdicts (P5.5, `emon.tagtable`).
-    (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
+    (if (== (fd c tabl) 1)
+      (ts-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
          (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
          (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
          (fd s g3) (fd s g4) (fd s g5) (fd s tv) (fd d an))
+      (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
+         (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
+         (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
+         (fd s g3) (fd s g4) (fd s g5) (fd s tv) (fd d an)))
     ;; the tagged tables' verdicts join the evidence dump, as `tb` (P5.5), and the dump is closed
     (if (!= (fd c keep) 0)
       (do (if (and (== kind 0) (> (cells-len (fd s tv)) 0))
             (do (emit-ascii (fd d evidence) ",\"tb\":")
                 (tt-emit (fd d evidence) (fd s tv))))))
     ;; D777: tbx link records: signature terms and explicit veto reasons.
-    (if (and (!= (fd c keep) 0) (> (cells-len (fd s s0)) 0))
+    (if (and (!= (fd c keep) 0) (or (== (fd c tabl) 1) (> (cells-len (fd s s0)) 0)))
       (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 reasons 0 ^:mut ^I32 comma 0]
         (emit-ascii (fd d evidence) ",\"tbx\":[")
+        (if (== (fd c tabl) 1) (emit-ascii (fd d evidence) "{\"kind\":\"engine\",\"engine\":\"scored\"}"))
         (while (< i (cells-len (fd s s0)))
-          (do (if (> i 0) (emit-ascii (fd d evidence) ","))
+          (do (if (or (> i 0) (== (fd c tabl) 1)) (emit-ascii (fd d evidence) ","))
               (if (>= (cells-at (fd s s0) i) 0)
                 (do
               (emit-ascii (fd d evidence) "{\"kind\":\"link\"")

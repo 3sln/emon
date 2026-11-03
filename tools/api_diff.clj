@@ -1131,6 +1131,8 @@
 (def tier-rules
   [;; binding hooks that are public by accident. (The hidden test setting `no_retarget`/`NoRetarget`/`noRetarget` and the C symbol `emon_test_panic` were closed
    ;; in P11.4, D542: a feature, a build tag, package-private, internal, and a test header; they are not in the surface at all.)
+   ;; TR1: experimental table option is provisional until the measured default flip.
+   [:options #"^option tables(?:=|$)" :provisional]
    [:rust #"^emon::Engine::start_pushed$" :accidental]
    ;; Rust: the lib.rs re-exports are the API (and the types their signatures name: see rust-entries). Tiered by the extractor.
    ;; Go: the root package is the library. `port` mixes the plan/render types an embedder names (a Renderer, an Ocr's

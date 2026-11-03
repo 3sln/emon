@@ -5573,4 +5573,105 @@ public static class Tabletest {
         emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
         emon.Testport.AssertEq(TtWordOwner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
     }
+    internal static int TtRunScoredAn(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, System.Text.StringBuilder t, int np, emon.Port.Cells an) {
+        // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+        emon.Port.Cells nodes = emon.Port.NewCells();
+        emon.Port.Cells attrs = emon.Port.NewCells();
+        emon.Port.Cells regions = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells ledger = emon.Port.NewCells();
+        emon.Port.Cells layout = emon.Port.NewCells();
+        emon.Port.Cells ord = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells tmp = emon.Port.NewCells();
+        emon.Port.Cells fr = emon.Port.NewCells();
+        emon.Port.Cells gp = emon.Port.NewCells();
+        emon.Port.Cells st = emon.Port.NewCells();
+        emon.Port.Cells ii = emon.Port.NewCells();
+        emon.Port.Cells al = emon.Port.NewCells();
+        emon.Port.Cells lt = emon.Port.NewCells();
+        emon.Port.Cells ls = emon.Port.NewCells();
+        emon.Port.Cells sd = emon.Port.NewCells();
+        emon.Port.Cells it = emon.Port.NewCells();
+        emon.Port.Cells io = emon.Port.NewCells();
+        emon.Port.Cells rw = emon.Port.NewCells();
+        emon.Port.Cells gu = emon.Port.NewCells();
+        emon.Port.Cells ac = emon.Port.NewCells();
+        emon.Port.Cells tm = emon.Port.NewCells();
+        emon.Port.Cells cf = emon.Port.NewCells();
+        emon.Port.Cells lo = emon.Port.NewCells();
+        emon.Port.Cells pr = emon.Port.NewCells();
+        emon.Port.Cells dbg = emon.Port.NewCells();
+        emon.Port.Cells hc = emon.Port.NewCells();
+        emon.Port.Cells tb = emon.Port.NewCells();
+        emon.Port.Cells tc = emon.Port.NewCells();
+        emon.Port.Cells tw = emon.Port.NewCells();
+        emon.Port.Cells tq = emon.Port.NewCells();
+        emon.Port.Cells tx = emon.Port.NewCells();
+        emon.Port.Cells s0 = emon.Port.NewCells();
+        emon.Port.Cells s1 = emon.Port.NewCells();
+        emon.Port.Cells s2 = emon.Port.NewCells();
+        emon.Port.Cells s3 = emon.Port.NewCells();
+        emon.Port.Cells s4 = emon.Port.NewCells();
+        emon.Port.Cells s5 = emon.Port.NewCells();
+        emon.Port.Cells s6 = emon.Port.NewCells();
+        emon.Port.Cells s7 = emon.Port.NewCells();
+        emon.Port.Cells s8 = emon.Port.NewCells();
+        emon.Port.Cells s9 = emon.Port.NewCells();
+        emon.Port.Cells s10 = emon.Port.NewCells();
+        emon.Port.Cells s11 = emon.Port.NewCells();
+        emon.Port.Cells s12 = emon.Port.NewCells();
+        emon.Port.Cells s13 = emon.Port.NewCells();
+        emon.Port.Cells s14 = emon.Port.NewCells();
+        emon.Port.Cells s15 = emon.Port.NewCells();
+        emon.Port.Cells s16 = emon.Port.NewCells();
+        emon.Port.Cells s17 = emon.Port.NewCells();
+        emon.Port.Cells s18 = emon.Port.NewCells();
+        emon.Port.Cells grl = emon.Port.NewCells();
+        emon.Port.Cells gfl = emon.Port.NewCells();
+        emon.Port.Cells cand = emon.Port.NewCells();
+        emon.Port.Cells gpts = emon.Port.NewCells();
+        emon.Port.Cells gmk = emon.Port.NewCells();
+        emon.Port.Cells gim = emon.Port.NewCells();
+        emon.Port.Cells t0e = emon.Port.NewCells();
+        emon.Port.Cells t1e = emon.Port.NewCells();
+        emon.Port.Cells t2e = emon.Port.NewCells();
+        emon.Port.Cells t3e = emon.Port.NewCells();
+        emon.Port.Cells t4e = emon.Port.NewCells();
+        emon.Port.Cells t5e = emon.Port.NewCells();
+        emon.Port.Cells t6e = emon.Port.NewCells();
+        emon.Port.Cells t7e = emon.Port.NewCells();
+        emon.Port.Cells t8e = emon.Port.NewCells();
+        emon.Port.Cells t9e = emon.Port.NewCells();
+        emon.Port.Cells t10e = emon.Port.NewCells();
+        emon.Port.Cells t11e = emon.Port.NewCells();
+        emon.Port.Cells t12e = emon.Port.NewCells();
+        Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
+        if (np == 2) {
+            Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
+        }
+        Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
+        Table.TbScored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return 7;
+        }
+        Columns.LcCopy(ln, lt);
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        TtBrief(t, nodes, attrs, text);
+        return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
+    }
+    [Xunit.Fact]
+    public static void TestScoredLatticeRefusesUnexplainedProse() {
+        emon.Port.Cells wd = emon.Port.NewCells();
+        emon.Port.Cells ln = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pa = emon.Port.NewCells();
+        System.Text.StringBuilder t = emon.Testport.NewText();
+        TtZebra(wd, ln, et, pa);
+        TtAt(wd, ln, et, emon.Testport.TextBlob("Orders ship free of charge"), 7600, 10000, 0, 0);
+        emon.Testport.AssertEq(TtRunScoredAn(wd, ln, et, pa, t, 1, emon.Port.NewCells()), 0, "scored lattice prose: well formed");
+        emon.Testport.AssertText(t, "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D503)");
+    }
 }

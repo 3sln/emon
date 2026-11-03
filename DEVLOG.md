@@ -13419,3 +13419,438 @@ The new engine sits behind an option, `tables=legacy|scored`, with legacy the de
 - The current engine fails on 19 inputs (17 cTDaR and 2 held-out): 12 overflow panics, 4 unsupported-image, and 3 "unit is done and left requests". These need their own batch.
 
 - [ ] **Signed off** (maintainer)
+
+### D821 — Port the table comparison checks and population freezer to babashka
+
+Replaced the three TR-design Python harness files with babashka namespaces.
+Structural matching, registered repairs, NFC word accounting and exact repeated
+header verification retain the original behavior. The freezer retains the
+salt, exclusions, order, hashes and byte serialization of populations.json.
+The scorer calls the checks directly rather than invoking Python. The fixed
+criteria and frozen baseline are unchanged. The port passes 22 tests with 44
+assertions, reproduces populations.json byte for byte, and a full rescore of
+the saved baseline Models reproduces every frozen baseline score exactly.
+
+The A/B runner now always converts fresh Models for `ab` (preventing stale
+A/B output from a previous stage), supports explicit A/B labels and argument
+sets for the required legacy/legacy experiment, and fails immediately if A
+moves off baseline. A failed standalone baseline check also exits nonzero.
+
+- [ ] **Signed off** (maintainer)
+
+### D822 — Stop on the remaining E09 structural-ownership conflict
+
+The task requires stopping if the fixed criteria are impossible or wrong.
+Preflight found that changing the protected checker from absolute indices to
+column structure does not permit the design's eight-column E09 rebuild.
+The frozen triples have nine occupied columns in each of incumbent fragments
+0 and 2. Under changed=0, every baseline column must have one modal output
+column, those columns must remain distinct, and all E09 fragments must land
+in the same linked table. Nine occupied columns cannot inject into eight.
+At least one protected cell per such fragment must change; E09 has no
+registered repair. Empty phantom columns can disappear, but these are occupied.
+
+A new adversarial law preserves every word while collapsing nine occupied
+columns into eight: the registered guard correctly reports two merged cells.
+The real-data preflight reports IDs and counts only, at
+/Volumes/SSK SSD/emon-scratch/tr1/ownership-preflight.json, with its repeatable
+babashka script alongside it. This is a conflict between the required
+eight-column rebuild (TF-design section 5.4; TR-design section 4.8) and the
+fixed ownership criterion, rather than an absolute-column-index issue.
+
+Stopped before the stage-1 A/B runs. Reverted the unmeasured identity switch
+and generated/host changes; retained only the completed babashka harness port
+and runner validity fixes. Legacy remains the only engine/default. Criteria,
+repairs, baseline, populations and runtime code are unchanged. No held-out
+Models were inspected for tuning (the stage-0 baseline rescore included their
+fixed metrics). No commit. Stages 1–6 and the final runtime gates are not
+claimed complete. The coordinator must decide whether the target can retain
+at least nine columns, or whether ownership needs a newly registered rule.
+
+- [ ] **Signed off** (maintainer)
+
+### D823 — Apply the coordinator's source-reviewed E09 merge ruling
+
+The 2026-10-29 ruling authorizes only a named pair that overlaps by at least
+50% in cell x-extents and is one physical column on a source render. Values
+must keep their rows and row-mates; missing values and column-mate changes
+remain losses. There is no general row-disjoint-column exception. Criteria,
+populations and baseline stay fixed.
+
+Reviewed rendered source pages 1 and 2. Registered only fragment 2, page 2,
+columns 7/8: union cell extents [2121.5,2359] and [2167,2359], 192 pixels of
+overlap (100% of the smaller extent); both lie in the physical Balance column.
+Credit and Balance remain distinct even though spanning cells make their
+union extents overlap. Fragment 0's columns 7/8 are also one physical Balance
+column, but their Model extents [2133.5,2367.5] and [2367.5,2427] overlap 0%,
+so that pair is NOT registered under the literal ruling. Asked the coordinator
+which geometry was intended; independent stages continue. Evidence renders
+are under emon-scratch/tr1/E09-source-p{1,2}.png; no document text is copied
+into the repository. The checker permits only the registered structural merge;
+it still matches each protected value to its original page and numeric row key.
+
+- [ ] **Signed off** (maintainer)
+
+### D824 — Measure child resources without restricted macOS sysctl
+
+The resumed sandbox denies `/usr/bin/time -l` access to `kern.clockrate`.
+It runs the child, then returns failure while collecting resource statistics,
+so successful conversions are falsely reported as failures and retried live.
+The first resumed A/B run is invalid and is not engine evidence. A marker
+command verified this behavior; direct driver conversions work. The harness now
+probes `time -l` once and, only when unavailable, builds a small C measurement
+helper in the worktree `.cache`. It uses fork/exec/wait4 and the child's
+rusage for user CPU, system CPU and peak RSS (bytes on macOS), preserving
+exit status. Both arms use the same measurement path. No cost threshold is
+changed and missing measurements are not treated as zero. All orchestration
+remains babashka; no Python or shell measurement script is introduced.
+
+- [ ] **Signed off** (maintainer)
+
+### D825 — Reject the atomic-row DP and selection trial at preflight
+
+The stage-2 trial applies one bounded DP to candidate grid rows, writes every
+retained word once, and uses an exact independent set for at most 16 scored
+candidates. Four focused Go laws pass: paired numbers, a wrapped baseline,
+a small superscript and selecting two disjoint readings over their enclosure.
+On the recorded F01 input it nevertheless changes 19 protected cells' ownership
+and leaves p11-paired-line-numbers failing. It loses and gains zero words.
+Atomic generator rows are too late an input for this DP: shared segmentation
+needs the original baselines before those rows become indivisible.
+
+Reject this trial; no tuning against held-out documents. Source and the
+preflight counts are saved under emon-scratch/tr1/stage2-source and
+stage2-F01-preflight.json. Its separate worktree-local binary is retained for
+the required full A/B audit after stage 1 finishes. These are preflight
+findings, not a claim that the population audit or stage 2 is complete.
+
+- [ ] **Signed off** (maintainer)
+
+### D826 — Reject the independent open-frame/fill-span trial at preflight
+
+With the stage-2 trial removed, proposed open frames before incumbent selection:
+matched horizontal endpoints spanning at least 60 pt, three full-height rails
+(doubled strokes within 1 pt count once), and at most one interior full-width
+rule. Added whole fill-stack spans as alternatives while keeping the original
+shaded proposer. The legacy path is unchanged.
+
+On F01 this trial makes t9-year-header pass but leaves t9-numbered-rows failing;
+it changes 15 protected cells (8 missing, 2 moved, 2 merged, 3 reordered) and
+loses 22 words. This is a hard rejection even though one named check improves.
+Do not retain it or tune it further. Source and counts are saved under
+emon-scratch/tr1/stage3-source and stage3-F01-preflight.json. The separate binary
+remains for the full A/B audit. Stage 4 proceeds independently. No criterion,
+threshold or baseline is changed; the held-out documents were not inspected.
+
+- [ ] **Signed off** (maintainer)
+
+### D827 — Verify the merge exception on the actual E09 cells
+
+The registered pair has rows with two occupied source cells. The matcher now
+allows those two protected values to share one output cell only for that named
+pair, on the same protected page and row key. Each value consumes a disjoint
+text occurrence: a single token can never satisfy two protected values.
+All other cells retain one-to-one matching. Missing values and changes of
+numeric row key remain losses, even inside a registered pair.
+
+The reproducible real-data adversary in
+emon-scratch/tr1/merge-ruling-preflight.clj collapses only fragment 2 columns
+7/8: 716 total, 700 kept, 1 extended, 15 repaired, 0 changed, 0 words lost or
+gained. Without its registration the exact same output has 15 changed cells.
+Also collapsing fragment 0 columns 7/8 retains every word but has 8 changed
+cells under the current ruling. Thus the checker admits the authorized merge
+and continues to reject the unregistered one. This is a stage-5 preflight
+rejection of that eight-column rebuild, not a reason to halt independent
+stages or to alter a criterion. No held-out documents were inspected.
+
+- [ ] **Signed off** (maintainer)
+
+### D828 — Reject the original-baseline DP trial on protected ownership
+
+Before the formal stage-2 population audit, replaced the atomic-grid-row
+prototype with a shared DP over the original word baselines. It includes
+anchors, paired numbers, superscript size, pitch gaps, fill crossings and
+row-start costs, with at most eight baselines per logical row. Candidates
+compare the same upright source words in their frame, and the writer checks
+every source word is owned exactly once. The DP cost feeds the hypothesis
+score. Exact selection has an explicit 16-candidate bound and keeps the
+incumbent set on equal scores. Six Go laws pass, covering those row cases,
+global selection, ties and the safe bound.
+
+F01 preflight still rejects it: 832 kept, 5 extended, 8 registered repairs,
+178 missing (changed) of 1,023 protected cells, with zero words lost/gained.
+The paired-line-number check remains false. This is the formal stage-2
+candidate to measure; the earlier atomic-row version was an internal
+preflight prototype. No further tuning of this rejected candidate is made.
+Source, counts and binary are retained for its A/B audit under
+emon-scratch/tr1/stage2-raw-source, stage2-raw-F01-preflight.json, and the
+worktree's .cache/emon-rs-tr1-stage2raw. Independent stages proceed. No
+held-out predictions were inspected or used to choose its costs.
+
+- [ ] **Signed off** (maintainer)
+
+### D829 — Carry the experimental table option through host adapters
+
+The hosts parse option text into Cfg, then rebuild Cfg from their Options for
+conversion. Preserve the experimental table code through that round trip with
+private host state (and the existing test-hooks feature on Rust), including
+Java/C# copies. There is no new stable typed Options field. The `tables` key
+and its words are provisional in the API audit until an accepted default flip;
+the 2,028 frozen public API entries remain unchanged. Legacy stays the default,
+and only scored evidence gets an engine row; the Model settings stay unchanged.
+
+The completed stage-1 A run reproduces every frozen score. All 857 output files
+also match the saved baseline byte for byte: 838 successful Models and the 19
+unchanged failed outputs. Its 16 table goldens match. The identity B run and
+explicit legacy/legacy proof continue separately; full criteria acceptance is
+not claimed for equality. Evidence is in emon-scratch/tr1/legacy-model-byte-check.json
+and stage1-A-baseline.log.
+
+- [ ] **Signed off** (maintainer)
+
+### D830 — Independent lattice-header trial: named preflight
+
+The stage-4 trial binds labels through the shortest covering sub-rule, falls
+back to covered column anchors, and stops at the first unexplained line. It
+keeps the existing forward-row and continuation logic. Its 14 named-document
+preflight preserves all 4,904 protected triples and loses/gains zero words,
+but stays at 14/19 named checks: F01's t9-year-header still fails. The trial's
+full-population A/B audit is pending; there is no claim it meets its stage target.
+Source and preflight evidence are in emon-scratch/tr1/stage4-source and
+stage4-named-preflight.json. No held-out document was inspected for tuning.
+
+- [ ] **Signed off** (maintainer)
+
+### D831 — Freeze row-mates for the narrow E09 merge exception
+
+Numeric row keys alone repeat in E09 and cannot enforce the coordinator's
+row-mates condition. Register a signature of the unchanged frozen ownership
+list and 139 consecutive row fingerprints for its 716 protected cells. A
+fingerprint hashes the complete normalized row token multiset, preserving it
+when the two authorized columns merge. Matching fails closed if this policy
+is absent, incomplete or attached to a different frozen list. The exception
+still permits only fragment 2, page 2, columns 7/8; no other repairs change.
+
+The same-key adversary keeps every word but swaps values between rows and is
+rejected. Authorized merge still has 15 repaired and zero changed; also merging
+the unregistered fragment still changes eight cells. The saved baseline and
+both completed identity arms each preserve all 4,904 cells under this stronger
+guard. Identity B reproduces every frozen population and document score.
+Harness tests pass: 20 structural/word tests, 45 assertions; six scorer tests,
+18 assertions. Evidence: emon-scratch/tr1/strict-row-ownership-baselines.json,
+merge-ruling-preflight.json and stage1-B-baseline.log. No thresholds changed.
+
+- [ ] **Signed off** (maintainer)
+
+### D832 — Repeat the borderline stage-1 replay cost measurement
+
+The first full identity A/B has zero deltas in all seven populations, zero
+ownership changes and zero lost/gained words. Replay CPU B/A is 1.025438,
+slightly above the stage's 1.02 target (live 0.964582, peak RSS 1.114566).
+The design documents about five percent noise on the shared machine and
+permits repeating borderline costs. Keep this measurement, do not waive the
+target, and repeat the unchanged identity binary before accepting stage 1.
+Its full criteria verdict is REJECT because identity supplies none of the
+required quality gains. Stage-2/3/4 trial binaries were frozen before these
+held-out scores were available; no tuning used those predictions.
+
+- [ ] **Signed off** (maintainer)
+
+### D833 — Freeze an independent document-anchor trial for stage 5
+
+Prepared a separate trial that pools amount right edges across pages, with
+native/raster tolerances, semantic compatibility, a 32-anchor bound and
+three-page support. It proposes collapsing adjacent fragment columns mapped
+to the same anchor, copies the original row maps and word indices, and refuses
+spans. Signature links compare common amount-anchor identities before the
+legacy geometric fallback; the context/header/unexplained-line vetoes remain.
+The runtime does not consult the repair registry or document IDs.
+
+This limited proposer does not recover uncovered date-started rows or combine
+all same-page fragments. Its source is frozen in emon-scratch/tr1/stage5-source
+before the stage-2/3/4 full audits; compilation and preflight follow their serial
+measurement boundary. It is not retained or claimed to meet E09's target.
+The literal ruling still rejects the separately measured eight-column rebuild
+that also collapses fragment 0 (D827/D831). Initial identity held-out scores
+have been printed; no held-out prediction informed this trial or its costs.
+
+- [ ] **Signed off** (maintainer)
+
+### D834 — Complete the explicit legacy identity and rederive proofs
+
+The explicit `--tables=legacy` versus `--tables=legacy` comparison completes
+with zero deltas in all seven headlines, 4,904 protected cells preserved,
+zero ownership changes and zero words lost/gained on all 54 controls. Both
+arms' 857 output files match the saved baseline byte for byte (838 successful
+Models and 19 unchanged failed outputs); each arm reproduces all 16 table
+goldens. Replay CPU B/A 1.000881, live CPU 1.006155, RSS 0.957344. Its full
+criteria verdict is REJECT, as expected for equality without the required gains.
+
+`bb rederive` exits zero and changes neither the tracked patch nor any
+untracked source content. The unchanged-binary scored/legacy CPU repeat now
+runs before the formal stage-2/3/4 audits. A brief stage-2 A conversion was
+interrupted at that boundary, with no scores or verdict produced; its partial
+labels are not reused. Fresh stage-2 labels are tr1-s2raw-r-a/b. No held-out
+prediction was used to alter any trial. Proofs and full verdicts are under
+emon-scratch/tr1 and emon-scratch/trd; per-population numbers are checkpointed.
+
+- [ ] **Signed off** (maintainer)
+
+### D835 — Stage 1 passes its replay cost target on the unchanged repeat
+
+The single predeclared repeat of the unchanged identity binary completes:
+replay CPU B/A 0.984719 (target <=1.02), live CPU 0.982883, peak RSS 0.959701.
+All seven headline deltas remain zero, all 4,904 protected cells are preserved,
+and all 54 controls have zero lost/gained words or failed checks. A reproduces
+every frozen population and document score. Keep both cost measurements: the
+first was 1.025438; no bound was waived or changed. The explicit legacy/legacy
+and no-diff rederive proofs remain D834's. The stage-1 output and cost targets are met. Its option laws are implemented;
+four-host execution remains among the final gates. The full criteria verdict
+remains REJECT because identity has no quality gain.
+
+Formal stage-2 original-baseline DP A/B now runs with fresh labels
+tr1-s2raw-r-a/b, followed serially by the frozen frame and header trials. The
+held-out identity totals were printed as required; no held-out prediction was
+used to tune these candidates. Full verdict and per-population checkpoint:
+emon-scratch/trd/compare-tr1-s1-repeat-a-tr1-s1-repeat-b.json.
+
+- [ ] **Signed off** (maintainer)
+
+### D836 — Stage 2 full audit rejects the shared-row DP candidate
+
+The formal original-baseline DP full A/B completes with A reproducing every
+frozen score. All seven headlines regress (exact per-population numbers are
+in tr1-checkpoints.txt and the full verdict). Of 4,904 protected cells, 4,095
+are preserved, eight are pre-registered repairs and 801 change. The 54 controls
+lose 298 words and gain 226, with zero failed word checks. Replay/live CPU
+ratios are 1.009168/0.987464 and peak RSS 1.132718, within the resource bounds.
+Resource compliance cannot excuse the ownership or word losses. Reject stage
+2; its trial source remains archived, and the working runtime keeps identity.
+
+The named scored run has ten replay conversions and four successful live
+fallbacks after recorded-port misses; request types have not been classified.
+The held-out aggregate was printed, but the rejection was already determined
+by the F01 preflight and is independently confirmed by protected ownership,
+word losses and the six non-held-out regressions. No held-out prediction was
+used to tune this or the frozen stage-3/4 candidates. Stage 3 now runs serially.
+Full verdict: emon-scratch/trd/compare-tr1-s2raw-r-a-tr1-s2raw-r-b.json.
+
+- [ ] **Signed off** (maintainer)
+
+### D837 — Validate the document-anchor writer before its first audit
+
+D833 prepared the stage-5 proposer policy; it did not establish a validated
+binary. Static implementation review now makes anchor lookup reject known
+semantic conflicts and requires matching column roles before collapse. The
+writer checks source-word bounds and unique old ownership, then compares the
+new ownership multiset with the old one. A mismatch restores the table's
+original pointers/counts and truncates every appended arena before refusing
+the candidate. Spans and invalid row/column maps are refused before mutation.
+These enforce the predeclared ownership invariant, without adding an exception
+or fitting a cost to predictions.
+
+The build helper composes this independent policy onto whichever runtime is
+retained after stage 4 and restores that exact base in a finally block. Thus
+rejecting stage 5 cannot discard an earlier accepted improvement. Proposer
+weights, anchor tolerances, bounds and three-page support are unchanged.
+No stage-5 prediction has been inspected; compilation, named/word preflight
+and its full A/B remain pending. No held-out prediction informed these
+compiler/invariant corrections. Source and helper: emon-scratch/tr1/stage5-source
+and build-stage5.clj. The working runtime remains the identity engine.
+
+- [ ] **Signed off** (maintainer)
+
+### D838 — Stage 3 full audit rejects the frame/fill-span trial
+
+A reproduces every frozen score. The new proposer improves named checks from
+14/19 to 15/19, while synth, FinTabNet and ledgers headlines stay equal. But
+ICDAR drops 0.004480 and cTDaR drops 0.015632. Protected ownership is 4,887
+preserved and 17 changed of 4,904, with no repairs. The 54 controls lose 189
+words and gain 27, with zero failed word checks. Replay/live CPU ratios are
+0.990240/0.990843 and RSS 0.996552. Resource compliance and the named gain
+cannot excuse the ownership, words or population regressions. Reject/revert
+stage 3; the working runtime keeps identity and no old passes are retired.
+
+The held-out headline is printed (0.534364 to 0.532274) but does not determine
+this decision: protected ownership, controls and the two tuning-population
+regressions independently reject it. No held-out prediction was used to tune
+the frozen lattice trial. Stage 4 now runs serially. Exact per-population
+values are checkpointed; full verdict:
+emon-scratch/trd/compare-tr1-s3-a-tr1-s3-b.json.
+
+- [ ] **Signed off** (maintainer)
+
+### D839 — Retain the measured lattice gain, with its F01 target still open
+
+Stage 4 reproduces the frozen A and improves ICDAR 0.759942 to 0.759966
+and FinTabNet 0.421575 to 0.423140. Other tuning headlines stay equal.
+All 4,904 protected cells remain preserved; controls lose/gain zero words
+and have zero failures. All fixed hard checks pass: no headline drop,
+no component regression beyond 0.01, no new input failure, replay/live CPU
+1.000601/1.006531 and RSS 1.009581. Synth and ledger header accuracy stay
+equal; F17, F05 and F14 header targets pass. FinTabNet column accuracy falls
+0.002862, within the fixed component tolerance.
+
+Retain this partial improvement under the task's keep-if-it-moves rule.
+F01 year-header still fails and named stays 14/19: its milestone is not
+claimed complete. Aggregate gain is only 0.000264833, below 0.01, so the
+full verdict remains REJECT. The printed held-out gain of 0.000045 did not
+determine retention. No prediction was used to tune the binding rule or
+the document-anchor policy.
+
+Removed an unused local read for Go without changing binding decisions.
+Added a scored-path negative law: unexplained prose above a zebra table
+stays a paragraph. bb unit go exits zero with all 1,358 laws, including
+that law and the option parser law. Four-host gates remain. Stage 5 will
+compose onto this lattice base; legacy stays default and old passes remain.
+Full verdict: emon-scratch/trd/compare-tr1-s4-a-tr1-s4-b.json.
+
+- [ ] **Signed off** (maintainer)
+
+### D840 — Document-anchor trial compiles; named preflight keeps ownership
+
+Stage 5 composes onto the retained lattice base and compiles on Rust.
+The helper restores that exact base after building the independent binary.
+Named preflight preserves all 4,904 protected cells and loses/gains zero
+words. E09 preserves all 716 cells with no repair used, but dated-rows and
+links still fail. The total remains 14/19; this is not target completion.
+
+Run its full A/B before deciding. Any gain must be incremental beyond stage
+4, rather than counting the retained lattice gain again. No held-out
+prediction is used to tune the candidate. No repair or threshold changes.
+Evidence: emon-scratch/tr1/stage5-named-preflight.json and stage5-build.log.
+
+- [ ] **Signed off** (maintainer)
+
+### D841 — Reject stage 5 for no incremental measured gain
+
+Stage 5's full A/B reproduces every frozen A score. B has exactly stage 4's
+headlines and every component metric, on all seven populations: the apparent
+gain over legacy is entirely the already-retained lattice gain. Ownership
+keeps all 4,904 cells with zero changes, and controls lose/gain zero words
+with zero failed checks. Replay/live CPU 0.998224/1.008589, RSS 1.022586.
+Resource variation is not a new quality gain. E09's dated-row and link targets
+remain false. Reject stage 5 for no incremental non-held-out improvement.
+
+The helper has restored the exact retained lattice base (both source files
+compared byte for byte with stage5-base); its invariant-checked document
+proposer remains archived, not in the working engine. No held-out prediction
+was used to tune it or to choose rejection: every tuning metric is identical
+to stage 4. No exception was broadened.
+
+The fixed full criteria remain REJECT, so do not flip the default. Run the
+final gates and a fresh final A/B on the retained lattice engine; no old pass
+is retired. Full stage-5 verdict and per-population checkpoint:
+emon-scratch/trd/compare-tr1-s5-a-tr1-s5-b.json and tr1-checkpoints.txt.
+
+- [ ] **Signed off** (maintainer)
+
+### D842 — Final scored-table verdict rejects adoption; retain the partial lattice gain
+
+Stages 1–6 and final validation are complete. The final full A/B rejects adoption: aggregate headline >= A + 0.01; held-out headline >= A + 0.005; held-out paired bootstrap 95% lower bound > 0. Aggregate delta 2.6483333333338077E-4; held-out delta 4.500000000007276E-5; held-out bootstrap interval [0.0 1.951854261548538E-5].
+Retain the experimental switch and stage 4's measured partial lattice improvement. Stages 2 and 3 broke hard guards; stage 5 added no measured improvement over stage 4, so all three are reverted. F01 and E09 stage milestones remain unmet, with 14/19 named checks. Legacy stays the default and no old pass is retired.
+Protected ownership {"total" 4904, "preserved" 4904, "repaired" 0, "changed" 0}; words {"lost" 0, "gained" 0, "failed" 0}; CPU replay/live 0.9922381412737517/1.0015781958851016; RSS 0.9395099233167833.
+All requested gates pass after environment-only reruns: C# uses the existing local NuGet package source, npm uses a task-local writable cache, and drift/CI use an isolated staged index scoped to this worktree. The real index and HEAD are unchanged. The original failed attempts are preserved. Optional WASM arms in OCR/identity/slice skip absent host/js node_modules; repeat skips browser threading by design. C/pod package artifacts lack native OCR/render libraries as their gate reports.
+Rust, Go, Java and C# each pass all 1,358 laws. The final legacy arm's 857 outputs match the saved baseline bytes. Final rederive changes no tracked patch or untracked contents. Criteria, baseline and populations are unchanged. Full verdict: /Volumes/SSK SSD/emon-scratch/trd/compare-tr1-final-a-tr1-final-b.json. Per-population checkpoints and logs remain external for review.
+
+- [ ] **Signed off** (maintainer)

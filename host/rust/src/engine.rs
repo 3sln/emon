@@ -278,6 +278,9 @@ pub struct Options {
     // published crate never does, so a release's `Options` has no such field.
     #[cfg(feature = "__test_hooks")]
     pub no_retarget: bool,
+    // Experimental comparison-driver option state, outside the stable typed API.
+    #[cfg(feature = "__test_hooks")]
+    pub tables_scored: bool,
 }
 
 // SPEC 13's defaults are kin's (`emon.config`'s `cf-defaults`): the default Options are the parse of the empty text.
@@ -406,6 +409,8 @@ fn options_of(c: &Cfg) -> Options {
         ocr_scope: OcrScope::from_code(c.scope),
         #[cfg(feature = "__test_hooks")]
         no_retarget: false,
+        #[cfg(feature = "__test_hooks")]
+        tables_scored: c.tabl == 1,
     }
 }
 
@@ -1124,6 +1129,7 @@ fn cfg_of(opts: &Options) -> Cfg {
     #[cfg(feature = "__test_hooks")]
     {
         c.nort = opts.no_retarget as i32;
+        c.tabl = opts.tables_scored as i32;
     }
     if opts.locale.is_some() {
         c.haveloc = 1;

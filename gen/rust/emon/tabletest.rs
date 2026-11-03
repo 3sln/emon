@@ -5587,3 +5587,104 @@ fn test_filled_entry_fields_cannot_be_promoted_to_column_headers() {
     crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
     crate::testport::assert_eq(tt_word_owner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
 }
+pub(crate) fn tt_run_scored_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, et: &mut crate::port::Cells, pa: &mut crate::port::Cells, mut t: &mut String, np: i32, an: &mut crate::port::Cells) -> i32 {
+    // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+    let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let layout: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ord: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tmp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gp: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let st: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ii: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let al: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lt: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let it: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let io: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let rw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gu: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ac: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tm: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cf: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lo: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let dbg: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let hc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tb: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tc: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tq: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let tx: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s0: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s1: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s2: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s3: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s4: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s5: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s6: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s7: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s8: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s9: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s10: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s11: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s12: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s13: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s14: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s15: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s16: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s17: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let s18: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let grl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cand: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gpts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gmk: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let gim: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t0e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t1e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t2e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t3e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t4e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t5e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t6e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t7e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t8e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t9e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t10e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t11e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t12e: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    model_init(nodes, attrs, regions, text, pages, ledger, layout);
+    page_new(pages, 1, 61200, 79200, 0, pk_vector());
+    if np == 2 {
+        page_new(pages, 2, 61200, 79200, 0, pk_vector());
+    }
+    gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
+    tb_scored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    if tt_body_audit(wd, et, tb, tc, tw) != 0 {
+        return 7;
+    }
+    lc_copy(ln, lt);
+    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    tt_brief(t, nodes, attrs, text);
+    return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
+}
+#[test]
+fn test_scored_lattice_refuses_unexplained_prose() {
+    let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pa: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let t: &mut String = &mut crate::port::new_text();
+    tt_zebra(wd, ln, et, pa);
+    tt_at(wd, ln, et, &crate::testport::text_blob("Orders ship free of charge")[..], 7600, 10000, 0, 0);
+    crate::testport::assert_eq(tt_run_scored_an(wd, ln, et, pa, t, 1, &mut crate::port::Cells::new()), 0, "scored lattice prose: well formed");
+    crate::testport::assert_text(t, "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D503)");
+}

@@ -116,6 +116,7 @@ pub struct Cfg {
     pub par: i32,
     pub dry: i32,
     pub jsrender: i32,
+    pub tabl: i32,
 }
 impl Cfg {
     pub fn new() -> Cfg {
@@ -145,6 +146,7 @@ impl Cfg {
             par: 0,
             dry: 0,
             jsrender: 0,
+            tabl: 0,
         }
     }
 }

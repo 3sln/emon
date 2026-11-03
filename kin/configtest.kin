@@ -190,7 +190,7 @@
 ;; ------------------------------------------------------------------ the grammar's tables
 
 (deftest test-the-keys-have-their-names-in-kin
-  (assert-eq (ck-row-count 0) 20 "twenty keys")
+  (assert-eq (ck-row-count 0) 21 "twenty-one keys")
   (t-key-name (test-t) 0 "locale")
   (t-key-name (test-t) 1 "ocr")
   (t-key-name (test-t) 2 "furniture")
@@ -210,10 +210,11 @@
   (t-key-name (test-t) 16 "limit.")
   (t-key-name (test-t) 17 "producer.")
   (t-key-name (test-t) 18 "parallel")
-  (t-key-name (test-t) 19 "js-render"))
+  (t-key-name (test-t) 19 "js-render")
+  (t-key-name (test-t) 20 "tables"))
 
 (deftest test-the-words-have-their-names-and-codes-in-kin
-  (assert-eq (cv-row-count 0) 13 "thirteen words")
+  (assert-eq (cv-row-count 0) 15 "fifteen words")
   (t-word-name (test-t) 0 1 2 "always")
   (t-word-name (test-t) 1 1 1 "auto")
   (t-word-name (test-t) 2 1 0 "never")
@@ -226,7 +227,9 @@
   (t-word-name (test-t) 9 8 1 "on")
   (t-word-name (test-t) 10 8 0 "off")
   (t-word-name (test-t) 11 10 0 "full")
-  (t-word-name (test-t) 12 10 1 "witness"))
+  (t-word-name (test-t) 12 10 1 "witness")
+  (t-word-name (test-t) 13 20 0 "legacy")
+  (t-word-name (test-t) 14 20 1 "scored"))
 
 (deftest test-a-key-is-found-by-its-whole-name-or-its-prefix
   (t-is-key (test-t) (text-blob "ocr") 1 "ocr")
@@ -429,3 +432,13 @@
 
 (deftest test-fonts-per-doc-cannot-be-raised-past-its-slab
   (t-refused (test-t) (text-blob "limit.fonts-per-doc=513") "limit.fonts-per-doc is out of range 0..512"))
+
+(deftest test-table-engine-option
+  (let [^Cfg c (new-ctx Cfg)]
+    (assert-eq (t-parse c (text-blob "")) 0 "default parses")
+    (assert-eq (fd c tabl) 0 "legacy default")
+    (assert-eq (t-parse c (text-blob "tables=scored")) 0 "scored parses")
+    (assert-eq (fd c tabl) 1 "scored code")
+    (assert-eq (t-parse c (text-blob "tables=legacy")) 0 "legacy parses")
+    (assert-eq (fd c tabl) 0 "legacy code"))
+  (t-refused (test-t) (text-blob "tables=other") "tables is legacy or scored"))

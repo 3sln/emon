@@ -3,7 +3,7 @@
 // itself and hands the Engine bytes, a seekable `File` or a spooled `Read` (D058).
 //
 //     emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG]
-//             [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
+//             [--ocr=always|auto|never] [--tables=legacy|scored] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--ocr-scope=full|witness] [--assets=none|images|figures] [--password=TEXT] [--source=bytes|seek|spool]
 //             [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D]
 //             [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE
 //
@@ -67,7 +67,7 @@ fn kin_flag(a: &str) -> Option<String> {
 
 fn usage(msg: &str) -> ! {
     eprintln!("emon-rs: {}", msg);
-    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
+    eprintln!("usage: emon-rs [--out=json|html|evidence|intake] [--pretty] [--html=OPTS] [--locale=TAG] [--ocr=always|auto|never] [--tables=legacy|scored] [--furniture=policy|keep|drop] [--tesseract[=TESSDATA]] [--tessdata=DIR --lang=eng+spa] [--pdfium] [--codecs] [--ocr-scope=full|witness] [--assets=none|images|figures] [--asset-dpi=N] [--asset-pixels=N] [--asset-bytes=N] [--assets-bytes=N] [--asset-signatures=on|off] [--asset-dir=D] [--html-assets=inline|external|omit] [--asset-prefix=P] [--password=TEXT] [--source=bytes|seek|spool] [--chunk=N --async] [--stats] [--record=DIR | --replay=DIR] [--concurrent=N] [--parallel=N] FILE");
     std::process::exit(2);
 }
 

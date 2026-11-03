@@ -310,21 +310,28 @@ public final class Engine {
         int pending = 0;
         int w = 0;
         Furniture.fuFind(d.fw, d.fl, d.et, d.gl, d.mk, m.pages, np, d.txt, d.md, d.lb, trust, c.furn, s.cd, s.sl, s.gr, s.ford, s.tx, s.bh, s.fo, s.fp, s.ft, s.pl);
-        Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+        if (c.tabl == 1) {
+            Tscore.tsBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+        } else {
+            Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+        }
         if (c.keep != 0) {
             if ((kind == 0) && (emon.Port.cellsLen(s.tv) > 0)) {
                 emon.Port.textAscii(d.evidence, ",\"tb\":");
                 Tagtable.ttEmit(d.evidence, s.tv);
             }
         }
-        if ((c.keep != 0) && (emon.Port.cellsLen(s.s0) > 0)) {
+        if ((c.keep != 0) && ((c.tabl == 1) || (emon.Port.cellsLen(s.s0) > 0))) {
             int i = 0;
             int j = 0;
             int reasons = 0;
             int comma = 0;
             emon.Port.textAscii(d.evidence, ",\"tbx\":[");
+            if (c.tabl == 1) {
+                emon.Port.textAscii(d.evidence, "{\"kind\":\"engine\",\"engine\":\"scored\"}");
+            }
             while (i < emon.Port.cellsLen(s.s0)) {
-                if (i > 0) {
+                if ((i > 0) || (c.tabl == 1)) {
                     emon.Port.textAscii(d.evidence, ",");
                 }
                 if (emon.Port.cellsAt(s.s0, i) >= 0) {

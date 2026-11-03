@@ -5456,4 +5456,104 @@ public final class Tabletest {
         emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 0), first, "123 owns its original first column");
         emon.Testport.assertEq(ttWordOwner(tb, 0, tc, tw, 4), first + 37, "the original total stays in its second column");
     }
+    public static int ttRunScoredAn(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells pa, StringBuilder t, int np, emon.Port.Cells an) {
+        // `tt-run-n` over a document whose annotations (rows of `an`, `AN_STRIDE` cells) are `an`: the form fields' widgets (D583).
+        emon.Port.Cells nodes = emon.Port.newCells();
+        emon.Port.Cells attrs = emon.Port.newCells();
+        emon.Port.Cells regions = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells ledger = emon.Port.newCells();
+        emon.Port.Cells layout = emon.Port.newCells();
+        emon.Port.Cells ord = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells tmp = emon.Port.newCells();
+        emon.Port.Cells fr = emon.Port.newCells();
+        emon.Port.Cells gp = emon.Port.newCells();
+        emon.Port.Cells st = emon.Port.newCells();
+        emon.Port.Cells ii = emon.Port.newCells();
+        emon.Port.Cells al = emon.Port.newCells();
+        emon.Port.Cells lt = emon.Port.newCells();
+        emon.Port.Cells ls = emon.Port.newCells();
+        emon.Port.Cells sd = emon.Port.newCells();
+        emon.Port.Cells it = emon.Port.newCells();
+        emon.Port.Cells io = emon.Port.newCells();
+        emon.Port.Cells rw = emon.Port.newCells();
+        emon.Port.Cells gu = emon.Port.newCells();
+        emon.Port.Cells ac = emon.Port.newCells();
+        emon.Port.Cells tm = emon.Port.newCells();
+        emon.Port.Cells cf = emon.Port.newCells();
+        emon.Port.Cells lo = emon.Port.newCells();
+        emon.Port.Cells pr = emon.Port.newCells();
+        emon.Port.Cells dbg = emon.Port.newCells();
+        emon.Port.Cells hc = emon.Port.newCells();
+        emon.Port.Cells tb = emon.Port.newCells();
+        emon.Port.Cells tc = emon.Port.newCells();
+        emon.Port.Cells tw = emon.Port.newCells();
+        emon.Port.Cells tq = emon.Port.newCells();
+        emon.Port.Cells tx = emon.Port.newCells();
+        emon.Port.Cells s0 = emon.Port.newCells();
+        emon.Port.Cells s1 = emon.Port.newCells();
+        emon.Port.Cells s2 = emon.Port.newCells();
+        emon.Port.Cells s3 = emon.Port.newCells();
+        emon.Port.Cells s4 = emon.Port.newCells();
+        emon.Port.Cells s5 = emon.Port.newCells();
+        emon.Port.Cells s6 = emon.Port.newCells();
+        emon.Port.Cells s7 = emon.Port.newCells();
+        emon.Port.Cells s8 = emon.Port.newCells();
+        emon.Port.Cells s9 = emon.Port.newCells();
+        emon.Port.Cells s10 = emon.Port.newCells();
+        emon.Port.Cells s11 = emon.Port.newCells();
+        emon.Port.Cells s12 = emon.Port.newCells();
+        emon.Port.Cells s13 = emon.Port.newCells();
+        emon.Port.Cells s14 = emon.Port.newCells();
+        emon.Port.Cells s15 = emon.Port.newCells();
+        emon.Port.Cells s16 = emon.Port.newCells();
+        emon.Port.Cells s17 = emon.Port.newCells();
+        emon.Port.Cells s18 = emon.Port.newCells();
+        emon.Port.Cells grl = emon.Port.newCells();
+        emon.Port.Cells gfl = emon.Port.newCells();
+        emon.Port.Cells cand = emon.Port.newCells();
+        emon.Port.Cells gpts = emon.Port.newCells();
+        emon.Port.Cells gmk = emon.Port.newCells();
+        emon.Port.Cells gim = emon.Port.newCells();
+        emon.Port.Cells t0e = emon.Port.newCells();
+        emon.Port.Cells t1e = emon.Port.newCells();
+        emon.Port.Cells t2e = emon.Port.newCells();
+        emon.Port.Cells t3e = emon.Port.newCells();
+        emon.Port.Cells t4e = emon.Port.newCells();
+        emon.Port.Cells t5e = emon.Port.newCells();
+        emon.Port.Cells t6e = emon.Port.newCells();
+        emon.Port.Cells t7e = emon.Port.newCells();
+        emon.Port.Cells t8e = emon.Port.newCells();
+        emon.Port.Cells t9e = emon.Port.newCells();
+        emon.Port.Cells t10e = emon.Port.newCells();
+        emon.Port.Cells t11e = emon.Port.newCells();
+        emon.Port.Cells t12e = emon.Port.newCells();
+        Model.modelInit(nodes, attrs, regions, text, pages, ledger, layout);
+        Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
+        if (np == 2) {
+            Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
+        }
+        Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
+        Table.tbScored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
+            return 7;
+        }
+        Columns.lcCopy(ln, lt);
+        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        ttBrief(t, nodes, attrs, text);
+        return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
+    }
+    public static void testScoredLatticeRefusesUnexplainedProse() {
+        emon.Port.Cells wd = emon.Port.newCells();
+        emon.Port.Cells ln = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pa = emon.Port.newCells();
+        StringBuilder t = emon.Testport.newText();
+        ttZebra(wd, ln, et, pa);
+        ttAt(wd, ln, et, emon.Testport.textBlob("Orders ship free of charge"), 7600, 10000, 0, 0);
+        emon.Testport.assertEq(ttRunScoredAn(wd, ln, et, pa, t, 1, emon.Port.newCells()), 0, "scored lattice prose: well formed");
+        emon.Testport.assertText(t, "P[Orders ship free of charge];T3s;Gb;R;C[Build];C[Ana];C[May];R;C[Test];C[Ben];C[June];R;C[Ship];C[Chen];C[July];R;C[Pack];C[Dee];C[Aug];R;C[Done];C[Eli];C[Sept];", "one chunk of prose above the stripes is a paragraph, and the stripes are the table (D503)");
+    }
 }

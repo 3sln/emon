@@ -3461,6 +3461,7 @@ Settings (all named, all with defaults, all in the Model header):
 | --- | --- | --- |
 | `locale` | BCP 47 or none | none |
 | `ocr` | `always` / `auto` / `never` | **`always`** — every page, born-digital included (D038); `auto` OCRs only where text-layer health, image coverage or hidden text call for it |
+| `tables` | Experimental comparison-driver engine selection through option text and `--tables=legacy|scored`; recorded only in evidence | `legacy` |
 | `ocr-scope` | `full` / `witness`: what `ocr: always` reads of a born-digital page (§8.3, §9.8, D200); written to the Model's `settings` only when not `full` | `full` |
 | `sources` | subset of text/ocr/trace | all available |
 | `dpi` | OCR render resolution | 300 |
