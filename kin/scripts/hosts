@@ -49,6 +49,7 @@
          [:port    "host/java/emon/ffi/PpOcr.java" "ocrengine ocrport plan"]
          [:port    "host/csharp/Emon/Ffi/PpOcr.cs" "ocrengine ocrport plan"]
          [:port    "host/rust/src/ppocr.rs"             "ocr ocrengine ocrport plan"]
+         [:port    "host/wasm/src/ppocr.rs"             "ocr ocrengine ocrport plan"]
          [:test    "host/rust/tests/engine.rs"          "ocr ocrengine plan"]
          [:test    "test/driver/rust/main.rs"           "ocr plan"]      ; `--fake-ports` (P10.2): the answers of a stand-in Ocr, built with the forms a real engine's adapter uses
          [:test    "test/driver/go/main.go"             "ocr plan"]

@@ -42,6 +42,8 @@ export const unpack4 = (v) => {
 };
 
 const cps = (s) => Array.from(s || '', (c) => c.codePointAt(0));
+// Private handshake for the optional Rust-built canonical answer.
+export const canonicalOcr = Symbol('emon canonical OCR answer');
 
 /**
  * The request's fields from kin's record `[len kind id bitmap psm flags x y w h lang... status?]`. WHERE the languages are, which
@@ -53,8 +55,10 @@ export function ocrRequest(rec, bitmap, w) {
   const args = rec.slice(3);
   const flags = args[2];
   const langs = [];
-  for (let k = w.ocrLangFirst(rec); k < args.length; k++) langs.push(unpack4(args[k]));
+  const marker = w.ocrIdentityAt(rec);
+  for (let k = w.ocrLangFirst(rec); k < (marker < 0 ? args.length : marker - 3); k++) langs.push(unpack4(args[k]));
   return {
+    ...(marker >= 0 ? { record: Int32Array.from(rec) } : {}),
     models: (installed) => w.ocrModels(rec, installed),
     wordLang: (model) => unpack4(w.ocrWordLang(model)),
     blockType: (polyBlockType) => w.ocrBlockType(polyBlockType),

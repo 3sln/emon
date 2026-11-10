@@ -14044,3 +14044,44 @@ All 24 option-off commands pass, including full rederivation with no diff, accur
 Qualification remains macOS arm64. Browser identity explicitly skips missing JS development dependencies; Maven resolution and optional JS/C/pod native package snippets are not exercised. C/pod package checks use their capability-free builds; release activation remains OP2c. Nested Babashka shutdown hooks log sandbox process-enumeration errors after completed commands; the structured exit statuses and gate scores pass. Owned builds are removed, with pinned optional assets, generator inputs, the existing PDFium symlink and external evidence retained. No commit is made.
 
 - [ ] **Signed off** (maintainer)
+
+### D871 — Reuse the qualified Rust PP pipeline in optional wasm
+
+OP2b assembles a separate optional emon wasm module through `EMON_WASM_PPOCR=1`. The native preprocessing, geometry, CTC, calibration and answer-construction sources remain frozen under 0420cd75. A checked mechanical transform introduces three async inference suspension points; reversing those changes must reproduce the native pipeline source exactly. A small wasm bridge owns the suspended future, yields tensor buffers and resumes with ORT outputs. Its sole import calls a dedicated Tesseract core wasm instance directly, through two tiny wasm memory-framing shims; there is no per-word JS callback. English traineddata and the ordinary SIMD Tesseract core wasm are hash pinned, with no recognition or document-word learning in this instance. The optional JS fulfiller routes untagged requests to its incumbent and returns Rust-built canonical integer answers through the existing plan protocol. Ordinary wasm builds retain their named PP refusal and import-free ABI. Qualification and release activation remain separate.
+
+- [ ] **Signed off** (maintainer)
+
+### D872 — Pin lazy ORT Web inference without changing native policy
+
+The optional JS subpath takes a caller-provided ORT loader, runtime locations, runtime wasm bytes or URL, and model sources. It has no runtime/model CDN defaults. ORT Web 1.22.0 is an exact development dependency and its ordinary SIMD wasm binary is SHA-256 checked; sessions use the wasm provider, one thread, sequential execution and graph optimization all. Models retain the native SHA pins and load only on a PP request. ORT and model assets stay outside the ordinary SDK dependency graph and default emon wasm build. Node and Chrome qualification drivers compare all retained OP1c bitmaps against canonical native answers and retained native answer hashes, preserving field-level differences outside the repository. No float quantization or native policy change is authorized by this transport work.
+
+- [ ] **Signed off** (maintainer)
+
+### D873 — Qualify exact Node PP answers and portable recordings
+
+All 225 retained OP1c bitmaps produce byte-identical complete integer PP answers through Node 24.6.0 and ORT Web 1.22.0. The independently captured native answers reproduce every retained OP1c answer hash. Field comparisons include word boxes, text, calibrated confidences, line/block indices and all extensions. No quantization or native policy change is needed. The final direct wasm dictionary path is requalified after removing the intermediate per-word JS callbacks. WABT validates both pinned inference/dictionary binaries with Relaxed SIMD disabled; runtime inference remains single-threaded with ordinary SIMD and graph optimization all. The raw PP sweep peaks at 496224 KiB RSS (about 485 MiB), including sessions and the dedicated dictionary, excluding the incumbent worker and complete conversion.
+
+JS and native each record a live PP-enabled scan. Both recordings replay on both hosts as identical complete bundles with all three PP models and English/OSD traineddata actually absent, then restored with matching hashes. Both hosts refuse the recordings under the default selector with transcript-miss. The interoperability harness checks that the JS PP runtime was exercised; native recording needs pinned OSD data as well as English, and now refuses a missing setup before starting the native process. An initial missing-OSD attempt is retained as a harness setup failure, with the corrected runs passing.
+
+The ordinary wasm module is byte-identical to a rebuild with the original binding: 5,929,199 bytes, SHA-256 fec3b4a2c87bf61c7cea7f73c93977a26315166c807f558ffb38cac4cf0019ca, zero imports. Chrome is installed but Puppeteer cannot start it in this sandbox (Code:null, empty stderr). Browser equality and the browser arm remain coordinator checks. The optional browser driver reuses the existing harness launcher/server. Ordinary host paths and the native 0420cd75 policy sources are unchanged; release activation remains separate.
+
+- [ ] **Signed off** (maintainer)
+
+### D874 — Integrate the optional JS host into the existing guards
+
+The wasm PP port receives the same narrow host-stage grant as the native PP port: ocr/ocrengine/ocrport/plan for canonical OCR request framing, identity checks, unsupported selectors and answer construction. It gains no scheduling, arbitration or adoption stage. All preprocessing, geometry, decoding, calibration and fusion policy remains in the qualified Rust/kin implementations. The JS API index and third-party notices are regenerated; the exact ORT Web/Common runtime and development-only transitive packages/WABT are inventoried with their actual permissive licences. ORT remains caller-provided and is not carried by the ordinary SDK.
+
+The first core run exposed the missing host grant, inventory/doc regeneration and a developer Tesseract worker caching a pinned English model at the repository root. The harness now disables that worker cache. The root copy was verified identical to the pinned worktree data and removed; no model is added to the source tree. This also removes the resulting CI-map/self-test failures without weakening their coverage. The corrected host, release-audit and documentation checks pass before resuming the serial suite. Native policy 0420cd75 and the qualified integer answers are unchanged.
+
+- [ ] **Signed off** (maintainer)
+
+### D875 — Complete OP2b qualification and retain the browser boundary
+
+All 24 corrected option-off commands pass: drift, fast core, rederive check and full rederivation (no diff), accuracy (3449 metrics, zero improvements), samples (no diff), every replay gate, embedders, all four law hosts and package check. Go, Rust, Java and C# each pass 1376 laws. Seven clean package consumers produce the same 3653-byte HTML. The real index is unchanged. The initial failed core logs are retained separately; the corrected suite does not weaken any gate.
+
+The required full ppocr-hosts check also passes: 1350 exact live answers over 225 bitmaps and six native transports, 35 integrated Models, actual runtime absence/restoration contracts and 1188 complete inference-free replay comparisons across all 198 retained candidate recordings. The 74-page Arabic booklet passes all six replay drivers. Together with the final direct wasm dictionary Node sweep (225 exact answers, 485 MiB raw-port peak RSS), this preserves native policy 0420cd75 without a quantization or confidence/geometry change.
+
+Chrome cannot launch in the sandbox, so browser arms are explicitly skipped and browser equality remains a coordinator check. The browser harness and reproduction commands are supplied; no browser success is claimed. Packaging checks cover the ordinary capability paths; optional release bundling remains OP2c. Task-owned compiled outputs are removed after verification, retaining pinned model/runtime assets, JS development dependencies, generator inputs and evidence. No commit is made.
+
+*Coordinator browser qualification (2026-11-10):* headless Chrome, via `node tools/ppocr/web_browser.mjs` followed by `web_qualify.clj --compare-only true --candidate browser`, gave 225 of 225 answers byte-identical to native, with 0 different. Browser activation is therefore qualified on macOS arm64.
+- [ ] **Signed off** (maintainer)

@@ -157,5 +157,11 @@ both direct-reference and runtime-bound Rust. Complete bundles must match
 the qualified bytes. It compares stdout directly through a pipe, keeping only small result summaries. No model or runtime
 path is available to those replay invocations.
 
+The optional [browser and Node adapter](../../docs/ppocr-web.md) uses ORT Web
+1.22.0 with the same Rust pipeline in a separate optional emon wasm build.
+It requires caller-supplied pinned assets and remains experimental; its live
+answer qualification is separate from the native hosts. `web_qualify.clj`
+records exact integer-field differences without changing the native policy.
+
 The retained replay sweep includes a 74-page booklet and can take hours
 serially. It is an optional qualification run, not a normal CI gate.

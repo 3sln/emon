@@ -176,13 +176,16 @@ height, rgb }, close() } }` and an OCR port is `async (request) => result`; see 
 - The WebAssembly instance, a Model's handle and the constructors of `Emon`, `Model` and `Asset` are not public API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the js host: 55 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the js host: 59 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
 | Name | Signature |
 |---|---|
 | `@3sln/emon/pdfium::pdfiumRenderer` | `function({ module, wasm, maxPixels = 64 * 2 ** 20 } = {})` |
+| `@3sln/emon/ppocr::ppocrAdapter` | `function({ wasm, loadOrt, wasmPaths, ortWasm, models, lexicon })` |
+| `@3sln/emon/ppocr::ppocrLexicon` | `function({ createCore, coreOptions, traineddata })` |
+| `@3sln/emon/ppocr::ppocrPort` | `function({ incumbent, ...options })` |
 | `@3sln/emon/tesseract::tesseractPort` | `function({ createWorker, languages = ['eng'], oem = 1, workerOptions = {}, workers = 1 })` |
 | `@3sln/emon::Asset` | `class` |
 | `@3sln/emon::Asset#blob` | `()` |
@@ -232,6 +235,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `package.json#exports[./emon.wasm]` | `./emon.wasm` |
 | `package.json#exports[./package.json]` | `./package.json` |
 | `package.json#exports[./pdfium]` | `./src/pdfium.js` |
+| `package.json#exports[./ppocr]` | `./src/ppocr.js` |
 | `package.json#exports[./tesseract]` | `./src/tesseract.js` |
 | `package.json#exports[.]` | `./src/index.js` |
 | `package.json#main` | `src/index.js` |

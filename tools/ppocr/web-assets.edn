@@ -1,0 +1,16 @@
+;; Optional development/qualification assets. No runtime CDN defaults.
+{:schema 1
+ :runtime {:package "onnxruntime-web" :version "1.22.0" :license "MIT"
+           :entry "onnxruntime-web/wasm"
+           :wasm {:file "ort-wasm-simd-threaded.wasm" :bytes 11210254
+                  :sha256 "71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4"}
+           :glue {:file "ort-wasm-simd-threaded.mjs" :bytes 20856
+                  :sha256 "30dd851d9c00622940500f71ddd2ff8820c5cb65270816080175b958705385a8"}
+           :threads 1 :simd :fixed :graph-optimization :all :execution :sequential}
+ :lexicon {:package "tesseract.js-core" :version "7.0.0"
+           :entry "tesseract-core-simd-lstm.wasm.js"
+           :wasm-sha256 "34e8d50cac216427d86bf397d610fdd9f49492539bbcdfbfccc4eda20c810bea"
+           :traineddata "eng.traineddata"
+           :sha256 "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"}
+ :linker {:package "wabt" :version "1.0.39" :license "Apache-2.0" :development-only true}
+ :models "tools/ppocr/assets.edn"}

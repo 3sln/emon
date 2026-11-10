@@ -49,11 +49,11 @@ fn world<T>(f: impl FnOnce(&mut World) -> T) -> T {
     WORLD.with(|w| f(&mut w.borrow_mut()))
 }
 
-fn put(bytes: Vec<u8>) {
+pub(crate) fn put(bytes: Vec<u8>) {
     world(|w| w.out = bytes);
 }
 
-fn put_str(s: &str) {
+pub(crate) fn put_str(s: &str) {
     put(s.as_bytes().to_vec());
 }
 
@@ -84,7 +84,7 @@ fn guard(f: impl FnOnce() -> i32) -> i32 {
     }
 }
 
-unsafe fn bytes<'a>(ptr: u32, len: u32) -> &'a [u8] {
+pub(crate) unsafe fn bytes<'a>(ptr: u32, len: u32) -> &'a [u8] {
     if len == 0 {
         return &[];
     }
@@ -99,7 +99,7 @@ fn session<T>(h: i32, f: impl FnOnce(&mut Session) -> T) -> Option<T> {
     world(|w| w.sessions.get_mut((h - 1) as usize).and_then(|s| s.as_mut()).map(|s| f(s)))
 }
 
-fn put_i32s(v: &[i32]) {
+pub(crate) fn put_i32s(v: &[i32]) {
     let mut b = Vec::with_capacity(v.len() * 4);
     for x in v {
         b.extend_from_slice(&x.to_le_bytes());

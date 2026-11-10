@@ -347,6 +347,82 @@ Tables built into every artifact by kin's generators from these sources.
 
 Build dependencies of site and development dependencies of host/js (the browser test harness and the Tesseract.js adapter); `files` is `src` only, so none is in the npm package. The browser demo ships bab, tesseract.js, tesseract.js-core, the English model's package and what tesseract.js bundles (`bb demo` copies their dist files).
 
+- **@protobufjs/aspromise** 1.1.2 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/aspromise
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/base64** 1.1.2 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/base64
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/codegen** 2.0.5 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/codegen
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/eventemitter** 1.1.1 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/eventemitter
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/fetch** 1.1.1 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/fetch
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/float** 1.0.2 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/float
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/path** 1.1.2 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/path
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/pool** 1.1.0 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/pool
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@protobufjs/utf8** 1.1.2 - BSD-3-Clause - https://www.npmjs.com/package/@protobufjs/utf8
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **@types/node** 26.6.6 - MIT - https://www.npmjs.com/package/@types/node
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **flatbuffers** 25.9.23 - Apache-2.0 - https://www.npmjs.com/package/flatbuffers
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **guid-typescript** 1.0.9 - ISC - https://www.npmjs.com/package/guid-typescript
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **long** 5.3.2 - Apache-2.0 - https://www.npmjs.com/package/long
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **onnxruntime-common** 1.22.0 - MIT - https://www.npmjs.com/package/onnxruntime-common
+  carried by no release artifact; loaded at run time (not carried) by the npm package @3sln/emon (WASM and JS SDK). Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
+  Licence text: [4](#licence-text-4).
+
+- **onnxruntime-web** 1.22.0 - MIT - https://www.npmjs.com/package/onnxruntime-web
+  carried by no release artifact; loaded at run time (not carried) by the npm package @3sln/emon (WASM and JS SDK). Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
+  Licence text: [4](#licence-text-4).
+
+- **platform** 1.3.6 - MIT - https://www.npmjs.com/package/platform
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **protobufjs** 7.6.6 - BSD-3-Clause - https://www.npmjs.com/package/protobufjs
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **undici-types** 8.9.0 - MIT - https://www.npmjs.com/package/undici-types
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
+- **wabt** 1.0.39 - Apache-2.0 - https://www.npmjs.com/package/wabt
+  carried by no release artifact. JS development/qualification dependency only; not carried by the SDK or the browser demo.
+  Licence text: not carried by any artifact; the upstream package holds it.
+
 - **@3sln/bab** 0.2.0 - MIT - https://www.npmjs.com/package/@3sln/bab
   carried by the browser demo page (P11.4c).
   Licence text: [17](#licence-text-17).
@@ -1042,7 +1118,7 @@ Used by: PP-OCRv5 mobile detector and English recognizer; v2 orientation classif
 
 ### Licence text 4
 
-Used by: ONNX Runtime CPU 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07.
+Used by: ONNX Runtime CPU 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07, onnxruntime-common 1.22.0, onnxruntime-web 1.22.0.
 
 ````text
 MIT License

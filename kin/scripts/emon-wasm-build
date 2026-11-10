@@ -47,6 +47,7 @@ if [ ! -d "$sysroot/lib/rustlib/src/rust/library" ]; then
 fi
 
 crate=.cache/emon-wasm
+[ "${EMON_WASM_PPOCR:-}" != 1 ] || crate=.cache/emon-wasm-ppocr
 mkdir -p "$crate/src/emon"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -69,6 +70,9 @@ rm -f "$crate/src/emon.rs.new"
 
 for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par ppocr_native; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put host/wasm/src/wasm.rs "$crate/src/wasm.rs"
+if [ "${EMON_WASM_PPOCR:-}" = 1 ]; then
+  bb tools/ppocr/wasm_assemble.clj "$crate"
+fi
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
@@ -105,6 +109,7 @@ rm -f "$crate/Cargo.toml.new"
 # unwinding (exception handling), a 16 MiB stack (kin recurses; the native hosts' main thread has 8 MiB, this one is not
 # bounded by a guard page, so the build gives it room), and no wasm-opt (none is required)
 flags="-Ctarget-feature=+exception-handling -Cpanic=unwind -Clink-arg=-zstack-size=16777216"
+[ "${EMON_WASM_PPOCR:-}" != 1 ] || flags="$flags --cfg ppocr_web"
 [ "${EMON_WASM_WARN:-}" = 1 ] || flags="$flags -A warnings"
 put host/rust/Cargo.lock "$crate/Cargo.lock"
 # rust-lld of the nightly links libLLVM through an rpath that is wrong on macOS; the toolchain's own lib/ is where it is

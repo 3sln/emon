@@ -87,7 +87,7 @@ export interface Renderer {
 export interface ConvertOptions {
   locale?: string;
   ocr?: 'always' | 'auto' | 'never' | string;
-  /** PP-OCR is unsupported in the browser; Tesseract remains the default. */
+  /** Experimental PP-OCR needs the optional wasm build and @3sln/emon/ppocr port. Tesseract is the default. */
   ocrEngine?: 'tesseract' | 'ppocr' | string;
   furniture?: 'policy' | 'keep' | 'drop' | string;
   assets?: 'none' | 'images' | 'figures' | string;

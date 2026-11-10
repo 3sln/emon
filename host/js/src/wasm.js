@@ -1,5 +1,7 @@
-// The WASM binding's wrapper (DEVLOG P9.3): the module's C ABI (`host/wasm/src/wasm.rs`) as methods. The module has no imports,
-// so instantiating it needs nothing of the page: no filesystem, no network, no glue. Everything here is integers and byte ranges
+// The WASM binding's wrapper (DEVLOG P9.3): the module's C ABI (`host/wasm/src/wasm.rs`) as methods. The default module has no imports.
+// The optional PP build imports one direct wasm dictionary function; its Engine instance never calls it, while the PP port binds
+// it to Tesseract wasm. The default throwing stub prevents accidental inference on an unlinked instance. No filesystem or network
+// is provided here. Everything here is integers and byte ranges
 // of the module's memory; `memory.buffer` is re-read after every call because a call may grow it.
 
 export class Wasm {
@@ -22,23 +24,29 @@ export class Wasm {
    * Instantiate the module from bytes, a compiled module, a `Response` (streamed), a promise of one, or a URL.
    * @param {ArrayBuffer|Uint8Array|WebAssembly.Module|Response|Promise<Response>|string|URL} src
    */
-  static async instantiate(src) {
+  static async instantiate(src, imports = { ppocr: { valid_word() { throw new Error('ppocr-lexicon-not-linked'); } } }) {
     if (typeof src === 'string' || src instanceof URL) src = fetch(src);
     src = await src;
-    if (src instanceof WebAssembly.Module) return new Wasm(await WebAssembly.instantiate(src, {}));
+    if (src instanceof WebAssembly.Module) return new Wasm(await WebAssembly.instantiate(src, imports));
     if (typeof Response !== 'undefined' && src instanceof Response) {
       if (WebAssembly.instantiateStreaming && (src.headers.get('content-type') || '').startsWith('application/wasm')) {
-        return new Wasm((await WebAssembly.instantiateStreaming(src, {})).instance);
+        return new Wasm((await WebAssembly.instantiateStreaming(src, imports)).instance);
       }
       src = await src.arrayBuffer();
     }
-    return new Wasm((await WebAssembly.instantiate(src, {})).instance);
+    return new Wasm((await WebAssembly.instantiate(src, imports)).instance);
   }
 
   // THE OCR POLICY IS KIN'S (`emon.ocrport`, P10.7, D396): these ask the module what an `ocr` request means.
   /** The argument index of the request record's first language. */
   ocrLangFirst(rec) {
     return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p) => this.x.emon_ocr_lang_first(p, rec.length));
+  }
+
+  /** Canonical optional-engine trailer, through kin; absent in ordinary builds. */
+  ocrIdentityAt(rec) {
+    if (!this.x.emon_pp_identity_at) return -1;
+    return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p, n) => this.x.emon_pp_identity_at(p, n));
   }
 
   /** Which of the `installed` model names read the request record: indices into `installed` (all of them when it names none). */

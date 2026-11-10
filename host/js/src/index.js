@@ -25,7 +25,7 @@
 
 import { Wasm } from './wasm.js';
 import { toSource, bytesSource, blobSource, urlSource, streamSource, SourceChangedError, EmonError } from './sources.js';
-import { ocrRequest, encodeOcr } from './ocr.js';
+import { ocrRequest, encodeOcr, canonicalOcr } from './ocr.js';
 
 export { bytesSource, blobSource, urlSource, streamSource, toSource, SourceChangedError, EmonError };
 
@@ -314,6 +314,15 @@ export class Emon {
           }
           if (result === null || result === undefined) {
             failed(w.status.unsupported);
+            return;
+          }
+          if (result[canonicalOcr]) {
+            const answer = result[canonicalOcr];
+            if (!(answer instanceof Int32Array) || answer.length < 4 || answer[0] !== answer.length || answer[1] !== kind || answer[2] !== rec[2]) {
+              throw new EmonError('internal', 'invalid canonical OCR answer');
+            }
+            const rc = w.withBytes(new Uint8Array(answer.buffer, answer.byteOffset, answer.byteLength), p => w.x.emon_answer(h, p, answer.length));
+            if (rc < 0) throw this._error(rc);
             return;
           }
           const cells = encodeOcr(result, w.ocrWord);
