@@ -1,8 +1,14 @@
-# Optional PP-OCRv5 Rust reference
+# Experimental optional PP-OCRv5
 
-Tesseract fast remains the default (D843). This reference is optional and is
-not accepted until the coordinator's complete OP1 table passes. The OE Python
-measurements are not acceptance results for this adapter.
+Tesseract fast remains the default. The maintainer approved experimental opt-in
+shipping on 2026-11-09 (D865), with OP1c fusion frozen at policy
+`ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f`.
+OP1c's fixed receipt precision floors and raster CPU limit failed: SROIE P/R
+.701436/.756857 and CORD .469098/.696764; five single-page raster controls
+exceeded 3× CPU, with F16 at 13.42×. Peak process RSS was 2.17 GiB.
+All eight required born-digital bundles were identical and the sampled
+69 changed readable lines had no new incumbent losses. These measurements
+do not establish default-use acceptance or comprehensive source correctness.
 
 `EMON_CS_SHARED_COMPILATION=false bb ppocr-fetch` downloads only the assets in
 `assets.edn`, verifies SHA-256 and size, and caches them in `.cache/ppocr`.
@@ -18,8 +24,31 @@ The optional build includes the incumbent Tesseract adapter automatically;
 `EMON_RS_PDFIUM=.cache/pdfium/current/lib` adds the PDF renderer. Build caches
 stay in the worktree. Run it from the worktree root with
 `--ocr-engine=ppocr`. `--ocr-engine=tesseract` is the default and retains the
-existing `--tesseract` port configuration. Go, Java, C#, and Rust builds without
-the optional adapter reject `ppocr` by name. Later bindings are not implemented.
+existing `--tesseract` port configuration.
+
+Native host bindings share the exact Rust preprocessing and complete answer
+construction through `host/native/include/emon_ppocr.h` (ABI v1). Run
+`bb tools/ppocr/build_shared.clj` after fetching the pinned optional assets;
+this builds `.cache/ppocr/libemon_ppocr_adapter.dylib`. It never downloads.
+Go uses cgo (`NewPpOcr`, build tag `ppocr`; the native driver build
+`EMON_GO_LIVE=1 kin/scripts/emon-go-build` enables it together with Tesseract), Java FFM (`emon.ffi.PpOcr.open`), C# P/Invoke
+(`emon.Ffi.PpOcr.Open`), and C/pod the direct native binding. Embedders pass
+the incumbent Tesseract OCR port to the wrapper; close/dispose it after all
+conversions finish. Drivers select it with `--ocr-engine=ppocr`. C/pod use
+their existing native-port builds and native conversion option.
+`EMON_PPOCR_LIB` overrides the adapter library and `EMON_PPOCR_MODELS` the
+model directory (development defaults under `.cache/ppocr`). The adapter
+loads ORT at run time. Default builds and replays need neither the adapter
+nor ORT. Missing assets report `ppocr-models-missing`; missing native
+libraries report `ppocr-runtime-missing`.
+
+`bb ppocr-hosts` is a non-gate requiring the models and OP1c qualification
+bitmaps. It compares all complete integer answers on exactly 225 bitmaps
+through Rust, Go, Java, C# and both C/native transports; missing inputs fail
+explicitly. `--qualification DIR` selects the OP1c evidence directory,
+`--out DIR` the scratch output. `--limit N` is only a development smoke test
+and marks the report unqualified. Browser/JS and release bundle packaging
+remain separate tasks. The only qualified runtime archive remains macOS arm64.
 
 The port verifies all graph bytes before session construction. ORT 1.22.0 CPU
 uses sequential execution, one intra-op and one inter-op thread, and fixed graph
@@ -109,3 +138,24 @@ that as absence and uses the measured line-box bottom for layout only; it is
 not a measured engine baseline. Acceptance scoring checks represented Model
 text as well as selected evidence, with separate occurrence budgets for repeated
 numeric slots, so evidence-only repairs cannot be counted as output gains.
+
+`bb tools/ppocr/models.clj` checks integrated live Models on the six native
+hosts and complete inference-free replay bundles on every host with a replay
+API. The pod's existing one-shot API has no replay method. The check uses the
+committed receipt, empty-page and rotated scan fixtures, and supplies missing
+model/runtime paths during replay. Run it serially after `ppocr-hosts`.
+
+`EMON_RS_LIVE=1 kin/scripts/emon-rs-build` also enables the native Rust
+run-time binding to the shared adapter, with the same named model/runtime
+errors as Go, Java, C#, C and pod. The `EMON_RS_PPOCR=1` reference build stays
+available as the independent direct-call qualification oracle. The CLI and
+browser keep their named refusal until their own activation work.
+
+The integrated check then replays all 198 retained OP1c candidate recordings
+(174 fixed plus 24 fresh) through the six available replay drivers, including
+both direct-reference and runtime-bound Rust. Complete bundles must match
+the qualified bytes. It compares stdout directly through a pipe, keeping only small result summaries. No model or runtime
+path is available to those replay invocations.
+
+The retained replay sweep includes a 74-page booklet and can take hours
+serially. It is an optional qualification run, not a normal CI gate.

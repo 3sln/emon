@@ -130,7 +130,7 @@ ships to fill it.
   it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the csharp host: 364 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the csharp host: 365 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -392,6 +392,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Options.Parsed.Options` | `Options` |
 | `emon.Api.Options.Parsed.Producer` | `readonly List<string[]>` |
 | `emon.Api.Options.Parsed.Record` | `bool` |
+| `emon.Api.Options.PpOcr` | `bool` |
 | `emon.Api.RunStats` | `sealed class` |
 | `emon.Api.RunStats.Attempts` | `int` |
 | `emon.Api.RunStats.BytesFetched` | `long` |
@@ -510,6 +511,11 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Ffi.Pdfium#Layers()` | `int` |
 | `emon.Ffi.Pdfium#Open(string)` | `static Pdfium` |
 | `emon.Ffi.Pdfium#Render(RenderPort.ISource,byte[],RenderPort.Request)` | `Port.Bitmap` |
+| `emon.Ffi.PpOcr` | `sealed unsafe class : emon.Api.IOcr,IDisposable` |
+| `emon.Ffi.PpOcr#Dispose()` | `void` |
+| `emon.Ffi.PpOcr#Fulfil(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `emon.Planrun.Answer` |
+| `emon.Ffi.PpOcr#Open(string?,emon.Api.IOcr)` | `static PpOcr` |
+| `emon.Ffi.PpOcr#Producer()` | `List<string[]>` |
 | `emon.Ffi.Tess` | `sealed unsafe class : emon.Api.IOcr` |
 | `emon.Ffi.Tess#Fulfil(Planrun.Request,Dictionary<int,Port.Bitmap>,bool)` | `Planrun.Answer` |
 | `emon.Ffi.Tess#Open(string)` | `static Tess` |

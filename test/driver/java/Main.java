@@ -230,6 +230,7 @@ public class Main {
         return a.text.equals(b.text) && (a.err == null) == (b.err == null) && (a.err == null || a.err.getMessage().equals(b.err.getMessage()));
     }
 
+    @SuppressWarnings("try") // The resource is used through Config.ocr and closed on every exit.
     static void run(String[] args, OutputStream stdout) throws Exception {
         String out = "json";
         boolean pretty = false;
@@ -377,13 +378,15 @@ public class Main {
             input = input.withPassword(password.getBytes(StandardCharsets.UTF_8));
         }
         final List<Input> inputs = List.of(input);
-        if (tess) {
+        if ((tess || opts.ppOcr) && replay.isEmpty()) {
             try {
                 cfg.ocr = emon.ffi.Tess.open(tessdata.isEmpty() ? null : tessdata);
+                if (opts.ppOcr) cfg.ocr = emon.ffi.PpOcr.open(null, cfg.ocr);
             } catch (emon.ffi.Unavailable e) {
                 usage(e.getMessage());
             }
         }
+        try (emon.ffi.PpOcr ownedPp = cfg.ocr instanceof emon.ffi.PpOcr p ? p : null) {
         if (pdfium) {
             try {
                 cfg.renderer = emon.ffi.Pdfium.open(pdfiumLib.isEmpty() ? null : pdfiumLib);
@@ -521,6 +524,7 @@ public class Main {
             err.flush();
         }
         stdout.write(r.text.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     /** The `--out=pixels` text of a recording: its decode entries, in order. */

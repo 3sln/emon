@@ -26,7 +26,7 @@ mod=.cache/emon-go
 tags=""
 # `emontest` (P11.4, D542): the driver's test hooks (host/go/testhooks.go: SetNoRetarget); never a consumer's, and not in the published module
 build_tags="-tags emontest"
-if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium"; build_tags="-tags tesseract,pdfium,emontest"; fi
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium,ppocr"; build_tags="-tags tesseract,pdfium,ppocr,emontest"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }

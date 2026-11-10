@@ -349,8 +349,15 @@ fn main() {
                 let port = emon::ppocr::PpOcr::new(std::path::Path::new(".cache/ppocr")).unwrap_or_else(|e| usage(&e));
                 cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
             }
-            #[cfg(not(ppocr))]
-            usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_PPOCR=1)");
+            #[cfg(all(not(ppocr), feature = "tesseract"))]
+            {
+                let incumbent = emon::tess::TessOcr::new(None).unwrap_or_else(|e| usage(&e));
+                let incumbent = emon::OcrPort(std::sync::Arc::new(incumbent));
+                let port = emon::ppocr_native::PpOcr::open(None, Some(incumbent)).unwrap_or_else(|e| usage(&e));
+                cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
+            }
+            #[cfg(all(not(ppocr), not(feature = "tesseract")))]
+            usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_LIVE=1)");
         }
     }
     if let Some(dir) = &tess {

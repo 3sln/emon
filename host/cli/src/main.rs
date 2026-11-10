@@ -210,6 +210,8 @@ fn convert(args: Vec<String>) {
     text.push('\n');
     let parsed = emon::parse_options(&text).unwrap_or_else(|m| usage(&m));
     let opts = parsed.options;
+    // OP2c owns CLI activation; the native library's optional binding is separate.
+    if opts.ocr_engine == emon::OcrEngine::PpOcr { usage("ocr-engine=ppocr is unsupported in this Rust build"); }
     let mut cfg = parsed.config;
     let never = matches!(opts.ocr, OcrPolicy::Never);
 

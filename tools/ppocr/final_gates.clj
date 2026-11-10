@@ -60,7 +60,8 @@
 (def rows (atom []))
 (try
   (doseq [command commands]
-    (assert (> (.getUsableSpace (java.io.File. "/System/Volumes/Data")) (* 5 1024 1024 1024)) "internal disk below 5 GiB")
+    (doseq [disk ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+      (assert (> (.getUsableSpace (java.io.File. disk)) (* 10 1024 1024 1024)) (str "disk below 10 GiB: " disk)))
     (let [label (str/join "-" command) start (System/nanoTime) log (str out "/" label ".log")
           unit-source (when (= command ["unit"]) (System/getenv "EMON_UNIT_RESTORE_SOURCES"))
           run-env (if unit-source (assoc env "RestoreSources" unit-source) env)

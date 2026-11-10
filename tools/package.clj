@@ -119,7 +119,7 @@
 
 ;; ------------------------------------------------------------------------------------------------------ the Rust crate
 
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par"]) ; not pdfcodecs: it links jbig2dec (D526)
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "ppocr_native"]) ; not pdfcodecs: it links jbig2dec (D526)
 
 (defn- rust-src-files
   "The source of the crate: the generated modules (not laws or probes), the module list, and the host files."
@@ -494,7 +494,7 @@
                                  (str lib "crate-type = [\"cdylib\", \"staticlib\", \"rlib\"]\n\n[[bin]]\nname = \"emon-pod\"\npath = \"src/pod.rs\"\n"))
               files (-> (rust-src-files)
                         (dissoc "src/lib.rs")
-                        (assoc "src/lib.rs" {:text (str (slurp (str root "/host/rust/src/lib.rs"))
+                        (assoc "src/lib.rs" {:text (str (str/replace (slurp (str root "/host/rust/src/lib.rs")) "PPOCR_NATIVE_HOST: bool = false" "PPOCR_NATIVE_HOST: bool = true")
                                                         "\n// the C binding (P9.4), assembled in by tools/package.clj from host/c/src/capi.rs\npub mod capi;\n")}
                                "src/capi.rs" "host/c/src/capi.rs"
                                "src/native.rs" "host/c/src/native.rs"

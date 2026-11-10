@@ -14000,3 +14000,47 @@ All 54 controls complete. The eight required born-digital bundles, including evi
 All 225 bitmaps pass three fresh processes times three readings: 2,025 byte-identical answers. All 342 recorded candidate/default/fresh conversions replay byte-identically with the detector unavailable and then restored. All 24 option-off commands pass, rederivation has no diff, four hosts pass 1,376 laws each, and seven clean package consumers produce identical 3,653-byte HTML. Browser identity, Maven resolution and optional native package snippets retain their documented environment bounds. Production sources and thresholds remain frozen under policy 0420cd75. PP remains optional and off by default and is not accepted on Rust under the unchanged criteria. No second tuning round or commit is made; source-bearing evidence and detailed timing rows remain in external op1c scratch.
 
 - [ ] **Signed off** (maintainer)
+
+### D865 — Ship PP-OCR as an experimental opt-in on native hosts
+
+Maintainer decision of 2026-11-09: ship `ocr-engine=ppocr` as an experimental opt-in, off by default, on every host. Tesseract fast remains the default. OP1c's measured receipt precision failures and raster CPU overruns remain documented tradeoffs; this decision does not claim those acceptance criteria passed. The accepted fusion policy is frozen at `ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f`. OP2a ports the native hosts; browser/JS and release bundles remain OP2b/OP2c.
+
+- [ ] **Signed off** (maintainer)
+
+### D866 — Share the qualified Rust port through a versioned C ABI
+
+OP2a chooses an `extern "C"` surface over the existing Rust `PpOcr`, rather than translating preprocessing or postprocessing. `host/native/include/emon_ppocr.h` defines ABI v1: opaque owned port, canonical request cells and tightly packed grayscale/RGB input, complete owned integer answer cells and explicit release. The ABI catches Rust panics; ownership stays with the allocating library. Its Rust pipeline, integer geometry, CTC, calibration, pinned lexicon and answer construction are the qualified implementation without source changes, retaining 0420cd75. `tools/ppocr/build_shared.clj` assembles the existing native reference into a shared adapter without downloading assets. Native callers discover it through `EMON_PPOCR_LIB`, with the worktree cache as the development default; `EMON_PPOCR_MODELS` selects the pinned asset directory. The shared adapter and ORT load at run time; ordinary host builds do not link ORT.
+
+Go uses cgo/dlopen under its explicit `ppocr` native build tag (enabled by `EMON_GO_LIVE=1`, preserving the pure-Go default build), Java JDK 22+ uses FFM, C# uses P/Invoke and the existing native resolver, and C/pod use the Rust run-time binding directly. Untagged requests retain each host's incumbent port and recording behavior. Bindings may name the OCR model directory and load the adapter library, so they receive the same narrow no-filesystem exemption as the Tesseract bindings; no Engine or pure policy module receives an exemption. Their host-stage grants cover only shared OCR framing, identity and plan fields. Go, Java and C# propagate the optional selector through copy/parse/config conversion and apply Rust's additive-recording replay mismatch check. Model absence is `ppocr-models-missing`; an unavailable adapter/runtime is `ppocr-runtime-missing`. No inference runs during replay. Only the existing macOS arm64 ORT archive is qualified; additional platform runtime qualification remains required.
+
+- [ ] **Signed off** (maintainer)
+
+### D867 — Preserve unported frontends and classify replay engine mismatches
+
+C/pod assembly and live native Rust builds enable dynamic-adapter option parsing without an ORT link dependency. A live Rust driver can therefore return the same named missing-model/runtime errors as the other native bindings; its shared binding is also the C/pod one. Pure Rust builds, CLI and WebAssembly retain named refusal; release/browser activation remains outside OP2a. The separately built Rust reference keeps its existing adapter and supplies the immutable qualification oracle. Go, Java, C# and the C step session now match Rust's early `transcript-miss` for an additive PP recording replayed with the default selector, using the canonical OCR framing helper. Replays with PP selected need no models or runtime. Optional wrappers are explicitly closed/disposed by live drivers, including exception paths supported by their runtimes; Go also offers `Close` for embedders. This is native handle lifetime and request transport work, with no fusion or image policy change.
+
+- [ ] **Signed off** (maintainer)
+
+### D868 — Release shared-library lexicon handles without changing reading policy
+
+The qualified short-lived Rust reference leaves Tesseract handles in `Tess.apis` to process teardown. Shared-adapter close must release those handles: repeated C/pod engine construction otherwise leaks a model-backed lexicon per conversion, and process-exit ordering with live ORT sessions can abort a Go consumer. `build_shared.clj` includes `ppocr_tess_drop.rs` in the assembled adapter's Tesseract module, where it can drain the private handle map and call the existing C destructor. This addition changes ownership at port destruction only. The original reference sources, default host builds, image/CTC/calibration, answer cells and fusion identity remain unchanged. All bindings close the opaque port after outstanding reads finish; Go serializes close/read, and Java/C# expose the conventional close/dispose lifetime.
+
+- [ ] **Signed off** (maintainer)
+
+### D869 — Qualify canonical answers and preserve host provenance and recording mode
+
+The 225 OP1c bitmaps each run live through six native transports: direct Rust reference, Go/cgo, Java/FFM, C#/PInvoke, direct C ABI and the Rust native binding used by C/pod. All 1,350 complete integer answers agree; the Rust answer hashes also reproduce the stored OP1c qualification. Packed transport fixtures are deleted after comparison. `bb ppocr-hosts` is a model-dependent non-gate and additionally exercises integrated native Models, named missing-asset/runtime errors, actual ORT-file absence/restoration and the retained candidate replay set.
+
+Recording comparisons preserve each binding's truthful `producer.host`; only that source-file value is normalized, while every remaining transcript byte and canonical PNG byte must agree. macOS filesystem sidecars are outside the recording payload. C/pod's one-shot API does not retain the recording-only Tesseract binary bitmaps: compare its complete live bundle with an unrecorded Rust conversion, and require the Model itself to agree across recording modes. Complete replay bundles compare against the recorded reference, including engine-ink evidence. The pod has no replay API; its native OCR port is the same tested Rust binding and its live Models are checked through the actual pod API. The broad check enumerates exactly 198 retained candidate recordings (120 fixed receipts, 54 controls and 24 fresh receipts), compares bundle stdout directly through pipes. All 1,188 replay comparisons pass with missing model/runtime paths. A saved external-drive capture contained an aligned 1 MiB NUL hole inside asset hex; the same Go replay matched byte-for-byte through a pipe, so the harness now avoids intermediate bundle files. These are interoperability checks, not a new OCR quality or cost acceptance claim.
+
+- [ ] **Signed off** (maintainer)
+
+### D870 — Finalize ABI output errors and option-off verification
+
+The shared ABI now initializes every available output and the bounded named error even when the caller omits one output pointer. The C contracts exercise both null-output cases. A rebuilt adapter passes those contracts and a fresh six-transport smoke; successful answer construction and the frozen policy sources remain unchanged.
+
+All 24 option-off commands pass, including full rederivation with no diff, accuracy's 3,449 metrics with zero improvements, samples and every replay gate. Go, Rust, Java and C# pass 1,376 laws each. Seven clean package consumers reproduce the same 3,653-byte HTML. The real Git index is unchanged. The 225-by-six live qualification, 35 integrated Model checks and all 1,188 retained candidate replay comparisons pass. Actual ORT absence reports the uniform runtime error on all runtime-bound native hosts; restoration preserves its SHA.
+
+Qualification remains macOS arm64. Browser identity explicitly skips missing JS development dependencies; Maven resolution and optional JS/C/pod native package snippets are not exercised. C/pod package checks use their capability-free builds; release activation remains OP2c. Nested Babashka shutdown hooks log sandbox process-enumeration errors after completed commands; the structured exit statuses and gate scores pass. Owned builds are removed, with pinned optional assets, generator inputs, the existing PDFium symlink and external evidence retained. No commit is made.
+
+- [ ] **Signed off** (maintainer)

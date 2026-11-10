@@ -377,13 +377,15 @@ public static class Program {
             input = input.WithPassword(Utf8.GetBytes(password));
         }
         var inputs = new List<Input> { input };
-        if (tess) {
+        if ((tess || opts.PpOcr) && replay.Length == 0) {
             try {
                 cfg.Ocr = emon.Ffi.Tess.Open(tessdata.Length == 0 ? null : tessdata);
+                if (opts.PpOcr) cfg.Ocr = emon.Ffi.PpOcr.Open(null, cfg.Ocr);
             } catch (emon.Ffi.Unavailable e) {
                 Usage(e.Message);
             }
         }
+        using var ownedPp = cfg.Ocr as emon.Ffi.PpOcr;
         if (pdfium) {
             try {
                 cfg.Renderer = emon.Ffi.Pdfium.Open(pdfiumLib.Length == 0 ? null : pdfiumLib);

@@ -72,6 +72,8 @@
              :depends [corpus-guard]
              :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "png-check" *command-line-args*)
                    (apply shell "kin/scripts/png-check" *command-line-args*))}
+  ppocr-hosts {:doc "Non-gate live cross-host PP-OCR equality check; needs pinned models and OP1c qualification bitmaps"
+               :task (apply shell "bb" "tools/ppocr/hosts.clj" *command-line-args*)}
   ppocr-check {:doc "Offline optional PP-OCR native prototype checks (not an acceptance gate)"
                :task (shell "bb" "tools/ppocr/check.clj")}
   ppocr-fetch {:doc "Fetch pinned, SHA-256 checked optional PP-OCRv5 assets into .cache/ppocr (not a gate)"

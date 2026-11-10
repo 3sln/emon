@@ -39,6 +39,7 @@ import (
 	"emon/engine"
 	"emon/html"
 	"emon/model"
+	"emon/ocrport"
 	"emon/plan"
 	"emon/planloop"
 	"emon/planrun"
@@ -241,6 +242,8 @@ func (f Furniture) mode() int32 { return int32(f) }
 
 // Options is what a conversion is asked to do. DefaultOptions is SPEC 13's defaults.
 type Options struct {
+	// PpOcr selects the experimental additive PP reading when true.
+	PpOcr bool
 	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial
 	// (a drop cap) joins its first word when the letter could be a word of its own (SPEC 10.9).
 	Locale string
@@ -374,6 +377,7 @@ func ocrPolicyOf(code int32) OcrPolicy {
 func optionsOf(c *enctx.Cfg) Options {
 	o := Options{
 		Ocr:             ocrPolicyOf(c.Ocr),
+		PpOcr:           c.Oengine != 0,
 		Assets:          Assets(c.Level),
 		AssetDPI:        c.Dpi,
 		AssetPixels:     c.Pixels,
@@ -406,7 +410,6 @@ func ParseOptions(text string) (*Parsed, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.Oengine != 0 { return nil, errors.New("ocr-engine=ppocr is unsupported on Go") }
 	p := &Parsed{Options: optionsOf(c), Config: configOf(c), Record: c.Rec != 0, JsOcr: c.Jsocr != 0, JsRender: c.Jsrender != 0}
 	for at := int32(0); at < port.CellsLen(c.Prod); {
 		kl, vl := port.CellsAt(c.Prod, at), port.CellsAt(c.Prod, at+1)
@@ -1047,6 +1050,7 @@ func finished(r int32, doc *enctx.Doc, m *arenas, info Intake, opts Options) out
 func cfgOf(opts Options) *enctx.Cfg {
 	c := enctx.NewCfg()
 	c.Ocr = opts.Ocr.code()
+	c.Oengine = boolInt(opts.PpOcr)
 	c.Scope = opts.OcrScope.code()
 	c.Furn = opts.Furniture.mode()
 	c.Level = opts.Assets.level()
@@ -1352,6 +1356,19 @@ func (e *Engine) Record(inputs []Input, opts Options) (*Model, *Transcript, erro
 
 // Replay converts from a transcript: no Renderer or Ocr is called; a request it has no answer for is an error.
 func (e *Engine) Replay(inputs []Input, opts Options, t *Transcript) (*Model, error) {
+	if !opts.PpOcr {
+		for _, entry := range t.Entries {
+			if len(entry.Req) > 1 && entry.Req[1] == plan.PkOcr() {
+				r := port.NewCells()
+				for _, v := range entry.Req {
+					port.CellsPush(r, v)
+				}
+				if ocrport.OpIdentityAt(r) >= 0 {
+					return nil, planError(&port.PlanError{Name: "transcript-miss", Msg: "OCR engine mismatch"})
+				}
+			}
+		}
+	}
 	m, _, err := e.convertWith(inputs, opts, nil, t)
 	return m, err
 }

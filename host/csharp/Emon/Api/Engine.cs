@@ -111,6 +111,12 @@ public sealed class Engine {
 
     /// <summary>Converts from a transcript: no Renderer or Ocr is called; a request it has no answer for is an error.</summary>
     public Model Replay(List<Input> inputs, Options opts, emon.Planrun.Transcript t) {
+        if (!opts.PpOcr) foreach (var entry in t.Entries) {
+            if (entry.Req.Length>1 && entry.Req[1]==emon.Plan.PkOcr()) {
+                var r=emon.Port.NewCells(); foreach(int v in entry.Req) emon.Port.CellsPush(r,v);
+                if(emon.Ocrport.OpIdentityAt(r)>=0) throw EmonError.FromPlan(new emon.Planrun.PlanError("transcript-miss","OCR engine mismatch"));
+            }
+        }
         return ConvertWith(inputs, opts, null, t).Model;
     }
 

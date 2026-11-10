@@ -56,6 +56,7 @@ pub struct Session {
     run: Option<Run>,
     idx: usize,
     js_ocr: bool,
+    ocr_engine: crate::engine::OcrEngine,
     // `js-render=1` (P11.4c): the `render` and `crop` requests are the caller's too
     js_render: bool,
     // the conversion's `limit.NAME=N` overrides: the caller asks a bound it must keep (`limit`, the pixels of a bitmap it answers with)
@@ -104,7 +105,7 @@ impl Session {
             t.producer = p.producer.clone();
             recording = Some(t);
         }
-        Ok(Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, js_render: p.js_render, limits: p.config.limits.clone(), files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false })
+        Ok(Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, ocr_engine: p.options.ocr_engine, js_render: p.js_render, limits: p.config.limits.clone(), files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false })
     }
 
     // SPEC 13.1: intake round 0 reads the first and the last chunk. The ranges to read and `provide` first.
@@ -135,6 +136,17 @@ impl Session {
 
     pub fn replay_end(&mut self) -> Result<(), Error> {
         let t = Transcript::from_files(&self.files).map_err(Error::Plan)?;
+        if self.ocr_engine == crate::engine::OcrEngine::Tesseract {
+            for entry in &t.entries {
+                if entry.req.get(1) == Some(&plan::KIND_OCR) && entry.req.contains(&-3100) {
+                    let mut request = Cells::new();
+                    for &v in &entry.req { crate::port::cells_push(&mut request, v); }
+                    if emon::ocrport::op_identity_at(&mut request) >= 0 {
+                        return Err(PlanError::TranscriptMiss(entry.req.clone()).into());
+                    }
+                }
+            }
+        }
         t.check_inputs(&[(self.idx as i32, self.cache.length() as i32)]).map_err(Error::Plan)?;
         self.replayer = Some(Replayer::new(&t));
         self.replay = true;

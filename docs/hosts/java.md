@@ -149,7 +149,7 @@ ships to fill it.
   cannot hide a package; `api/surface.edn` lists it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the java host: 385 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the java host: 386 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -526,6 +526,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Options.locale` | `String` |
 | `emon.api.Options.ocr` | `OcrPolicy` |
 | `emon.api.Options.ocrScope` | `OcrScope` |
+| `emon.api.Options.ppOcr` | `boolean` |
 | `emon.api.RunStats` | `final class` |
 | `emon.api.RunStats.attempts` | `int` |
 | `emon.api.RunStats.bytesFetched` | `long` |
@@ -550,6 +551,11 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.ffi.Pdfium#layers()` | `int` |
 | `emon.ffi.Pdfium#open(String)` | `static Pdfium` |
 | `emon.ffi.Pdfium#render(RenderPort.Source,byte[],RenderPort.Request)` | `Port.Bitmap throws RenderPort.RenderError` |
+| `emon.ffi.PpOcr` | `final class implements Ocr,AutoCloseable` |
+| `emon.ffi.PpOcr#close()` | `synchronized void` |
+| `emon.ffi.PpOcr#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `synchronized Planrun.Answer` |
+| `emon.ffi.PpOcr#open(String,Ocr)` | `static PpOcr` |
+| `emon.ffi.PpOcr#producer()` | `List<String[]>` |
 | `emon.ffi.Tess` | `final class implements Ocr` |
 | `emon.ffi.Tess#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Planrun.Answer` |
 | `emon.ffi.Tess#open(String)` | `static Tess` |

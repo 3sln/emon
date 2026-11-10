@@ -145,6 +145,7 @@ internal static class Units {
     internal static emon.Enctx.Cfg CfgOf(Options opts) {
         var c = new emon.Enctx.Cfg();
         c.Ocr = opts.Ocr.Code();
+        c.Oengine = opts.PpOcr ? 1 : 0;
         c.Scope = opts.OcrScope.Code();
         c.Furn = opts.Furniture.Mode();
         c.Level = opts.Assets.Level();

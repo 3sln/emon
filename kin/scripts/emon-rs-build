@@ -69,7 +69,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par ppocr_native; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 if [ -n "$cli_mode" ]; then
   put host/cli/src/main.rs "$crate/src/main.rs"
   put THIRD_PARTY_NOTICES.md "$crate/src/THIRD_PARTY_NOTICES.md"

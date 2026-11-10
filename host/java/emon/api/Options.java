@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class Options {
+    public boolean ppOcr;
     /** SPEC 13's OCR setting (D038): `never` asks for no OCR; `auto` and `always` OCR an image and a scanned PDF page, `always` also fuses a born-digital one. */
     public enum OcrPolicy {
         ALWAYS, AUTO, NEVER;
@@ -97,6 +98,7 @@ public final class Options {
         o.furniture = furniture;
         o.keepEvidence = keepEvidence;
         o.ocrScope = ocrScope;
+        o.ppOcr = ppOcr;
         o.noRetarget = noRetarget;
         o.tablesScored = tablesScored;
         return o;
@@ -259,9 +261,9 @@ public final class Options {
         if (emon.Config.cfParse(cellsOf(text), c) != 0) {
             throw new IllegalArgumentException(c.msg.toString());
         }
-        if (c.oengine != 0) throw new IllegalArgumentException("ocr-engine=ppocr is unsupported on Java");
         Options o = new Options();
         o.ocr = OcrPolicy.of(c.ocr);
+        o.ppOcr = c.oengine != 0;
         o.assets = Assets.values()[c.level];
         o.assetDpi = c.dpi;
         o.assetPixels = c.pixels;

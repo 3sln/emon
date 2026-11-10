@@ -84,6 +84,12 @@ public final class Engine {
 
     /** Converts from a transcript: no Renderer or Ocr is called; a request it has no answer for is an error. */
     public Model replay(List<Input> inputs, Options opts, Planrun.Transcript t) throws EmonError {
+        if (!opts.ppOcr) for (var entry : t.entries) {
+            if (entry.req.length > 1 && entry.req[1] == emon.Plan.pkOcr()) {
+                var r=Port.newCells(); for(int v:entry.req) Port.cellsPush(r,v);
+                if (emon.Ocrport.opIdentityAt(r)>=0) throw EmonError.plan(new Planrun.PlanError("transcript-miss","OCR engine mismatch"));
+            }
+        }
         return convertWith(inputs, opts, null, t).model;
     }
 

@@ -479,6 +479,11 @@ pub fn html_options(list: &str) -> Result<HtmlOptions, String> {
     shared::parse_html(list)
 }
 
+pub fn ppocr_config(cfg: &mut Config) -> Result<(), String> {
+    cfg.ocr = Some(crate::OcrPort(std::sync::Arc::new(crate::ppocr_native::PpOcr::open(None, cfg.ocr.clone())?)));
+    Ok(())
+}
+
 pub fn native_config(cfg: &mut Config) -> Result<(), String> {
     native_config_at(cfg, None, None)
 }
@@ -568,8 +573,11 @@ fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
         return Err(Fail::Usage("record=1, js-ocr=1 and js-render=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
     }
     let mut cfg = p.config.clone();
-    if flags & EMON_NATIVE != 0 {
+    if flags & EMON_NATIVE != 0 || p.options.ocr_engine == crate::OcrEngine::PpOcr {
         native_ports(&mut cfg, None, None)?;
+    }
+    if p.options.ocr_engine == crate::OcrEngine::PpOcr {
+        ppocr_config(&mut cfg).map_err(Fail::Usage)?;
     }
     Ok((Engine::new(cfg), p.options.clone()))
 }

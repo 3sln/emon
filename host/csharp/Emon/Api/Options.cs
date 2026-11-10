@@ -12,6 +12,7 @@ namespace emon.Api;
 using System.Collections.Generic;
 
 public sealed class Options {
+    public bool PpOcr;
     /// <summary>SPEC 13's OCR setting (D038): `never` asks for no OCR; `auto` and `always` OCR an image and a scanned PDF page, `always` also fuses a born-digital one. `Code()` is kin's (an extension below).</summary>
     public enum OcrPolicy {
         Always, Auto, Never
@@ -70,6 +71,7 @@ public sealed class Options {
         o.Furniture = Furniture;
         o.KeepEvidence = KeepEvidence;
         o.OcrScope = OcrScope;
+        o.PpOcr = PpOcr;
         o.NoRetarget = NoRetarget;
         o.TablesScored = TablesScored;
         return o;
@@ -240,8 +242,8 @@ public sealed class Options {
         if (emon.Config.CfParse(CellsOf(text), c) != 0) {
             throw new System.ArgumentException(c.Msg.ToString());
         }
-        if (c.Oengine != 0) throw new System.ArgumentException("ocr-engine=ppocr is unsupported on C#");
         var o = new Options();
+        o.PpOcr = c.Oengine != 0;
         o.Ocr = (OcrPolicy) (c.Ocr == 0 ? 2 : c.Ocr == 1 ? 1 : 0);
         o.Assets = (AssetsLevel) c.Level;
         o.AssetDpi = c.Dpi;

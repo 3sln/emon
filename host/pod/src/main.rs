@@ -605,8 +605,11 @@ fn setup(text: &str, native: bool, places: (Option<&str>, Option<&str>)) -> Resu
         return Err(PodError::usage("record=1, js-ocr=1 and js-render=1 are options of a session (the C binding's emon_open): the pod converts in one call"));
     }
     let mut cfg = p.config.clone();
-    if native {
+    if native || p.options.ocr_engine == emon::OcrEngine::PpOcr {
         native_config_at(&mut cfg, places.0, places.1).map_err(PodError::usage)?;
+    }
+    if p.options.ocr_engine == emon::OcrEngine::PpOcr {
+        emon::capi::ppocr_config(&mut cfg).map_err(PodError::usage)?;
     }
     Ok((Engine::new(cfg), p.options))
 }

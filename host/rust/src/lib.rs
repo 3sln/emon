@@ -11,6 +11,8 @@
 #[allow(warnings)]
 #[doc(hidden)]
 pub mod emon;
+// Assembly switches this only for the native C/pod hosts (OP2a).
+pub(crate) const PPOCR_NATIVE_HOST: bool = false;
 pub mod engine;
 mod imgdec;
 // the PDF image codecs of the `decode-img` request (P6.1a): DCT and CCITT here, JPX and JBIG2 through the embedder's `PdfCodecs`;
@@ -23,6 +25,8 @@ pub mod pdfium;
 // parallel execution (P10.2, D505): a pool of threads that fulfils a round's requests at once and the pages ahead of the loop's; the browser has none
 #[cfg(not(target_arch = "wasm32"))]
 pub mod par;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ppocr_native;
 pub mod plan;
 pub mod port;
 pub mod render;

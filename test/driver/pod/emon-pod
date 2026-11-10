@@ -31,6 +31,7 @@
   (doseq [a args]
     (let [[_ k v] (re-matches #"--([^=]+)=(.*)" a)]
       (cond
+        (= a "--native") (swap! state assoc :native true)
         (= a "--pretty") (swap! state assoc :pretty true)
         (= k "out") (swap! state assoc :out v)
         (= k "html") (swap! state assoc :html v)
@@ -44,7 +45,7 @@
         (str/starts-with? a "--") (usage (str "unknown flag " a))
         (:file @state) (usage "one FILE")
         :else (swap! state assoc :file a))))
-  (let [{:keys [out pretty html html-assets asset-prefix asset-dir password source kin file]} @state
+  (let [{:keys [out pretty html html-assets asset-prefix asset-dir password source kin file native]} @state
         _ (when-not file (usage "no FILE"))
         _ (when-not (#{"json" "html" "evidence" "bundle" "intake"} out) (usage "--out is json, html, evidence, bundle or intake"))
         _ (when-not (#{"bytes" "seek" "spool"} source) (usage "--source is bytes, seek or spool"))
@@ -64,7 +65,7 @@
                      (do (binding [*out* *err*] (println (str "error: " (:name d))) (println (ex-message e)))
                          (System/exit (if (= "internal" (:name d)) 1 4))))
                    (do (binding [*out* *err*] (println (str "emon-pod: " (ex-message e)))) (System/exit 1)))))
-        convert (fn [spec] (try (emon/convert input opts spec) (catch Exception e (fail e))))
+        convert (fn [spec] (try (emon/convert input opts (cond-> spec native (assoc :native true))) (catch Exception e (fail e))))
         intake-line (fn [{:keys [format version pages encrypted bytes]}] (str format " " version " pages=" pages " encrypted=" encrypted " bytes=" bytes))
         hex (fn [^bytes b] (let [sb (StringBuilder.)] (doseq [x b] (.append sb (format "%02x" (bit-and x 0xff)))) (str sb)))
         write-assets (fn [assets]

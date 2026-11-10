@@ -434,7 +434,8 @@ fn config_of(c: &Cfg) -> Config {
 // host has. An Err is the sentence a driver prints after `usage`.
 pub fn parse_options(text: &str) -> Result<Parsed, String> {
     let c = parse_cfg(text)?;
-    if c.oengine != 0 && !cfg!(ppocr) {
+    if c.oengine != 0 && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST
+        && !(cfg!(feature = "tesseract") && !cfg!(target_arch = "wasm32")) {
         return Err("ocr-engine=ppocr is unsupported in this Rust build".into());
     }
     let mut producer = Vec::new();

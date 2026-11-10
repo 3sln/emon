@@ -331,13 +331,26 @@ func main() {
 		input = input.WithPassword([]byte(*password))
 	}
 	inputs := []emon.Input{input}
-	if tess {
+	if (tess || opts.PpOcr) && replay == "" {
 		o, err := emon.NewTessOcr(tessdata)
 		if err != nil {
 			usage(err.Error())
 		}
 		cfg.Ocr = o
 	}
+	if opts.PpOcr && replay == "" {
+		o, err := emon.NewPpOcr("", cfg.Ocr)
+		if err != nil {
+			usage(err.Error())
+		}
+		cfg.Ocr = o
+	}
+	closePp := func() {
+		if p, ok := cfg.Ocr.(interface{ Close() }); ok {
+			p.Close()
+		}
+	}
+	defer closePp()
 	if pdfiumOn {
 		r, err := livePdfium(pdfiumLib)
 		if err != nil {
@@ -354,6 +367,7 @@ func main() {
 	engine := emon.NewEngine(cfg)
 
 	errExit := func(err error) {
+		closePp()
 		var e *emon.Error
 		if errors.As(err, &e) {
 			fmt.Fprintf(os.Stderr, "error: %s\n%s\n", e.Name(), e.Error())

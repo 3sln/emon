@@ -192,7 +192,7 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 353 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 359 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -348,6 +348,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.NewBytesSource` | `(b []byte) *BytesSource` |
 | `emon.NewEngine` | `(cfg Config) *Engine` |
 | `emon.NewInput` | `(src ByteSource) Input` |
+| `emon.NewPpOcr` | `(dir string, incumbent Ocr) (*PpOcr, error)` |
 | `emon.NewSeekSource` | `(r io.ReadSeeker) (*SeekSource, error)` |
 | `emon.NewTessOcr` | `(tessdata string) (Ocr, error)` |
 | `emon.Node` | `struct +unexported` |
@@ -390,6 +391,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Options.Locale` | `field string` |
 | `emon.Options.Ocr` | `field OcrPolicy` |
 | `emon.Options.OcrScope` | `field OcrScope` |
+| `emon.Options.PpOcr` | `field bool` |
 | `emon.Output` | `struct` |
 | `emon.Output.HTML` | `field *HTMLOptions` |
 | `emon.Output.JSON` | `field *JSONOptions` |
@@ -418,6 +420,10 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.PdfPix.H` | `field int32` |
 | `emon.PdfPix.Px` | `field []byte` |
 | `emon.PdfPix.W` | `field int32` |
+| `emon.PpOcr` | `struct +unexported` |
+| `emon.PpOcr.Close` | `ptr ()` |
+| `emon.PpOcr.Fulfil` | `ptr (req port.PlanRequest, bitmaps port.PlanBitmaps, keep bool) (port.PlanAnswer, error)` |
+| `emon.PpOcr.Producer` | `ptr () [][2]string` |
 | `emon.ReaderAtInput` | `(r io.ReaderAt, size int64) Input` |
 | `emon.Region` | `struct` |
 | `emon.Region.Page` | `field int32` |
