@@ -1012,6 +1012,79 @@ public static class Ofusetest {
         Evidence.OwSet(words, w, Evidence.OwfFlags(), flags);
         return w;
     }
+    [Xunit.Fact]
+    public static void TestRepeatedIdentifierNeedsAnIndependentIncumbentAndAnEmptySlot() {
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells refs = emon.Port.NewCells();
+        emon.Port.Cells sel = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 65);
+        emon.Port.CellsPush(text, 66);
+        emon.Port.CellsPush(text, 49);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, 0, Evidence.OrfRequest(), 272);
+        Evidence.OrSet(runs, 1, Evidence.OrfRequest(), 279);
+        OftW(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
+        OftW(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
+        emon.Port.CellsPush(sel, 0);
+        emon.Port.CellsPush(refs, 1);
+        emon.Port.CellsPush(c, -1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 700);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 1);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
+        emon.Port.CellsSet(c, 12, 699);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "existing insertion confidence floor");
+        emon.Port.CellsSet(c, 12, 700);
+        Evidence.OwSet(words, 0, Evidence.HdConf(), 699);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "weak repeats are not independent support");
+        Evidence.OwSet(words, 0, Evidence.HdConf(), 700);
+        Evidence.OwSet(words, 0, Evidence.OwfRun(), 1);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "PP cannot corroborate itself");
+        Evidence.OwSet(words, 0, Evidence.OwfRun(), 0);
+        Evidence.OwSet(words, 1, Evidence.HdY0(), 1000);
+        Evidence.OwSet(words, 1, Evidence.HdY1(), 1200);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "same physical word is not a repeat");
+    }
+    [Xunit.Fact]
+    public static void TestPpSkipNeedsConfidentGuardedWordsAndCompleteInk() {
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells text = emon.Port.NewCells();
+        emon.Port.Cells comps = emon.Port.NewCells();
+        emon.Port.CellsPush(text, 80);
+        emon.Port.CellsPush(text, 65);
+        emon.Port.CellsPush(text, 78);
+        emon.Port.CellsPush(text, 68);
+        OftW(words, 1000, 1000, 1200, 1200, 0, 4, 0, 0, 900, Evidence.OeDictionary());
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 1, comps, 1), 0, "missing ink evidence cannot prove completeness");
+        Evidence.CoNew(comps, 1, 1010, 1010, 1190, 1190, 0);
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 1, comps, 1), 1, "confident dictionary word covers all measured ink");
+        Evidence.OwSet(words, 0, Evidence.HdConf(), 699);
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 1, comps, 1), 0, "weak incumbent needs PP");
+        Evidence.OwSet(words, 0, Evidence.HdConf(), 900);
+        Evidence.OwSet(words, 0, Evidence.OwfFlags(), 0);
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 1, comps, 1), 0, "confidence cannot substitute for lexical evidence");
+        Evidence.OwSet(words, 0, Evidence.OwfFlags(), Evidence.OeDictionary());
+        Evidence.CoNew(comps, 1, 1300, 1010, 1400, 1190, 0);
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 1, comps, 1), 0, "unread ink defeats a high-confidence skip");
+        emon.Testport.AssertEq(Ofuse.OfPpComplete(words, text, 0, 0, comps, 1), 0, "an empty reading is not complete");
+    }
     internal static int OftClose(emon.Port.Cells runs, emon.Port.Cells lines, int pass, int w0, int w1, int x1, int y1) {
         // Run `pass` of words [w0, w1), one line over all of them.
         int r = Evidence.OrNew(runs, 1, -1);

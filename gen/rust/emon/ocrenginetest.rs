@@ -200,3 +200,42 @@ fn test_pp_lexicon_membership_alone_cannot_erase_a_dictionary_incumbent() {
     crate::port::cells_push(c, 0);
     crate::testport::assert_eq(of_pp_choice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
 }
+#[test]
+fn test_repeated_code_grammar_does_not_reclassify_protected_formats() {
+    let code: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let price: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let year: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let time: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let word: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(code, 65);
+    crate::port::cells_push(code, 66);
+    crate::port::cells_push(code, 45);
+    crate::port::cells_push(code, 49);
+    crate::port::cells_push(price, 82);
+    crate::port::cells_push(price, 77);
+    crate::port::cells_push(price, 53);
+    crate::port::cells_push(price, 46);
+    crate::port::cells_push(price, 48);
+    crate::port::cells_push(price, 48);
+    crate::port::cells_push(year, 50);
+    crate::port::cells_push(year, 48);
+    crate::port::cells_push(year, 48);
+    crate::port::cells_push(year, 53);
+    crate::port::cells_push(year, 45);
+    crate::port::cells_push(year, 48);
+    crate::port::cells_push(year, 54);
+    crate::port::cells_push(time, 50);
+    crate::port::cells_push(time, 49);
+    crate::port::cells_push(time, 58);
+    crate::port::cells_push(time, 50);
+    crate::port::cells_push(time, 56);
+    crate::port::cells_push(word, 80);
+    crate::port::cells_push(word, 65);
+    crate::port::cells_push(word, 78);
+    crate::port::cells_push(word, 68);
+    crate::testport::assert_eq(of_pp_code(code, 0, 4), 1, "alphanumeric identifier");
+    crate::testport::assert_eq(of_pp_code(price, 0, 6), 0, "currency is not a repeated identifier");
+    crate::testport::assert_eq(of_pp_code(year, 0, 7), 0, "source year range remains protected");
+    crate::testport::assert_eq(of_pp_code(time, 0, 5), 0, "source time remains protected");
+    crate::testport::assert_eq(of_pp_code(word, 0, 4), 0, "PAND/PANO failure band is not an identifier");
+}

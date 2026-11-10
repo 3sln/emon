@@ -491,15 +491,13 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     let mut nl: i32 = 0;
     let mut rotmed: i32 = 0;
     let mut asked: i32 = 0;
+    let mut ppasked: i32 = 0;
     let mut nsel: i32 = 0;
     pxw = an_arg(ans, ad, 0);
     pxh = an_arg(ans, ad, 1);
     ao = an_find(ans, oid);
     if ao < 0 {
         sc_request(rq, oid, did, (dpi100 + 50) / 100, loc);
-        if (fuse & 8) == 8 {
-            sc_request(rq, pu_id(i, oe_request_slot()), did, (dpi100 + 50) / 100, loc);
-        }
         return us_requests();
     }
     if an_ok(ans, ao) != 1 {
@@ -567,9 +565,16 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     nw = ow_count(owords) - w0;
     pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
+    if ((fuse & 8) == 8) && (an_find(ans, pu_id(i, oe_request_slot())) < 0) {
+        if of_pp_complete(owords, etext, w0, nw, comps, i + 1) == 0 {
+            sc_request(rq, pu_id(i, oe_request_slot()), did, (dpi100 + 50) / 100, loc);
+            ppasked = 1;
+        }
+    }
     rt_prep(rtp);
     rt_receipt_source(rtp, maskv);
     asked = rt_plan(i, input, 0, 0, rid, hint, loc, ans, bms, pn_k_text(), crate::port::bms_get(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6);
+    asked += ppasked;
     if crate::port::cells_at(rtp, rtp_q()) == 0 {
         asked += pct_ask(i, dpi100, bx0, by0, crate::port::bms_get(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
     }

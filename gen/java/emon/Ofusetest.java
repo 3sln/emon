@@ -972,6 +972,77 @@ public final class Ofusetest {
         Evidence.owSet(words, w, Evidence.owfFlags(), flags);
         return w;
     }
+    public static void testRepeatedIdentifierNeedsAnIndependentIncumbentAndAnEmptySlot() {
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells refs = emon.Port.newCells();
+        emon.Port.Cells sel = emon.Port.newCells();
+        emon.Port.cellsPush(text, 65);
+        emon.Port.cellsPush(text, 66);
+        emon.Port.cellsPush(text, 49);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, 0, Evidence.orfRequest(), 272);
+        Evidence.orSet(runs, 1, Evidence.orfRequest(), 279);
+        oftW(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
+        oftW(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
+        emon.Port.cellsPush(sel, 0);
+        emon.Port.cellsPush(refs, 1);
+        emon.Port.cellsPush(c, -1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 700);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
+        emon.Port.cellsSet(c, 12, 699);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "existing insertion confidence floor");
+        emon.Port.cellsSet(c, 12, 700);
+        Evidence.owSet(words, 0, Evidence.hdConf(), 699);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "weak repeats are not independent support");
+        Evidence.owSet(words, 0, Evidence.hdConf(), 700);
+        Evidence.owSet(words, 0, Evidence.owfRun(), 1);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "PP cannot corroborate itself");
+        Evidence.owSet(words, 0, Evidence.owfRun(), 0);
+        Evidence.owSet(words, 1, Evidence.hdY0(), 1000);
+        Evidence.owSet(words, 1, Evidence.hdY1(), 1200);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "same physical word is not a repeat");
+    }
+    public static void testPpSkipNeedsConfidentGuardedWordsAndCompleteInk() {
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells text = emon.Port.newCells();
+        emon.Port.Cells comps = emon.Port.newCells();
+        emon.Port.cellsPush(text, 80);
+        emon.Port.cellsPush(text, 65);
+        emon.Port.cellsPush(text, 78);
+        emon.Port.cellsPush(text, 68);
+        oftW(words, 1000, 1000, 1200, 1200, 0, 4, 0, 0, 900, Evidence.oeDictionary());
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 1, comps, 1), 0, "missing ink evidence cannot prove completeness");
+        Evidence.coNew(comps, 1, 1010, 1010, 1190, 1190, 0);
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 1, comps, 1), 1, "confident dictionary word covers all measured ink");
+        Evidence.owSet(words, 0, Evidence.hdConf(), 699);
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 1, comps, 1), 0, "weak incumbent needs PP");
+        Evidence.owSet(words, 0, Evidence.hdConf(), 900);
+        Evidence.owSet(words, 0, Evidence.owfFlags(), 0);
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 1, comps, 1), 0, "confidence cannot substitute for lexical evidence");
+        Evidence.owSet(words, 0, Evidence.owfFlags(), Evidence.oeDictionary());
+        Evidence.coNew(comps, 1, 1300, 1010, 1400, 1190, 0);
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 1, comps, 1), 0, "unread ink defeats a high-confidence skip");
+        emon.Testport.assertEq(Ofuse.ofPpComplete(words, text, 0, 0, comps, 1), 0, "an empty reading is not complete");
+    }
     public static int oftClose(emon.Port.Cells runs, emon.Port.Cells lines, int pass, int w0, int w1, int x1, int y1) {
         // Run `pass` of words [w0, w1), one line over all of them.
         int r = Evidence.orNew(runs, 1, -1);

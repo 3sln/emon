@@ -199,4 +199,43 @@ public static class Ocrenginetest {
         emon.Port.CellsPush(c, 0);
         emon.Testport.AssertEq(Ofuse.OfPpChoice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
     }
+    [Xunit.Fact]
+    public static void TestRepeatedCodeGrammarDoesNotReclassifyProtectedFormats() {
+        emon.Port.Cells code = emon.Port.NewCells();
+        emon.Port.Cells price = emon.Port.NewCells();
+        emon.Port.Cells year = emon.Port.NewCells();
+        emon.Port.Cells time = emon.Port.NewCells();
+        emon.Port.Cells word = emon.Port.NewCells();
+        emon.Port.CellsPush(code, 65);
+        emon.Port.CellsPush(code, 66);
+        emon.Port.CellsPush(code, 45);
+        emon.Port.CellsPush(code, 49);
+        emon.Port.CellsPush(price, 82);
+        emon.Port.CellsPush(price, 77);
+        emon.Port.CellsPush(price, 53);
+        emon.Port.CellsPush(price, 46);
+        emon.Port.CellsPush(price, 48);
+        emon.Port.CellsPush(price, 48);
+        emon.Port.CellsPush(year, 50);
+        emon.Port.CellsPush(year, 48);
+        emon.Port.CellsPush(year, 48);
+        emon.Port.CellsPush(year, 53);
+        emon.Port.CellsPush(year, 45);
+        emon.Port.CellsPush(year, 48);
+        emon.Port.CellsPush(year, 54);
+        emon.Port.CellsPush(time, 50);
+        emon.Port.CellsPush(time, 49);
+        emon.Port.CellsPush(time, 58);
+        emon.Port.CellsPush(time, 50);
+        emon.Port.CellsPush(time, 56);
+        emon.Port.CellsPush(word, 80);
+        emon.Port.CellsPush(word, 65);
+        emon.Port.CellsPush(word, 78);
+        emon.Port.CellsPush(word, 68);
+        emon.Testport.AssertEq(Ofuse.OfPpCode(code, 0, 4), 1, "alphanumeric identifier");
+        emon.Testport.AssertEq(Ofuse.OfPpCode(price, 0, 6), 0, "currency is not a repeated identifier");
+        emon.Testport.AssertEq(Ofuse.OfPpCode(year, 0, 7), 0, "source year range remains protected");
+        emon.Testport.AssertEq(Ofuse.OfPpCode(time, 0, 5), 0, "source time remains protected");
+        emon.Testport.AssertEq(Ofuse.OfPpCode(word, 0, 4), 0, "PAND/PANO failure band is not an identifier");
+    }
 }

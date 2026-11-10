@@ -39,7 +39,7 @@
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
             [emon.ocrengine :refer [oe-request-slot]]
             [emon.oapp :refer [pp-sums]]
-            [emon.ofuse :refer [of-fuse]]
+            [emon.ofuse :refer [of-fuse of-pp-complete]]
             [emon.oaline :refer [oa-line-fuse]]
             [emon.oapct :refer [pct-ask pct-record pct-rows pct-plan pct-fuse]]
             [emon.rasterplan :refer [rp-w rp-f-ask rp-f-wat rp-f-wn rp-f-scripts rp-ww rp-ask-none rp-ask-full rp-ask-witness rp-plan rp-request rp-weak
@@ -446,14 +446,13 @@
         ^:mut ^I32 nl 0
         ^:mut ^I32 rotmed 0
         ^:mut ^I32 asked 0
+        ^:mut ^I32 ppasked 0
         ^:mut ^I32 nsel 0]
     (set pxw (an-arg ans ad 0))
     (set pxh (an-arg ans ad 1))
     (set ao (an-find ans oid))
     (if (< ao 0)
       (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
-          (if (== (bit-and fuse 8) 8)
-            (sc-request rq (pu-id i (oe-request-slot)) did (quot (+ dpi100 50) 100) loc))
           (return (us-requests))))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (if (== (pu-dry fuse) 1) (return (us-done)))
@@ -505,9 +504,16 @@
       (rt-run-meta oruns run (op-upscaled) 3 3 0 0 0 0))
     (set nw (- (ow-count owords) w0))
     (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) roid w0 nw ws comps owords feats scr)
+    ;; OP1c: inspect the incumbent and measured ink before paying for PP.
+    ;; Share the retarget round; keep the original bitmap/scale for PP.
+    (if (and (== (bit-and fuse 8) 8) (< (an-find ans (pu-id i (oe-request-slot))) 0))
+      (if (== (of-pp-complete owords etext w0 nw comps (+ i 1)) 0)
+        (do (sc-request rq (pu-id i (oe-request-slot)) did (quot (+ dpi100 50) 100) loc)
+            (set ppasked 1))))
     (rt-prep rtp)
     (rt-receipt-source rtp maskv)
     (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks s6))
+    (set asked (+ asked ppasked))
     (if (== (cells-at rtp (rtp-q)) 0)
       (set asked (+ asked (pct-ask i dpi100 bx0 by0 (bms-get bms did) ans loc bms owords etext w0 nw rq s1 s2 s3 s4 s5 s6))))
     (comment "the seals and stamps in the page's pixels (P8.2): their strips and crops are asked in the same round as the targeted passes")

@@ -187,4 +187,42 @@ public final class Ocrenginetest {
         emon.Port.cellsPush(c, 0);
         emon.Testport.assertEq(Ofuse.ofPpChoice(c, 1), -1, "an incumbent dictionary word needs independent agreement");
     }
+    public static void testRepeatedCodeGrammarDoesNotReclassifyProtectedFormats() {
+        emon.Port.Cells code = emon.Port.newCells();
+        emon.Port.Cells price = emon.Port.newCells();
+        emon.Port.Cells year = emon.Port.newCells();
+        emon.Port.Cells time = emon.Port.newCells();
+        emon.Port.Cells word = emon.Port.newCells();
+        emon.Port.cellsPush(code, 65);
+        emon.Port.cellsPush(code, 66);
+        emon.Port.cellsPush(code, 45);
+        emon.Port.cellsPush(code, 49);
+        emon.Port.cellsPush(price, 82);
+        emon.Port.cellsPush(price, 77);
+        emon.Port.cellsPush(price, 53);
+        emon.Port.cellsPush(price, 46);
+        emon.Port.cellsPush(price, 48);
+        emon.Port.cellsPush(price, 48);
+        emon.Port.cellsPush(year, 50);
+        emon.Port.cellsPush(year, 48);
+        emon.Port.cellsPush(year, 48);
+        emon.Port.cellsPush(year, 53);
+        emon.Port.cellsPush(year, 45);
+        emon.Port.cellsPush(year, 48);
+        emon.Port.cellsPush(year, 54);
+        emon.Port.cellsPush(time, 50);
+        emon.Port.cellsPush(time, 49);
+        emon.Port.cellsPush(time, 58);
+        emon.Port.cellsPush(time, 50);
+        emon.Port.cellsPush(time, 56);
+        emon.Port.cellsPush(word, 80);
+        emon.Port.cellsPush(word, 65);
+        emon.Port.cellsPush(word, 78);
+        emon.Port.cellsPush(word, 68);
+        emon.Testport.assertEq(Ofuse.ofPpCode(code, 0, 4), 1, "alphanumeric identifier");
+        emon.Testport.assertEq(Ofuse.ofPpCode(price, 0, 6), 0, "currency is not a repeated identifier");
+        emon.Testport.assertEq(Ofuse.ofPpCode(year, 0, 7), 0, "source year range remains protected");
+        emon.Testport.assertEq(Ofuse.ofPpCode(time, 0, 5), 0, "source time remains protected");
+        emon.Testport.assertEq(Ofuse.ofPpCode(word, 0, 4), 0, "PAND/PANO failure band is not an identifier");
+    }
 }

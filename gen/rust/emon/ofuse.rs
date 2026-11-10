@@ -1410,6 +1410,121 @@ pub fn of_pp_year(text: &mut crate::port::Cells, start: i32, n: i32) -> i32 {
     }
     return 1;
 }
+pub fn of_pp_complete(words: &mut crate::port::Cells, text: &mut crate::port::Cells, first: i32, n: i32, comps: &mut crate::port::Cells, page: i32) -> i32 {
+    // Conservative PP skip: every incumbent exceeds the existing insertion floor and is dictionary/format guarded, and every measured ink component fits wholly inside an incumbent word. No ink evidence is never completeness.
+    if n <= 0 {
+        return 0;
+    }
+    let mut i: i32 = first;
+    let mut j: i32 = 0;
+    let mut seen: i32 = 0;
+    let mut covered: i32 = 0;
+    while i < (first + n) {
+        if ow_get(words, i, hd_conf()) < of_insert_conf() {
+            return 0;
+        }
+        if of_eligible(words, text, i) == 0 {
+            return 0;
+        }
+        if ((ow_get(words, i, owf_flags()) & oe_dictionary()) == 0) && (ofmt_valid(text, ow_get(words, i, hd_tstart()), ow_get(words, i, hd_tlen())) == 0) {
+            return 0;
+        }
+        i += 1;
+    }
+    i = 0;
+    while i < co_count(comps) {
+        if co_get(comps, i, cf_page()) == page {
+            seen = 1;
+            covered = 0;
+            j = first;
+            while j < (first + n) {
+                if (ow_get(words, j, hd_x0()) <= co_get(comps, i, cf_x0())) && ((ow_get(words, j, hd_y0()) <= co_get(comps, i, cf_y0())) && ((ow_get(words, j, hd_x1()) >= co_get(comps, i, cf_x1())) && (ow_get(words, j, hd_y1()) >= co_get(comps, i, cf_y1())))) {
+                    covered = 1;
+                }
+                j += 1;
+            }
+            if covered == 0 {
+                return 0;
+            }
+        }
+        i += 1;
+    }
+    return seen;
+}
+pub fn of_pp_code(text: &mut crate::port::Cells, start: i32, n: i32) -> i32 {
+    // An ASCII identifier containing both letters and digits. Existing valid formats, punctuation other than a hyphen, and lexical words are excluded.
+    if (start < 0) || ((n <= 0) || ((start + n) > crate::port::cells_len(text))) {
+        return 0;
+    }
+    if ofmt_valid(text, start, n) == 1 {
+        return 0;
+    }
+    let mut i: i32 = 0;
+    let mut cp: i32 = 0;
+    let mut letters: i32 = 0;
+    let mut digits: i32 = 0;
+    while i < n {
+        cp = crate::port::cells_at(text, start + i);
+        if fmt_digit(cp) == 1 {
+            digits = 1;
+        } else if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+            letters = 1;
+        } else if cp != 45 {
+            return 0;
+        }
+        i += 1;
+    }
+    if (letters == 1) && (digits == 1) {
+        return 1;
+    }
+    return 0;
+}
+pub fn of_pp_repeat_choice(runs: &mut crate::port::Cells, words: &mut crate::port::Cells, text: &mut crate::port::Cells, c: &mut crate::port::Cells, refs: &mut crate::port::Cells, sel: &mut crate::port::Cells, incumbent_count: i32) -> i32 {
+    // Only an empty slot may acquire an identifier independently present in a selected non-PP incumbent at another physical location. No replacement, vote inflation, or invented dictionary membership.
+    if incumbent_count != 0 {
+        return -1;
+    }
+    let mut i: i32 = 1;
+    let mut j: i32 = 0;
+    let mut w: i32 = 0;
+    let mut v: i32 = 0;
+    let mut run: i32 = 0;
+    let mut best: i32 = -1;
+    let mut found: i32 = 0;
+    while i < (crate::port::cells_len(c) / of_cstride()) {
+        run = of_cget(c, i, 0);
+        if (run >= 0) && (run < or_count(runs)) {
+            if ((or_get(runs, run, orf_request()) % 256) == 23) && ((of_cget(c, i, 2) == 1) && (of_cget(c, i, 4) >= of_insert_conf())) {
+                w = crate::port::cells_at(refs, of_cget(c, i, 1));
+                if of_pp_code(text, ow_get(words, w, hd_tstart()), ow_get(words, w, hd_tlen())) == 1 {
+                    j = 0;
+                    found = 0;
+                    while j < crate::port::cells_len(sel) {
+                        v = crate::port::cells_at(sel, j);
+                        run = ow_get(words, v, owf_run());
+                        if (run >= 0) && (run < or_count(runs)) {
+                            if ((or_get(runs, run, orf_request()) % 256) != 23) && ((ow_get(words, w, hd_page()) == ow_get(words, v, hd_page())) && (ow_get(words, v, hd_conf()) >= of_insert_conf())) {
+                                if (of_word_same(words, text, w, v, 0) == 1) && (ev_overlap_small(ow_get(words, w, hd_x0()), ow_get(words, w, hd_y0()), ow_get(words, w, hd_x1()), ow_get(words, w, hd_y1()), ow_get(words, v, hd_x0()), ow_get(words, v, hd_y0()), ow_get(words, v, hd_x1()), ow_get(words, v, hd_y1())) == 0) {
+                                    found = 1;
+                                }
+                            }
+                        }
+                        j += 1;
+                    }
+                    if found == 1 {
+                        if best >= 1 {
+                            return -1;
+                        } else {
+                            best = i;
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    return best;
+}
 pub fn of_pp_choice(c: &mut crate::port::Cells, incumbent_count: i32) -> i32 {
     let best: i32 = of_choice(c, incumbent_count);
     if best < 1 {
@@ -1872,6 +1987,12 @@ pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::
                         }
                     }
                     best = of_pp_choice(c, count);
+                    if best < 1 {
+                        best = of_pp_repeat_choice(runs, words, text, c, crefs, sel, count);
+                        if best >= 1 {
+                            closure = 2;
+                        }
+                    }
                     if count == 1 {
                         k = 0;
                         while k < crate::port::cells_len(arithmetic) {
@@ -1939,6 +2060,9 @@ pub fn of_fuse(page: i32, image: i32, trigger: i32, mut runs: &mut crate::port::
                     crate::port::cells_push(oaz, identity_first);
                     crate::port::cells_push(oaz, identity_total);
                     crate::port::cells_push(oaz, 0);
+                }
+                if closure == 2 {
+                    rule = 3;
                 }
                 zr = of_zrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, of_cget(c, 0, 3), of_null_votes(runs, words, reads, rows, parents, r), margin, mask);
                 if best >= 1 {

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Rescore the frozen source-reviewed F08 numeric slots against emitted words."""
 import argparse,json,pathlib,re
+from artifacts import read_text
 p=argparse.ArgumentParser(__doc__);p.add_argument('--model',type=pathlib.Path,required=True);p.add_argument('--evidence',type=pathlib.Path,required=True);p.add_argument('--slots',type=pathlib.Path,required=True);p.add_argument('--out',type=pathlib.Path,required=True);a=p.parse_args()
-e=json.loads(a.evidence.read_text());model=json.loads(a.model.read_text());slots=json.loads(a.slots.read_text());rows=[]
+e=json.loads(read_text(a.evidence));model=json.loads(a.model.read_text());slots=json.loads(a.slots.read_text());rows=[]
 def overlap(b,c):
  w=max(0,min(b[2],c[2])-max(b[0],c[0]));h=max(0,min(b[3],c[3])-max(b[1],c[1]));area=min((b[2]-b[0])*(b[3]-b[1]),(c[2]-c[0])*(c[3]-c[1]));return w*h/area if area>0 else 0
 def norm(s):return re.sub(r'^[^\d]+|[^\d]+$','',s).replace(',','')

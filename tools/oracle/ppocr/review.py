@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build external physical-source review cards from final selected evidence."""
 import argparse,collections,json,pathlib,re,sys,subprocess
+from artifacts import read_text
 sys.path.insert(0,str(pathlib.Path.home()/'.cache/emon/pylib'))
 from PIL import Image,ImageDraw,ImageFont
 ROOT=pathlib.Path(__file__).resolve().parents[3]
@@ -10,7 +11,7 @@ controls={r['index']:r for r in json.loads(a.reference_controls.read_text())} if
 controls.update({r['index']:r for r in json.loads((a.live/'controls.json').read_text())});cache={};model_cache={}
 def evidence(i,engine):
  key=i,engine
- if key not in cache:cache[key]=json.loads((a.live/'controls'/f'{i:02}-{engine}.evidence').read_text())
+ if key not in cache:cache[key]=json.loads(read_text(a.live/'controls'/f'{i:02}-{engine}.evidence'))
  return cache[key]
 def page_size(e,page):
  row=next(v for v in e['epages'] if v['page']==page);return row['width'],row['height']

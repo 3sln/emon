@@ -1,6 +1,10 @@
 #!/usr/bin/env bb
 ;; Experimental audit of recorded eligibility and unchanged incumbent requests.
 (require '[babashka.fs :as fs] '[clojure.edn :as edn] '[cheshire.core :as json])
+(defn artifact-text [p]
+  (if (fs/exists? p) (slurp p)
+      (with-open [stream (java.util.zip.GZIPInputStream. (java.io.FileInputStream. (str p ".gz")))]
+        (slurp stream))))
 
 (defn pp-entry? [entry]
   (let [r (:req entry) n (count r)]
@@ -15,7 +19,7 @@
              :let [stem (str (fs/strip-ext recording))
                    transcript (edn/read-string (slurp (str recording "/transcript.edn")))
                    fast (edn/read-string (slurp (str (clojure.string/replace stem #"-ppocr$" "-tesseract") ".replay/transcript.edn")))
-                   evidence (json/parse-string (slurp (str stem ".evidence")) true)
+                   evidence (json/parse-string (artifact-text (str stem ".evidence")) true)
                    tagged (filter pp-entry? (:entries transcript))
                    raster-pages (set (map :page (filter #(some #{"raster"} (:flags %)) (:epages evidence))))
                    eligible (every? #(and (= 23 (mod (nth (:req %) 2) 256))

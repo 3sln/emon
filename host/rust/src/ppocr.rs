@@ -6,11 +6,12 @@ use crate::port::{cells_at, cells_len, crypto_sha256, Cells};
 use crate::ppocr_ctc::Calibration;
 use crate::ppocr_image::Image;
 use crate::ppocr_pipeline::Pipeline;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub struct PpOcr {
-    pipeline: Mutex<Pipeline>,
+    pipeline: Mutex<Option<Pipeline>>,
+    model_dir: PathBuf,
     incumbent: crate::tess::TessOcr,
     lexicon: Mutex<crate::tess::Tess>,
     calibration: Calibration,
@@ -64,7 +65,10 @@ impl PpOcr {
                "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2")?;
         let lexicon = Mutex::new(crate::tess::Tess::new(incumbent.data_dir(), 0));
         Ok(Self {
-            pipeline: Mutex::new(Pipeline::open(dir, include_str!("ppocr_dictionary.txt"))?),
+            // A page proven complete by kin never needs inference sessions.
+            // Pins are still checked above, including on such pages.
+            pipeline: Mutex::new(None),
+            model_dir: dir.to_path_buf(),
             incumbent,
             lexicon,
             calibration,
@@ -191,12 +195,16 @@ impl Ocr for PpOcr {
         } else {
             (full, 0, 0)
         };
-        let reading = self
-            .pipeline
-            .lock()
-            .map_err(|_| fail("PP-OCR session lock poisoned"))?
-            .read(&image)
-            .map_err(PlanError::Fulfil)?;
+        let reading = {
+            let mut pipeline = self.pipeline.lock()
+                .map_err(|_| fail("PP-OCR session lock poisoned"))?;
+            if pipeline.is_none() {
+                *pipeline = Some(Pipeline::open(&self.model_dir, include_str!("ppocr_dictionary.txt"))
+                    .map_err(PlanError::Fulfil)?);
+            }
+            pipeline.as_mut().ok_or_else(|| fail("PP-OCR sessions absent"))?
+                .read(&image).map_err(PlanError::Fulfil)?
+        };
         let mut out = Cells::new();
         let at = crate::emon::plan::an_ocr(&mut out, req.id());
         for word in &reading.words {

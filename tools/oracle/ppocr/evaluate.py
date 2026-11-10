@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Paired OP1 live measurements; outputs (including source text) stay external."""
 import argparse,collections,hashlib,json,os,pathlib,re,resource,shutil,subprocess,sys,time,unicodedata
+from artifacts import compact, read_bytes, read_text
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'tools/receipts'))
 import receipts as R
@@ -46,7 +47,7 @@ def receipt_audit(a):
         rows=[]
         for ident in old[dataset]['rows']:
             gold=json.loads((ROOT/'corpus/_gold'/dataset/(ident+'.gold.json')).read_text())
-            b=sections((fast_dir/(ident+'.bundle')).read_text());n=sections((a.out/'receipts-ppocr'/(ident+'.bundle')).read_text())
+            b=sections(read_text(fast_dir/(ident+'.bundle')));n=sections(read_text(a.out/'receipts-ppocr'/(ident+'.bundle')))
             lost=loss(json.loads(b['json']),json.loads(n['json']),gold['model'])
             rows.append(dict(id=ident,lost_gold=lost,old_matched=old[dataset]['rows'][ident]['matched'],new_matched=new[dataset]['rows'][ident]['matched']))
         deltas[dataset]=dict(before=old[dataset]['totals'],after=new[dataset]['totals'],rows=rows)
@@ -64,10 +65,10 @@ def controls(a,env):
             row=existing[i];assert row['source']==path
             for engine in ['tesseract','ppocr']:
                 stem=out/f'{i:02}-{engine}'
-                assert row[engine]['sha256']==hashlib.sha256(stem.with_suffix('.bundle').read_bytes()).hexdigest()
+                assert row[engine]['sha256']==hashlib.sha256(read_bytes(stem.with_suffix('.bundle'))).hexdigest()
                 assert (stem.with_suffix('.replay')/'transcript.edn').is_file()
                 if engine=='ppocr':
-                    recorded=json.loads(stem.with_suffix('.evidence').read_text())['ocr-engine']['model']
+                    recorded=json.loads(read_text(stem.with_suffix('.evidence')))['ocr-engine']['model']
                     identity=''.join(map(chr,map(int,re.search(r':data \[([0-9 ]+)\]',(ROOT/'kin/ocrengine.kin').read_text()).group(1).split())))
                     assert recorded==identity,'cannot reuse controls from a different policy identity'
             rows.append(row);print('control',i,'reused verified candidate run',flush=True);continue
@@ -97,9 +98,10 @@ def controls(a,env):
                                 shutil.copy2(ref.with_suffix(suffix),stem.with_suffix(suffix))
                             shutil.copytree(ref.with_suffix('.replay'),stem.with_suffix('.replay'),ignore=shutil.ignore_patterns('._*'),dirs_exist_ok=True)
                             metrics.update(reference=str(ref),replayed_byte_identically=True);row[engine]=metrics
+                            compact(stem.with_suffix('.bundle'));compact(stem.with_suffix('.evidence'))
                             print('control',i,'fast reference replay verified',flush=True);continue
             flag='--tesseract' if engine=='tesseract' else '--ocr-engine=ppocr'
-            command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),str(a.bin),'--pdfium',flag,'--ocr=auto','--assets=figures','--out=bundle','--record='+str(stem)+'.replay',str(ROOT/path)]
+            command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),'--timeout','7100',str(a.bin),'--pdfium',flag,'--ocr=auto','--assets=figures','--out=bundle','--record='+str(stem)+'.replay',str(ROOT/path)]
             start=resource.getrusage(resource.RUSAGE_CHILDREN);wall=time.monotonic()
             with stem.with_suffix('.bundle').open('w') as stdout,stem.with_suffix('.err').open('w') as stderr:
                 subprocess.run(command,cwd=ROOT,env=env,stdout=stdout,stderr=stderr,check=True,timeout=7200)
@@ -111,6 +113,7 @@ def controls(a,env):
             model=json.loads(data['json']);pages=len(model.get('pages',[]));assert pages
             row[engine]=dict(cpu=measured['cpu_seconds'],wall=time.monotonic()-wall,
                 peak_rss_bytes=measured['peak_rss_bytes'],pages=pages,sha256=hashlib.sha256(stem.with_suffix('.bundle').read_bytes()).hexdigest())
+            compact(stem.with_suffix('.bundle'));compact(stem.with_suffix('.evidence'))
         before=json.loads((out/f'{i:02}-tesseract.json').read_text());after=json.loads((out/f'{i:02}-ppocr.json').read_text())
         row['same_model']=before==after;row['same_bundle']=row['tesseract']['sha256']==row['ppocr']['sha256']
         old=represented_words(before);new=represented_words(after)

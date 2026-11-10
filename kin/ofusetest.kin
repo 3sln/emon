@@ -3,12 +3,12 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-text new-cells new-text TestT test-t]]
             [emon.port :refer [cells-push cells-at cells-len cells-set]]
-            [emon.evidence :refer [oe-garbage ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-line hd-feat owf-run ow-set owf-flags or-new or-set or-get or-count orf-pass orf-wfirst orf-wcount
+            [emon.evidence :refer [oe-garbage oe-dictionary co-new ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-y0 hd-y1 hd-line hd-feat owf-run ow-set owf-flags or-new or-set or-get or-count orf-request orf-pass orf-wfirst orf-wcount
                                    orf-lfirst orf-lcount ol-new ol-set ol-get ol-count olf-run lh-first lh-count op-fused ev-check ev-row ev-emit-ofuse
                                    oz-stride ozf-ifirst ozf-icount ozf-cfirst ozf-ccount ozf-rule ozf-votes ozf-ivotes ozf-nulls ozf-margin ozf-readings ozf-op]]
             [emon.scan :refer [sc-prep sc-sel-base sc-xtra-base sc-admit-floor]]
             [emon.ofmt :refer [ofmt-valid]]
-            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-source of-align of-root of-keyword of-readings of-candidates of-choice of-cget of-cstride of-null-votes of-eligible of-fuse of-page-keyword]]
+            [emon.ofuse :refer [of-active of-rule of-margin of-insert-conf of-slot-max of-copy of-from of-source of-align of-root of-keyword of-readings of-candidates of-choice of-cget of-cstride of-null-votes of-eligible of-fuse of-page-keyword of-pp-repeat-choice of-pp-complete]]
             [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or bit-and quot]]))
 
 (defn ^I32 oft-447-0 []
@@ -837,6 +837,47 @@
     (ow-set words w (owf-run) run)
     (ow-set words w (owf-flags) flags)
     (return w)))
+
+(deftest test-repeated-identifier-needs-an-independent-incumbent-and-an-empty-slot
+  (let [^Cells runs (new-cells) ^Cells words (new-cells) ^Cells text (new-cells)
+        ^Cells c (new-cells) ^Cells refs (new-cells) ^Cells sel (new-cells)]
+    (cells-push text 65) (cells-push text 66) (cells-push text 49)
+    (or-new runs 1 0) (or-new runs 1 0)
+    (or-set runs 0 (orf-request) 272) (or-set runs 1 (orf-request) 279)
+    (oft-w words 1000 1000 1200 1200 0 3 0 0 700 0)
+    (oft-w words 1000 2000 1200 2200 0 3 1 1 700 0)
+    (cells-push sel 0) (cells-push refs 1)
+    ;; Empty incumbent and one singleton PP candidate; no dictionary or format.
+    (cells-push c -1) (cells-push c 0) (cells-push c 0) (cells-push c 0)
+    (cells-push c 0) (cells-push c 0) (cells-push c 0) (cells-push c 0)
+    (cells-push c 1) (cells-push c 0) (cells-push c 1) (cells-push c 1)
+    (cells-push c 700) (cells-push c 0) (cells-push c 0) (cells-push c 1)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) 1 "verbatim independently supported identifier inserts")
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 1) -1 "never overrides even a low-confidence incumbent")
+    (cells-set c 12 699)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "existing insertion confidence floor")
+    (cells-set c 12 700) (ow-set words 0 (hd-conf) 699)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "weak repeats are not independent support")
+    (ow-set words 0 (hd-conf) 700) (ow-set words 0 (owf-run) 1)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "PP cannot corroborate itself")
+    (ow-set words 0 (owf-run) 0) (ow-set words 1 (hd-y0) 1000) (ow-set words 1 (hd-y1) 1200)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "same physical word is not a repeat")))
+
+(deftest test-pp-skip-needs-confident-guarded-words-and-complete-ink
+  (let [^Cells words (new-cells) ^Cells text (new-cells) ^Cells comps (new-cells)]
+    (cells-push text 80) (cells-push text 65) (cells-push text 78) (cells-push text 68)
+    (oft-w words 1000 1000 1200 1200 0 4 0 0 900 (oe-dictionary))
+    (assert-eq (of-pp-complete words text 0 1 comps 1) 0 "missing ink evidence cannot prove completeness")
+    (co-new comps 1 1010 1010 1190 1190 0)
+    (assert-eq (of-pp-complete words text 0 1 comps 1) 1 "confident dictionary word covers all measured ink")
+    (ow-set words 0 (hd-conf) 699)
+    (assert-eq (of-pp-complete words text 0 1 comps 1) 0 "weak incumbent needs PP")
+    (ow-set words 0 (hd-conf) 900) (ow-set words 0 (owf-flags) 0)
+    (assert-eq (of-pp-complete words text 0 1 comps 1) 0 "confidence cannot substitute for lexical evidence")
+    (ow-set words 0 (owf-flags) (oe-dictionary))
+    (co-new comps 1 1300 1010 1400 1190 0)
+    (assert-eq (of-pp-complete words text 0 1 comps 1) 0 "unread ink defeats a high-confidence skip")
+    (assert-eq (of-pp-complete words text 0 0 comps 1) 0 "an empty reading is not complete")))
 
 (defn ^I32 oft-close [^:mut ^Cells runs ^:mut ^Cells lines ^I32 pass ^I32 w0 ^I32 w1 ^I32 x1 ^I32 y1]
   (comment "Run `pass` of words [w0, w1), one line over all of them.")

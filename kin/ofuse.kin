@@ -5,14 +5,14 @@
   (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
             [emon.ofmt :refer [ofmt-valid fmt-digit]]
             [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
-            [emon.evidence :refer [ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
+            [emon.evidence :refer [co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
                                    hd-line hd-tstart hd-tlen hd-conf hd-feat owf-flags oe-garbage oe-dictionary owf-run owf-from ev-overlap-small
-                                   or-new or-count or-get or-set orf-page orf-view orf-pass orf-lfirst orf-lcount orf-wfirst orf-wcount
+                                   or-new or-count or-get or-set orf-page orf-view orf-pass orf-request orf-lfirst orf-lcount orf-wfirst orf-wcount
                                    ol-new ol-count ol-get ol-set lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1 lh-rot lh-dir lh-first lh-count olf-run
                                    op-first op-upscaled op-body-ink op-receipt op-receipt-rescue op-line op-cell op-fused
                                    oz-stride ozf-page ozf-x0 ozf-ifirst ozf-icount ozf-cfirst ozf-ccount ozf-rule ozf-votes ozf-ivotes ozf-nulls ozf-margin ozf-readings ozf-op]]
             [emon.scan :refer [sc-line-words sc-kept-words sc-fate-base sc-xtra-base sc-sel-base sc-sel-max]]
-            [kin.lang :refer [defdata defn return let set while if do comment and or >= <= > < == != + - * quot bit-and bit-or]]))
+            [kin.lang :refer [defdata defn return let set while if do comment and or >= <= > < == != + - * quot rem bit-and bit-or]]))
 
 (defn ^:pub ^I32 of-margin [] (return 300))
 (defn ^:pub ^I32 of-insert-conf [] (return 700))
@@ -1185,6 +1185,76 @@
           (set j (+ j 1)))))
   (return 1))
 
+(defn ^:pub ^I32 of-pp-complete [^Cells words ^Cells text ^I32 first ^I32 n ^Cells comps ^I32 page]
+  (comment "Conservative PP skip: every incumbent exceeds the existing insertion floor and is dictionary/format guarded, and every measured ink component fits wholly inside an incumbent word. No ink evidence is never completeness.")
+  (if (<= n 0) (return 0))
+  (let [^:mut ^I32 i first ^:mut ^I32 j 0 ^:mut ^I32 seen 0 ^:mut ^I32 covered 0]
+    (while (< i (+ first n))
+      (do (if (< (ow-get words i (hd-conf)) (of-insert-conf)) (return 0))
+          (if (== (of-eligible words text i) 0) (return 0))
+          (if (and (== (bit-and (ow-get words i (owf-flags)) (oe-dictionary)) 0)
+                   (== (ofmt-valid text (ow-get words i (hd-tstart)) (ow-get words i (hd-tlen))) 0)) (return 0))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i (co-count comps))
+      (do (if (== (co-get comps i (cf-page)) page)
+            (do (set seen 1) (set covered 0) (set j first)
+                (while (< j (+ first n))
+                  (do (if (and (<= (ow-get words j (hd-x0)) (co-get comps i (cf-x0)))
+                               (and (<= (ow-get words j (hd-y0)) (co-get comps i (cf-y0)))
+                                    (and (>= (ow-get words j (hd-x1)) (co-get comps i (cf-x1)))
+                                         (>= (ow-get words j (hd-y1)) (co-get comps i (cf-y1))))))
+                        (set covered 1))
+                      (set j (+ j 1))))
+                (if (== covered 0) (return 0))))
+          (set i (+ i 1))))
+    (return seen)))
+
+(defn ^:pub ^I32 of-pp-code [^Cells text ^I32 start ^I32 n]
+  (comment "An ASCII identifier containing both letters and digits. Existing valid formats, punctuation other than a hyphen, and lexical words are excluded.")
+  (if (or (< start 0) (or (<= n 0) (> (+ start n) (cells-len text)))) (return 0))
+  (if (== (ofmt-valid text start n) 1) (return 0))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 cp 0 ^:mut ^I32 letters 0 ^:mut ^I32 digits 0]
+    (while (< i n)
+      (do (set cp (cells-at text (+ start i)))
+          (if (== (fmt-digit cp) 1) (set digits 1)
+            (if (or (and (>= cp 65) (<= cp 90)) (and (>= cp 97) (<= cp 122)))
+              (set letters 1)
+              (if (!= cp 45) (return 0))))
+          (set i (+ i 1))))
+    (if (and (== letters 1) (== digits 1)) (return 1)))
+  (return 0))
+
+(defn ^:pub ^I32 of-pp-repeat-choice [^Cells runs ^Cells words ^Cells text ^Cells c ^Cells refs ^Cells sel ^I32 incumbent-count]
+  (comment "Only an empty slot may acquire an identifier independently present in a selected non-PP incumbent at another physical location. No replacement, vote inflation, or invented dictionary membership.")
+  (if (!= incumbent-count 0) (return -1))
+  (let [^:mut ^I32 i 1 ^:mut ^I32 j 0 ^:mut ^I32 w 0 ^:mut ^I32 v 0
+        ^:mut ^I32 run 0 ^:mut ^I32 best -1 ^:mut ^I32 found 0]
+    (while (< i (quot (cells-len c) (of-cstride)))
+      (do (set run (of-cget c i 0))
+          (if (and (>= run 0) (< run (or-count runs)))
+            (if (and (== (rem (or-get runs run (orf-request)) 256) 23)
+                     (and (== (of-cget c i 2) 1) (>= (of-cget c i 4) (of-insert-conf))))
+              (do (set w (cells-at refs (of-cget c i 1)))
+                  (if (== (of-pp-code text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 1)
+                    (do (set j 0) (set found 0)
+                        (while (< j (cells-len sel))
+                          (do (set v (cells-at sel j))
+                              (set run (ow-get words v (owf-run)))
+                              (if (and (>= run 0) (< run (or-count runs)))
+                                (if (and (!= (rem (or-get runs run (orf-request)) 256) 23)
+                                         (and (== (ow-get words w (hd-page)) (ow-get words v (hd-page)))
+                                              (>= (ow-get words v (hd-conf)) (of-insert-conf))))
+                                  (if (and (== (of-word-same words text w v 0) 1)
+                                           (== (ev-overlap-small (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))
+                                                                  (ow-get words v (hd-x0)) (ow-get words v (hd-y0)) (ow-get words v (hd-x1)) (ow-get words v (hd-y1))) 0))
+                                    (set found 1))))
+                              (set j (+ j 1))))
+                        (if (== found 1)
+                          (if (>= best 1) (return -1) (set best i))))))))
+          (set i (+ i 1))))
+    (return best)))
+
 (defn ^:pub ^I32 of-pp-choice [^Cells c ^I32 incumbent-count]
   (let [^I32 best (of-choice c incumbent-count)]
     (if (< best 1) (return best))
@@ -1430,6 +1500,9 @@
                                   (if (== (of-pp-year text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 1)
                                     (cells-set c 6 1))))
                             (set best (of-pp-choice c count))
+                            (if (< best 1)
+                              (do (set best (of-pp-repeat-choice runs words text c crefs sel count))
+                                  (if (>= best 1) (set closure 2))))
                             ;; P-ARB approved a unique source-recorded assignment
                             ;; under an exact, independently supported column sum.
                             (if (== count 1)
@@ -1464,6 +1537,7 @@
                             (cells-push oaz pick) (cells-push oaz 1) (cells-push oaz w) (cells-push oaz 1) (cells-push oaz 3)
                             (cells-push oaz (ow-get words w (owf-run))) (cells-push oaz (of-cget c best 3)) (cells-push oaz margin)
                             (cells-push oaz identity-first) (cells-push oaz identity-total) (cells-push oaz 0)))
+                      (if (== closure 2) (set rule 3))
                       (set zr (of-zrow ofz page x0 y0 x1 y1 pick count rule
                                        votes (of-cget c 0 3) (of-null-votes runs words reads rows parents r) margin mask))
                       (if (>= best 1)

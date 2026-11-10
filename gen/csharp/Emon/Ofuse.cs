@@ -1410,6 +1410,121 @@ public static class Ofuse {
         }
         return 1;
     }
+    public static int OfPpComplete(emon.Port.Cells words, emon.Port.Cells text, int first, int n, emon.Port.Cells comps, int page) {
+        // Conservative PP skip: every incumbent exceeds the existing insertion floor and is dictionary/format guarded, and every measured ink component fits wholly inside an incumbent word. No ink evidence is never completeness.
+        if (n <= 0) {
+            return 0;
+        }
+        int i = first;
+        int j = 0;
+        int seen = 0;
+        int covered = 0;
+        while (i < (first + n)) {
+            if (Evidence.OwGet(words, i, Evidence.HdConf()) < OfInsertConf()) {
+                return 0;
+            }
+            if (OfEligible(words, text, i) == 0) {
+                return 0;
+            }
+            if (((Evidence.OwGet(words, i, Evidence.OwfFlags()) & Evidence.OeDictionary()) == 0) && (Ofmt.OfmtValid(text, Evidence.OwGet(words, i, Evidence.HdTstart()), Evidence.OwGet(words, i, Evidence.HdTlen())) == 0)) {
+                return 0;
+            }
+            i += 1;
+        }
+        i = 0;
+        while (i < Evidence.CoCount(comps)) {
+            if (Evidence.CoGet(comps, i, Evidence.CfPage()) == page) {
+                seen = 1;
+                covered = 0;
+                j = first;
+                while (j < (first + n)) {
+                    if ((Evidence.OwGet(words, j, Evidence.HdX0()) <= Evidence.CoGet(comps, i, Evidence.CfX0())) && ((Evidence.OwGet(words, j, Evidence.HdY0()) <= Evidence.CoGet(comps, i, Evidence.CfY0())) && ((Evidence.OwGet(words, j, Evidence.HdX1()) >= Evidence.CoGet(comps, i, Evidence.CfX1())) && (Evidence.OwGet(words, j, Evidence.HdY1()) >= Evidence.CoGet(comps, i, Evidence.CfY1()))))) {
+                        covered = 1;
+                    }
+                    j += 1;
+                }
+                if (covered == 0) {
+                    return 0;
+                }
+            }
+            i += 1;
+        }
+        return seen;
+    }
+    public static int OfPpCode(emon.Port.Cells text, int start, int n) {
+        // An ASCII identifier containing both letters and digits. Existing valid formats, punctuation other than a hyphen, and lexical words are excluded.
+        if ((start < 0) || ((n <= 0) || ((start + n) > emon.Port.CellsLen(text)))) {
+            return 0;
+        }
+        if (Ofmt.OfmtValid(text, start, n) == 1) {
+            return 0;
+        }
+        int i = 0;
+        int cp = 0;
+        int letters = 0;
+        int digits = 0;
+        while (i < n) {
+            cp = emon.Port.CellsAt(text, start + i);
+            if (Ofmt.FmtDigit(cp) == 1) {
+                digits = 1;
+            } else if (((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122))) {
+                letters = 1;
+            } else if (cp != 45) {
+                return 0;
+            }
+            i += 1;
+        }
+        if ((letters == 1) && (digits == 1)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int OfPpRepeatChoice(emon.Port.Cells runs, emon.Port.Cells words, emon.Port.Cells text, emon.Port.Cells c, emon.Port.Cells refs, emon.Port.Cells sel, int incumbentCount) {
+        // Only an empty slot may acquire an identifier independently present in a selected non-PP incumbent at another physical location. No replacement, vote inflation, or invented dictionary membership.
+        if (incumbentCount != 0) {
+            return -1;
+        }
+        int i = 1;
+        int j = 0;
+        int w = 0;
+        int v = 0;
+        int run = 0;
+        int best = -1;
+        int found = 0;
+        while (i < (emon.Port.CellsLen(c) / OfCstride())) {
+            run = OfCget(c, i, 0);
+            if ((run >= 0) && (run < Evidence.OrCount(runs))) {
+                if (((Evidence.OrGet(runs, run, Evidence.OrfRequest()) % 256) == 23) && ((OfCget(c, i, 2) == 1) && (OfCget(c, i, 4) >= OfInsertConf()))) {
+                    w = emon.Port.CellsAt(refs, OfCget(c, i, 1));
+                    if (OfPpCode(text, Evidence.OwGet(words, w, Evidence.HdTstart()), Evidence.OwGet(words, w, Evidence.HdTlen())) == 1) {
+                        j = 0;
+                        found = 0;
+                        while (j < emon.Port.CellsLen(sel)) {
+                            v = emon.Port.CellsAt(sel, j);
+                            run = Evidence.OwGet(words, v, Evidence.OwfRun());
+                            if ((run >= 0) && (run < Evidence.OrCount(runs))) {
+                                if (((Evidence.OrGet(runs, run, Evidence.OrfRequest()) % 256) != 23) && ((Evidence.OwGet(words, w, Evidence.HdPage()) == Evidence.OwGet(words, v, Evidence.HdPage())) && (Evidence.OwGet(words, v, Evidence.HdConf()) >= OfInsertConf()))) {
+                                    if ((OfWordSame(words, text, w, v, 0) == 1) && (Evidence.EvOverlapSmall(Evidence.OwGet(words, w, Evidence.HdX0()), Evidence.OwGet(words, w, Evidence.HdY0()), Evidence.OwGet(words, w, Evidence.HdX1()), Evidence.OwGet(words, w, Evidence.HdY1()), Evidence.OwGet(words, v, Evidence.HdX0()), Evidence.OwGet(words, v, Evidence.HdY0()), Evidence.OwGet(words, v, Evidence.HdX1()), Evidence.OwGet(words, v, Evidence.HdY1())) == 0)) {
+                                        found = 1;
+                                    }
+                                }
+                            }
+                            j += 1;
+                        }
+                        if (found == 1) {
+                            if (best >= 1) {
+                                return -1;
+                            } else {
+                                best = i;
+                            }
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+        return best;
+    }
     public static int OfPpChoice(emon.Port.Cells c, int incumbentCount) {
         int best = OfChoice(c, incumbentCount);
         if (best < 1) {
@@ -1872,6 +1987,12 @@ public static class Ofuse {
                             }
                         }
                         best = OfPpChoice(c, count);
+                        if (best < 1) {
+                            best = OfPpRepeatChoice(runs, words, text, c, crefs, sel, count);
+                            if (best >= 1) {
+                                closure = 2;
+                            }
+                        }
                         if (count == 1) {
                             k = 0;
                             while (k < emon.Port.CellsLen(arithmetic)) {
@@ -1939,6 +2060,9 @@ public static class Ofuse {
                         emon.Port.CellsPush(oaz, identityFirst);
                         emon.Port.CellsPush(oaz, identityTotal);
                         emon.Port.CellsPush(oaz, 0);
+                    }
+                    if (closure == 2) {
+                        rule = 3;
                     }
                     zr = OfZrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask);
                     if (best >= 1) {

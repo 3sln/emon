@@ -73,9 +73,14 @@ the existing receipt scorer. Use `EMON_RECEIPTS_OUT` for external outputs.
 `--measure-cost` captures per-process peak RSS using the owned child's `wait4` resource result (macOS byte units, Linux KiB converted to bytes);
 CPU includes process/session initialization and all existing emon passes.
 
-The optional path shares its extra full-raster request with the first Tesseract
-OCR round. If Tesseract later enlarges its own view, PP keeps the original
-bitmap's view and scale. RC5c numeric protection remains in force. Optional
+The optional path inspects Tesseract and measured ink before requesting PP,
+sharing the retarget round. It skips PP only when every incumbent word meets
+the existing 700 confidence floor and has dictionary or valid-format evidence,
+and every measured ink component fits wholly inside an incumbent word. Missing
+ink evidence never proves completeness. ORT sessions initialize lazily on the
+first actual PP request; model pins are still verified at construction. If
+Tesseract enlarges its own view, PP keeps the original bitmap's view and scale.
+RC5c numeric protection remains in force. Optional
 P-ARB sum proposals require ruled numeric columns and a neighboring ruled column, then use the existing bounded arithmetic kernel's
 compatibility, uniqueness and competing-explanation guards. An incumbent-only
 neighbor identity supplies independent support; otherwise the stricter unique
@@ -85,6 +90,13 @@ The option also refuses shortened slot replacements and protects year ranges;
 a dictionary-backed incumbent needs independent agreement for lexical
 replacement, while a dictionary-backed
 insertion still needs calibrated confidence >=700.
+
+An empty slot can also insert a verbatim alphanumeric identifier independently
+present in a non-overlapping selected Tesseract word on the same page. Both
+words must meet the existing 700 floor. Exact case-sensitive agreement is
+required; PP cannot corroborate itself, valid numeric formats are excluded,
+and competing candidates are refused. This rule cannot replace an incumbent
+and does not manufacture reading votes or dictionary membership (D861).
 
 Run option-off verification serially with
 `bb tools/ppocr/final_gates.clj --out EXTERNAL-DIR`. It snapshots the review

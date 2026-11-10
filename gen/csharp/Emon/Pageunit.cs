@@ -474,15 +474,13 @@ public static class Pageunit {
         int nl = 0;
         int rotmed = 0;
         int asked = 0;
+        int ppasked = 0;
         int nsel = 0;
         pxw = Plan.AnArg(ans, ad, 0);
         pxh = Plan.AnArg(ans, ad, 1);
         ao = Plan.AnFind(ans, oid);
         if (ao < 0) {
             Scan.ScRequest(rq, oid, did, (dpi100 + 50) / 100, loc);
-            if ((fuse & 8) == 8) {
-                Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot()), did, (dpi100 + 50) / 100, loc);
-            }
             return Plan.UsRequests();
         }
         if (Plan.AnOk(ans, ao) != 1) {
@@ -550,9 +548,16 @@ public static class Pageunit {
         }
         nw = Evidence.OwCount(owords) - w0;
         Pageink.PnFeatures(i + 1, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
+        if (((fuse & 8) == 8) && (Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot())) < 0)) {
+            if (Ofuse.OfPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
+                Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot()), did, (dpi100 + 50) / 100, loc);
+                ppasked = 1;
+            }
+        }
         Retarget.RtPrep(rtp);
         Retarget.RtReceiptSource(rtp, maskv);
         asked = Retarget.RtPlan(i, input, 0, 0, rid, hint, loc, ans, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), ws, oruns, run, olines, owords, rules, tlines, rtp, rq, scr, comps, inks, s6);
+        asked += ppasked;
         if (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0) {
             asked += Oapct.PctAsk(i, dpi100, bx0, by0, emon.Port.BmsGet(bms, did), ans, loc, bms, owords, etext, w0, nw, rq, s1, s2, s3, s4, s5, s6);
         }

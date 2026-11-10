@@ -1,6 +1,6 @@
 (ns emon.ocrenginetest
   (:require [emon.lang :refer [I32 Cells]]
-            [emon.ofuse :refer [of-rule of-pp-choice of-pp-year]]
+            [emon.ofuse :refer [of-rule of-pp-choice of-pp-year of-pp-code]]
             [emon.ocrengine :refer [oe-tag oe-id-count]]
             [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
             [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
@@ -143,3 +143,19 @@
     (cells-push c 1) (cells-push c 1) (cells-push c 1) (cells-push c 1)
     (cells-push c 883) (cells-push c 1) (cells-push c 0) (cells-push c 0)
     (assert-eq (of-pp-choice c 1) -1 "an incumbent dictionary word needs independent agreement")))
+
+;; OP1c: repeated identifiers can support an insertion, never a replacement.
+;; Amounts, times and year ranges stay in their existing format policies.
+(deftest test-repeated-code-grammar-does-not-reclassify-protected-formats
+  (let [^Cells code (new-cells) ^Cells price (new-cells) ^Cells year (new-cells)
+        ^Cells time (new-cells) ^Cells word (new-cells)]
+    (cells-push code 65) (cells-push code 66) (cells-push code 45) (cells-push code 49)
+    (cells-push price 82) (cells-push price 77) (cells-push price 53) (cells-push price 46) (cells-push price 48) (cells-push price 48)
+    (cells-push year 50) (cells-push year 48) (cells-push year 48) (cells-push year 53) (cells-push year 45) (cells-push year 48) (cells-push year 54)
+    (cells-push time 50) (cells-push time 49) (cells-push time 58) (cells-push time 50) (cells-push time 56)
+    (cells-push word 80) (cells-push word 65) (cells-push word 78) (cells-push word 68)
+    (assert-eq (of-pp-code code 0 4) 1 "alphanumeric identifier")
+    (assert-eq (of-pp-code price 0 6) 0 "currency is not a repeated identifier")
+    (assert-eq (of-pp-code year 0 7) 0 "source year range remains protected")
+    (assert-eq (of-pp-code time 0 5) 0 "source time remains protected")
+    (assert-eq (of-pp-code word 0 4) 0 "PAND/PANO failure band is not an identifier")))

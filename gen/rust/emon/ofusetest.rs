@@ -1013,6 +1013,79 @@ pub(crate) fn oft_w(mut words: &mut crate::port::Cells, x0: i32, y0: i32, x1: i3
     ow_set(words, w, owf_flags(), flags);
     return w;
 }
+#[test]
+fn test_repeated_identifier_needs_an_independent_incumbent_and_an_empty_slot() {
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let refs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let sel: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 65);
+    crate::port::cells_push(text, 66);
+    crate::port::cells_push(text, 49);
+    or_new(runs, 1, 0);
+    or_new(runs, 1, 0);
+    or_set(runs, 0, orf_request(), 272);
+    or_set(runs, 1, orf_request(), 279);
+    oft_w(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
+    oft_w(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
+    crate::port::cells_push(sel, 0);
+    crate::port::cells_push(refs, 1);
+    crate::port::cells_push(c, -1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 700);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
+    crate::port::cells_set(c, 12, 699);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "existing insertion confidence floor");
+    crate::port::cells_set(c, 12, 700);
+    ow_set(words, 0, hd_conf(), 699);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "weak repeats are not independent support");
+    ow_set(words, 0, hd_conf(), 700);
+    ow_set(words, 0, owf_run(), 1);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "PP cannot corroborate itself");
+    ow_set(words, 0, owf_run(), 0);
+    ow_set(words, 1, hd_y0(), 1000);
+    ow_set(words, 1, hd_y1(), 1200);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "same physical word is not a repeat");
+}
+#[test]
+fn test_pp_skip_needs_confident_guarded_words_and_complete_ink() {
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let text: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let comps: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(text, 80);
+    crate::port::cells_push(text, 65);
+    crate::port::cells_push(text, 78);
+    crate::port::cells_push(text, 68);
+    oft_w(words, 1000, 1000, 1200, 1200, 0, 4, 0, 0, 900, oe_dictionary());
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 1, comps, 1), 0, "missing ink evidence cannot prove completeness");
+    co_new(comps, 1, 1010, 1010, 1190, 1190, 0);
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 1, comps, 1), 1, "confident dictionary word covers all measured ink");
+    ow_set(words, 0, hd_conf(), 699);
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 1, comps, 1), 0, "weak incumbent needs PP");
+    ow_set(words, 0, hd_conf(), 900);
+    ow_set(words, 0, owf_flags(), 0);
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 1, comps, 1), 0, "confidence cannot substitute for lexical evidence");
+    ow_set(words, 0, owf_flags(), oe_dictionary());
+    co_new(comps, 1, 1300, 1010, 1400, 1190, 0);
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 1, comps, 1), 0, "unread ink defeats a high-confidence skip");
+    crate::testport::assert_eq(of_pp_complete(words, text, 0, 0, comps, 1), 0, "an empty reading is not complete");
+}
 pub(crate) fn oft_close(mut runs: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, pass: i32, w0: i32, w1: i32, x1: i32, y1: i32) -> i32 {
     // Run `pass` of words [w0, w1), one line over all of them.
     let r: i32 = or_new(runs, 1, -1);

@@ -1445,6 +1445,124 @@ func OfPpYear(text *port.Cells, start int32, n int32) int32 {
 	return 1
 }
 
+func OfPpComplete(words *port.Cells, text *port.Cells, first int32, n int32, comps *port.Cells, page int32) int32 {
+	// Conservative PP skip: every incumbent exceeds the existing insertion floor and is dictionary/format guarded, and every measured ink component fits wholly inside an incumbent word. No ink evidence is never completeness.
+	if n <= 0 {
+		return 0
+	}
+	var i int32 = first
+	var j int32 = 0
+	var seen int32 = 0
+	var covered int32 = 0
+	for i < (first + n) {
+		if evidence.OwGet(words, i, evidence.HdConf()) < OfInsertConf() {
+			return 0
+		}
+		if OfEligible(words, text, i) == 0 {
+			return 0
+		}
+		if ((evidence.OwGet(words, i, evidence.OwfFlags()) & evidence.OeDictionary()) == 0) && (ofmt.OfmtValid(text, evidence.OwGet(words, i, evidence.HdTstart()), evidence.OwGet(words, i, evidence.HdTlen())) == 0) {
+			return 0
+		}
+		i += 1
+	}
+	i = 0
+	for i < evidence.CoCount(comps) {
+		if evidence.CoGet(comps, i, evidence.CfPage()) == page {
+			seen = 1
+			covered = 0
+			j = first
+			for j < (first + n) {
+				if (evidence.OwGet(words, j, evidence.HdX0()) <= evidence.CoGet(comps, i, evidence.CfX0())) && ((evidence.OwGet(words, j, evidence.HdY0()) <= evidence.CoGet(comps, i, evidence.CfY0())) && ((evidence.OwGet(words, j, evidence.HdX1()) >= evidence.CoGet(comps, i, evidence.CfX1())) && (evidence.OwGet(words, j, evidence.HdY1()) >= evidence.CoGet(comps, i, evidence.CfY1())))) {
+					covered = 1
+				}
+				j += 1
+			}
+			if covered == 0 {
+				return 0
+			}
+		}
+		i += 1
+	}
+	return seen
+}
+
+func OfPpCode(text *port.Cells, start int32, n int32) int32 {
+	// An ASCII identifier containing both letters and digits. Existing valid formats, punctuation other than a hyphen, and lexical words are excluded.
+	if (start < 0) || ((n <= 0) || ((start + n) > port.CellsLen(text))) {
+		return 0
+	}
+	if ofmt.OfmtValid(text, start, n) == 1 {
+		return 0
+	}
+	var i int32 = 0
+	var cp int32 = 0
+	var letters int32 = 0
+	var digits int32 = 0
+	for i < n {
+		cp = port.CellsAt(text, start+i)
+		if ofmt.FmtDigit(cp) == 1 {
+			digits = 1
+		} else if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
+			letters = 1
+		} else if cp != 45 {
+			return 0
+		}
+		i += 1
+	}
+	if (letters == 1) && (digits == 1) {
+		return 1
+	}
+	return 0
+}
+
+func OfPpRepeatChoice(runs *port.Cells, words *port.Cells, text *port.Cells, c *port.Cells, refs *port.Cells, sel *port.Cells, incumbentCount int32) int32 {
+	// Only an empty slot may acquire an identifier independently present in a selected non-PP incumbent at another physical location. No replacement, vote inflation, or invented dictionary membership.
+	if incumbentCount != 0 {
+		return -1
+	}
+	var i int32 = 1
+	var j int32 = 0
+	var w int32 = 0
+	var v int32 = 0
+	var run int32 = 0
+	var best int32 = -1
+	var found int32 = 0
+	for i < (port.CellsLen(c) / OfCstride()) {
+		run = OfCget(c, i, 0)
+		if (run >= 0) && (run < evidence.OrCount(runs)) {
+			if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) == 23) && ((OfCget(c, i, 2) == 1) && (OfCget(c, i, 4) >= OfInsertConf())) {
+				w = port.CellsAt(refs, OfCget(c, i, 1))
+				if OfPpCode(text, evidence.OwGet(words, w, evidence.HdTstart()), evidence.OwGet(words, w, evidence.HdTlen())) == 1 {
+					j = 0
+					found = 0
+					for j < port.CellsLen(sel) {
+						v = port.CellsAt(sel, j)
+						run = evidence.OwGet(words, v, evidence.OwfRun())
+						if (run >= 0) && (run < evidence.OrCount(runs)) {
+							if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) != 23) && ((evidence.OwGet(words, w, evidence.HdPage()) == evidence.OwGet(words, v, evidence.HdPage())) && (evidence.OwGet(words, v, evidence.HdConf()) >= OfInsertConf())) {
+								if (ofWordSame(words, text, w, v, 0) == 1) && (evidence.EvOverlapSmall(evidence.OwGet(words, w, evidence.HdX0()), evidence.OwGet(words, w, evidence.HdY0()), evidence.OwGet(words, w, evidence.HdX1()), evidence.OwGet(words, w, evidence.HdY1()), evidence.OwGet(words, v, evidence.HdX0()), evidence.OwGet(words, v, evidence.HdY0()), evidence.OwGet(words, v, evidence.HdX1()), evidence.OwGet(words, v, evidence.HdY1())) == 0) {
+									found = 1
+								}
+							}
+						}
+						j += 1
+					}
+					if found == 1 {
+						if best >= 1 {
+							return -1
+						} else {
+							best = i
+						}
+					}
+				}
+			}
+		}
+		i += 1
+	}
+	return best
+}
+
 func OfPpChoice(c *port.Cells, incumbentCount int32) int32 {
 	var best int32 = OfChoice(c, incumbentCount)
 	if best < 1 {
@@ -1925,6 +2043,12 @@ func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *por
 						}
 					}
 					best = OfPpChoice(c, count)
+					if best < 1 {
+						best = OfPpRepeatChoice(runs, words, text, c, crefs, sel, count)
+						if best >= 1 {
+							closure = 2
+						}
+					}
 					if count == 1 {
 						k = 0
 						for k < port.CellsLen(arithmetic) {
@@ -1992,6 +2116,9 @@ func OfFuse(page int32, image int32, trigger int32, runs *port.Cells, lines *por
 					port.CellsPush(oaz, identityFirst)
 					port.CellsPush(oaz, identityTotal)
 					port.CellsPush(oaz, 0)
+				}
+				if closure == 2 {
+					rule = 3
 				}
 				zr = ofZrow(ofz, page, x0, y0, x1, y1, pick, count, rule, votes, OfCget(c, 0, 3), OfNullVotes(runs, words, reads, rows, parents, r), margin, mask)
 				if best >= 1 {
