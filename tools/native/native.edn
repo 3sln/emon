@@ -17,7 +17,7 @@
 
  ;; one entry per target triple; :runner is the GitHub runner that builds it (.github/workflows/native.yml holds the same table, `bb native --check`)
  :triples
- {"aarch64-apple-darwin"     {:runner "macos-14"        :os :mac     :arch "arm64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-arm64"
+ {"aarch64-apple-darwin"     {:runner "macos-15"        :os :mac     :arch "arm64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-arm64"
                               :ignore-prefix ["/opt/homebrew" "/usr/local"] :cxx-runtime ["c++"]}
   "x86_64-apple-darwin"      {:runner "macos-15-intel"  :os :mac     :arch "x86_64" :generator "Unix Makefiles" :osx-deployment "12.0" :pdfium "mac-x64"
                               :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime ["c++"]}
