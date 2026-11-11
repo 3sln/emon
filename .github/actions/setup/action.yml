@@ -59,6 +59,10 @@ runs:
         mkdir -p "$pylib"
         python3 -m pip install --quiet --target "$pylib" --break-system-packages \
           jsonschema==4.26.0 html5lib==1.1 pdfplumber==0.11.10 pdfminer.six==20260107
+        # Scripts also add the unversioned ~/.cache/emon/pylib to sys.path (some ahead of EMON_PYLIB), so
+        # make that path the versioned directory too: a stale restored copy must not shadow it.
+        rm -rf "$HOME/.cache/emon/pylib"
+        ln -s "$pylib" "$HOME/.cache/emon/pylib"
         echo "EMON_PYLIB=$pylib" >> "$GITHUB_ENV"
         echo "PYTHONPATH=$pylib" >> "$GITHUB_ENV"
     - name: Versions
