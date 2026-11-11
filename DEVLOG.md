@@ -4101,6 +4101,26 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
 
 ---
 
+## Phase 13 — Engine seam, packaging, Dart/Flutter
+
+Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engine-neutral OCR interchange (OIL, D883), engines as adapters, a bare core plus adapter packages, and pinned model packs. Dart/Flutter ships as a thin FFI package over the C ABI. There is no Dart kin target (D884). No backwards compatibility: re-record and re-baseline. Order: P13.1 and P13.2 now; Dart P13.6 to P13.8 may run beside the OIL items, since they touch the C ABI and host/dart, not kin.
+
+- [ ] P13.1 — One-file release (REL1). Placeholder versions in tracked manifests, stamped from `version.edn` at build time. `release.yml` runs end to end on a `version.edn` bump on main, and retries manually with `workflow_dispatch version [only]`. Replaces bump/draft/publish-on-release. In progress.
+- [ ] P13.2 — OIL phase 1: OIL replaces the Tesseract-shaped answer record. Tesseract and PP are expressed in it, with emon's own enums, capability bits, requested and observed engine identity, and the sidecar registry. Gate: the Tesseract path shows zero accuracy regressions, and PP P/R stays within ±0.002. Fix the four host bugs the audit found: PP's `osd=0`, the browser's missing OSD and zero baselines, row metrics never filled, and PP calibration living in the Rust host.
+- [ ] P13.3 — Packaging design (PKG1): `emon-core` (no OCR engine) plus adapter packages, a turnkey `emon` per platform, hybrids composed in core, and SHA-pinned model/language packs as release assets. Covers the package matrix per ecosystem and the C ABI adapter-callback form. In progress.
+- [ ] P13.4 — OIL phase 2: PP-alone as a first-class engine. Measure first (row/line split on the OP1 bundles), then build kin row assembly for segment engines. Gate: CORD line items ≥ 22/151, the D849 baseline.
+- [ ] P13.5 — Threshold refit: about 20 `scan`/`retarget` thresholds move from raw Tesseract confidence to calibrated `pcal`. A separate reviewed phase, taken after P13.4 acceptance.
+- [ ] P13.6 — Dart P1: a C ABI fit for mobile embedding. `emon.h` may break freely; re-record `api/surface.edn`.
+- [ ] P13.7 — Dart P2: the `emon` Dart package on desktop. ffigen bindings, an API shaped like the JS SDK, conversions on a background isolate, and a build hook that downloads SHA-pinned `libemon` and pdfium. Adds `bb package --host dart --check`. The shape follows P13.3: core plus adapters.
+- [ ] P13.8 — Dart P3: mobile native builds. Android arm64, armv7 and x86_64, plus iOS device and simulator triples in `native.edn` and CI.
+- [ ] P13.9 — OIL phase 3: composition of N readings, with per-reading provenance. Each source engine's reading is attached where the engines disagree.
+- [ ] P13.10 — OIL phase 4: Apple Vision in the Rust host, so the macOS CLI, C ABI, pod and Dart get it too. Needs per-engine calibration and acceptance. Seal and stamp pages keep Tesseract as incumbent (D883 ruling 8).
+- [ ] P13.11 — OIL phase 5: Windows.Media.Ocr (Rust and C#) and ML Kit (an optional Android plugin through the Dart package). Uncalibrated engines vote only (D883 ruling 3).
+- [ ] P13.12 — Dart web backend: the same Dart API over the wasm build and JS SDK, through `dart:js_interop`.
+- [ ] P13.13 — Dart release: pub.dev automated publishing via GitHub OIDC, folded into `release.yml`.
+
+---
+
 ## Decisions
 
 Append-only. Each entry says what was decided, why, and what else was
@@ -14133,5 +14153,88 @@ The maintainer configures a Trusted Publisher on each of `@3sln/emon`, `@3sln/pd
 ### D882 — No `release` deployment environment in publish.yml
 
 At the maintainer's request, the publish jobs (`assets`, crates, npm, nuget, maven, go) no longer run in the `release` environment, so there is no required-reviewer approval. Publishing the draft release is now the single decision; `bb release-verify` still gates every job on `emon/verified`. Registry secrets are read at repository level, which already worked. Because the OIDC token no longer carries an environment claim, the Trusted Publishing policies on nuget.org and npm (D881) must leave the environment blank. The `release` environment can be deleted in the repository settings. `github-pages` stays: `pages.yml` deploys through it.
+
+- [ ] **Signed off** (maintainer)
+
+### D883 — OIL: an engine-agnostic OCR interchange replaces the Tesseract-shaped answer; hybrids stay composed in kin
+
+The OCR answer record (D089's words plus `emon.ocr` extension v2, D095/D214) is replaced, with no compatibility reader, by **OIL**:
+- **Enums and units.** emon's own enums (segmentation intent instead of psm; page orientation, writing direction, line order, block kind, line granularity, confidence kind). Geometry in request-bitmap pixels. Raw per-mille confidence rounded by one kin helper.
+- **Capability bits.** `caps` and `native` gate variable-stride column groups (baseline, row metrics, quad, angle, line confidence, paragraphs, block kind, word language, lexicon, style, point size, symbols, alternatives, word alternatives, reading order, binary). Absence is never an in-band value for a signed quantity (the D857 lesson).
+- **Two identities.** The requested configuration is a trailer on every OCR request and part of the transcript key. The observed identity is a hash in the answer header, with its full string in the transcript's `:engines`.
+- **A source-engine sidecar.** Namespaced by engine and registered in kin (type, arity, subject, attach rule, consumer, fallback). Kin seals it so that a value is kept only when it is informative or differs from what the normalized row implies.
+
+The evidence arenas, already engine-neutral, gain: the engine and capabilities per run; a calibrated probability beside the raw score per word; and provenance (`prov`, agreement code, references to the other engines' source rows) per word and line.
+
+Hybrids are composed in kin over N recorded readings, under a role table (incumbent, challenger). This replaces request slot 23 and the PP-named rules. Adapter-side composition is rejected: it would duplicate policy in every host and make policy changes unreplayable. Within-engine assembly (CTC word boxes, string-range boxes) stays at the engine call.
+
+Calibration:
+- Word-level maps move into kin (`emon.ocalib`), keyed by engine and calibration class. PP's D845 bins move verbatim from the Rust host.
+- The node map gains an engine column.
+- An engine with no fitted map is uncalibrated: it may vote, may not insert or replace, and its output is capped and flagged.
+
+PP-alone's CORD line-item collapse (D849: 22/151 → 0) is traced, from code and not yet measured, to detector segments emitted as lines, blocks and paragraphs that paragraph, table and column stages read as Tesseract textlines. Kin row assembly for segment engines is Phase 2.
+
+Transcripts, goldens, scoreboard, receipt and calibration baselines are re-recorded or refitted. Acceptance is by accuracy delta:
+- zero regressions on the Tesseract path;
+- ±0.002 receipt P/R for PP and the hybrid in Phase 1;
+- PP-alone CORD line items ≥ 22/151 in Phase 2.
+
+`bb oil-check` and the L-oil laws are added. Apple Vision through the Rust host is the proving engine (Phase 4). Report: `.claude/coord/oil1-report.md`.
+
+**Maintainer rulings of 2026-11-11 on the eight open questions, all as the coordinator recommended:**
+1. Every OCR request carries the requested-identity trailer. Transcripts are re-keyed, and the D859/D867 classifiers retire.
+2. Row assembly for segment engines is kin policy, not adapter merging.
+3. An uncalibrated engine may vote, but it may not insert or replace. It is capped, flagged, and never incumbent while uncalibrated.
+4. An engine without OSD has its script judged by emon's own text-script census plus the requested model's script.
+5. The roughly 20 threshold refits to `pcal` form their own reviewed phase after PP-alone acceptance (P13.5).
+6. PP's non-monotone calibration bin is repaired (isotonic) when PP calibration moves into kin.
+7. `emon.ocrtess` stays the request-language resolver for Tesseract only. Other engines get ISO-639-3 → locale tables.
+8. On seal and stamp pages, Tesseract is incumbent whenever it is available, until a platform engine passes the seal and stamp gates.
+
+No backwards compatibility: re-record and re-baseline. Accuracy must not regress beyond the stated tolerances.
+
+- [ ] **Signed off** (maintainer)
+
+### D884 — Dart/Flutter: an FFI package over the C ABI with prebuilt libraries from build hooks; no Dart kin target; platform OCR behind OIL1
+
+emon ships to Dart and Flutter as one package, `emon`:
+- **API:** a Dart API shaped like the JS SDK, over `emon.h` through ffigen `@Native` bindings.
+- **Native libraries:** `libemon` and `libpdfium` are prebuilt per target and fetched by `hook/build.dart`. The hook verifies them against SHA-256 values pinned in the published package and bundles them with `DynamicLoadingBundled` (Dart 3.10+ hooks; static linking is not supported by the SDK).
+- **Targets:** macOS, Linux and Windows (a new Windows C archive), plus Android arm64/armv7/x86_64 (NDK r28+, 16 KB pages) and iOS device/simulator as new `native.edn` triples.
+- **Web:** the same API over the existing wasm module and JS SDK through `dart:js_interop`.
+- **No Dart kin target.** A fifth generated language (340k lines, a fifth arm in laws, identity and replay gates, and a fifth host) would still need native pdfium and OCR per platform. dart2js cannot carry I64.
+
+**OCR.** The default is each platform's engine where one exists:
+- Apple Vision and `Windows.Media.Ocr` in the Rust host, so the CLI, C library and pod gain them too;
+- ML Kit through an optional Android plugin answering via a step-API session whose renders the library makes itself;
+- Tesseract on Linux and as an opt-in variant elsewhere;
+- tesseract.js on the web.
+
+A platform engine is enabled by default only after it passes its own acceptance through the OIL1 interchange:
+- engine identity in requests, transcripts and evidence;
+- capability flags;
+- a frozen per-engine reliability calibration;
+- per-engine replay ratchets recorded on a pinned reference OS.
+
+The prototype found that Vision alone:
+- has quantized per-line confidences;
+- has no OSD;
+- drops small cell crops;
+- leaks stamp words into the body.
+
+pdfium stays the renderer: platform renderers cannot draw text-only or no-text layers.
+
+Cross-host identity and replay are unchanged. A transcript recorded with Vision answers replayed byte-identically in the prototype. Live readings may differ by device and OS, and the evidence names the engine and its version. Backwards compatibility is not kept: `emon.h`, the transcripts and the goldens are re-recorded where this needs it.
+
+pub.dev:
+- verified publisher `3sln.com`;
+- the first version is published by hand;
+- after that, tag-push OIDC publishing, after `publish.yml` has attached the archives;
+- the repository must be public.
+
+Plan: P1-P7 of `.claude/coord/dart1-report.md`. The MVP with Tesseract everywhere is about 13-20 agent-days; the whole plan is about 33-49.
+
+The maintainer accepted this on 2026-11-11 and asked that it go in the plan (Phase 13, P13.6–P13.8 and P13.12–P13.13). The package shape is revised by P13.3 (PKG1): a core with no OCR engine, plus adapter packages and a turnkey `emon`, replacing the spike's two variants per triple.
 
 - [ ] **Signed off** (maintainer)
