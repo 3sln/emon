@@ -10,6 +10,9 @@ pub fn ocf_osd() -> i32 {
 pub fn ocf_best() -> i32 {
     return 4;
 }
+pub fn ocf_source() -> i32 {
+    return 8;
+}
 pub fn ocf_dpi_unit() -> i32 {
     return 256;
 }

@@ -14,6 +14,26 @@ public final class Oiltest {
         emon.Testport.assertEq(Oil.oilWordBase(0), 6, "word base only");
         emon.Testport.assertEq(Oil.oilWordBase((((Oil.ocWlang() + Oil.ocStyle()) + Oil.ocPsize()) + Oil.ocLexicon()) + Oil.ocWalts()), 11, "word groups include the word-alternative count");
     }
+    public static void testNativeRecordsUseTheSameBitmapBoundary() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.oilLine(c, at, 2, 3, 8, 7, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.oilEnd(c, at);
+        int size = emon.Port.cellsLen(c);
+        int line = Oil.oilLineAt(c, at, 0);
+        emon.Testport.assertEq(Oil.oilRecordCheckBitmap(c, at, 10, 10, scratch), 0, "rectangle reaches the bitmap edge");
+        emon.Testport.assertEq(emon.Port.cellsLen(c), size, "checking does not append a decoded copy");
+        emon.Port.cellsSet(c, line + 2, 9);
+        emon.Testport.assertEq(Oil.oilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "native overflow is refused");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, line + 2), 9, "checking never repairs or mutates evidence");
+        emon.Port.cellsSet(c, line + 2, 8);
+        emon.Port.cellsSet(c, at, size + 1);
+        emon.Testport.assertEq(Oil.oilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "truncated native envelope");
+        emon.Port.cellsSet(c, at, size);
+        emon.Port.cellsSet(c, at + 1, 4);
+        emon.Testport.assertEq(Oil.oilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "a different answer kind is not OCR");
+    }
     public static void testNativeMustBeASubsetOfPresentCapabilities() {
         emon.Testport.assertEq(Oil.oilNativeCheck(Oil.ocBlocks() + Oil.ocBaseline(), Oil.ocBaseline()), 1, "native subset");
         emon.Testport.assertEq(Oil.oilNativeCheck(Oil.ocBlocks(), Oil.ocBaseline()), 0, "cannot claim an absent group as native");

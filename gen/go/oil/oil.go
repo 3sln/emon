@@ -2018,7 +2018,7 @@ func oilBitmapBoxValid(v *port.Cells, p int32, width int32, height int32) int32 
 	return 1
 }
 
-func OilFlatInBitmap(v *port.Cells, id int32, width int32, height int32, out *port.Cells) int32 {
+func OilFlatCheckBitmap(v *port.Cells, width int32, height int32) int32 {
 	// At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
 	if (width < 0) || (height < 0) {
 		return -1
@@ -2097,7 +2097,41 @@ func OilFlatInBitmap(v *port.Cells, id int32, width int32, height int32, out *po
 		p = q
 		i += 1
 	}
+	return 0
+}
+
+func OilFlatInBitmap(v *port.Cells, id int32, width int32, height int32, out *port.Cells) int32 {
+	if OilFlatCheckBitmap(v, width, height) != 0 {
+		return -1
+	}
 	return OilFlat(v, id, out)
+}
+
+func OilRecordCheckBitmap(c *port.Cells, at int32, width int32, height int32, scratch *port.Cells) int32 {
+	// Native and external answers share the same syntax and bitmap checks. The complete record is never modified.
+	if (at < 0) || (at > (port.CellsLen(c) - 4)) {
+		return -1
+	}
+	var n int32 = port.CellsAt(c, at)
+	var i int32 = 4
+	if (n < 4) || (n > (port.CellsLen(c) - at)) {
+		return -1
+	}
+	if port.CellsAt(c, at+1) != 3 {
+		return -1
+	}
+	if port.CellsAt(c, at+3) != 0 {
+		if n != 4 {
+			return -1
+		}
+		return 0
+	}
+	port.CellsDrop(scratch, 0)
+	for i < n {
+		port.CellsPush(scratch, port.CellsAt(c, at+i))
+		i += 1
+	}
+	return OilFlatCheckBitmap(scratch, width, height)
 }
 
 func OilPolicyConf(c *port.Cells, at int32, word int32) int32 {

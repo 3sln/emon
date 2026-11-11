@@ -16,6 +16,27 @@ public static class Oiltest {
         emon.Testport.AssertEq(Oil.OilWordBase((((Oil.OcWlang() + Oil.OcStyle()) + Oil.OcPsize()) + Oil.OcLexicon()) + Oil.OcWalts()), 11, "word groups include the word-alternative count");
     }
     [Xunit.Fact]
+    public static void TestNativeRecordsUseTheSameBitmapBoundary() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.OilLine(c, at, 2, 3, 8, 7, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.OilEnd(c, at);
+        int size = emon.Port.CellsLen(c);
+        int line = Oil.OilLineAt(c, at, 0);
+        emon.Testport.AssertEq(Oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), 0, "rectangle reaches the bitmap edge");
+        emon.Testport.AssertEq(emon.Port.CellsLen(c), size, "checking does not append a decoded copy");
+        emon.Port.CellsSet(c, line + 2, 9);
+        emon.Testport.AssertEq(Oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "native overflow is refused");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, line + 2), 9, "checking never repairs or mutates evidence");
+        emon.Port.CellsSet(c, line + 2, 8);
+        emon.Port.CellsSet(c, at, size + 1);
+        emon.Testport.AssertEq(Oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "truncated native envelope");
+        emon.Port.CellsSet(c, at, size);
+        emon.Port.CellsSet(c, at + 1, 4);
+        emon.Testport.AssertEq(Oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "a different answer kind is not OCR");
+    }
+    [Xunit.Fact]
     public static void TestNativeMustBeASubsetOfPresentCapabilities() {
         emon.Testport.AssertEq(Oil.OilNativeCheck(Oil.OcBlocks() + Oil.OcBaseline(), Oil.OcBaseline()), 1, "native subset");
         emon.Testport.AssertEq(Oil.OilNativeCheck(Oil.OcBlocks(), Oil.OcBaseline()), 0, "cannot claim an absent group as native");

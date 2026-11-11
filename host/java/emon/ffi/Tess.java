@@ -245,7 +245,7 @@ public final class Tess implements Ocr {
     private static final class Word {
         int conf, line, block;
         int[] bx;
-        int[] text;
+        int[] text, model;
         int flags, lang, psize, dflags;
         List<Sym> syms = new ArrayList<>();
     }
@@ -257,7 +257,7 @@ public final class Tess implements Ocr {
 
     private static final class Block {
         int[] bx;
-        int orient, wdir, tlo, desk;
+        int orient, wdir, tlo, desk, pb;
     }
 
     // ------------------------------------------------------------------ TEST SUPPORT: the filesystem (tessdata)
@@ -460,6 +460,7 @@ public final class Tess implements Ocr {
         byte[] binPx = null;
         boolean hasBinary = false;
         int osd = -1, script = 0, sconf = -1, oconf = -1;
+        int[] osdName = new int[0];
         // Tesseract keeps the pointer until Clear: native memory that lives for this request
         try (Arena ar = Arena.ofConfined()) {
             MemorySegment cpx = ar.allocate(Math.max(px.length, 1), 16);
@@ -490,7 +491,8 @@ public final class Tess implements Ocr {
                     osd = deg.get(INT, 0);
                     oconf = x10(oc.get(FLT, 0));
                     sconf = x10(sc.get(FLT, 0));
-                    script = Ocrport.opOsdScript(cellsOf(cps(cstr(sn.get(PTR, 0)))));
+                    osdName = cps(cstr(sn.get(PTR, 0)));
+                    script = Ocrport.opOsdScript(cellsOf(osdName));
                 } else {
                     eng.notes.add("osd failed");
                 }
@@ -568,7 +570,23 @@ public final class Tess implements Ocr {
                 }
             }
         }
-        emon.Oil.oilEnd(c, at);
+        for (int i = 0; i < blocks.size(); i++) {
+            emon.Oil.oilScPut(c, at, 1, 1, i, cellsOf(new int[] {blocks.get(i).pb}), 0, 1);
+        }
+        if (osdName.length > 0) {
+            int[] value = new int[osdName.length + 1]; value[0] = osdName.length;
+            System.arraycopy(osdName, 0, value, 1, osdName.length);
+            emon.Oil.oilScPut(c, at, 2, 0, 0, cellsOf(value), 0, value.length);
+        }
+        for (int i = 0; i < words.size(); i++) {
+            int[] model = words.get(i).model, value = new int[model.length + 1]; value[0] = model.length;
+            System.arraycopy(model, 0, value, 1, model.length);
+            emon.Oil.oilScPut(c, at, 3, 3, i, cellsOf(value), 0, value.length);
+        }
+        emon.Oil.oilEndSource(c, at, flags);
+        if (emon.Oil.oilRecordCheckBitmap(c, at, w, hh, Port.newCells()) != 0) {
+            return failed(id, Planrun.STATUS_FAILED);
+        }
         int[] rec = Port.cellsVec(c);
         Port.Bitmap bmp = null;
         if (keepBinary && hasBinary && binPx != null && binPx.length > 0) {
@@ -598,6 +616,7 @@ public final class Tess implements Ocr {
                 bl.wdir = wd.get(INT, 0);
                 bl.tlo = tl.get(INT, 0);
                 bl.desk = (int) Math.round((double) dk.get(FLT, 0) * 180 / Math.PI * 100);
+                bl.pb = (int) piBlockType.invoke(pi);
                 blocks.add(bl);
             }
             if ((int) piAtBeginning.invoke(pi, RIL_PARA) != 0) {
@@ -637,6 +656,7 @@ public final class Tess implements Ocr {
                 wd.block = block;
                 wd.text = cps(text);
                 wd.lang = Ocrport.opWordLang(cellsOf(cps(cstr((MemorySegment) itWordLang.invoke(it)))));
+                wd.model = cps(cstr((MemorySegment) itWordLang.invoke(it)));
                 wd.dflags = dfl;
                 if (wantSyms) {
                     symbols(it, ar, wd);

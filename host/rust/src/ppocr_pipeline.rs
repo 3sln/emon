@@ -10,12 +10,16 @@ pub struct ReadingWord {
     pub bounds: [i32; 4],
     pub posterior: i32,
     pub line: usize,
+    pub span: [i32; 3],
 }
 #[derive(Debug, Clone)]
 pub struct Reading {
     pub words: Vec<ReadingWord>,
     pub lines: Vec<[i32; 4]>,
     pub quads: Vec<Quad>,
+    pub detector_scores: Vec<i32>,
+    pub classifications: Vec<[i32; 2]>,
+    pub quarters: Vec<i32>,
 }
 pub struct Pipeline {
     detector: Session,
@@ -95,14 +99,18 @@ impl Pipeline {
         if shape != vec![1, 1, height as i64, width as i64] {
             return Err("unexpected PP-OCR detector shape".into());
         }
-        let boxes = ppocr_image::detect(&prob, width, height, image.width, image.height)?;
+        let boxes = ppocr_image::detect_scored(&prob, width, height, image.width, image.height)?;
         let mut reading = Reading {
             words: Vec::new(),
             lines: Vec::new(),
             quads: Vec::new(),
+            detector_scores: Vec::new(),
+            classifications: Vec::new(),
+            quarters: Vec::new(),
         };
-        for mut q in boxes {
-            if q[3].sub(q[0]).length() > q[1].sub(q[0]).length() * 1.5 {
+        for (mut q, detector_score) in boxes {
+            let quarter = q[3].sub(q[0]).length() > q[1].sub(q[0]).length() * 1.5;
+            if quarter {
                 q = [q[3], q[0], q[1], q[2]];
             }
             let mut crop = image.crop(q)?;
@@ -112,6 +120,7 @@ impl Pipeline {
                 return Err("unexpected orientation classifier output".into());
             }
             let reversed = scores[1] > scores[0] && scores[1] > 0.9;
+            let classification = [reversed as i32, (f64::from(scores[1]) * 1_000_000.).round() as i32];
             if reversed {
                 crop.rotate180();
                 q = [q[2], q[3], q[0], q[1]];
@@ -130,6 +139,9 @@ impl Pipeline {
             let line = reading.lines.len();
             reading.lines.push(box_of(q, image.width, image.height));
             reading.quads.push(q);
+            reading.detector_scores.push(detector_score);
+            reading.classifications.push(classification);
+            reading.quarters.push(quarter as i32);
             for word in ws {
                 // Measured CTC support in padded tensor pixels, inverse-scaled to
                 // the actual crop. This deliberately does not spread words evenly.
@@ -153,6 +165,7 @@ impl Pipeline {
                         bounds,
                         posterior: word.posterior,
                         line,
+                        span: [word.start as i32, word.end as i32, steps as i32],
                     });
                 }
             }

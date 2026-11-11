@@ -11,7 +11,7 @@
                               oil-begin oil-end oil-line oil-word oil-word-cp
                               oil-sym oil-sym-cp oil-alt oil-alt-cp oil-first-word
                               oil-tess-begin oil-tess-block oil-block-field oil-tlorder oh-lorder oil-sc-put oil-seal oil-set oh-nsc oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
-                              oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat oil-flat-in-bitmap]]
+                              oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat oil-flat-in-bitmap oil-record-check-bitmap]]
             [kin.lang :refer [defn return let set while if do + - <]]))
 
 (deftest test-capabilities-determine-the-physical-row-strides
@@ -25,6 +25,24 @@
   (assert-eq (oil-word-base 0) 6 "word base only")
   (assert-eq (oil-word-base (+ (+ (+ (+ (oc-wlang) (oc-style)) (oc-psize)) (oc-lexicon)) (oc-walts))) 11
              "word groups include the word-alternative count"))
+
+(deftest test-native-records-use-the-same-bitmap-boundary
+  (let [^Cells c (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (oil-begin c 1 (oen-ppocr) 0 0 1 0 0 1)]
+    (oil-line c at 2 3 8 7 -1 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (oil-end c at)
+    (let [^I32 size (cells-len c) ^I32 line (oil-line-at c at 0)]
+      (assert-eq (oil-record-check-bitmap c at 10 10 scratch) 0 "rectangle reaches the bitmap edge")
+      (assert-eq (cells-len c) size "checking does not append a decoded copy")
+      (cells-set c (+ line 2) 9)
+      (assert-eq (oil-record-check-bitmap c at 10 10 scratch) -1 "native overflow is refused")
+      (assert-eq (cells-at c (+ line 2)) 9 "checking never repairs or mutates evidence")
+      (cells-set c (+ line 2) 8)
+      (cells-set c at (+ size 1))
+      (assert-eq (oil-record-check-bitmap c at 10 10 scratch) -1 "truncated native envelope")
+      (cells-set c at size)
+      (cells-set c (+ at 1) 4)
+      (assert-eq (oil-record-check-bitmap c at 10 10 scratch) -1 "a different answer kind is not OCR"))))
 
 (deftest test-native-must-be-a-subset-of-present-capabilities
   (assert-eq (oil-native-check (+ (oc-blocks) (oc-baseline)) (oc-baseline)) 1 "native subset")

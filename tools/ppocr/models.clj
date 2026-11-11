@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 ;; Integrated optional-port contracts: live Models and inference-free replays.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]] '[clojure.string :as str]
-         '[cheshire.core :as json] '[clojure.edn :as edn])
+         '[cheshire.core :as json] '[clojure.edn :as edn] '[ppocr.qualification :as qualification-path])
 (def args (apply hash-map *command-line-args*))
 (def out (str (fs/absolutize (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/models")))))
 (fs/create-dirs out)
@@ -21,9 +21,9 @@
 (def rust ".cache/emon-rs-ppocr/target/release/emon-rs")
 (def hosts [["rust" rust] ["go" ".cache/emon-go-live/emon-go"] ["java" ".cache/emon-java/emon-java"]
             ["csharp" ".cache/emon-cs/emon-cs"] ["c" ".cache/emon-c-live/emon-c"] ["pod" ".cache/emon-pod/emon-pod"] ["rust-native" ".cache/emon-rs-live/target/release/emon-rs"]])
-(def qualification (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c")))
-(def first-bitmap (:file (first (json/parse-string (slurp (str qualification "/bitmaps.json")) true))))
-(def receipt-bitmap (if (fs/regular-file? first-bitmap) first-bitmap (str/replace first-bitmap "/op1b/" "/op1c/")))
+(def qualification (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
+(def receipt-bitmap (qualification-path/bitmap-file qualification
+                     (first (json/parse-string (slurp (str qualification "/bitmaps.json")) true))))
 (def files ["test/raster/receipt-photo.png" "test/raster/h-plain-72dpi.png" "test/raster/h-plain-rot180.png" "test/raster/receipt-empty.png" receipt-bitmap])
 (def pp-recordings (atom 0))
 (def rows (atom []))
@@ -98,6 +98,8 @@
   (spit (str out "/summary.json") (json/generate-string @rows {:pretty true}))))
 (assert (pos? @pp-recordings) "integrated fixtures never requested PP")
 (println "live PP Models match on six hosts; available replay APIs match complete bundles without model/runtime paths")
-(run! "qualification-replays.log" ["bb" "tools/ppocr/replays.clj" "--qualification"
-                                   (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c"))
-                                   "--out" (str out "/qualification-replays")])
+(run! "qualification-replays.log" (into ["bb" "tools/ppocr/replays.clj" "--qualification"
+                                   qualification
+                                   "--out" (str out "/qualification-replays")]
+                                  (when-let [artifact (get args "--record-reference")]
+                                    ["--record-reference" artifact])))

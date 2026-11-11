@@ -15,6 +15,10 @@ func OcfBest() int32 {
 	return 4
 }
 
+func OcfSource() int32 {
+	return 8
+}
+
 func OcfDpiUnit() int32 {
 	return 256
 }

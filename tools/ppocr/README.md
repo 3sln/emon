@@ -44,14 +44,29 @@ loads ORT at run time. Default builds and replays need neither the adapter
 nor ORT. Missing assets report `ppocr-models-missing`; missing native
 libraries report `ppocr-runtime-missing`.
 
-`bb ppocr-hosts` is a non-gate requiring the models and OP1c qualification
-bitmaps. It compares all complete integer answers on exactly 225 bitmaps
+`bb ppocr-hosts` is a non-gate requiring the models and an OIL qualification
+artifact (by default `$EMON_SCRATCH/ppocr-qual`). It compares all complete integer answers on exactly 225 bitmaps
 through Rust, Go, Java, C# and both C/native transports; missing inputs fail
-explicitly. `--qualification DIR` selects the OP1c evidence directory,
+explicitly. `--qualification DIR` selects the artifact,
 `--out DIR` the scratch output. `--limit N` is only a development smoke test
 and marks the report unqualified. Browser/JS setup and release bundling are
 documented separately in [the experimental engine guide](../../docs/ppocr.md).
 The only quality-qualified native runtime remains macOS arm64.
+
+To re-qualify after an answer-format change, use the restored OP1c selections:
+
+```sh
+bb ppocr-hosts --qualification "$EMON_SCRATCH/op1c" \
+  --record-qualification "$EMON_SCRATCH/ppocr-qual"
+```
+
+This records a new Rust reference, requires exact transport and replay bytes,
+and scores the same 60+60 fixed receipts against D864's P/R tolerance of 0.002.
+Historical answer hashes are not an OIL reference. The new artifact contains
+relative bitmap paths, reference answers, recordings, bundles, the replay
+manifest, accuracy measurements and `PROVENANCE.edn`; logs stay in `--out`.
+The provenance marks transport, replay and accuracy completion separately.
+A failed run is not an accepted qualification artifact.
 
 The port verifies all graph bytes before session construction. ORT 1.22.0 CPU
 uses sequential execution, one intra-op and one inter-op thread, and fixed graph

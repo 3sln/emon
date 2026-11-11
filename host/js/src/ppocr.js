@@ -112,7 +112,7 @@ export function ppocrAdapter({ wasm, loadOrt, wasmPaths, ortWasm, models, lexico
           if (rc === 0) throw new Error('PP-OCR request has no engine identity');
           if (rc === 2) return null;
         }
-        let status = w.withBytes(png, (p, n) => w.x.emon_pp_begin(p, n, id, rect?.x || 0, rect?.y || 0, rect?.w || 0, rect?.h || 0));
+        let status = w.withBytes(png, (p, n) => w.x.emon_pp_begin(p, n, id, rect?.x || 0, rect?.y || 0, rect?.w || 0, rect?.h || 0, record[5]));
         while (status > 0) {
           const data = w.outBytes(); w.outFree();
           const header = new DataView(data.buffer, data.byteOffset, data.byteLength);

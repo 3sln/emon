@@ -223,7 +223,29 @@ impl Ocr for PpOcr {
                 word.posterior / 1000, 1701734144, 0, -1, lex);
             for cp in word.text.chars() { crate::emon::oil::oil_word_cp(&mut out, at, k, cp as i32); }
         }
-        crate::emon::oil::oil_end(&mut out, at);
+        let mut source = Cells::new();
+        for (i, score) in reading.detector_scores.iter().enumerate() {
+            crate::port::cells_drop(&mut source, 0);
+            crate::port::cells_push(&mut source, crate::emon::oil::oil_pm(*score, 1000));
+            crate::emon::oil::oil_sc_put(&mut out, at, 1, 2, i as i32, &mut source, 0, 1);
+            crate::port::cells_drop(&mut source, 0);
+            crate::port::cells_push(&mut source, reading.classifications[i][0]);
+            crate::port::cells_push(&mut source, crate::emon::oil::oil_pm(reading.classifications[i][1], 1000));
+            crate::emon::oil::oil_sc_put(&mut out, at, 2, 2, i as i32, &mut source, 0, 2);
+            crate::port::cells_drop(&mut source, 0);
+            crate::port::cells_push(&mut source, reading.quarters[i]);
+            crate::emon::oil::oil_sc_put(&mut out, at, 3, 2, i as i32, &mut source, 0, 1);
+        }
+        for (i, word) in reading.words.iter().enumerate() {
+            crate::port::cells_drop(&mut source, 0);
+            for value in word.span { crate::port::cells_push(&mut source, value); }
+            crate::emon::oil::oil_sc_put(&mut out, at, 4, 3, i as i32, &mut source, 0, 3);
+        }
+        crate::emon::oil::oil_end_source(&mut out, at, req.field(crate::emon::plan::oc_flags()));
+        let mut validation = Cells::new();
+        if crate::emon::oil::oil_record_check_bitmap(&mut out, at, b.width(), b.height(), &mut validation) != 0 {
+            return Err(fail("invalid-native-oil"));
+        }
         Ok(Answer {
             rec: (0..cells_len(&out)).map(|i| cells_at(&out, i)).collect(),
             bitmap: None,

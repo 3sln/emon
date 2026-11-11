@@ -45,6 +45,6 @@ fn main() {
             Arc::new(Bitmap::from_bytes(w, h, ch, &data[(4 + n) * 4..])),
         );
         let a = port.fulfil(&req, &bm, false).unwrap();
-        println!("{:?}", a.rec);
+        println!("[{}]", a.rec.iter().map(i32::to_string).collect::<Vec<_>>().join(","));
     }
 }

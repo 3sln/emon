@@ -238,7 +238,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
     private sealed class Word {
         public int Conf, Line, Block;
         public int[] Bx;
-        public int[] Text;
+        public int[] Text, Model;
         public int Flags, Lang, Psize, Dflags;
         public List<Sym> Syms = new List<Sym>();
     }
@@ -250,7 +250,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
 
     private sealed class Block {
         public int[] Bx;
-        public int Orient, Wdir, Tlo, Desk;
+        public int Orient, Wdir, Tlo, Desk, Pb;
     }
 
     // ------------------------------------------------------------------ TEST SUPPORT: the filesystem (tessdata)
@@ -469,6 +469,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         byte[] binPx = null;
         bool hasBinary = false;
         int osd = -1, script = 0, sconf = -1, oconf = -1;
+        int[] osdName = System.Array.Empty<int>();
         // Tesseract keeps the pointer until Clear: native memory that lives for this request
         using (var ar = new Native.Arena()) {
             nint cpx = ar.Alloc(System.Math.Max(px.Length, 1), 16);
@@ -486,7 +487,8 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                     osd = *(int*) deg;
                     oconf = X10(*(float*) oc);
                     sconf = X10(*(float*) sc);
-                    script = emon.Ocrport.OpOsdScript(CellsOf(Cps(CStr(*(nint*) sn))));
+                    osdName = Cps(CStr(*(nint*) sn));
+                    script = emon.Ocrport.OpOsdScript(CellsOf(osdName));
                 } else {
                     eng.Notes.Add("osd failed");
                 }
@@ -564,7 +566,23 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                 }
             }
         }
-        emon.Oil.OilEnd(c, at);
+        for (int i = 0; i < blocks.Count; i++) {
+            emon.Oil.OilScPut(c, at, 1, 1, i, CellsOf(new[] {blocks[i].Pb}), 0, 1);
+        }
+        if (osdName.Length > 0) {
+            int[] value = new int[osdName.Length + 1]; value[0] = osdName.Length;
+            System.Array.Copy(osdName, 0, value, 1, osdName.Length);
+            emon.Oil.OilScPut(c, at, 2, 0, 0, CellsOf(value), 0, value.Length);
+        }
+        for (int i = 0; i < words.Count; i++) {
+            int[] model = words[i].Model, value = new int[model.Length + 1]; value[0] = model.Length;
+            System.Array.Copy(model, 0, value, 1, model.Length);
+            emon.Oil.OilScPut(c, at, 3, 3, i, CellsOf(value), 0, value.Length);
+        }
+        emon.Oil.OilEndSource(c, at, flags);
+        if (emon.Oil.OilRecordCheckBitmap(c, at, w, hh, Port.NewCells()) != 0) {
+            return Failed(id, Planrun.StatusFailed);
+        }
         int[] rec = Port.CellsVec(c);
         Port.Bitmap bmp = null;
         if (keepBinary && hasBinary && binPx != null && binPx.Length > 0) {
@@ -595,6 +613,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                 bl.Tlo = *(int*) tl;
                 // Java's Math.round: floor(x + 1/2)
                 bl.Desk = (int) System.Math.Floor((double) *(float*) dk * 180 / System.Math.PI * 100 + 0.5);
+                bl.Pb = piBlockType(pi);
                 blocks.Add(bl);
             }
             if (piAtBeginning(pi, RilPara) != 0) {
@@ -634,6 +653,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                 wd.Block = block;
                 wd.Text = Cps(text);
                 wd.Lang = emon.Ocrport.OpWordLang(CellsOf(Cps(CStr(itWordLang(it)))));
+                wd.Model = Cps(CStr(itWordLang(it)));
                 wd.Dflags = dfl;
                 if (wantSyms) {
                     Symbols(it, ar, wd);

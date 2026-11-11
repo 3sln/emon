@@ -1899,7 +1899,7 @@ pub(crate) fn oil_bitmap_box_valid(v: &mut crate::port::Cells, p: i32, width: i3
     }
     return 1;
 }
-pub fn oil_flat_in_bitmap(v: &mut crate::port::Cells, id: i32, width: i32, height: i32, mut out: &mut crate::port::Cells) -> i32 {
+pub fn oil_flat_check_bitmap(v: &mut crate::port::Cells, width: i32, height: i32) -> i32 {
     // At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
     if (width < 0) || (height < 0) {
         return -1;
@@ -1978,7 +1978,39 @@ pub fn oil_flat_in_bitmap(v: &mut crate::port::Cells, id: i32, width: i32, heigh
         p = q;
         i += 1;
     }
+    return 0;
+}
+pub fn oil_flat_in_bitmap(v: &mut crate::port::Cells, id: i32, width: i32, height: i32, mut out: &mut crate::port::Cells) -> i32 {
+    if oil_flat_check_bitmap(v, width, height) != 0 {
+        return -1;
+    }
     return oil_flat(v, id, out);
+}
+pub fn oil_record_check_bitmap(c: &mut crate::port::Cells, at: i32, width: i32, height: i32, mut scratch: &mut crate::port::Cells) -> i32 {
+    // Native and external answers share the same syntax and bitmap checks. The complete record is never modified.
+    if (at < 0) || (at > (crate::port::cells_len(c) - 4)) {
+        return -1;
+    }
+    let n: i32 = crate::port::cells_at(c, at);
+    let mut i: i32 = 4;
+    if (n < 4) || (n > (crate::port::cells_len(c) - at)) {
+        return -1;
+    }
+    if crate::port::cells_at(c, at + 1) != 3 {
+        return -1;
+    }
+    if crate::port::cells_at(c, at + 3) != 0 {
+        if n != 4 {
+            return -1;
+        }
+        return 0;
+    }
+    crate::port::cells_drop(scratch, 0);
+    while i < n {
+        crate::port::cells_push(scratch, crate::port::cells_at(c, at + i));
+        i += 1;
+    }
+    return oil_flat_check_bitmap(scratch, width, height);
 }
 pub fn oil_policy_conf(c: &mut crate::port::Cells, at: i32, word: i32) -> i32 {
     return ocal_word(oil_get(c, at, oh_engine()), 0, crate::port::cells_at(c, word + 5));

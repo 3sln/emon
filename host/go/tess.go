@@ -147,6 +147,7 @@ type tessWord struct {
 	conf, line, block int32
 	bx                [4]int32
 	text              []int32
+	model             []int32
 	flags, lang       int32
 	psize, dflags     int32
 	syms              []tessSym
@@ -158,6 +159,7 @@ type tessLine struct {
 type tessBlock struct {
 	bx                      [4]int32
 	orient, wdir, tlo, desk int32
+	pb                      int32
 }
 
 // tess is the engine: initialised instances per language string, one goroutine at a time (TessOcr gives each reading an engine of its own).
@@ -350,6 +352,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		}
 	}
 	osd, script, sconf, oconf := int32(-1), int32(0), int32(-1), int32(-1)
+	var osdName []int32
 	if flags&2 != 0 {
 		// OSD has its own model (`osd`) and its own engine instance
 		ho, ok := t.api("osd")
@@ -365,7 +368,8 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 			osd = int32(deg)
 			oconf = x10(float32(oc))
 			sconf = x10(float32(sc))
-			script = ocrport.OpOsdScript(cellsOf(cps(C.GoString(sn))))
+			osdName = cps(C.GoString(sn))
+			script = ocrport.OpOsdScript(cellsOf(osdName))
 		} else {
 			t.notes = append(t.notes, "osd failed")
 		}
@@ -396,7 +400,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 				var dk C.float
 				C.TessPageIteratorOrientation(pi, &o, &wd, &tl, &dk)
 				blocks = append(blocks, tessBlock{bx: [4]int32{int32(l), int32(tp), int32(r - l), int32(bt - tp)}, orient: int32(o), wdir: int32(wd), tlo: int32(tl),
-					desk: int32(math.Round(float64(dk) * 180 / math.Pi * 100))})
+					desk: int32(math.Round(float64(dk) * 180 / math.Pi * 100)), pb: int32(C.TessPageIteratorBlockType(pi))})
 			}
 			if C.TessPageIteratorIsAtBeginningOf(pi, rilPara) != 0 {
 				par++
@@ -437,6 +441,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 					text:   cps(text),
 					flags:  fl,
 					lang:   ocrport.OpWordLang(cellsOf(cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))))),
+					model:  cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))),
 					psize:  psize,
 					dflags: dfl,
 				}
@@ -542,7 +547,21 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 			}
 		}
 	}
-	oil.OilEnd(c, at)
+	for i, b := range blocks {
+		oil.OilScPut(c, at, 1, 1, int32(i), cellsOf([]int32{b.pb}), 0, 1)
+	}
+	if len(osdName) > 0 {
+		value := append([]int32{int32(len(osdName))}, osdName...)
+		oil.OilScPut(c, at, 2, 0, 0, cellsOf(value), 0, int32(len(value)))
+	}
+	for i, w := range words {
+		value := append([]int32{int32(len(w.model))}, w.model...)
+		oil.OilScPut(c, at, 3, 3, int32(i), cellsOf(value), 0, int32(len(value)))
+	}
+	oil.OilEndSource(c, at, flags)
+	if oil.OilRecordCheckBitmap(c, at, w, hh, port.NewCells()) != 0 {
+		return failed(port.PlanStatusFailed)
+	}
 	ans := port.PlanAnswer{Rec: cellsVec(c)}
 	if keepBinary && hasBinary && len(binPx) > 0 {
 		ans.Bitmap = port.BitmapFromBytes(binW, binH, 1, binPx)

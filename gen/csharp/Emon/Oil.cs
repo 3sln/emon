@@ -1899,7 +1899,7 @@ public static class Oil {
         }
         return 1;
     }
-    public static int OilFlatInBitmap(emon.Port.Cells v, int id, int width, int height, emon.Port.Cells @out) {
+    public static int OilFlatCheckBitmap(emon.Port.Cells v, int width, int height) {
         // At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
         if ((width < 0) || (height < 0)) {
             return -1;
@@ -1978,7 +1978,39 @@ public static class Oil {
             p = q;
             i += 1;
         }
+        return 0;
+    }
+    public static int OilFlatInBitmap(emon.Port.Cells v, int id, int width, int height, emon.Port.Cells @out) {
+        if (OilFlatCheckBitmap(v, width, height) != 0) {
+            return -1;
+        }
         return OilFlat(v, id, @out);
+    }
+    public static int OilRecordCheckBitmap(emon.Port.Cells c, int at, int width, int height, emon.Port.Cells scratch) {
+        // Native and external answers share the same syntax and bitmap checks. The complete record is never modified.
+        if ((at < 0) || (at > (emon.Port.CellsLen(c) - 4))) {
+            return -1;
+        }
+        int n = emon.Port.CellsAt(c, at);
+        int i = 4;
+        if ((n < 4) || (n > (emon.Port.CellsLen(c) - at))) {
+            return -1;
+        }
+        if (emon.Port.CellsAt(c, at + 1) != 3) {
+            return -1;
+        }
+        if (emon.Port.CellsAt(c, at + 3) != 0) {
+            if (n != 4) {
+                return -1;
+            }
+            return 0;
+        }
+        emon.Port.CellsDrop(scratch, 0);
+        while (i < n) {
+            emon.Port.CellsPush(scratch, emon.Port.CellsAt(c, at + i));
+            i += 1;
+        }
+        return OilFlatCheckBitmap(scratch, width, height);
     }
     public static int OilPolicyConf(emon.Port.Cells c, int at, int word) {
         return Ocalib.OcalWord(OilGet(c, at, OhEngine()), 0, emon.Port.CellsAt(c, word + 5));

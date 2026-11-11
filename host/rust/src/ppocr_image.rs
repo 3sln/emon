@@ -244,6 +244,14 @@ pub fn detect(
     page_width: usize,
     page_height: usize,
 ) -> Result<Vec<Quad>, String> {
+    Ok(detect_scored(prob, width, height, page_width, page_height)?
+        .into_iter().map(|(quad, _)| quad).collect())
+}
+
+/// The same components and ordering, retaining their measured DB means.
+pub fn detect_scored(
+    prob: &[f32], width: usize, height: usize, page_width: usize, page_height: usize,
+) -> Result<Vec<(Quad, i32)>, String> {
     if width.checked_mul(height) != Some(prob.len()) || prob.iter().any(|v| !v.is_finite()) {
         return Err("invalid DB tensor".into());
     }
@@ -308,16 +316,16 @@ pub fn detect(
             x: (p.x * page_width as f64 / width as f64).clamp(0., page_width as f64),
             y: (p.y * page_height as f64 / height as f64).clamp(0., page_height as f64),
         });
-        out.push(q);
+        out.push((q, (sum * 1_000_000. / count as f64).round() as i32));
         if out.len() >= 1000 {
             break;
         }
     }
-    out.sort_by(|a, b| a[0].y.total_cmp(&b[0].y).then(a[0].x.total_cmp(&b[0].x)));
+    out.sort_by(|a, b| a.0[0].y.total_cmp(&b.0[0].y).then(a.0[0].x.total_cmp(&b.0[0].x)));
     // Insertion pass groups adjacent boxes on a common ten-pixel baseline.
     for i in 1..out.len() {
         let mut j = i;
-        while j > 0 && (out[j][0].y - out[j - 1][0].y).abs() < 10. && out[j][0].x < out[j - 1][0].x
+        while j > 0 && (out[j].0[0].y - out[j - 1].0[0].y).abs() < 10. && out[j].0[0].x < out[j - 1].0[0].x
         {
             out.swap(j, j - 1);
             j -= 1;
@@ -338,6 +346,12 @@ mod tests {
             }
         }
         let q = detect(&p, 64, 32, 128, 64).unwrap();
+        let scored = detect_scored(&p, 64, 32, 128, 64).unwrap();
+        // Dilation covers 36*11 cells; the original 35*10 cells carry .99.
+        assert_eq!(scored[0].1, 875000);
+        for (a, b) in scored[0].0.iter().zip(q[0].iter()) {
+            assert_eq!((a.x, a.y), (b.x, b.y));
+        }
         assert_eq!(q.len(), 1);
         assert!(q[0][0].x < 20.);
         assert!(q[0][2].x > 88.);

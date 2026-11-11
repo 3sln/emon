@@ -14,6 +14,27 @@ fn test_capabilities_determine_the_physical_row_strides() {
     crate::testport::assert_eq(oil_word_base((((oc_wlang() + oc_style()) + oc_psize()) + oc_lexicon()) + oc_walts()), 11, "word groups include the word-alternative count");
 }
 #[test]
+fn test_native_records_use_the_same_bitmap_boundary() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 0, 0, 1);
+    oil_line(c, at, 2, 3, 8, 7, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    oil_end(c, at);
+    let size: i32 = crate::port::cells_len(c);
+    let line: i32 = oil_line_at(c, at, 0);
+    crate::testport::assert_eq(oil_record_check_bitmap(c, at, 10, 10, scratch), 0, "rectangle reaches the bitmap edge");
+    crate::testport::assert_eq(crate::port::cells_len(c), size, "checking does not append a decoded copy");
+    crate::port::cells_set(c, line + 2, 9);
+    crate::testport::assert_eq(oil_record_check_bitmap(c, at, 10, 10, scratch), -1, "native overflow is refused");
+    crate::testport::assert_eq(crate::port::cells_at(c, line + 2), 9, "checking never repairs or mutates evidence");
+    crate::port::cells_set(c, line + 2, 8);
+    crate::port::cells_set(c, at, size + 1);
+    crate::testport::assert_eq(oil_record_check_bitmap(c, at, 10, 10, scratch), -1, "truncated native envelope");
+    crate::port::cells_set(c, at, size);
+    crate::port::cells_set(c, at + 1, 4);
+    crate::testport::assert_eq(oil_record_check_bitmap(c, at, 10, 10, scratch), -1, "a different answer kind is not OCR");
+}
+#[test]
 fn test_native_must_be_a_subset_of_present_capabilities() {
     crate::testport::assert_eq(oil_native_check(oc_blocks() + oc_baseline(), oc_baseline()), 1, "native subset");
     crate::testport::assert_eq(oil_native_check(oc_blocks(), oc_baseline()), 0, "cannot claim an absent group as native");

@@ -19,6 +19,27 @@ func TestCapabilitiesDetermineThePhysicalRowStrides(emonT *testing.T) {
 	port.AssertEq(emonT, oil.OilWordBase((((oil.OcWlang()+oil.OcStyle())+oil.OcPsize())+oil.OcLexicon())+oil.OcWalts()), 11, "word groups include the word-alternative count")
 }
 
+func TestNativeRecordsUseTheSameBitmapBoundary(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenPpocr(), 0, 0, 1, 0, 0, 1)
+	oil.OilLine(c, at, 2, 3, 8, 7, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	oil.OilEnd(c, at)
+	var size int32 = port.CellsLen(c)
+	var line int32 = oil.OilLineAt(c, at, 0)
+	port.AssertEq(emonT, oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), 0, "rectangle reaches the bitmap edge")
+	port.AssertEq(emonT, port.CellsLen(c), size, "checking does not append a decoded copy")
+	port.CellsSet(c, line+2, 9)
+	port.AssertEq(emonT, oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "native overflow is refused")
+	port.AssertEq(emonT, port.CellsAt(c, line+2), 9, "checking never repairs or mutates evidence")
+	port.CellsSet(c, line+2, 8)
+	port.CellsSet(c, at, size+1)
+	port.AssertEq(emonT, oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "truncated native envelope")
+	port.CellsSet(c, at, size)
+	port.CellsSet(c, at+1, 4)
+	port.AssertEq(emonT, oil.OilRecordCheckBitmap(c, at, 10, 10, scratch), -1, "a different answer kind is not OCR")
+}
+
 func TestNativeMustBeASubsetOfPresentCapabilities(emonT *testing.T) {
 	port.AssertEq(emonT, oil.OilNativeCheck(oil.OcBlocks()+oil.OcBaseline(), oil.OcBaseline()), 1, "native subset")
 	port.AssertEq(emonT, oil.OilNativeCheck(oil.OcBlocks(), oil.OcBaseline()), 0, "cannot claim an absent group as native")

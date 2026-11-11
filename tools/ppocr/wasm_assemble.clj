@@ -3,18 +3,22 @@
 (require '[babashka.fs :as fs] '[clojure.string :as str] '[babashka.process :refer [process]])
 (defn answer-body [source]
   (let [start (str/index-of source "        let mut out = Cells::new();")
-        end (when start (str/index-of source "        Ok(Answer {" start))
+        ;; Native validation uses the full request bitmap. Browser answers pass
+        ;; through Session's request-relative validator after this crop builder.
+        end (when start (str/index-of source "        let mut validation = Cells::new();" start))
         lock "        let mut lexicon = self.lexicon.lock().map_err(|_| fail(\"PP lexicon lock poisoned\"))?;\n"]
     (assert (and start end) "native PP answer builder anchors")
     (let [native (subs source start end)
           body (-> native
                    (str/replace "req.id()" "id")
+                   (str/replace "req.field(crate::emon::plan::oc_flags())" "flags")
                    (str/replace "image.width" "width")
                    (str/replace "image.height" "height")
                    (str/replace lock "")
                    (str/replace "lexicon.valid_english_word(&word.text)" "dictionary(&word.text).await"))
           restored (-> body
                        (str/replace "(&mut out, id," "(&mut out, req.id(),")
+                       (str/replace "oil_end_source(&mut out, at, flags)" "oil_end_source(&mut out, at, req.field(crate::emon::plan::oc_flags()))")
                        (str/replace "width as f64" "image.width as f64")
                        (str/replace "height as f64" "image.height as f64")
                        (str/replace "dictionary(&word.text).await" "lexicon.valid_english_word(&word.text)")
@@ -54,6 +58,6 @@
 ;; fields. The lexicon call is the only additional suspension point.
 (let [body (answer-body (slurp "host/rust/src/ppocr.rs"))]
   (spit (str root "/src/ppocr_answer.rs")
-        (str "async fn answer(reading: crate::ppocr_pipeline::Reading, id: i32, dx: i32, dy: i32, width: usize, height: usize) -> Result<Vec<i32>, String> {\n"
+        (str "async fn answer(reading: crate::ppocr_pipeline::Reading, id: i32, dx: i32, dy: i32, width: usize, height: usize, flags: i32) -> Result<Vec<i32>, String> {\n"
              "use crate::port::{Cells, cells_len, cells_at};\n"
              body "Ok((0..cells_len(&out)).map(|i| cells_at(&out, i)).collect())\n}\n")))

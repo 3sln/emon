@@ -176,6 +176,7 @@ struct Word {
     text: Vec<i32>,
     flags: i32,
     lang: i32,
+    model: Vec<i32>,
     psize: i32,
     dflags: i32,
     syms: Vec<Sym>,
@@ -194,6 +195,7 @@ struct Block {
     tlo: i32,
     // the page's deskew angle, centi-degrees, as the engine reports it at this block
     deskew: i32,
+    pb: i32,
 }
 
 pub struct Tess {
@@ -386,6 +388,7 @@ impl Tess {
             }
         };
         let (mut osd, mut script, mut sconf, mut oconf) = (-1, 0, -1, -1);
+        let mut osd_name = Vec::new();
         if flags & 2 != 0 {
             // OSD has its own model (`osd`) and its own engine instance.
             let ho = self.api("osd").unwrap_or(h);
@@ -398,7 +401,8 @@ impl Tess {
                     osd = deg;
                     oconf = x10(oc);
                     sconf = x10(sc);
-                    script = emon::ocrport::op_osd_script(&mut cells_of(cps(&borrowed(sn))));
+                    osd_name = cps(&borrowed(sn));
+                    script = emon::ocrport::op_osd_script(&mut cells_of(osd_name.clone()));
                 } else {
                     self.notes.push("osd failed".into());
                 }
@@ -428,7 +432,7 @@ impl Tess {
                         TessPageIteratorBoundingBox(pi, RIL_BLOCK, &mut l, &mut t, &mut r, &mut bt);
                         let (mut o, mut wd, mut tl, mut dk): (c_int, c_int, c_int, c_float) = (0, 0, 0, 0.0);
                         TessPageIteratorOrientation(pi, &mut o, &mut wd, &mut tl, &mut dk);
-                        blocks.push(Block { bx: [l, t, r - l, bt - t], orient: o, wdir: wd, tlo: tl, deskew: (dk.to_degrees() * 100.0).round() as i32 });
+                        blocks.push(Block { bx: [l, t, r - l, bt - t], orient: o, wdir: wd, tlo: tl, deskew: (dk.to_degrees() * 100.0).round() as i32, pb: TessPageIteratorBlockType(pi) });
                     }
                     if TessPageIteratorIsAtBeginningOf(pi, RIL_PARA) != 0 {
                         par += 1;
@@ -465,6 +469,7 @@ impl Tess {
                             text: cps(&text),
                             flags: fl,
                             lang: emon::ocrport::op_word_lang(&mut cells_of(cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))))),
+                            model: cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))),
                             psize: if sz > 0 { sz } else { -1 },
                             dflags: dfl,
                             syms: Vec::new(),
@@ -561,7 +566,23 @@ impl Tess {
                 }
             }
         }
-        emon::oil::oil_end(&mut c, at);
+        for (i, b) in blocks.iter().enumerate() {
+            emon::oil::oil_sc_put(&mut c, at, 1, 1, i as i32, &mut cells_of(vec![b.pb]), 0, 1);
+        }
+        if !osd_name.is_empty() {
+            let n = osd_name.len() as i32;
+            let mut value = vec![n]; value.extend_from_slice(&osd_name);
+            emon::oil::oil_sc_put(&mut c, at, 2, 0, 0, &mut cells_of(value), 0, n + 1);
+        }
+        for (i, w) in words.iter().enumerate() {
+            let n = w.model.len() as i32;
+            let mut value = vec![n]; value.extend_from_slice(&w.model);
+            emon::oil::oil_sc_put(&mut c, at, 3, 3, i as i32, &mut cells_of(value), 0, n + 1);
+        }
+        emon::oil::oil_end_source(&mut c, at, flags);
+        if emon::oil::oil_record_check_bitmap(&mut c, at, w, hh, &mut Cells::new()) != 0 {
+            return failed(STATUS_FAILED);
+        }
         let bitmap = match (keep_binary, binary) {
             (true, Some((w, h, px))) if !px.is_empty() => Some(std::sync::Arc::new(Bitmap::from_bytes(w, h, 1, &px))),
             _ => None,

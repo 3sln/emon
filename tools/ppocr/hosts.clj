@@ -1,13 +1,21 @@
 #!/usr/bin/env bb
 ;; Live, optional qualification. No fetching, policy changes or corpus writes.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process shell]]
-         '[cheshire.core :as json] '[clojure.string :as str])
+         '[cheshire.core :as json] '[clojure.string :as str] '[clojure.edn :as edn]
+         '[ppocr.qualification :as qualification])
 (import '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
-(assert (every? #{"--qualification" "--out" "--limit" "--skip-build"} (keys args)) "unknown ppocr-hosts option")
-(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c")))
+(assert (every? #{"--qualification" "--out" "--limit" "--skip-build" "--record-qualification"} (keys args)) "unknown ppocr-hosts option")
+(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
 (def out (str (fs/absolutize (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/hosts")))))
 (def env {"EMON_CS_SHARED_COMPILATION" "false" "NuGetAudit" "false"})
+(def artifact (get args "--record-qualification"))
+(assert (not (and artifact (get args "--limit"))) "a partial run cannot record qualification")
+(when artifact
+  (assert (not (fs/exists? artifact)) "refusing to overwrite a qualification artifact"))
+(defn sha256 [bytes]
+  (apply str (map #(format "%02x" (bit-and % 255))
+                 (.digest (MessageDigest/getInstance "SHA-256") bytes))))
 (defn space! []
  (doseq [p ["."]]
   (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "less than 10 GiB free: " p))))
@@ -45,10 +53,7 @@
 (run! "c-contract" [".cache/ppocr/contracts-c"])
 (def rows
  (mapv (fn [row]
-   (let [old (:file row) remapped (str/replace old "/op1b/" "/op1c/")
-         file (if (fs/regular-file? old) old remapped)]
-    (assert (fs/regular-file? file) (str "qualification bitmap missing: " file))
-    (assoc row :file file)))
+   (assoc row :file (qualification/bitmap-file qual row)))
   (concat (json/parse-string (slurp (str qual "/bitmaps.json")) true)
           (json/parse-string (slurp (str qual "/fresh-bitmaps.json")) true))))
 (assert (= 225 (count rows)) "qualification must contain exactly 225 bitmaps")
@@ -67,9 +72,10 @@
                 ["csharp" [dotnet ".cache/ppocr-hosts-cs/out/probe.dll"]]
                 ["c" [(str (fs/absolutize ".cache/ppocr/hosts-c"))]]
                 ["c-pod-native" [probe "native"]]])
- (def historical (into {} (map (juxt :id :sha256) (concat
-    (json/parse-string (slurp (str qual "/repeats/summary.json")) true)
-    (json/parse-string (slurp (str qual "/fresh-repeats/summary.json")) true)))))
+ (def reference-file (str qual "/reference.answers"))
+ (when-not (or artifact (get args "--limit"))
+   (assert (fs/regular-file? reference-file)
+           "OIL qualification needs reference.answers; record a new Rust reference with --record-qualification"))
  (def expected (atom nil))
  (def results (atom []))
  (doseq [[host argv] commands]
@@ -77,20 +83,72 @@
   (let [file (str out "/" host ".answers")
         result @(process argv {:extra-env env :in (fs/file manifest) :out file :err (str out "/" host ".err") :shutdown nil})]
    (assert (zero? (:exit result)) (str host " failed; see " out "/" host ".err"))
-   (let [answers (mapv json/parse-string (str/split-lines (slurp file)))]
+   (let [answer-bytes (fs/read-all-bytes file)
+         answers (mapv json/parse-string (str/split-lines (slurp file)))]
     (assert (= (count selected) (count answers)) (str host " incomplete answers"))
-    (when @expected (doseq [k (range (count selected))] (assert (= (@expected k) (answers k)) (str host " answer differs: " (:id (selected k))))))
+    (when @expected
+      (assert (java.util.Arrays/equals ^bytes (fs/read-all-bytes (str out "/rust.answers")) ^bytes answer-bytes)
+              (str host " answer bytes differ from Rust")))
     (when-not @expected
-      (doseq [[row answer] (map vector selected (str/split-lines (slurp file)))]
-        (let [sha (apply str (map #(format "%02x" (bit-and % 255))
-                       (.digest (MessageDigest/getInstance "SHA-256") (.getBytes answer "UTF-8"))))]
-          (assert (= (historical (:id row)) sha) (str "qualified Rust answer changed: " (:id row)))))
+      (when-not (or artifact (get args "--limit"))
+        (assert (java.util.Arrays/equals ^bytes (fs/read-all-bytes reference-file) ^bytes answer-bytes)
+                "Rust answer bytes differ from the OIL qualification reference"))
       (reset! expected answers))
     (swap! results conj {:host host :bitmaps (count answers) :equal true})
-    (spit (str out "/summary.json") (json/generate-string {:complete (= 6 (count @results)) :qualification (= 225 (count selected)) :results @results} {:pretty true})))))
+    (spit (str out "/summary.json") (json/generate-string {:complete (= 6 (count @results)) :qualification (and (not (get args "--limit")) (= 225 (count selected))) :results @results} {:pretty true})))))
+ (when-not (get args "--limit")
+   (let [repeat-manifest (str out "/repeat-inputs.txt")
+         reference (slurp (str out "/rust.answers"))]
+     (spit repeat-manifest (apply str (repeat 3 (slurp manifest))))
+     (doseq [process-index (range 3)]
+       (let [path (str out "/rust-repeat-" process-index ".answers")]
+         (run! (str "rust-repeat-" process-index) [probe "reference"]
+               {:in (fs/file repeat-manifest) :out path :err (str path ".err")})
+         (assert (= (apply str (repeat 3 reference)) (slurp path))
+                 (str "Rust 3x3 determinism differs in process " process-index))))))
+ (when artifact
+  (let [destination artifact artifact (str out "/qualification-artifact")]
+   (assert (not (fs/exists? artifact)) "qualification staging directory already exists")
+   (fs/create-dirs (str artifact "/inputs"))
+   (let [copied (mapv (fn [k row]
+                        (let [name (str "inputs/" k ".png")]
+                          (fs/copy (:file row) (str artifact "/" name))
+                          (assoc row :file name :sha256 (sha256 (fs/read-all-bytes (:file row))))))
+                      (range) selected)
+         pins (edn/read-string (slurp "tools/ppocr/assets.edn"))
+         graphs (filter #(str/ends-with? (:file %) ".onnx") (:assets pins))
+         commit (str/trim (:out @(process ["git" "rev-parse" "HEAD"] {:out :string :shutdown nil})))
+         identity (second (re-find #":data \[([0-9 ]+)\]" (slurp "kin/ocrengine.kin")))
+         policy (apply str (map #(char (parse-long %)) (str/split identity #" +")))]
+     (doseq [{:keys [file] expected-sha :sha256} graphs]
+       (assert (= expected-sha (sha256 (fs/read-all-bytes (str ".cache/ppocr/" file))))
+               (str "qualification graph differs from pin: " file)))
+     (spit (str artifact "/bitmaps.json") (json/generate-string (subvec copied 0 (count (json/parse-string (slurp (str qual "/bitmaps.json"))))) {:pretty true}))
+     (spit (str artifact "/fresh-bitmaps.json") (json/generate-string (subvec copied (count (json/parse-string (slurp (str qual "/bitmaps.json"))))) {:pretty true}))
+     (fs/copy (str out "/rust.answers") (str artifact "/reference.answers"))
+     (spit (str artifact "/PROVENANCE.edn")
+           (pr-str {:schema 1 :emon-commit commit
+                    :worktree-dirty (not (str/blank? (:out @(process ["git" "status" "--porcelain"] {:out :string :shutdown nil}))))
+                    :graphs (mapv #(select-keys % [:file :sha256]) graphs)
+                    :ort-version (:version (edn/read-string (slurp "tools/ppocr/runtimes.edn")))
+                    :policy-identity policy :counts {:bitmaps (count copied) :transports 6}
+                    :source-corpus-shard-ids
+                    (get-in (json/parse-string (slurp "test/corpus/shards.json") true)
+                            [:consumers (keyword "test/controls/sweep3.txt")])
+                    :source {:qualification :op1c :selection "all bitmaps.json then fresh-bitmaps.json, in listed order"}
+                    :reference-sha256 (sha256 (fs/read-all-bytes (str artifact "/reference.answers")))
+                    :command (into ["bb" "ppocr-hosts"] *command-line-args*)
+                    :determinism {:processes 3 :readings 3 :bitmaps (count copied)}
+                    :transport-equality true :accuracy-accepted false :complete false})))
+   (fs/move artifact destination)))
  (finally (fs/delete-tree packed)))
 (if (get args "--limit")
   (println "PP-OCR development transport smoke passed; full qualification was not requested.")
   (do
-    (run! "integrated-models" ["bb" "tools/ppocr/models.clj" "--out" (str out "/models") "--qualification" qual])
+    (run! "integrated-models" (into ["bb" "tools/ppocr/models.clj" "--out" (str out "/models") "--qualification" qual]
+                                  (when artifact ["--record-reference" artifact])))
+    (run! "fixed-receipt-accuracy" ["python3" "tools/oracle/ppocr/oil_accuracy.py" "--qualification" (or artifact qual)])
+    (when artifact
+      (let [path (str artifact "/PROVENANCE.edn")]
+        (spit path (pr-str (assoc (edn/read-string (slurp path)) :accuracy-accepted true :complete true)))))
     (println "PP-OCR live answers and integrated Model/replay contracts agree.")))
