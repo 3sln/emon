@@ -4105,7 +4105,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
 
 Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engine-neutral OCR interchange (OIL, D883), engines as adapters, a bare core plus adapter packages, and pinned model packs. Dart/Flutter ships as a thin FFI package over the C ABI. There is no Dart kin target (D884). No backwards compatibility: re-record and re-baseline. Order: P13.1 and P13.2 now; Dart P13.6 to P13.8 may run beside the OIL items, since they touch the C ABI and host/dart, not kin.
 
-- [ ] P13.1 — One-file release (REL1). Placeholder versions in tracked manifests, stamped from `version.edn` at build time. `release.yml` runs end to end on a `version.edn` bump on main, and retries manually with `workflow_dispatch version [only]`. Replaces bump/draft/publish-on-release. In progress.
+- [x] P13.1 — One-file release (REL1). Placeholder versions in tracked manifests, stamped from `version.edn` at build time. `release.yml` runs end to end on a `version.edn` bump on main, and retries manually with `workflow_dispatch version [only]`. Replaces bump/draft/publish-on-release. DONE (D886).
 - [ ] P13.2 — OIL phase 1: OIL replaces the Tesseract-shaped answer record. Tesseract and PP are expressed in it, with emon's own enums, capability bits, requested and observed engine identity, and the sidecar registry. Gate: the Tesseract path shows zero accuracy regressions, and PP P/R stays within ±0.002. Fix the four host bugs the audit found: PP's `osd=0`, the browser's missing OSD and zero baselines, row metrics never filled, and PP calibration living in the Rust host.
 - [x] P13.3 — Packaging design (PKG1): `emon-core` (no OCR engine) plus adapter packages, a turnkey `emon` per platform, hybrids composed in core, and SHA-pinned model/language packs as release assets. Covers the package matrix per ecosystem and the C ABI adapter-callback form. DONE (D885). Executed as P13.14–P13.22.
 - [ ] P13.4 — OIL phase 2: PP-alone as a first-class engine. Measure first (row/line split on the OP1 bundles), then build kin row assembly for segment engines. Gate: CORD line items ≥ 22/151, the D849 baseline.
@@ -14165,16 +14165,6 @@ At the maintainer's request, the publish jobs (`assets`, crates, npm, nuget, mav
 
 - [ ] **Signed off** (maintainer)
 
-### D886 — One-file release input, staged versions and automatic verified publication
-
-Supersedes the release orchestration and version-copying parts of D524, D525, D542, D547, D550 and D882. `version.edn` is the only release input. All tracked release fields use `0.0.0-dev`; set/bump writes only the central file. Package staging stamps Cargo manifests/locks, Maven POM, NuGet project, npm metadata and peer ranges, and C/pod runtime strings. Local Rust/CLI, C/pod, wasm and unit builds stamp their assembled copies by reading the central file, without CI-only variables. Unchanged stamped copies retain their timestamps, so local builds stay incremental. Java jar metadata, archive names and Go module versions already read it. The website expands documentation placeholders at rendering time; checked-in docs stay stable so a version-only commit passes their check. Site dependencies have independent upstream versions and are left pinned.
-
-A main push touching version.edn resolves the version and runs the per-version, non-cancelling reusable pipeline in release-run.yml. Full verify.yml and archive validation precede all public changes. A same-commit tag/release is reused; a different-commit tag or release target is refused. The published GitHub release includes notes and verified archives, followed by independent crates/npm/NuGet/Maven/Go jobs and a failing partial-publication summary. Normal scoped verification remains; version-only pushes run only the release verification, while mixed pushes may verify twice. Prereleases retain GitHub prerelease and npm next.
-
-Manual release.yml dispatch accepts version (blank reads the selected ref; otherwise must match), only (assets,crates,npm,nuget,maven,go), and dry_run, default true. A selected-registry retry requires an existing published release. Re-run failed jobs remains idempotent. D881/D882 authentication remains OIDC with no release environment; npm's caller policy must identify release.yml; NuGet's called-workflow policy must identify release-run.yml (sources in docs/releasing.md). Hosted workflow, cross-platform archive and OIDC behavior require CI validation. See docs/releasing.md for operations and the REL1 report for local gate evidence.
-
-- [ ] **Signed off** (maintainer)
-
 ### D883 — OIL: an engine-agnostic OCR interchange replaces the Tesseract-shaped answer; hybrids stay composed in kin
 
 The OCR answer record (D089's words plus `emon.ocr` extension v2, D095/D214) is replaced, with no compatibility reader, by **OIL**:
@@ -14333,3 +14323,14 @@ The other open questions take the coordinator's recommendations unless the maint
 pub.dev publishing uses GitHub Actions OIDC (maintainer 2026-11-11: no GCP account coupled to the project). pub.dev accepts it only from a workflow triggered by a tag push, so `release.yml` pushes the tag `emon-dart-v{{version}}` with a repository deploy key (an SSH write key held as a secret; pushes made with `GITHUB_TOKEN` trigger no workflows), and that tag starts `pub.yml`. A retry re-pushes the tag or re-runs `pub.yml`'s failed job.
 
 - [ ] **Signed off** (maintainer)
+
+### D886 — One-file release input, staged versions and automatic verified publication
+
+Supersedes the release orchestration and version-copying parts of D524, D525, D542, D547, D550 and D882. `version.edn` is the only release input. All tracked release fields use `0.0.0-dev`; set/bump writes only the central file. Package staging stamps Cargo manifests/locks, Maven POM, NuGet project, npm metadata and peer ranges, and C/pod runtime strings. Local Rust/CLI, C/pod, wasm and unit builds stamp their assembled copies by reading the central file, without CI-only variables. Unchanged stamped copies retain their timestamps, so local builds stay incremental. Java jar metadata, archive names and Go module versions already read it. The website expands documentation placeholders at rendering time; checked-in docs stay stable so a version-only commit passes their check. Site dependencies have independent upstream versions and are left pinned.
+
+A main push touching version.edn resolves the version and runs the per-version, non-cancelling reusable pipeline in release-run.yml. Full verify.yml and archive validation precede all public changes. A same-commit tag/release is reused; a different-commit tag or release target is refused. The published GitHub release includes notes and verified archives, followed by independent crates/npm/NuGet/Maven/Go jobs and a failing partial-publication summary. Normal scoped verification remains; version-only pushes run only the release verification, while mixed pushes may verify twice. Prereleases retain GitHub prerelease and npm next.
+
+Manual release.yml dispatch accepts version (blank reads the selected ref; otherwise must match), only (assets,crates,npm,nuget,maven,go), and dry_run, default true. A selected-registry retry requires an existing published release. Re-run failed jobs remains idempotent. D881/D882 authentication remains OIDC with no release environment; npm's caller policy must identify release.yml; NuGet's called-workflow policy must identify release-run.yml (sources in docs/releasing.md). Hosted workflow, cross-platform archive and OIDC behavior require CI validation. See docs/releasing.md for operations and the REL1 report for local gate evidence.
+
+- [ ] **Signed off** (maintainer)
+
