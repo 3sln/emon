@@ -15,7 +15,7 @@ public sealed unsafe class PpOcr : emon.Api.IOcr, IDisposable {
     private readonly object gate = new object();
     private readonly emon.Api.IOcr incumbent;
     private PpOcr(nint p, emon.Api.IOcr incumbent) { port=p; this.incumbent=incumbent; }
-    public static PpOcr Open(string? dir, emon.Api.IOcr incumbent) {
+    public static PpOcr Open(string dir, emon.Api.IOcr incumbent) {
         if(string.IsNullOrEmpty(dir)) dir=Environment.GetEnvironmentVariable("EMON_PPOCR_MODELS") ?? ".cache/ppocr";
         foreach(string name in new[]{"ch_PP-OCRv5_det_mobile.onnx","en_PP-OCRv5_rec_mobile.onnx","ch_ppocr_mobile_v2.0_cls_mobile.onnx"})
             if(!System.IO.File.Exists(System.IO.Path.Combine(dir,name))) throw new Unavailable("ppocr-models-missing");

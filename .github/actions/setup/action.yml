@@ -52,16 +52,20 @@ runs:
     - name: Python oracles (pinned as on the maintainer's machine)
       shell: bash
       run: |
-        # kin/scripts/unit finds these on $EMON_PYLIB or ~/.cache/emon/pylib.
-        mkdir -p "$HOME/.cache/emon/pylib"
-        python3 -m pip install --quiet --target "$HOME/.cache/emon/pylib" --break-system-packages \
+        # kin/scripts/unit finds these on $EMON_PYLIB or ~/.cache/emon/pylib. The directory is per Python
+        # version: the tools cache restores across runner images, and a compiled wheel (Pillow, via pdfplumber)
+        # built for another Python fails to import.
+        pylib="$HOME/.cache/emon/pylib-$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+        mkdir -p "$pylib"
+        python3 -m pip install --quiet --target "$pylib" --break-system-packages \
           jsonschema==4.26.0 html5lib==1.1 pdfplumber==0.11.10 pdfminer.six==20260107
+        echo "EMON_PYLIB=$pylib" >> "$GITHUB_ENV"
+        echo "PYTHONPATH=$pylib" >> "$GITHUB_ENV"
     - name: Versions
       shell: bash
       run: |
         bb --version; rustc --version; go version; dotnet --version; java -version 2>&1 | head -1
         pdftotext -v 2>&1 | head -1; python3 --version
         echo "EMON_JDK=$JAVA_HOME" >> "$GITHUB_ENV"
-        echo "PYTHONPATH=$HOME/.cache/emon/pylib" >> "$GITHUB_ENV"
         magick -list format | grep -i ' JPEG ' || echo "NO JPEG DELEGATE"
         magick emon/test/image/jpeg-gray.jpg -depth 8 gray:- 2>&1 | wc -c || true
