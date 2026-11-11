@@ -1,0 +1,20 @@
+{
+  "name": "@3sln/emon-ppocr",
+  "version": "0.2.0",
+  "description": "Experimental opt-in PP-OCR adapter; caller-provided pinned ORT Web and model URLs",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/3sln/emon.git", "directory": "release/pkg/ppocr" },
+  "homepage": "https://github.com/3sln/emon/blob/main/docs/ppocr.md",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "import": "./index.js" },
+    "./emon.wasm": "./emon.wasm"
+  },
+  "files": ["*.js", "*.d.ts", "emon.wasm", "LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"],
+  "sideEffects": false,
+  "publishConfig": { "access": "public" },
+  "peerDependencies": { "@3sln/emon": "^0.2.0" },
+  "engines": { "node": ">=22" }
+}

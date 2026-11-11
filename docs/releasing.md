@@ -26,8 +26,46 @@ secrets**. Five workflows do the work and a person decides:
 
 Nothing is published until you publish the draft **and** approve the `release` environment: two deliberate clicks.
 
-**Status of this document: none of it has run.** The workflows, the tools' self-tests and the dry runs below were written and checked offline; the first real
-run of each will find something. Treat the dry runs, and then the first release, as the tests.
+**Validation scope.** Local self-tests and dry runs check release-tool contracts.
+The experimental PP add-on has a local macOS arm64 smoke check; its other four
+native builds and smokes are wired to hosted CI and have not been run by OP2c.
+Local checks do not replace `emon/verified` and `emon/archives` on the final release commit.
+
+## Experimental PP-OCR assets
+
+The five native jobs additionally build `emon-ppocr-<version>-<triple>.tar.gz`
+(`.zip` on Windows) with `bb ppocr-addon --fetch --check --out .cache/cli`.
+Both separate archives share the existing upload root so downloaded native
+artifacts stay flat and the collector finds the CLI files. The standalone
+builder's default output remains `dist/ppocr`. Each job unpacks its
+archive and converts the committed receipt fixture against the committed
+reference. These are separate opt-in downloads: no default archive carries ORT
+or PP graphs. macOS arm64 is locally qualified; the other four builds and
+smokes run in CI only and must pass before attaching assets. `emon/archives`
+covers all five alongside the existing CLI, C and pod archives.
+
+`bb package --host ppocr --check` uses cached pinned inputs from `bb native`
+and `bb ppocr-addon --fetch --prepare`. `bb package --host js-ppocr --check`
+builds the separate optional npm tarball (install `host/js` dev dependencies
+first). Registry publishing builds this package explicitly; the ordinary npm
+SDK excludes PP bridge files and retains its ordinary wasm. No required
+dependency is added to the Go, Java or C# artifacts.
+
+For a local dry run, collect all platform archives with `bb release-ops archive
+--dir DIR --out OUT`; it requires 23 assets (18 archives and five CLI sidecars),
+and writes `SHA256SUMS` including every add-on. Then run `bb release-ops attach
+--tag v0.2.0 --dir OUT --dry-run`. A missing cross-platform artifact is an
+error, not a locally verified release. `bb release-ops --self-test` exercises
+this complete set with synthetic bytes; that is not a native smoke check.
+Run `bb publish npm --dry-run` only after building ordinary JS, pdfium wasm
+and optional JS tarballs. Its existing preflight requires `NPM_TOKEN` even
+for a dry run; without that secret it fails before invoking npm. For local,
+credential-free tarball inspection use `npm publish TAR --dry-run
+--ignore-scripts --userconfig=/dev/null`. Neither command publishes anything.
+If the development version still names an existing release, `release-verify`
+correctly refuses a tag pointing at another commit, even in dry mode. Perform
+the next version bump after the coordinator's commit; never retarget a published tag.
+See [Experimental: PP-OCR engine](ppocr.md) for setup, measurements and limits.
 
 ## 1. How `main` is verified
 
@@ -44,7 +82,7 @@ run of each will find something. Treat the dry runs, and then the first release,
   (not the `--fast` variants of `pr.yml`). A diff that changes nothing but version strings (`version.edn` and the manifests `bb version` rewrites) plans **no gate**: that is the
   release bump. `bb ci plan --base HEAD~1` shows what a commit would schedule.
 * **The status.** `emon/verified` on the commit: `success` with `verified: N gates since <sha>` only when the plan, the fast core and every job were green; otherwise `failure`.
-* **The archives.** The release archives (CLI x5 from `native.yml`, C library x4 and pod x4 from `bb package`, and `SHA256SUMS`) are built in the same run **only when affected**:
+* **The archives.** The release archives (CLI x5 and experimental PP add-on x5 from `native.yml`, C library x4 and pod x4 from `bb package`, and `SHA256SUMS`) are built in the same run **only when affected**:
   a path they are built from changed (`:archives` in the gate map), no valid archives come with the base, or the **version** changed (the archives carry it in their names and
   in the binaries, so the bump commit rebuilds them although it plans no gate). They are the workflow artifact `release-archives`, kept 90 days. Either way the commit gets
   `emon/archives` (`archives X.Y.Z: run ID (built at SHA)`), naming the run whose artifact holds the valid archives. Archives older than 80 days are not inherited.

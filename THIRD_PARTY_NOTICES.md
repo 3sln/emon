@@ -9,83 +9,83 @@ Rust crates are compiled into the Rust, C, pod, WASM and CLI artifacts. pdfium, 
 Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 
 - **adler2** 2.0.1 - 0BSD OR MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/adler2
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [37](#licence-text-37).
 
 - **autocfg** 1.5.1 - Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/autocfg
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [42](#licence-text-42).
 
 - **bitflags** 2.13.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/bitflags
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [28](#licence-text-28).
 
 - **bytemuck** 1.25.2 - Zlib OR Apache-2.0 OR MIT (used under MIT) - https://crates.io/crates/bytemuck
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [24](#licence-text-24).
 
 - **byteorder-lite** 0.1.0 - Unlicense OR MIT (used under MIT) - https://crates.io/crates/byteorder-lite
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [21](#licence-text-21).
 
 - **cfg-if** 1.0.5 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/cfg-if
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [43](#licence-text-43).
 
 - **crc32fast** 1.5.2 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/crc32fast
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [23](#licence-text-23).
 
 - **fdeflate** 0.3.7 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/fdeflate
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [39](#licence-text-39).
 
 - **flate2** 1.1.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/flate2
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [33](#licence-text-33).
 
 - **image** 0.25.10 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/image
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [39](#licence-text-39).
 
 - **miniz_oxide** 0.8.9 - MIT OR Zlib OR Apache-2.0 (used under MIT) - https://crates.io/crates/miniz_oxide
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [13](#licence-text-13).
 
 - **miniz_oxide** 0.9.1 - MIT OR Zlib OR Apache-2.0 (used under MIT) - https://crates.io/crates/miniz_oxide
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [13](#licence-text-13).
 
 - **moxcms** 0.8.1 - BSD-3-Clause OR Apache-2.0 (used under BSD-3-Clause) - https://crates.io/crates/moxcms
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [6](#licence-text-6).
 
 - **num-traits** 0.2.19 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/num-traits
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [28](#licence-text-28).
 
 - **png** 0.18.1 - MIT OR Apache-2.0 (used under MIT) - https://crates.io/crates/png
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [52](#licence-text-52).
 
 - **pxfm** 0.1.30 - BSD-3-Clause OR Apache-2.0 (used under BSD-3-Clause) - https://crates.io/crates/pxfm
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [6](#licence-text-6).
 
 - **simd-adler32** 0.3.10 - MIT - https://crates.io/crates/simd-adler32
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [2](#licence-text-2).
 
 - **zlib-rs** 0.6.8 - Zlib - https://crates.io/crates/zlib-rs
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [14](#licence-text-14).
 
 - **zune-core** 0.5.3 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-core
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [49](#licence-text-49).
 
 - **zune-jpeg** 0.5.15 - MIT OR Apache-2.0 OR Zlib (used under MIT) - https://crates.io/crates/zune-jpeg
-  carried by the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c).
   Licence text: [49](#licence-text-49).
 
 
@@ -94,11 +94,11 @@ Compiled into the Rust, C, pod and WASM artifacts (host/rust/Cargo.lock).
 Not carried by the Rust, Go, Java and C# library packages (they load pdfium and Tesseract from the user's system at run time); carried by the per-platform CLI, the C library and pod archives (D552), the npm package @3sln/pdfium-wasm (pdfium's WebAssembly build, D553) and the browser demo.
 
 - **PP-OCRv5 mobile detector and English recognizer; v2 orientation classifier** RapidOCR v3.10.0 ONNX exports; exact graph and dictionary SHA-256 in tools/ppocr/assets.edn - Apache-2.0 - https://github.com/RapidAI/RapidOCR/tree/v3.10.0
-  carried by no release artifact. Optional fetched assets only. PaddleOCR and RapidOCR retain their own Apache-2.0 terms and copyright. The English dictionary is extracted verbatim from the pinned recognizer metadata; classifier labels are 0 and 180. No separate root NOTICE file exists in the inspected PaddleOCR v3.0.0 tree; retain any future upstream NOTICE on a pin update. Not accepted or enabled by default.
+  carried by the separate experimental native PP-OCR archive. Separate experimental PP add-on only. PaddleOCR and RapidOCR retain their own Apache-2.0 terms and copyright. The English dictionary is extracted verbatim from the pinned recognizer metadata; classifier labels are 0 and 180. No separate root NOTICE file exists in the inspected PaddleOCR v3.0.0 tree; retain any future upstream NOTICE on a pin update. Not accepted or enabled by default.
   Licence text: [25](#licence-text-25), [3](#licence-text-3).
 
 - **ONNX Runtime CPU** 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07 - MIT - https://github.com/microsoft/onnxruntime/releases/tag/v1.22.0
-  carried by no release artifact. Optional reference runtime, downloaded separately by ppocr-fetch. Its distribution's complete ThirdPartyNotices.txt is retained; the generated Markdown normalizes trailing whitespace. Other platform asset pins remain to be qualified.
+  carried by the separate experimental native PP-OCR archive. Pinned CPU runtime in the separate experimental PP add-on; five platform pins in tools/ppocr/runtimes.edn. Its distribution's complete ThirdPartyNotices.txt is retained; the generated Markdown normalizes trailing whitespace. Non-macOS-arm64 platforms require their CI smoke; no local qualification is claimed.
   Licence text: [4](#licence-text-4), [12](#licence-text-12).
 
 - **pdfium** chromium/8076 (156.0.8076.0) - Apache-2.0 - https://pdfium.googlesource.com/pdfium/
@@ -158,39 +158,39 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
   Licence text: [26](#licence-text-26).
 
 - **Tesseract** 5.5.3 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. The version recorded by the committed transcripts (test/ocr/PRODUCER.json); Built by `bb native` (tools/native/native.edn) as a static library without libarchive, libcurl, its own libtiff, OpenMP, ICU or ScrollView (D540).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. The version recorded by the committed transcripts (test/ocr/PRODUCER.json); Built by `bb native` (tools/native/native.edn) as a static library without libarchive, libcurl, its own libtiff, OpenMP, ICU or ScrollView (D540).
   Licence text: [38](#licence-text-38).
 
 - **Leptonica** 1.87.0 - BSD-2-Clause - http://www.leptonica.org/
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. Leptonica's own licence is a two-clause BSD text. Static in the CLI; built with libpng, libjpeg-turbo, libtiff, zlib, giflib and libwebp, and without OpenJPEG (JPX stays unsupported, D524) or any JBIG codec (D540).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552); loaded at run time (not carried) by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon. Leptonica's own licence is a two-clause BSD text. Static in the CLI; built with libpng, libjpeg-turbo, libtiff, zlib, giflib and libwebp, and without OpenJPEG (JPX stays unsupported, D524) or any JBIG codec (D540).
   Licence text: [20](#licence-text-20).
 
 - **libpng (Leptonica's PNG codec)** 1.6.58 - libpng-2.0 - http://www.libpng.org/pub/png/libpng.html
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [10](#licence-text-10).
 
 - **libjpeg-turbo (Leptonica's JPEG codec)** 3.2.0 - IJG AND BSD-3-Clause AND Zlib - https://libjpeg-turbo.org/
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [16](#licence-text-16), [1](#licence-text-1).
 
 - **libtiff (Leptonica's TIFF codec)** 4.7.2 - libtiff - https://libtiff.gitlab.io/libtiff/
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552). A permissive BSD-style notice, not in the SPEC allowlist; listed so a maintainer decides (D526).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552). A permissive BSD-style notice, not in the SPEC allowlist; listed so a maintainer decides (D526).
   Licence text: [22](#licence-text-22).
 
 - **zlib (Leptonica's Flate codec)** 1.3.1 - Zlib - https://zlib.net/
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [5](#licence-text-5).
 
 - **giflib (Leptonica's GIF codec)** 6.1.3 - MIT - https://giflib.sourceforge.net/
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [55](#licence-text-55).
 
 - **libwebp (Leptonica's WebP codec)** 1.6.0 - BSD-3-Clause - https://chromium.googlesource.com/webm/libwebp
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [11](#licence-text-11), [7](#licence-text-7).
 
 - **Tesseract eng.traineddata** tessdata_fast 4.1.0, 4113088 bytes, sha256 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2 - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
-  carried by the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
+  carried by the separate experimental native PP-OCR archive, the per-platform CLI (P11.4b), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552).
   Licence text: [50](#licence-text-50).
 
 - **Tesseract osd.traineddata** tessdata_fast 4.1.0, sha256 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff - Apache-2.0 - https://github.com/tesseract-ocr/tessdata_fast
@@ -323,23 +323,23 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
 Tables built into every artifact by kin's generators from these sources.
 
 - **Unicode Character Database (UnicodeData, BidiBrackets, BidiMirroring, CJKRadicals, DerivedNormalizationProps)** 18.0.0 - Unicode-3.0 - https://www.unicode.org/license.txt
-  carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/bidiclass.kin, kin/nftable.kin, kin/radicals.kin (test/normalize/, test/bidi/).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/bidiclass.kin, kin/nftable.kin, kin/radicals.kin (test/normalize/, test/bidi/).
   Licence text: [30](#licence-text-30).
 
 - **Adobe Glyph List, AGLFN and ZapfDingbats names** 2.0 (glyphlist.txt) - BSD-3-Clause - https://github.com/adobe-type-tools/agl-aglfn
-  carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/agl.kin (test/fonts/glyphlist.txt, aglfn.txt, zapfdingbats.txt).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/agl.kin (test/fonts/glyphlist.txt, aglfn.txt, zapfdingbats.txt).
   Licence text: [54](#licence-text-54).
 
 - **Adobe cmap-resources (the predefined CMaps and cid2code tables)** commit f5cf3bca7fdfeaceb77aa82847e974f2306c20b4 - BSD-3-Clause - https://github.com/adobe-type-tools/cmap-resources
-  carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/cmapjp.kin, cmapgb.kin, cmapcns.kin, cmapkr.kin, cjk.kin (fetched by kin/scripts/cjkfetch.clj).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). In kin/cmapjp.kin, cmapgb.kin, cmapcns.kin, cmapkr.kin, cjk.kin (fetched by kin/scripts/cjkfetch.clj).
   Licence text: [47](#licence-text-47).
 
 - **pdf.js font encoding and charset tables (encodings.js, charsets.js, cff_parser.js, fonts.js)** commit 81525fd446779f0a29003cf06e3ba33751954826 - Apache-2.0 - https://github.com/mozilla/pdf.js
-  carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Copyright Mozilla Foundation. In kin/fontextra.kin (CFF standard strings and predefined charsets, MacExpertEncoding, the TrueType Macintosh glyph order).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Copyright Mozilla Foundation. In kin/fontextra.kin (CFF standard strings and predefined charsets, MacExpertEncoding, the TrueType Macintosh glyph order).
   Licence text: [50](#licence-text-50).
 
 - **Adobe Core 14 font metrics (AFM)** 4.1 (1997) - LicenseRef-Adobe-Core14-AFM - https://www.adobe.com/devnet/font/pdfs/Core14_AFMs.zip
-  carried by the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Widths and encodings derived into kin/encodings.kin (test/fonts/*.afm). Adobe permits copying and distribution for any purpose provided its copyright notices stay; the exact text is TODO, a maintainer decides (D526).
+  carried by the separate experimental native PP-OCR archive, the optional npm @3sln/emon-ppocr package, the Rust crate `emon` (crates.io), the Go module, the Java library (Maven Central, com.3sln), the NuGet package Emon, the npm package @3sln/emon (WASM and JS SDK), the C library and emon.h (with pdfium and the English and orientation models, D552), the babashka pod (with pdfium and the English and orientation models, D552), the per-platform CLI (P11.4b), the browser demo page (P11.4c). Widths and encodings derived into kin/encodings.kin (test/fonts/*.afm). Adobe permits copying and distribution for any purpose provided its copyright notices stay; the exact text is TODO, a maintainer decides (D526).
   Licence text: TODO: vendored at P11.5.
 
 
@@ -400,11 +400,11 @@ Build dependencies of site and development dependencies of host/js (the browser 
   Licence text: not carried by any artifact; the upstream package holds it.
 
 - **onnxruntime-common** 1.22.0 - MIT - https://www.npmjs.com/package/onnxruntime-common
-  carried by no release artifact; loaded at run time (not carried) by the npm package @3sln/emon (WASM and JS SDK). Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
+  carried by no release artifact; loaded at run time (not carried) by the optional npm @3sln/emon-ppocr package. Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
   Licence text: [4](#licence-text-4).
 
 - **onnxruntime-web** 1.22.0 - MIT - https://www.npmjs.com/package/onnxruntime-web
-  carried by no release artifact; loaded at run time (not carried) by the npm package @3sln/emon (WASM and JS SDK). Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
+  carried by no release artifact; loaded at run time (not carried) by the optional npm @3sln/emon-ppocr package. Caller-provided optional runtime for the JS PP adapter; the SDK carries no ORT code or models. The retained MIT text is from the same ONNX Runtime 1.22.0 distribution.
   Licence text: [4](#licence-text-4).
 
 - **platform** 1.3.6 - MIT - https://www.npmjs.com/package/platform

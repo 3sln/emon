@@ -301,6 +301,9 @@ jobs:
         run: npm ci --prefix host/js
       - name: bb gates ${{ matrix.gates }}
         run: bb gates ${{ matrix.gates }}
+      - name: Optional PP npm package (separate from the default SDK)
+        if: contains(matrix.gates, 'package-check')
+        run: bb package --host js-ppocr --check
 
   # ---- the release archives, only when the plan says they are affected (otherwise the base's stay valid) ---------------------------------------------------
   # five CLI targets (static Tesseract and Leptonica, pdfium, the `emon` binary: native.yml) ...
@@ -379,7 +382,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # the 18 files and SHA256SUMS in one artifact, kept 90 days: publish.yml downloads exactly this
+  # the 23 assets (18 archives) and SHA256SUMS in one artifact, kept 90 days: publish.yml downloads exactly this
   archives:
     needs: [plan, native, package]
     if: ${{ !cancelled() && needs.native.result == 'success' && needs.package.result == 'success' }}
@@ -404,7 +407,7 @@ jobs:
           pattern: package-*
           path: ${{ runner.temp }}/in
           merge-multiple: true
-      - name: Collect (all 18 files must be there) and write SHA256SUMS
+      - name: Collect (all 23 files must be there) and write SHA256SUMS
         run: bb release-ops archive --dir "$RUNNER_TEMP/in" --out "$RUNNER_TEMP/release-archives"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

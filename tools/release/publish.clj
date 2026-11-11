@@ -166,7 +166,8 @@
 ;; `bb package --host js` into dist/js/. The peer goes first, so that @3sln/emon never names a version that is not there; each is skipped when its version
 ;; is already on npm, so a rerun publishes what is missing.
 (defn npm-packages "[[package-name tarball] ...] for version v, in publishing order." [v]
-  [["@3sln/pdfium-wasm" (str "dist/js/3sln-pdfium-wasm-" v ".tgz")] ["@3sln/emon" (str "dist/js/3sln-emon-" v ".tgz")]])
+  [["@3sln/pdfium-wasm" (str "dist/js/3sln-pdfium-wasm-" v ".tgz")] ["@3sln/emon" (str "dist/js/3sln-emon-" v ".tgz")]
+   ["@3sln/emon-ppocr" (str "dist/js-ppocr/3sln-emon-ppocr-" v ".tgz")]])
 
 (defn npm-outcome "One outcome for the packages' (published / already-published / dry-run): published if any was." [outcomes]
   (cond (some #{"published"} outcomes) "published"
@@ -334,7 +335,7 @@
     (t! "npm view: another version is not this one" (not (npm-has? "0.1.1" "0.1.0")))
     (t! "npm args: public access, a private userconfig, no provenance outside Actions"
         (= ["publish" "a.tgz" "--access" "public" "--userconfig=rc"] (npm-args "a.tgz" "0.1.0" false "rc")))
-    (t! "npm packages: pdfium-wasm first, both tarballs named by version" (= [["@3sln/pdfium-wasm" "dist/js/3sln-pdfium-wasm-0.1.0.tgz"] ["@3sln/emon" "dist/js/3sln-emon-0.1.0.tgz"]] (npm-packages "0.1.0")))
+    (t! "npm packages: pdfium-wasm first, optional PP separate, all named by version" (= [["@3sln/pdfium-wasm" "dist/js/3sln-pdfium-wasm-0.1.0.tgz"] ["@3sln/emon" "dist/js/3sln-emon-0.1.0.tgz"] ["@3sln/emon-ppocr" "dist/js-ppocr/3sln-emon-ppocr-0.1.0.tgz"]] (npm-packages "0.1.0")))
     (t! "npm outcome: published when any package was, dry-run, else already-published"
         (and (= "published" (npm-outcome ["already-published" "published"])) (= "dry-run" (npm-outcome ["dry-run" "already-published"]))
              (= "already-published" (npm-outcome ["already-published" "already-published"]))))

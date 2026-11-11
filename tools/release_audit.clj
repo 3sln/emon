@@ -371,6 +371,24 @@
               (when-not (fs/exists? (path root (str texts-dir "/" f)))
                 (fail! (:id c) ": licence text " texts-dir "/" f " is missing (bb release-audit --import-texts for a crate)")))
             (when (= b (n-before)) (ok! "every licence text the inventory names is in release/licenses/")))
+          ;; PP is shipped only in its separate experimental add-on. The five
+          ;; runtime pins are packaging inputs, independent of frozen OCR policy.
+          (when-let [source (rd root "tools/ppocr/runtimes.edn")]
+            (let [b (n-before)
+                  pins (edn/read-string source)
+                  triples (set (keys (:triples (edn/read-string (rd root "tools/native/native.edn")))))]
+              (when-not (= triples (set (keys (:platforms pins)))) (fail! "PP runtime pins must cover all five native targets"))
+              (when-not (= "1.22.0" (:version pins)) (fail! "PP runtime version differs from qualified ORT"))
+              (doseq [[triple pin] (:platforms pins)]
+                (when-not (and (pos-int? (:bytes pin)) (re-matches #"[a-f0-9]{64}" (:sha256 pin))
+                               (str/starts-with? (:url pin) "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/"))
+                  (fail! "invalid PP runtime pin for " triple)))
+              (doseq [[id licence] [["native/onnxruntime@1.22.0" "MIT"] ["native/ppocr5-mobile-en" "Apache-2.0"]]
+                      :let [component (by-id id)]]
+                (when-not (and (= licence (:licence component)) (= [:ppocr-addon] (:carried-by component))
+                               (seq (text-files component)))
+                  (fail! id " must carry its licence texts in the PP add-on only")))
+              (when (= b (n-before)) (ok! "five pinned PP runtime archives; ORT MIT and Paddle/RapidOCR Apache-2.0 notices belong only to the add-on"))))
           ;; the browser demo's vendored files (P11.4c): every file `bb demo` vendors maps to a component the demo carries
           (let [b (n-before)
                 df (:demo-files inv)

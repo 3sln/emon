@@ -13,10 +13,27 @@
 (defn equal-streams? [expected actual]
  (with-open [a (expected-stream expected) b (io/input-stream actual)]
   (let [ab (byte-array 65536) bb (byte-array 65536)]
-   (loop []
+   (loop [equal true]
     (let [na (.readNBytes a ab 0 65536) nb (.readNBytes b bb 0 65536)]
-     (cond (not= na nb) false (zero? na) true
-           (java.util.Arrays/equals ^bytes ab ^bytes bb) (recur) :else false))))))
+     ;; Always drain stdout before awaiting the child. Returning at the first
+     ;; mismatch can leave a large bundle blocked on its full output pipe.
+     (if (and (zero? na) (zero? nb)) equal
+       (recur (and equal (= na nb) (java.util.Arrays/equals ^bytes ab ^bytes bb)))))))))
+(when (= "true" (get args "--self-test"))
+ (let [dir (fs/create-temp-dir {:dir ".cache" :prefix "ppocr-replay-drain-"})
+       expected (str dir "/expected")]
+  (try
+   (doseq [[size char equal] [[1048576 "y" true] [1048576 "x" false]
+                             [4096 "x" false] [2097152 "x" false]]]
+    (spit expected (apply str (repeat size char)))
+    (let [p (process ["bb" "-e" "(print (apply str (repeat 1048576 \"y\")))"]
+                     {:out :stream :err :string :shutdown nil})
+          result (equal-streams? expected (:out p))]
+     (assert (= equal result) "stream equality result differs")
+     (assert (zero? (:exit @p)) "mismatched stdout was not drained")))
+   (println "PASS replay stream equality, early mismatch and shorter/longer streams drain child stdout")
+   (finally (fs/delete-tree dir)))))
+(when (= "true" (get args "--self-test")) (System/exit 0))
 (defn sha [expected]
  (with-open [in (expected-stream expected)]
   (let [h (MessageDigest/getInstance "SHA-256") b (byte-array 65536)]

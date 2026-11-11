@@ -18,7 +18,13 @@
 
 ;; The inventory (DEVLOG D525). :n = how many times the pattern must match in the file.
 (def targets
-  [{:file "host/js/package.json"
+  [{:file "release/pkg/ppocr/package.json"
+    :what "optional npm @3sln/emon-ppocr"
+    :re #"(?m)(^  \"version\": \")([^\"]+)(\")" :n 1}
+   {:file "release/pkg/ppocr/package.json"
+    :what "optional PP package: matching SDK peer"
+    :re #"(\"@3sln/emon\": \"\^)([^\"]+)(\")" :n 1}
+   {:file "host/js/package.json"
     :what "npm @3sln/emon (WASM/JS SDK)"
     :re #"(?m)(^  \"name\": \"@3sln/emon\",\n  \"version\": \")([^\"]+)(\")" :n 1}
    {:file "host/js/package-lock.json"

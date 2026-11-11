@@ -16,8 +16,10 @@ It is not part of any gate. Re-running it with verified cached files is offline.
 `bb ppocr-check` verifies the cached assets, extracts the checked runtime archive,
 compiles the C ABI ownership shim, runs the Rust CTC/geometry/runtime smoke
 checks and builds the raw calibration probe. It never downloads. The current
-runtime archive is macOS arm64 only; other native platform archives still need
-qualification. Model files and runtime binaries are not bundled into releases.
+reference checker uses the macOS arm64 runtime. The release builder has separate
+five-platform pins in `runtimes.edn`; the other four platforms need their CI
+build/smoke checks and are not quality-qualified here. Model files and runtime binaries are carried only by the separate experimental
+[release add-on](../../docs/ppocr.md), never the default artifacts.
 
 Build the reference driver with `EMON_RS_PPOCR=1 kin/scripts/emon-rs-build`.
 The optional build includes the incumbent Tesseract adapter automatically;
@@ -47,8 +49,9 @@ bitmaps. It compares all complete integer answers on exactly 225 bitmaps
 through Rust, Go, Java, C# and both C/native transports; missing inputs fail
 explicitly. `--qualification DIR` selects the OP1c evidence directory,
 `--out DIR` the scratch output. `--limit N` is only a development smoke test
-and marks the report unqualified. Browser/JS and release bundle packaging
-remain separate tasks. The only qualified runtime archive remains macOS arm64.
+and marks the report unqualified. Browser/JS setup and release bundling are
+documented separately in [the experimental engine guide](../../docs/ppocr.md).
+The only quality-qualified native runtime remains macOS arm64.
 
 The port verifies all graph bytes before session construction. ORT 1.22.0 CPU
 uses sequential execution, one intra-op and one inter-op thread, and fixed graph
@@ -148,8 +151,8 @@ model/runtime paths during replay. Run it serially after `ppocr-hosts`.
 `EMON_RS_LIVE=1 kin/scripts/emon-rs-build` also enables the native Rust
 run-time binding to the shared adapter, with the same named model/runtime
 errors as Go, Java, C#, C and pod. The `EMON_RS_PPOCR=1` reference build stays
-available as the independent direct-call qualification oracle. The CLI and
-browser keep their named refusal until their own activation work.
+available as the independent direct-call qualification oracle. The CLI loads the separate release add-on through the same environment variables.
+The browser uses the separate optional npm package.
 
 The integrated check then replays all 198 retained OP1c candidate recordings
 (174 fixed plus 24 fresh) through the six available replay drivers, including

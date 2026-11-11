@@ -1,5 +1,8 @@
 # emon, the command-line tool
 
+[Experimental PP-OCR](ppocr.md) is a separate opt-in download; enable it with
+`emon convert --ocr-engine=ppocr INPUT` after configuring the add-on.
+
 `emon` converts a PDF or an image of a document into semantic HTML or the JSON Model. One archive per
 platform holds everything it needs: the binary, pdfium (renders pages), Tesseract and Leptonica (read
 scans; linked into the binary) and the English and orientation models. Nothing else has to be installed.

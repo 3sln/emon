@@ -32,6 +32,26 @@ unsafe extern "C" {
     fn dlsym(p: *mut c_void, n: *const c_char) -> *mut c_void;
     fn dlclose(p: *mut c_void) -> i32;
 }
+#[cfg(windows)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn LoadLibraryExW(path: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
+    fn GetProcAddress(library: *mut c_void, name: *const c_char) -> *mut c_void;
+    fn FreeLibrary(library: *mut c_void) -> i32;
+}
+#[cfg(windows)]
+unsafe fn dlopen(path: *const c_char, _: i32) -> *mut c_void {
+    use std::os::windows::ffi::OsStrExt;
+    let path = std::path::PathBuf::from(CStr::from_ptr(path).to_string_lossy().as_ref());
+    let Ok(path) = path.canonicalize() else { return std::ptr::null_mut(); };
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // Resolve ORT beside the adapter; do not search the current working directory.
+    LoadLibraryExW(wide.as_ptr(), std::ptr::null_mut(), 0x100 | 0x1000)
+}
+#[cfg(windows)]
+unsafe fn dlsym(p: *mut c_void, n: *const c_char) -> *mut c_void { GetProcAddress(p, n) }
+#[cfg(windows)]
+unsafe fn dlclose(p: *mut c_void) -> i32 { FreeLibrary(p) }
 pub struct PpOcr {
     state: Mutex<State>,
     incumbent: Option<OcrPort>,
@@ -57,15 +77,17 @@ impl PpOcr {
                 return Err("ppocr-models-missing".into());
             }
         }
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         unsafe {
             let ext = if cfg!(target_os = "macos") {
                 "dylib"
+            } else if cfg!(windows) {
+                "dll"
             } else {
                 "so"
             };
             let path = std::env::var("EMON_PPOCR_LIB")
-                .unwrap_or_else(|_| format!(".cache/ppocr/libemon_ppocr_adapter.{ext}"));
+                .unwrap_or_else(|_| format!(".cache/ppocr/{}emon_ppocr_adapter.{ext}", if cfg!(windows) { "" } else { "lib" }));
             let path = CString::new(path).map_err(|_| "ppocr-runtime-missing")?;
             let library = dlopen(path.as_ptr(), 2);
             if library.is_null() {
@@ -104,7 +126,7 @@ impl PpOcr {
                 incumbent,
             })
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = incumbent;
             Err("ppocr-runtime-missing".into())
@@ -115,7 +137,7 @@ impl Drop for State {
     fn drop(&mut self) {
         unsafe {
             (self.close)(self.port);
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             {
                 dlclose(self.library);
             }

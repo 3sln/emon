@@ -41,6 +41,7 @@ INPUT is a PDF or an image file, or - for standard input. The result goes to FIL
   --format   html (the default), json (the Model, compact) or model (the Model, indented)
   --assets   omit: the figures are left out; inline: figures and seals as PNGs inside the HTML; dir: as files in FILE.assets/ (needs -o)
   --ocr      when to read pages with Tesseract (the engine's own default when omitted)
+  --ocr-engine tesseract (default) or ppocr (experimental, separate add-on; docs/ppocr.md)
   --lang     the Tesseract models to read with, joined by + (default: every model in the models directory)
   --tessdata the models directory (default: $EMON_TESSDATA, else ../share/emon/tessdata beside the executable)
   --pdfium   the pdfium library or the directory holding it (default: $EMON_PDFIUM_LIB, else ../lib or beside the executable)
@@ -147,6 +148,7 @@ fn convert(args: Vec<String>) {
             "--format" => format = a.value("--format", inline),
             "--assets" => assets = Some(a.value("--assets", inline)),
             "--ocr" => ocr = Some(a.value("--ocr", inline)),
+            "--ocr-engine" => kv.push(format!("ocr-engine={}", a.value("--ocr-engine", inline))),
             "--lang" => lang = Some(a.value("--lang", inline)),
             "--tessdata" => tessdata = Some(a.value("--tessdata", inline)),
             "--pdfium" => pdfium = Some(a.value("--pdfium", inline)),
@@ -210,8 +212,6 @@ fn convert(args: Vec<String>) {
     text.push('\n');
     let parsed = emon::parse_options(&text).unwrap_or_else(|m| usage(&m));
     let opts = parsed.options;
-    // OP2c owns CLI activation; the native library's optional binding is separate.
-    if opts.ocr_engine == emon::OcrEngine::PpOcr { usage("ocr-engine=ppocr is unsupported in this Rust build"); }
     let mut cfg = parsed.config;
     let never = matches!(opts.ocr, OcrPolicy::Never);
 
@@ -266,6 +266,12 @@ fn convert(args: Vec<String>) {
         cfg.ocr = Some(emon::OcrPort(Arc::new(t)));
     } else if lang.is_some() {
         eprintln!("emon: note: --lang does nothing with ocr=never");
+    }
+
+    if opts.ocr_engine == emon::OcrEngine::PpOcr && !never {
+        let port = emon::ppocr_native::PpOcr::open(None, cfg.ocr.take())
+            .unwrap_or_else(|e| die(3, &e));
+        cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
     }
 
     // the document

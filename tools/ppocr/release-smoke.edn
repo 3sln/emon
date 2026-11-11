@@ -1,0 +1,12 @@
+{:answer-bytes 2007,
+ :fixture-sha256
+ "b1232dd7bed6c712b3da431b891c624617195170a04c3a1e9e45db6214c390ba",
+ :incumbent "pinned static Tesseract 5.5.3; native.edn",
+ :policy
+ "ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f",
+ :answer "tools/ppocr/release-smoke.html",
+ :options ["ocr-engine=ppocr"],
+ :fixture "test/raster/receipt-photo.png",
+ :answer-sha256
+ "9e7656fcafd2a8309c4e4ea7c3cb16e8153fa02493bb52759b3d9f4ae967e007",
+ :reference-platform "aarch64-apple-darwin"}

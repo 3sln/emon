@@ -187,10 +187,10 @@ jobs:
         run: |
           bb pdfium-fetch
           bb pdfium-fetch --platform wasm
-      - name: bb package --host js (emon.wasm, npm pack of @3sln/emon and of @3sln/pdfium-wasm)
+      - name: Package the SDK, pdfium and separate experimental PP npm package
         env:
           EMON_PACKAGE_REQUIRE_NATIVE: "1"
-        run: bb package --host js
+        run: bb package --host js --host js-ppocr
       - id: publish
         name: bb publish npm
         run: bb publish npm ${DRY_FLAG}

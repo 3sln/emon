@@ -7,7 +7,10 @@ JavaScript. Dictionary lookups call the pinned Tesseract wasm directly through
 a small wasm shim using separate memories. The native fusion policy
 and its documented receipt precision and CPU limitations remain unchanged.
 
-Build the optional module from the repository root:
+The separately installed `@3sln/emon-ppocr` package supplies the optional module
+as `@3sln/emon-ppocr/emon.wasm`. It has no required ORT dependency; supply the
+pinned runtime and model sources below. The ordinary SDK excludes the PP bridge.
+For a source build, from the repository root:
 
 ```sh
 EMON_CS_SHARED_COMPILATION=false EMON_WASM_PPOCR=1 kin/scripts/emon-wasm-build
@@ -30,7 +33,7 @@ third-party CDN URL defaults. URLs are fetched only when explicitly supplied.
 
 ```js
 import { Emon } from '@3sln/emon';
-import { ppocrPort, ppocrLexicon } from '@3sln/emon/ppocr';
+import { ppocrPort, ppocrLexicon } from '@3sln/emon-ppocr';
 
 // Supplied by the application:
 // optionalWasm: compiled WebAssembly.Module, bytes, or a hosted URL
@@ -57,6 +60,15 @@ const model = await emon.convert(input, {
 model.dispose();
 await ocr.terminate();
 ```
+
+To fetch models from a release asset URL chosen by your application, import
+`ppocrAssets` from `@3sln/emon-ppocr` and call `await ppocrAssets(addonUrl)`.
+Use a native `.tar.gz` add-on URL (not the Windows zip); pass the returned
+`models` and `traineddata` into the port and lexicon above. Browsers need a
+CORS-enabled URL or your own proxy. This explicit helper decompresses the
+archive in memory (up to 512 MiB) and ignores native binaries; the inference
+port verifies model hashes before use. Hosting just the extracted model
+files avoids downloading and buffering the native libraries.
 
 In Node, supply filesystem bytes for the wasm modules, models and traineddata,
 and a filesystem directory for `wasmPaths`; the adapter does not read files.
@@ -88,8 +100,8 @@ OP1c. This single-process sweep peaked at 485 MiB RSS, measured by Node's
 `resourceUsage().maxRSS`. It includes the PP pipeline, ORT sessions and
 dedicated dictionary, and excludes the incumbent OCR worker and full emon
 conversion. It is not a browser memory measurement or a per-conversion bound.
-Chrome could not launch in the task sandbox; browser qualification remains
-a coordinator check.
+The coordinator also qualified Chrome on macOS arm64: 225/225 raw answers
+match native. This is answer equality, not a browser memory measurement.
 
 Reproduce the optional live comparison after preparing the pinned assets and
 building the native oracle with `bb tools/ppocr/build_shared.clj`:

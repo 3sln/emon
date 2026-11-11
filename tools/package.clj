@@ -26,7 +26,7 @@
 
 (def root (str (fs/absolutize ".")))
 (def version (:version (edn/read-string (slurp (str root "/version.edn")))))
-(def all-hosts [:rust :go :java :csharp :js :c :pod])
+(def all-hosts [:rust :go :java :csharp :js :c :pod :ppocr :js-ppocr])
 (def sample "align-justify")
 
 (def ^:dynamic *out* nil)
@@ -413,15 +413,15 @@
 (defn build-js! []
   (when-not (have? "npm") (skip! "no npm"))
   (check-types!)
-  (let [r (run {:ok? false} "kin/scripts/emon-wasm-build")]
+  (let [r (run {:ok? false :env {"EMON_WASM_PPOCR" "0"}} "kin/scripts/emon-wasm-build")]
     (when (= 3 (:exit r)) (skip! (str/trim (:err r))))
     (when-not (zero? (:exit r)) (bad! "emon-wasm-build failed\n" (tail (:err r) 20)))
     (let [wasm (str/trim (:out r))
           dir (stage-dir :js)
-          srcs (->> (fs/list-dir (str root "/host/js/src")) (filter fs/regular-file?) (map #(str (fs/file-name %))) sort)
+          srcs (->> (fs/list-dir (str root "/host/js/src")) (filter fs/regular-file?) (map #(str (fs/file-name %))) (remove #(str/starts-with? % "ppocr")) sort)
           files (merge (into {} (for [s srcs] [(str "src/" s) (str "host/js/src/" s)]))
                        common-files
-                       {"package.json" "host/js/package.json"
+                       {"package.json" {:text (str/replace (slurp "host/js/package.json") #"(?m)^    \"\./ppocr\": [^\n]+\n" "")}
                         "emon.wasm" wasm})
           out (out-dir :js)]
       (stage! dir files ["src"])
@@ -431,6 +431,8 @@
             tgz (str out "/3sln-emon-" version ".tgz")]
         (when-not (fs/exists? tgz) (bad! "npm pack made no " tgz "\n" (:out r)))
         (let [names (tar-list tgz)]
+          (when (some #(re-find #"(?i)(ppocr|onnxruntime|\.onnx$)" %) names)
+            (bad! "the ordinary npm tarball carries optional PP assets"))
           (doseq [need ["package/package.json" "package/emon.wasm" "package/src/index.js" "package/src/index.d.ts" "package/src/pdfium.js" "package/src/pdfium.d.ts"
                         "package/src/tesseract.js" "package/src/tesseract.d.ts" "package/LICENSE" "package/README.md"]]
             (when-not (some #{need} names) (bad! "the tarball has no " need))))
@@ -597,7 +599,28 @@
 
 ;; ------------------------------------------------------------------------------------------------------ build all
 
-(def builders {:rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})
+(defn build-ppocr! []
+  (when-not (fs/exists? (str ".cache/native/" (host-triple) "/link.rustflags"))
+    (if (= "1" (System/getenv "EMON_PACKAGE_REQUIRE_NATIVE")) (bad! "PP add-on needs bb native") (skip! "PP add-on needs bb native and pinned optional assets")))
+  (run {} "bb" "ppocr-addon" "--out" (out-dir :ppocr))
+  [(str (out-dir :ppocr) "/emon-ppocr-" version "-" (host-triple)
+        (if (str/includes? (host-triple) "windows") ".zip" ".tar.gz"))])
+
+(defn build-js-ppocr! []
+  (let [r (run {:ok? false :env {"EMON_WASM_PPOCR" "1"}} "kin/scripts/emon-wasm-build")]
+    (when (= 3 (:exit r)) (skip! (str/trim (:err r))))
+    (when-not (zero? (:exit r)) (bad! (:err r)))
+    (let [dir (stage-dir :js-ppocr) out (out-dir :js-ppocr)
+          files (merge common-files {"package.json" "release/pkg/ppocr/package.json"
+                       "index.js" "release/pkg/ppocr/index.js" "index.d.ts" "release/pkg/ppocr/index.d.ts"
+                       "README.md" "docs/ppocr-web.md" "emon.wasm" (str/trim (:out r))}
+                       (into {} (for [f ["ppocr.js" "ppocr-link.js" "wasm.js" "ocr.js"]] [f (str "host/js/src/" f)]))
+                       {"ppocr.d.ts" {:text (str/replace (slurp "host/js/src/ppocr.d.ts") "'./index.js'" "'@3sln/emon'")}})]
+      (stage! dir files []) (fs/create-dirs out)
+      (run {:dir dir} "npm" "pack" "--ignore-scripts" "--pack-destination" out)
+      [(str out "/3sln-emon-ppocr-" version ".tgz")])))
+
+(def builders {:ppocr build-ppocr! :js-ppocr build-js-ppocr! :rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})
 
 (defn- artifact-line [f] (format "%-62s %10s  sha256 %s" (str (fs/relativize root f)) (human (fs/size f)) (subs (sha256 f) 0 16)))
 
@@ -980,7 +1003,16 @@
         (when-not (= html by-bytes) (bad! "pod: a path and the bytes gave different HTML"))
         html))))
 
-(def consumers {:rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})
+(defn- consume-ppocr [{:keys [files]} tmp]
+  (run {} "bb" "tools/ppocr/addon_smoke.clj" (first files))
+  :checked)
+
+(defn- consume-js-ppocr [{:keys [files]} tmp]
+  (run {:dir tmp} "npm" "install" "--ignore-scripts" "--no-audit" "--legacy-peer-deps" (first files))
+  (run {:dir tmp} "node" "--input-type=module" "-e" "import {ppocrPort, ppocrAdapter, ppocrLexicon, ppocrAssets} from '@3sln/emon-ppocr'; if (![ppocrPort,ppocrAdapter,ppocrLexicon,ppocrAssets].every(x=>typeof x === 'function')) process.exit(1)")
+  :checked)
+
+(def consumers {:ppocr consume-ppocr :js-ppocr consume-js-ppocr :rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})
 
 (defn check-hosts!
   "Install each built artifact into a clean consumer and convert the sample. Returns {host html-or-nil}."
@@ -994,8 +1026,10 @@
         (try
           (let [html ((consumers h) r tmp)]
             (swap! results assoc h html)
-            (say "  ok   " (name h) " consumer: installed " (fs/file-name (first (:files r))) " into a clean project, converted samples/" sample ".pdf: "
-                 (count (.getBytes ^String html "UTF-8")) " bytes of HTML" (when (= html expected) ", equal to samples/") " [" (Math/round (/ (- (System/nanoTime) t0) 1e9)) " s]"))
+            (if (= :checked html)
+              (say "  ok   " (name h) " optional-package smoke passed")
+              (say "  ok   " (name h) " consumer: installed " (fs/file-name (first (:files r))) " into a clean project, converted samples/" sample ".pdf: "
+                   (count (.getBytes ^String html "UTF-8")) " bytes of HTML" (when (= html expected) ", equal to samples/") " [" (Math/round (/ (- (System/nanoTime) t0) 1e9)) " s]")))
           (catch Exception e
             (if (:skip (ex-data e))
               (say "  SKIP " (name h) " consumer -- " (ex-message e))
@@ -1007,13 +1041,15 @@
 (defn- verdict [built results]
   (let [expected (slurp sample-html)
         ran (filter (fn [[_ v]] (string? v)) results)
+        checked (filter (fn [[_ v]] (= :checked v)) results)
         errors (filter (fn [[_ v]] (= :error v)) results)
         failed-build (filter (fn [[_ r]] (= :fail (:status r))) built)
         diff (remove (fn [[_ v]] (= v expected)) ran)]
     (doseq [[h _] diff] (say "  FAIL " (name h) ": its HTML differs from samples/" sample ".html"))
     (when (and (seq ran) (empty? diff) (empty? errors) (empty? failed-build))
       (say "  ok   " (count ran) " host(s) (" (str/join " " (map (comp name first) ran)) ") gave identical bytes, equal to samples/" sample ".html"))
-    (when (and (empty? ran) (empty? failed-build))
+    (when (seq checked) (say "  ok   " (count checked) " optional package smoke check(s) passed"))
+    (when (and (empty? ran) (empty? checked) (empty? failed-build))
       (say "  SKIP no host had a toolchain: nothing was installed"))
     (zero? (+ (count diff) (count errors) (count failed-build)))))
 
@@ -1033,7 +1069,7 @@
                    "--list" (recur (next as) (assoc o :list true))
                    (die 2 "usage: bb package [--host H] [--out DIR] | --check [--host H] [--out DIR] [--no-build] [--keep] | --list"))
                  o))
-        hosts (or (:hosts opts) all-hosts)
+        hosts (or (:hosts opts) (remove #{:ppocr :js-ppocr} all-hosts))
         out (str (fs/absolutize (or (:out opts) "dist")))]
     (when (:list opts)
       (doseq [h all-hosts] (println (name h)))

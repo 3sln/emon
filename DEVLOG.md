@@ -14085,3 +14085,39 @@ Chrome cannot launch in the sandbox, so browser arms are explicitly skipped and 
 
 *Coordinator browser qualification (2026-11-10):* headless Chrome, via `node tools/ppocr/web_browser.mjs` followed by `web_qualify.clj --compare-only true --candidate browser`, gave 225 of 225 answers byte-identical to native, with 0 different. Browser activation is therefore qualified on macOS arm64.
 - [ ] **Signed off** (maintainer)
+
+### D876 — Package PP-OCR as a separate experimental native add-on
+
+OP2c adds five `emon-ppocr-<version>-<triple>` archives alongside the existing CLI assets. Their ORT CPU 1.22.0 downloads have independent size and SHA-256 pins in `tools/ppocr/runtimes.edn`; the frozen 0420cd75 inference sources and model pins do not change. The adapter links the release's static Tesseract/codecs and locates ORT beside itself. It carries the three graphs, dictionary, orientation labels, pinned English lexicon and licence texts. The CLI activates the existing dynamic C ABI binding through `EMON_PPOCR_LIB` and `EMON_PPOCR_MODELS`, without linking or bundling ORT in its default archive. Windows uses the system loader with the adapter directory in the dependency search path; its assembled ORT shim converts UTF-8 model paths to the Windows wide pathname ABI only. Windows CI preserves LF checkout bytes before checking the frozen policy and dictionary pins. Each native CI runner must unpack its own add-on and ordinary CLI, convert the committed receipt fixture and compare against the committed HTML reference, including named missing-input errors. Linux, Windows and macOS x64 are CI-only here; no local portability or quality verification is claimed.
+
+- [ ] **Signed off** (maintainer)
+
+### D877 — Keep PP JavaScript in a separate optional npm package
+
+Choose the first OP2c option: `@3sln/emon-ppocr` carries the optional wasm and PP bridge, with no required ORT dependency. The ordinary `@3sln/emon` package excludes the PP bridge files and staged PP export and retains its ordinary wasm. Applications explicitly install and supply ORT Web 1.22.0, its runtime location and caller-chosen model URLs or bytes; no CDN or model URL default is introduced. `ppocrAssets` can decode a caller-selected native release tar.gz URL in memory and return the three graphs and English lexicon; inference still verifies their pins. Native add-on release assets can be extracted and served at an application-controlled URL. `bb package --host js-ppocr --check` builds/imports the optional tarball; the npm release workflow builds it explicitly and publishes it after the ordinary SDK. Nothing is published by this task. Go, Java and C# have no new required dependency and use the shared add-on's existing environment/API configuration.
+
+- [ ] **Signed off** (maintainer)
+
+### D878 — Include experimental add-ons in scoped archive verification and licence audit
+
+`emon/archives` now covers five additional native archives. The collection/attachment contract requires 23 assets (18 archives and five CLI checksum sidecars); `SHA256SUMS` names each PP add-on. A change to PP packaging inputs, release collection logic or the add-on instructions rebuilds the scoped archives. Release audit requires all five runtime pins and records ORT MIT and the PaddleOCR/RapidOCR Apache-2.0 texts as carried only by the separate add-on. Complete runtime-distribution notices are retained in each platform's payload. The user-facing experimental page retains the failed receipt precision floors, CPU overruns, measured memory, Latin-script limit and macOS arm64 qualification. Release notes link that page without treating experimental shipment as acceptance or a change of default.
+
+- [ ] **Signed off** (maintainer)
+
+### D879 — Drain replay output before awaiting a mismatched child
+
+The replay comparator returned immediately at a byte mismatch, then awaited the child. A large mismatched bundle could fill the stdout pipe and block that wait. It now drains both streams while retaining the equality result. A self-check covers equal 1 MiB output, an early mismatch and shorter/longer expected streams; every child exits and every equality verdict is checked. Complete byte equality remains required.
+
+The 74-page Arabic booklet was interrupted during OP2c's replay sweep after 918 completed pairs to investigate its long runtime. A separate reference comparison matched all 107,325,126 bytes in 1404.97 seconds; no booklet mismatch is claimed. The phased continuation revalidates each retained reference SHA, snapshots the consumed host binaries and requires the unchanged binaries and complete 198-recording/1188-pair set before reporting completion. The retained logs distinguish the interrupted attempt from its continuation. Frozen PP inference and fusion sources remain unchanged.
+
+- [ ] **Signed off** (maintainer)
+
+### D880 — Verify the experimental release path and keep native uploads flat
+
+Native CI writes the separate PP archive beside the CLI with `--out .cache/cli`. Uploading from both `.cache/cli` and `dist/ppocr` would move the artifact root to their common ancestor ([upload-artifact v4](https://github.com/actions/upload-artifact/tree/v4#upload-using-multiple-paths-and-exclusions)); the release collector's glob then misses the hidden CLI subtree. The layout regression reproduces 13 of 23 assets before the fix and collects all 23 afterward, with 18 archive checksums and five PP entries. Its fixed-layout dry run combines the five actual macOS arm64 files with 18 explicitly synthetic foreign files. No foreign build or execution is claimed. The actual macOS add-on passes its unpacked CLI smoke in the CI output directory, and the ordinary CLI checksum remains unchanged.
+
+The default suite passes drift, core, rederive check, accuracy, samples, four law hosts and seven clean package consumers. Accuracy has 3449 metrics with no regressions or improvements; Go, Rust, Java and C# each pass 1376 laws, and the seven consumers match 3653-byte HTML. Twelve ordinary archives contain no PP graphs, ORT library or PP adapter binary. Default wasm remains byte-identical: 5,929,199 bytes, SHA-256 fec3b4a2c87bf61c7cea7f73c93977a26315166c807f558ffb38cac4cf0019ca. Explicit native and optional npm package checks pass; the npm asset-helper test extracts the real release payload and checks its graph and lexicon pins. Full PP qualification coverage passes 1350 live answers, 35 integrated Models, actual runtime absence/restoration and all 1188 exact replay comparisons. Replay completion is phased as recorded in D879, with retained reference hashes revalidated and host binaries unchanged. The independent Rust reference matches the committed release-smoke HTML.
+
+Official `bb publish npm --dry-run` refuses the missing NPM_TOKEN; credential-free direct npm dry inspection passes for all three tarballs. `release-verify --tag v0.2.0 --dry-run` refuses the existing tag's different commit. Actual full archive collection refuses the missing foreign builds. Those preflights remain enforced; the coordinator must version a subsequent release after committing. Maven is unavailable, so Java consumes the Maven layout through javac/java without testing Maven resolution. Linux, Windows and macOS x64 remain CI-only. Nothing is committed, published, pushed, retagged or dispatched to CI.
+
+- [ ] **Signed off** (maintainer)

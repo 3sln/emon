@@ -1,5 +1,8 @@
 # emon
 
+[Experimental: PP-OCR engine](docs/ppocr.md) is an optional, separately downloaded
+Latin-script OCR add-on. Tesseract fast remains the default.
+
 **PDFs and images in, semantic HTML out. Built for scraping.**
 
 emon reads a PDF (or a PNG, JPEG or TIFF image of a page) and gives you what a scraper wants: the text in

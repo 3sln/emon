@@ -4,7 +4,7 @@
 #   - on demand:  gh workflow run native.yml [-f ref=main]
 #   - called from verify.yml (P11.4b, D550) when the plan says the release archives are affected: `uses: ./.github/workflows/native.yml` with `ref` set to the commit; the
 #     artifacts native-<triple> carry .cache/native/<triple> (include/, lib/*.a, share/tessdata, manifest.edn, link.rustflags) and the pdfium archive. They and the
-#     emon-cli-<triple> artifacts are intermediate (7 days): verify.yml collects the CLI archives into `release-archives`, which is kept 90 days.
+#     emon-cli-<triple> artifacts (CLI plus separate experimental PP add-on) are intermediate (7 days): verify.yml collects them into `release-archives`, which is kept 90 days.
 # A prefix is cached by the hash of the pins (the file contents of native.edn, giflib.CMakeLists.txt, tesseract-prefind.cmake and native.clj): an unchanged pin is not rebuilt.
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
 # P11.4b (D541): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
@@ -64,6 +64,10 @@ jobs:
           - { triple: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm, pdfium: linux-arm64 }
           - { triple: x86_64-pc-windows-msvc,    runner: windows-2022,     pdfium: win-x64 }
     steps:
+      - name: Preserve byte-pinned source files (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           repository: 3sln/emon
@@ -160,6 +164,11 @@ jobs:
       - name: bb cli --check (build the archive, unpack it and run it)
         if: inputs.cli != false
         run: bb cli --check --target ${{ matrix.triple }}
+      - name: Experimental PP add-on (pinned runtime, adapter, models; unpacked CLI smoke)
+        if: inputs.cli != false
+        # Keep both separate archives under the same upload root. A second root
+        # would nest .cache/cli in the artifact, outside the collector's glob.
+        run: bb ppocr-addon --fetch --check --out .cache/cli
       - name: The archive
         if: inputs.cli != false
         run: ls -l .cache/cli/*.tar.gz .cache/cli/*.zip .cache/cli/*.sha256 2>/dev/null || true

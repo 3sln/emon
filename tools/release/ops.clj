@@ -8,7 +8,7 @@
 ;;        the DRAFT GitHub release for the tag, `target_commitish` = SHA (the tag is made when the draft is published): created; or, when a draft exists, its target and notes
 ;;        are updated; a release that is already published is an error, and so is a tag that exists at another commit.
 ;;   bb release-ops archive --dir DIR [--dir DIR ...] --out OUT [--version X.Y.Z]
-;;        collect the CLI, C library and pod archives under the DIRs into OUT (all 18 must be there) and write OUT/SHA256SUMS: what verify.yml uploads as `release-archives`.
+;;        collect the CLI, PP add-on, C library and pod archives under the DIRs into OUT (all 23 must be there) and write OUT/SHA256SUMS: what verify.yml uploads as `release-archives`.
 ;;   bb release-ops verdict --sha SHA --results plan=success,core=success,... --run-url URL --plan PLAN_JSON [--dry-run]
 ;;        post `emon/archives` and then `emon/verified` on SHA: verified only when `plan` succeeded and every other job succeeded or was skipped (a cancelled or failed job is not).
 ;;        PLAN_JSON is what `bb ci verify-plan` printed ({} if the plan job failed): it holds the description, the version and what to say of the archives.
@@ -17,7 +17,7 @@
 ;;        artifacts' retention), and download that run's `release-archives` artifact into DIR; check it is complete and matches SHA256SUMS. --dry-run: only find it and ask
 ;;        GitHub whether the artifact is still there.
 ;;   bb release-ops attach --tag vX.Y.Z --dir DIR [--dry-run]
-;;        check DIR (all 18 files, SHA256SUMS matching) and upload it to the release with SHA256SUMS (--clobber: a rerun replaces them).
+;;        check DIR (all 23 files, SHA256SUMS matching) and upload it to the release with SHA256SUMS (--clobber: a rerun replaces them).
 ;;   bb release-ops summary --tag vX.Y.Z --results crates=success:published,npm=failure,... [--dry-run]
 ;;        the publish job's report (Markdown to $GITHUB_STEP_SUMMARY and stdout); exit 1 if any registry did not succeed.
 ;;   bb release-ops --self-test
@@ -62,7 +62,8 @@
 (defn expected-assets
   "Every file the release must carry besides SHA256SUMS, by name."
   [v]
-  (vec (concat (for [t triples-cli ext (if (str/includes? t "windows") ["zip"] ["tar.gz"])] (str "emon-" v "-" t "." ext))
+  (vec (concat (for [t triples-cli] (str "emon-ppocr-" v "-" t (if (str/includes? t "windows") ".zip" ".tar.gz")))
+               (for [t triples-cli ext (if (str/includes? t "windows") ["zip"] ["tar.gz"])] (str "emon-" v "-" t "." ext))
                (for [t triples-cli ext (if (str/includes? t "windows") ["zip"] ["tar.gz"])] (str "emon-" v "-" t "." ext ".sha256"))
                (for [t triples-lib] (str "emon-c-" v "-" t ".tar.gz"))
                (for [t triples-lib] (str "emon-pod-" v "-" t ".tar.gz")))))
@@ -270,7 +271,7 @@
                  #(do (rl/run! "gh" "run" "download" (:run found) "--repo" repo "-n" artifact-name "-D" out)
                       (let [problems (check-dir out version)]
                         (when (seq problems) (rl/die 1 (str "release-ops fetch-archives: the artifact is not a good set:\n  " (str/join "\n  " problems))))
-                        (say "the 18 archives and " sums-file " are complete and consistent")))))))
+                        (say "the 23 assets and " sums-file " are complete and consistent")))))))
 
 (defn attach! [{:keys [tag dir dry-run?]}]
   (let [v (rl/tag->version tag)
@@ -318,19 +319,19 @@
     (t! "draft: a published release is refused, clearly" (let [d (draft-decision {:release {:draft false} :sha sha})] (and (= :refuse (:action d)) (str/includes? (:why d) "PUBLISHED"))))
     (t! "draft: a tag at another commit is refused" (= :refuse (:action (draft-decision {:release nil :tag-sha other :sha sha}))))
     (let [a (expected-assets "0.1.0")]
-      (t! "expected assets: 5 CLI + 5 sums + 4 C + 4 pod = 18" (= 18 (count a)))
+      (t! "expected assets: 5 CLI + 5 PP + 5 sums + 4 C + 4 pod = 23" (= 23 (count a)))
       (t! "expected assets are distinct" (= (count a) (count (set a))))
       (t! "windows ships a zip" (some #{"emon-0.1.0-x86_64-pc-windows-msvc.zip"} a))
       (t! "C and pod archives are named as bb package names them" (and (some #{"emon-c-0.1.0-aarch64-apple-darwin.tar.gz"} a) (some #{"emon-pod-0.1.0-x86_64-unknown-linux-gnu.tar.gz"} a)))
       (let [hashes (into {} (for [n a] [n (str (hash n))]))
             sums (sums-text hashes)]
-        (t! "SHA256SUMS lists the 13 archives and not the .sha256 sidecars" (= 13 (count (parse-sums sums))))
+        (t! "SHA256SUMS lists the 18 archives and not the .sha256 sidecars" (= 18 (count (parse-sums sums))))
         (t! "a complete set matches its sums" (= [] (check-archives "0.1.0" hashes sums)))
         (t! "a missing file is named" (= ["missing emon-c-0.1.0-aarch64-apple-darwin.tar.gz"]
                                          (filterv #(str/starts-with? % "missing emon-c") (check-archives "0.1.0" (dissoc hashes "emon-c-0.1.0-aarch64-apple-darwin.tar.gz") sums))))
         (t! "a file that differs from its sum is named" (some #(str/includes? % "does not match SHA256SUMS") (check-archives "0.1.0" (assoc hashes "emon-pod-0.1.0-x86_64-unknown-linux-gnu.tar.gz" "0") sums)))
         (t! "no SHA256SUMS is a problem" (some #{"missing SHA256SUMS"} (check-archives "0.1.0" hashes nil)))
-        (t! "archives of another version are all missing" (= 18 (count (filter #(str/starts-with? % "missing emon") (check-archives "0.2.0" hashes sums)))))))
+        (t! "archives of another version are all missing" (= 23 (count (filter #(str/starts-with? % "missing emon") (check-archives "0.2.0" hashes sums)))))))
     (t! "verdict: plan and every job success -> success" (= "success" (verdict-state (parse-results "plan=success,core=success,gates=success"))))
     (t! "verdict: skipped jobs are fine" (= "success" (verdict-state (parse-results "plan=success,core=success,gates=skipped,unit=skipped,archives=skipped"))))
     (t! "verdict: one failure" (= "failure" (verdict-state (parse-results "plan=success,core=failure,gates=success"))))
