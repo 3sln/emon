@@ -19,7 +19,7 @@
   (fs/create-dirs ".cache/site")
   (let [commit (str/trim (:out @(process {:out :string :err :string} "git" "rev-parse" "HEAD")))
         languages (read-edn "site/i18n/languages.edn" [{:code "en" :path "" :name "English" :dir "ltr"}])]
-   (spit ".cache/site/data.json" (json/generate-string {:out out :commit commit :version (:version (read-edn "version.edn" {})) :languages languages :samples (read-edn "samples/catalog.edn" []) :install (mapv (fn [item] (if-let [snippet (:snippet item)] (assoc item :code (let [text (slurp snippet)] (if-let [[_ body] (re-find #"(?s)docs:begin[^\n]*\n(.*?)\n[^\n]*docs:end" text)] body text))) item)) (read-edn "site/install.edn" [])) :noDemo (has? "--no-demo")})))
+   (spit ".cache/site/data.json" (json/generate-string {:out out :commit commit :version (:version (read-edn "version.edn" {})) :languages languages :samples (read-edn "samples/catalog.edn" []) :install (mapv (fn [item] (if-let [snippet (:snippet item)] (assoc item :code (let [text (str/replace (slurp snippet) "0.0.0-dev" (:version (read-edn "version.edn" {})))] (if-let [[_ body] (re-find #"(?s)docs:begin[^\n]*\n(.*?)\n[^\n]*docs:end" text)] body text))) item)) (read-edn "site/install.edn" [])) :noDemo (has? "--no-demo")})))
   (fs/delete-tree out)
   (fs/create-dirs out)
   (if (has? "--no-demo") (println "SKIP demo -- --no-demo") (run! "bb" "demo" "--out" (str out "/demo")))

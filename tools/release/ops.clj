@@ -1,26 +1,5 @@
-#!/usr/bin/env bb
-;; The small steps of the release workflows (P11.9, P11.10, D524, D547, D550). The workflows only call these; the logic is here so it can be tried on a laptop
-;; (every step that changes something outside the working tree takes --dry-run, which says what it would do and does nothing).
-;;
-;;   bb release-ops next (--bump major|minor|patch | --version X.Y.Z)
-;;        validate the version a release will have (newer than version.edn, no tag or release of that name) and print it; bump.yml then runs `bb version set`.
-;;   bb release-ops draft --tag vX.Y.Z --sha SHA --notes FILE [--dry-run]
-;;        the DRAFT GitHub release for the tag, `target_commitish` = SHA (the tag is made when the draft is published): created; or, when a draft exists, its target and notes
-;;        are updated; a release that is already published is an error, and so is a tag that exists at another commit.
-;;   bb release-ops archive --dir DIR [--dir DIR ...] --out OUT [--version X.Y.Z]
-;;        collect the CLI, PP add-on, C library and pod archives under the DIRs into OUT (all 23 must be there) and write OUT/SHA256SUMS: what verify.yml uploads as `release-archives`.
-;;   bb release-ops verdict --sha SHA --results plan=success,core=success,... --run-url URL --plan PLAN_JSON [--dry-run]
-;;        post `emon/archives` and then `emon/verified` on SHA: verified only when `plan` succeeded and every other job succeeded or was skipped (a cancelled or failed job is not).
-;;        PLAN_JSON is what `bb ci verify-plan` printed ({} if the plan job failed): it holds the description, the version and what to say of the archives.
-;;   bb release-ops fetch-archives --sha SHA --version V --out DIR [--limit N] [--dry-run]
-;;        find the archives for SHA: its own `emon/archives` status, else the nearest verified first-parent ancestor whose archives are valid for V (same version, inside the
-;;        artifacts' retention), and download that run's `release-archives` artifact into DIR; check it is complete and matches SHA256SUMS. --dry-run: only find it and ask
-;;        GitHub whether the artifact is still there.
-;;   bb release-ops attach --tag vX.Y.Z --dir DIR [--dry-run]
-;;        check DIR (all 23 files, SHA256SUMS matching) and upload it to the release with SHA256SUMS (--clobber: a rerun replaces them).
-;;   bb release-ops summary --tag vX.Y.Z --results crates=success:published,npm=failure,... [--dry-run]
-;;        the publish job's report (Markdown to $GITHUB_STEP_SUMMARY and stdout); exit 1 if any registry did not succeed.
-;;   bb release-ops --self-test
+;; D886: prepare validates the selected main commit/version; release reuses or creates a published release after verification.
+;; All public mutations support --dry-run; archive/verdict/fetch-archives/summary support verification and reporting.
 (require '[babashka.fs :as fs]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
@@ -50,14 +29,22 @@
       (and tag-exists? (tag-exists? (str "v" v))) {:error (str "tag v" v " already exists")}
       :else {:version v})))
 
-(defn draft-decision
-  "What to do about the draft of a tag. release: the release of that tag (a map with :draft) or nil; tag-sha: the commit the tag points at, if the tag exists; sha: the commit to release."
-  [{:keys [release tag-sha sha]}]
+(defn release-decision [{:keys [release tag-sha sha]}]
   (cond
-    (and release (not (:draft release))) {:action :refuse :why "a release for this tag is already PUBLISHED; a published version is never redrafted (release the next one)"}
     (and tag-sha (not= tag-sha sha)) {:action :refuse :why (str "the tag exists at " tag-sha ", not at " sha "; a tag is never moved")}
-    release {:action :update}
+    (and release (not= (:target_commitish release) sha)) {:action :refuse :why "the existing release targets a different commit"}
+    release {:action :reuse}
     :else {:action :create}))
+
+(defn prepare-decision [{:keys [current version only event tag-sha sha]}]
+  (let [selected (if (str/blank? only) #{} (set (str/split only #"," -1)))
+        known (set (cons "assets" registries))]
+    (cond
+      (and (not (str/blank? version)) (not= version current)) {:error "input version must equal version.edn at the selected ref"}
+      (and (not (empty? (str only))) (str/blank? only)) {:error "only must not contain whitespace"}
+      (not-every? known selected) {:error "only must be a comma list of assets,crates,npm,nuget,maven,go"}
+      (and tag-sha (not= tag-sha sha)) {:error (str "tag v" current " exists at another commit; never retarget it")}
+      :else {:run (not (and (= event "push") tag-sha)) :version current})))
 
 (defn expected-assets
   "Every file the release must carry besides SHA256SUMS, by name."
@@ -134,8 +121,11 @@
       (line "| " k " | " (case r "success" (if dry? "ok (dry run)" "done") "skipped" "skipped" "FAILED") (when-not (#{"success" "skipped"} r) (str " (" r ")")) " | " (or d "") " |"))
     (line)
     (if ok?
-      (line (if dry? "Every check passed; a real release would publish " "Every registry is at ") v ". A rerun is safe: a registry that has the version is skipped.")
-      (do (line "**NOT everything was published.** Failed: " (str/join ", " failed) ". The others are done and stay done; this is a partial publish.")
+      (line (if dry? "Every check passed; a real release would publish " "Selected release steps completed for ") v ". A rerun is safe: a registry that has the version is skipped.")
+      (do (line "**Release incomplete.** Failed: " (str/join ", " failed) ".")
+          (let [completed (for [[k r _] rows :when (and (some #{k} registries) (= r "success"))] k)]
+            (line (if (seq completed) (str (if dry? "Dry-run registry checks completed: " "Partial publish: registry jobs completed: ") (str/join ", " completed) ".")
+                      "No registry job completed successfully; inspect the logs before retrying.")))
           (line)
           (line "1. Read the failed job's log; fix the cause (a credential, a registry outage). A registry never accepts the same version twice, so do not change the tag.")
           (line "2. Re-run the failed jobs (Actions > this run > Re-run failed jobs). Each step skips a version its registry already has.")
@@ -178,23 +168,6 @@
     (rl/write-output! "version" (:version p))
     (rl/write-output! "tag" (str "v" (:version p)))))
 
-(defn draft! [{:keys [tag sha notes dry-run?]}]
-  (let [v (rl/tag->version tag)
-        _ (when-not (re-matches #"[0-9a-f]{40}" (str sha)) (rl/die 2 "release-ops draft: --sha must be a full commit sha, got" (pr-str sha)))
-        release (find-release tag)
-        d (draft-decision {:release release :tag-sha (remote-tag-sha tag) :sha sha})
-        fields ["-f" (str "tag_name=" tag) "-f" (str "target_commitish=" sha) "-f" (str "name=emon " tag)
-                "-F" (str "body=@" notes) "-F" "draft=true" "-F" (str "prerelease=" (boolean (str/includes? v "-")))]]
-    (case (:action d)
-      :refuse (rl/die 1 "release-ops draft:" tag (:why d))
-      :update (do-or-say dry-run? (str "update the draft " tag ": target " sha ", notes " notes)
-                         #(do (apply rl/run! "gh" "api" "-X" "PATCH" (str "repos/" (rl/repo) "/releases/" (:id release)) fields)
-                              (say "updated the draft release " tag " (target " sha "): " (:html_url release))))
-      :create (do-or-say dry-run? (str "create the draft " tag " targeting " sha)
-                         #(let [r (apply rl/run! "gh" "api" "-X" "POST" (str "repos/" (rl/repo) "/releases") "--jq" ".html_url" fields)]
-                            (say "created the draft release " tag " (target " sha "; the tag is made when it is published): " (str/trim (:out r))))))
-    (rl/write-output! "action" (name (:action d)))))
-
 (defn- files-of [dirs]
   (into (sorted-map)
         (for [d dirs, f (fs/glob d "**" {:follow-links false}) :when (fs/regular-file? f)]
@@ -218,6 +191,52 @@
         hashes (into {} (for [n (expected-assets version) :when (contains? fs* n)] [n (sha256-hex (get fs* n))]))
         sums (when (contains? fs* sums-file) (slurp (get fs* sums-file)))]
     (check-archives version hashes sums)))
+
+(defn prepare! [{:keys [version only event]}]
+  (let [sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))
+        _ (when-not (zero? (:exit (rl/git "merge-base" "--is-ancestor" sha "origin/main")))
+            (rl/die 1 "release: selected commit is not on main"))
+        current (cur-version)
+        decision (prepare-decision {:current current :version version :only only :event event
+                                    :tag-sha (remote-tag-sha (str "v" current)) :sha sha})]
+    (when (:error decision) (rl/die 1 (:error decision)))
+    (rl/run! "bb" "tools/version.clj" "--check" (str "v" current))
+    (doseq [[k v] {"sha" sha "version" current "run" (str (boolean (:run decision)))}] (rl/write-output! k v))))
+
+(defn release! [{:keys [tag sha notes dir only dry-run?]}]
+  (let [v (rl/tag->version tag)
+        _ (when-not (and (= v (cur-version)) (re-matches #"[0-9a-f]{40}" (str sha))
+                         (= sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))))
+            (rl/die 1 "release: version or checkout does not equal the requested release"))
+        statuses (rl/statuses-of (rl/repo) sha)
+        _ (when (or (rl/error? statuses) (not (rl/verified-ok? (rl/newest rl/status-context statuses))))
+            (rl/die 1 "release: commit has no successful emon/verified status"))
+        problems (check-dir dir v)
+        _ (when (seq problems) (rl/die 1 (str/join "\n" problems)))
+        rel (find-release tag)
+        tag-sha (remote-tag-sha tag)
+        d (release-decision {:release rel :tag-sha tag-sha :sha sha})
+        assets? (or (str/blank? only) (some #{"assets"} (str/split only #",")))]
+    (when (= :refuse (:action d)) (rl/die 1 (:why d)))
+    (when (and (not assets?) (or (nil? rel) (nil? tag-sha) (:draft rel)))
+      (rl/die 1 "release: selected registries need an existing published release; retry with assets included"))
+    (when assets?
+      (do-or-say dry-run? (str "create/reuse tag " tag " at " sha " and publish release with archives")
+        #(do
+           (when-not tag-sha
+             (rl/run! "gh" "api" "-X" "POST" (str "repos/" (rl/repo) "/git/refs")
+                      "-f" (str "ref=refs/tags/" tag) "-f" (str "sha=" sha)))
+           (if rel
+             (do
+               (apply rl/run! "gh" "release" "upload" tag "--repo" (rl/repo) "--clobber"
+                      (for [n (conj (expected-assets v) sums-file)] (str dir "/" n)))
+               (when (:draft rel)
+                 (rl/run! "gh" "api" "-X" "PATCH" (str "repos/" (rl/repo) "/releases/" (:id rel)) "-F" "draft=false")))
+             (apply rl/run! "gh" "release" "create" tag "--repo" (rl/repo) "--verify-tag" "--target" sha
+                    "--title" (str "emon " tag) "--notes-file" notes
+                    (concat (when (str/includes? v "-") ["--prerelease"])
+                            (for [n (conj (expected-assets v) sums-file)] (str dir "/" n))))))))
+    (rl/write-output! "outcome" (if dry-run? "dry-run" "release and assets ready"))))
 
 (defn plan-fields
   "What the verdict needs from the JSON `bb ci verify-plan` printed ({} when the plan job failed): its description, the version, whether this run built the archives and, if not,
@@ -283,7 +302,7 @@
       (do-or-say dry-run? (str "gh release upload " tag " (" (count names) " files) --clobber")
                  #(let [rel (find-release tag)]
                     (when-not rel (rl/die 1 "release-ops attach: no release" tag))
-                    (when (:draft rel) (rl/die 1 "release-ops attach:" tag "is still a draft; the publish workflow attaches to the published release"))
+                    (when (:draft rel) (rl/die 1 "release-ops attach:" tag "is not published; run release.yml with assets selected"))
                     (apply rl/run! "gh" "release" "upload" tag "--clobber" "--repo" (rl/repo) paths)
                     (say "attached " (count names) " files to " tag))))))
 
@@ -313,11 +332,19 @@
     (t! "a nonsense bump is refused" (:error (pv {:bump "huge"})))
     (t! "a nonsense version is refused" (:error (pv {:version "1.2"})))
     (t! "a pre-release of the next version is newer than the current" (= {:version "0.2.0-rc.1"} (pv {:version "0.2.0-rc.1"})))
-    (t! "draft: absent -> create" (= :create (:action (draft-decision {:release nil :sha sha}))))
-    (t! "draft: a draft exists -> update its target and notes" (= :update (:action (draft-decision {:release {:draft true :id 1} :sha sha}))))
-    (t! "draft: a draft whose tag exists at the same commit -> update" (= :update (:action (draft-decision {:release {:draft true} :tag-sha sha :sha sha}))))
-    (t! "draft: a published release is refused, clearly" (let [d (draft-decision {:release {:draft false} :sha sha})] (and (= :refuse (:action d)) (str/includes? (:why d) "PUBLISHED"))))
-    (t! "draft: a tag at another commit is refused" (= :refuse (:action (draft-decision {:release nil :tag-sha other :sha sha}))))
+    (t! "release: absent -> create" (= :create (:action (release-decision {:sha sha}))))
+    (t! "release: same tag and release reused" (= :reuse (:action (release-decision {:sha sha :tag-sha sha :release {:target_commitish sha}}))))
+    (t! "release: tag at another commit refused" (= :refuse (:action (release-decision {:sha sha :tag-sha other}))))
+    (t! "release: different target refused" (= :refuse (:action (release-decision {:sha sha :release {:target_commitish other}}))))
+    (let [p #(prepare-decision (merge {:current "1.2.3" :sha sha :event "push"} %))]
+      (t! "new version (tag absent) triggers" (:run (p {})))
+      (t! "released version push skips" (false? (:run (p {:tag-sha sha}))))
+      (t! "manual retry reuses tag" (:run (p {:event "workflow_dispatch" :tag-sha sha})))
+      (t! "wrong-commit tag refused even on push" (:error (p {:tag-sha other})))
+      (t! "input version mismatch refused" (:error (p {:version "1.2.4"})))
+      (t! "whitespace selection refused" (:error (p {:only " "})))
+      (t! "invalid registry refused" (:error (p {:only "npm,typo"})))
+      (t! "selected registries accepted" (:run (p {:only "npm,assets"}))))
     (let [a (expected-assets "0.1.0")]
       (t! "expected assets: 5 CLI + 5 PP + 5 sums + 4 C + 4 pod = 23" (= 23 (count a)))
       (t! "expected assets are distinct" (= (count a) (count (set a))))
@@ -361,11 +388,45 @@
       (t! "summary: a dry run says so, and never claims anything was published"
           (let [m (:markdown (summary-md "v1.2.3" [["npm" "success" "dry-run"]] true))] (and (str/includes? m "DRY RUN: nothing was published") (not (str/includes? m "published |")))))
       (t! "summary: a skipped registry is not a failure" (:ok? (summary-md "v1.2.3" [["crates" "skipped" nil]]))))
+    ;; Exercise effect wiring with synthetic archives and mocked GitHub; never call a registry.
+    (let [tmp (str (fs/create-temp-dir {:prefix "emon-release-test-"}))
+          v "1.2.3-rc.1" tag (str "v" v)
+          calls (atom []) release (atom nil)
+          green {:context rl/status-context :state "success" :description "verified: full gates"
+                 :target_url "https://github.com/3sln/emon/actions/runs/99"}]
+      (try
+        (doseq [n (expected-assets v)] (spit (str tmp "/" n) n))
+        (spit (str tmp "/SHA256SUMS")
+              (sums-text (into {} (for [n (expected-assets v)] [n (sha256-hex (str tmp "/" n))]))))
+        (with-redefs [cur-version (constantly v) remote-tag-sha (constantly nil)
+                      find-release (fn [_] @release) rl/statuses-of (fn [& _] [green])
+                      rl/git! (fn [& _] {:out sha :exit 0})
+                      rl/run! (fn [& args] (swap! calls conj (vec args)) {:exit 0 :out ""})]
+          (release! {:tag tag :sha sha :dir tmp :notes "notes.md" :dry-run? true})
+          (t! "release dry-run makes no public mutations" (empty? @calls))
+          (release! {:tag tag :sha sha :dir tmp :notes "notes.md"})
+          (t! "release creates tag at verified sha before release"
+              (and (= "api" (second (first @calls)))
+                   (some #{(str "sha=" sha)} (first @calls))
+                   (= ["gh" "release" "create"] (subvec (second @calls) 0 3))))
+          (t! "release create carries all archives and prerelease flag"
+              (and (some #{"--prerelease"} (second @calls))
+                   (every? (set (second @calls)) (for [n (conj (expected-assets v) sums-file)] (str tmp "/" n)))))
+          (reset! calls []) (reset! release {:id 1 :target_commitish sha})
+          (with-redefs [remote-tag-sha (constantly sha)]
+            (release! {:tag tag :sha sha :dir tmp :notes "notes.md"})
+            (t! "retry reuses tag/release and replaces assets"
+                (and (= 1 (count @calls)) (= ["gh" "release" "upload"] (subvec (first @calls) 0 3)))))
+          (reset! calls [])
+          (with-redefs [remote-tag-sha (constantly sha)]
+            (release! {:tag tag :sha sha :dir tmp :notes "notes.md" :only "npm"})
+            (t! "registry-only retry does not mutate existing release" (empty? @calls))))
+        (finally (fs/delete-tree tmp))))
     (done!)))
 
 ;; ---------------------------------------------------------------------------------------------------- main
 (def ^:private value-flags
-  {"--bump" :bump "--version" :version "--tag" :tag "--sha" :sha "--notes" :notes "--out" :out "--limit" :limit
+  {"--only" :only "--event" :event "--bump" :bump "--version" :version "--tag" :tag "--sha" :sha "--notes" :notes "--out" :out "--limit" :limit
    "--results" :results "--run-url" :run-url "--plan" :plan})
 
 (defn- parse [args]
@@ -383,13 +444,14 @@
         need (fn [& ks] (doseq [k ks] (when-not (get o k) (rl/die 2 (str "bb release-ops " cmd ": --" (name k) " is required")))))]
     (case cmd
       "next" (next! o)
-      "draft" (do (need :tag :sha :notes) (draft! o))
+      "prepare" (prepare! o)
+      "release" (do (need :tag :sha :notes :dir) (release! o))
       "archive" (do (need :dirs :out) (archive! o))
       "verdict" (do (need :sha :results :run-url :plan) (verdict! o))
       "fetch-archives" (do (need :sha :version :out) (fetch-archives! o))
       "attach" (do (need :tag :dir) (attach! o))
       "summary" (do (need :tag :results) (summary! o))
-      (rl/die 2 "usage: bb release-ops next|draft|archive|verdict|fetch-archives|attach|summary ... [--dry-run] | --self-test"))))
+      (rl/die 2 "usage: bb release-ops prepare|release|next|archive|verdict|fetch-archives|attach|summary ... [--dry-run] | --self-test"))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (if (= ["--self-test"] (vec *command-line-args*))

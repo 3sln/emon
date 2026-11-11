@@ -55,13 +55,13 @@ for f in port plan source engine imgdec tess render pdfium pdfimg pdfcodecs sess
 { sed 's/PPOCR_NATIVE_HOST: bool = false/PPOCR_NATIVE_HOST: bool = true/' host/rust/src/lib.rs; echo; echo "// the C binding (P9.4): assembled in by kin/scripts/emon-bind-build from host/c/src/capi.rs"; echo "pub mod capi;"; } > "$crate/src/lib.rs.new"
 put "$crate/src/lib.rs.new" "$crate/src/lib.rs"
 rm -f "$crate/src/lib.rs.new"
-put host/c/src/capi.rs "$crate/src/capi.rs"
+bb tools/version.clj --stamp-copy host/c/src/capi.rs "$crate/src/capi.rs"
 put host/c/src/native.rs "$crate/src/native.rs" # where pdfium and the models are (D552): `#[path = "native.rs"] mod native;` in capi.rs
-put host/pod/src/main.rs "$crate/src/pod.rs"
+bb tools/version.clj --stamp-copy host/pod/src/main.rs "$crate/src/pod.rs"
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
-version = "0.2.0"
+version = "0.0.0-dev"
 license = "MIT"
 edition = "2021"
 
@@ -93,7 +93,7 @@ opt-level = 3
 overflow-checks = true
 debug = false
 TOML
-put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+bb tools/version.clj --stamp-copy "$crate/Cargo.toml.new" "$crate/Cargo.toml"
 rm -f "$crate/Cargo.toml.new"
 
 flags="-A warnings"
@@ -109,7 +109,8 @@ fi
 if [ -n "$codecs_lib" ]; then
   flags="$flags --cfg codecs -L native=$codecs_lib -C link-arg=-Wl,-rpath,$codecs_lib"
 fi
-put host/rust/Cargo.lock "$crate/Cargo.lock"
+bb tools/version.clj --stamp-copy host/rust/Cargo.lock "$crate/Cargo.lock"
+
 if [ "$what" = lib ]; then target="--lib"; else target="--bin emon-pod"; fi
 out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $target $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $target $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-bind: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2

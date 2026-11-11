@@ -82,7 +82,7 @@ fi
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
-version = "0.2.0"
+version = "0.0.0-dev"
 license = "MIT"
 edition = "2021"
 
@@ -116,7 +116,7 @@ opt-level = 3
 overflow-checks = true
 debug = false
 TOML
-if [ -n "$cli_mode" ]; then put host/cli/Cargo.toml "$crate/Cargo.toml"; else put "$crate/Cargo.toml.new" "$crate/Cargo.toml"; fi
+if [ -n "$cli_mode" ]; then bb tools/version.clj --stamp-copy host/cli/Cargo.toml "$crate/Cargo.toml"; else bb tools/version.clj --stamp-copy "$crate/Cargo.toml.new" "$crate/Cargo.toml"; fi
 rm -f "$crate/Cargo.toml.new"
 
 # Optional Rust reference port only. Assets/runtime must already be fetched and verified.
@@ -168,7 +168,8 @@ if [ -n "$codecs_lib" ]; then
   flags="$flags --cfg codecs -L native=$codecs_lib -C link-arg=-Wl,-rpath,$codecs_lib"
 fi
 # the lock file is committed (host/rust/Cargo.lock); the registry is reached only when a crate is not cached
-put host/rust/Cargo.lock "$crate/Cargo.lock"
+bb tools/version.clj --stamp-copy host/rust/Cargo.lock "$crate/Cargo.lock"
+
 out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 if [ -n "$cli_mode" ]; then

@@ -3,7 +3,7 @@
 ;;   bb ci coverage                       every gate is in a shard of ci/gate-map.edn and a workflow job runs the shards, every bb task a workflow calls exists, the gate map covers the tree (map-coverage), and every replay gate has a re-derivation (`bb rederive --check`, D488)
 ;;   bb ci map-coverage [--self-test]     ci/gate-map.edn: every tracked file (git ls-files) matches an entry, every gate it names exists, no entry is dead; --self-test plants each failure
 ;;   bb ci plan --base REF [--head REF] [--format edn|json] [--files A,B] [--all]   the gates a change calls for (git diff --name-only BASE...HEAD, mapped); fails on a path no entry maps.
-;;                                        A diff that only changes version strings (version.edn and the manifests of `bb version`, D550) plans nothing. --all: every gate the fast core does not run
+;;                                        A diff that only changes the value in version.edn (D886) plans nothing. --all: every gate the fast core does not run
 ;;   bb ci shards [--format edn|json]     the shards of the full run (every gate), as the matrix shape verify.yml consumes
 ;;   bb ci verify-plan --head SHA [--mode scoped|full] [--limit N] [--repo R] [--format edn|json]
 ;;                                        what verify.yml runs on main (D550): finds the base (the newest first-parent ancestor with a green `emon/verified` status, via gh api; none -> everything),
@@ -100,7 +100,7 @@
             :when (and (= "bb" (first (:cmd c))) (not (str/includes? (str t) "/")) (not (contains? tasks t)))]
         (str "core step `" (:id c) "` runs bb " t ", which is not a bb.edn task"))
       (for [c (:core m) :when (and (:gate c) (not (contains? gates (:gate c))))] (str "core step `" (:id c) "` claims gate `" (:gate c) "`, which does not exist"))
-      ;; D550: the globs of the files the release archives are built from (a change to one rebuilds them), and the manifests whose version-only diff plans nothing
+      ;; D550: the globs of the files the release archives are built from (a change to one rebuilds them), and the central version whose value-only diff plans nothing
       (for [g (:archives m) :when (not-any? #(re-matches (glob->regex g) %) files)] (str ":archives glob " (pr-str g) " matches no tracked file (dead: remove it, or fix the glob)"))
       (when (contains? args :version-files)
         (let [declared (set (:version-files m))]
@@ -118,11 +118,9 @@
 
 ;; ------------------------------------------------------------------------------------------------------------------ version-only diffs (D550)
 (defn version-targets
-  "The manifests `bb version` rewrites, [{:file :re ..}], read from tools/version.clj itself (loaded into a namespace of its own: its `-main` does not run), plus version.edn."
+  "D886: set/bump writes only the central file. Template edits are ordinary source changes."
   []
-  (let [ns (create-ns 'emon.versiontool)]
-    (binding [*ns* ns] (refer-clojure) (load-file "tools/version.clj"))
-    (into [{:file "version.edn" :re #"(\{:version \")([^\"]+)(\"\})"}] @(ns-resolve ns 'targets))))
+  [{:file "version.edn" :re #"(\{:version \")([^\"]+)(\"\})"}])
 
 (defn mask-version
   "The text with the version (group 2 of the target's pattern) replaced by V everywhere the pattern matches."
@@ -437,7 +435,7 @@
       (ok! "plan: with --all the shards are all of them, less the gates the core runs" (= (shard-include vbase #(not= % "hosts")) (get-in (pv {:all? true}) [:shards :include])))
       (ok! "plan: a change under :archives marks the archives, a document does not"
            (and (:archives (pv {} "host/b.rs")) (not (:archives (pv {} "docs/a.md"))) (not (:archives (pv {:version-only #{"host/b.rs"}} "host/b.rs"))))))
-    ;; the version-only rule on the REAL manifests: every one of them, bumped by `bb version`'s own patterns, is version-only; a second change (a dependency, a new line) is not
+    ;; the version-only rule on the REAL manifests: the central value alone is version-only; a second change (a dependency, a new line) is not
     (let [targets (version-targets)
           bump (fn [t s] (str/replace s (:re t) (fn [[_ a _ c]] (str a "9.9.9" c))))
           m (read-map)]
@@ -446,11 +444,6 @@
         (ok! (str "version-only: " (:file t) " with only its version changed") (version-only? t before after))
         (ok! (str "version-only: " (:file t) " with one more line is not") (not (version-only? t before (str after "# one more line\n"))))
         (ok! (str "version-only: " (:file t) " unchanged is not a change") (not (version-only? t before before))))
-      (ok! "version-only: another crate's version in the same file is not the package's"
-           (let [t (some #(when (= "host/cli/Cargo.toml" (:file %)) %) targets)
-                 before "[package]\nname = \"emon\"\nversion = \"0.1.0\"\n[dependencies]\nfoo = \"1.2.3\"\n"]
-             (and (version-only? t before "[package]\nname = \"emon\"\nversion = \"0.1.1\"\n[dependencies]\nfoo = \"1.2.3\"\n")
-                  (not (version-only? t before "[package]\nname = \"emon\"\nversion = \"0.1.1\"\n[dependencies]\nfoo = \"1.2.4\"\n")))))
       (ok! "version-only: the set is every listed manifest that is version-only, nothing else"
            (let [blobs {"version.edn" ["{:version \"0.1.0\"}\n" "{:version \"0.1.1\"}\n"]
                         "host/c/src/capi.rs" ["static VERSION: &[u8] = b\"0.1.0\\0\";\n" "static VERSION: &[u8] = b\"0.1.1\\0\";\nfn x() {}\n"]
@@ -461,8 +454,8 @@
             blobs (into {} (for [t targets] [(:file t) [(slurp (:file t)) (bump t (slurp (:file t)))]]))
             vonly (version-only-paths m targets paths blobs)
             x (plan-of m (vec paths) {:version-only vonly})]
-        (ok! "plan: the version bump itself (version.edn and every manifest) plans no gate" (and (= (set paths) vonly) (empty? (:gates x)) (empty? (:unmapped x)) (not (:has-gates x)) (not (:unit x))))
-        (ok! "plan: the same paths without the rule would plan gates (host/**, release/pkg/**)" (seq (:gates (plan-of m (vec paths)))))))
+        (ok! "plan: the version bump itself (version.edn alone) plans no gate" (and (= (set paths) vonly) (empty? (:gates x)) (empty? (:unmapped x)) (not (:has-gates x)) (not (:unit x))))
+        (ok! "plan: a template edit still plans host gates" (seq (:gates (plan-of m ["host/cli/Cargo.toml"]))))))
     ;; what verify.yml runs
     (let [m (read-map)
           sha1 "1111111111111111111111111111111111111111" sha2 "2222222222222222222222222222222222222222"
@@ -473,8 +466,8 @@
       (ok! "verify-plan: a change the archives are built from rebuilds them" (let [x (vp {:paths ["host/cli/src/main.rs"]})] (and (:build_archives x) (= "" (:archives_run x)))))
       (ok! "verify-plan: a kin change plans gates and rebuilds the archives" (let [x (vp {:paths ["kin/retarget.kin"]})] (and (pos? (:n_gates x)) (:unit x) (:build_archives x) (:has_shards x))))
       (ok! "verify-plan: the bump commit plans no gate but rebuilds the archives (they carry the version)"
-           (let [x (vp {:paths ["version.edn" "host/cli/Cargo.toml"] :version-only #{"version.edn" "host/cli/Cargo.toml"} :version "0.1.1"})]
-             (and (= 0 (:n_gates x)) (empty? (get-in x [:shards :include])) (:build_archives x) (= 2 (:version_only x)))))
+           (let [x (vp {:paths ["version.edn"] :version-only #{"version.edn"} :version "0.1.1"})]
+             (and (= 0 (:n_gates x)) (empty? (get-in x [:shards :include])) (:build_archives x) (= 1 (:version_only x)))))
       (ok! "verify-plan: no archives came with the base: they are built" (:build_archives (vp {:inherited nil})))
       (ok! "verify-plan: no verified base: everything runs, archives built"
            (let [x (vp {:base nil :reason "none"})] (and (= "full" (:mode x)) (:unit x) (:build_archives x) (= "none" (:reason x)) (pos? (:n_gates x)) (re-find #"full run" (:description x)))))

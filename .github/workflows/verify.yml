@@ -1,24 +1,25 @@
 # VERIFY MAIN (SPEC 15.3, D550; the gate map is D528). Every push to `main` is verified by the gates its change calls for, IN FULL (not the `--fast` variants of pr.yml),
-# and the result is the commit status `emon/verified` on that commit. The release flow reads that status and nothing else: publish.yml refuses a tag whose commit is not green.
+# and the result is the commit status `emon/verified` on that commit. The release flow reads that status and nothing else: release.yml refuses a tag whose commit is not green.
 #
 #   1. DEBOUNCE   `concurrency: verify-main`, cancel-in-progress false: a running run finishes; of several pushes that arrive meanwhile only the NEWEST waits (GitHub drops the
 #                 older pending ones). The commits it skips are covered by the next run, whose base is the newest ancestor that IS verified.
 #   2. BASE       `bb ci verify-plan`: the newest first-parent ancestor of the commit (at most 60 back) whose newest `emon/verified` status is a green one; none, or GitHub not
 #                 answering, means everything runs. `bb ci plan` maps the diff since the base through ci/gate-map.edn, exactly as for a pull request. A diff that only changes
-#                 version strings (version.edn and the manifests of `bb version`) plans no gate: that is the release bump.
+#                 the value in version.edn plans no gate: that is the release bump.
 #   3. RUN        the fast core (`bb ci core`) always, plus the planned shards as FULL gates; `unit` (a job per arm, and its red twin) when planned.
 #   4. ARCHIVES   the release archives (the CLI for five targets: native.yml; the C library and pod for four: `bb package`; SHA256SUMS) are built in this run only when the plan says
 #                 they are affected (a path they are built from changed, no valid archives came with the base, or the VERSION changed: the archives carry it). Otherwise the base's
 #                 stay valid. Either way `emon/archives` is posted on the commit, naming the run whose artifact `release-archives` (retention 90 days) holds them.
 #   5. VERDICT    `emon/verified` success only when the plan, the core and every job ran green; description `verified: N gates since <sha>`.
 # Also: weekly (Monday, all gates, archives rebuilt, status posted), `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
-# (bump.yml calls it for the release commit it pushes: a push made with GITHUB_TOKEN starts no workflow). A commit that is not on main is refused.
+# (release.yml calls it in full for the release commit). A commit that is not on main is refused.
 # Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka. Never run (D524: no Actions credits yet).
 name: verify
 
 on:
   push:
     branches: [main]
+    paths-ignore: [version.edn] # release.yml verifies a version-only push in full
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -67,7 +68,7 @@ jobs:
   # repository is public). Skipped, every dependent is skipped with it (`needs: plan` / `plan.result == 'success'`) and `verdict` (on_main empty) posts no status at all.
   # The schedule, workflow_dispatch and workflow_call are not affected.
   plan:
-    if: github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
+    if: inputs.sha != '' || github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -92,7 +93,7 @@ jobs:
           if git merge-base --is-ancestor "$SHA" origin/main; then
             echo "on_main=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::$SHA is not a commit of main: only main is verified (the status it would get is what publish.yml trusts)"
+            echo "::error::$SHA is not a commit of main: only main is verified (the status it would get is what release.yml trusts)"
             exit 1
           fi
       - name: Base, plan and archives (bb ci verify-plan; fails on a changed path the gate map does not know)
@@ -382,7 +383,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # the 23 assets (18 archives) and SHA256SUMS in one artifact, kept 90 days: publish.yml downloads exactly this
+  # the 23 assets (18 archives) and SHA256SUMS in one artifact, kept 90 days: release.yml downloads exactly this
   archives:
     needs: [plan, native, package]
     if: ${{ !cancelled() && needs.native.result == 'success' && needs.package.result == 'success' }}

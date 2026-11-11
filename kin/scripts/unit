@@ -305,7 +305,7 @@ case "$arms" in *rust*)
     cat > "$work/rust/Cargo.toml" <<'TOML'
 [package]
 name = "emon"
-version = "0.2.0"
+version = "0.0.0-dev"
 edition = "2021"
 
 [lib]
@@ -314,6 +314,7 @@ TOML
     # WARNINGS OFF so a failure is the first thing in the excerpt: a generator
     # that emits one shape for four languages leaves unused imports and
     # needless `mut`s, and forty lines of them in front of a panic hide it.
+    bb tools/version.clj --stamp "$work/rust/Cargo.toml"
     rc=0; out=$(cd "$work/rust" && RUSTFLAGS="-A warnings" cargo test --offline -q -- --test-threads=1 $rust_skip 2>&1) || rc=$?
     n=$(printf '%s\n' "$out" | sed -n 's/^test result: [a-zA-Z]*\. \([0-9]*\) passed; \([0-9]*\) failed.*/\1 \2/p' | awk '{n+=$1+$2} END {print n+0}')
     finish rust "$rc" "$n" "$out"

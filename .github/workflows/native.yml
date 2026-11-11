@@ -8,7 +8,7 @@
 # A prefix is cached by the hash of the pins (the file contents of native.edn, giflib.CMakeLists.txt, tesseract-prefind.cmake and native.clj): an unchanged pin is not rebuilt.
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
 # P11.4b (D541): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
-#   verify.yml (D550) calls this file with `ref` set to the verified commit; publish.yml attaches the collected archives to the GitHub release.
+#   verify.yml (D550) calls this file with `ref` set to the verified commit; release.yml attaches the collected archives to the GitHub release.
 # Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
 name: native
 

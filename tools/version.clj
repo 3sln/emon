@@ -1,15 +1,5 @@
-;; The one place the package version lives (P11.1): `version.edn`, and every manifest that must agree with it.
-;;
-;;   bb version                       print the version
-;;   bb version set X.Y.Z             rewrite version.edn and every manifest
-;;   bb version bump major|minor|patch
-;;   bb version --check TAG           exit 1 unless every manifest (and version.edn) equals TAG (a leading v is allowed)
-;;   bb version --self-test           set/bump/check on a temporary COPY of the manifests; the real tree is not touched
-;;
-;; Manifests are edited as TEXT: each target is a file and a regex whose group 1 is what comes before the version, group 2 the
-;; version and group 3 what follows. Only group 2 is replaced, so every other byte of the file stays as it was (no TOML or JSON
-;; is parsed and re-serialised). A target whose pattern does not match the expected number of times is an error, so a manifest
-;; that was reformatted cannot silently stop being rewritten. Unknown arguments exit 2.
+;; D886: version.edn is authoritative; tracked release fields are 0.0.0-dev.
+;; --stamp FILE... and --stamp-copy SRC DST only operate on build/stage copies. set/bump touch version.edn alone.
 (require '[babashka.fs :as fs]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
@@ -99,7 +89,7 @@
     v))
 
 (defn mismatches
-  "Every place whose version is not `want`: a seq of [file what found]."
+  "Central version differs from want, or a tracked release field is not the placeholder: [file what found]."
   [root want]
   (let [cur (try (current root) (catch Exception e (str "unreadable (" (ex-message e) ")")))
         base (if (= cur want) [] [["version.edn" "the single source" cur]])]
@@ -109,25 +99,27 @@
                       (cond
                         (nil? vs) [[file what "file missing"]]
                         (not= n (count vs)) [[file what (str "expected " n " version field(s), found " (count vs))]]
-                        :else (for [v vs :when (not= v want)] [file what v])))))
+                        :else (for [v vs :when (not= v "0.0.0-dev")] [file what v])))))
           targets)))
 
-(defn set-version!
-  "Rewrite version.edn and every manifest to `v`, touching only the version bytes."
-  [root v]
+(def placeholder "0.0.0-dev")
+
+(defn stamp-text [text version]
+  (str/replace text placeholder version))
+
+(defn stamp-file! [file version]
+  (let [before (slurp file) after (stamp-text before version)]
+    (when-not (= before after) (spit file after))))
+
+(defn stamp-copy! [src dst version]
+  (let [after (stamp-text (slurp src) version)]
+    (when-let [parent (fs/parent dst)] (fs/create-dirs parent))
+    (when-not (and (fs/exists? dst) (= after (slurp dst))) (spit dst after))))
+
+(defn set-version! [root v]
   (when-not (re-matches semver-re v)
-    (throw (ex-info (str "not a version (X.Y.Z): " v) {:usage true})))
-  ;; check every target BEFORE writing any
-  (doseq [{:keys [file n] :as t} targets]
-    (let [vs (find-versions root t)]
-      (when-not (= n (count vs))
-        (throw (ex-info (str file ": expected " n " version field(s), found " (count vs) " (was the file reformatted?)") {})))))
-  (spit (path root "version.edn") (str "{:version " (pr-str v) "}\n"))
-  (doseq [{:keys [file re]} targets]
-    (let [p (path root file)
-          s (slurp p)
-          out (str/replace s re (fn [[_ a _ c]] (str a v c)))]
-      (when-not (= s out) (spit p out)))))
+    (throw (ex-info (str "not a version: " v) {:usage true})))
+  (spit (path root "version.edn") (str "{:version " (pr-str v) "}\n")))
 
 (defn bump [v part]
   (let [[a b c] (map parse-long (str/split (re-find #"^\d+\.\d+\.\d+" v) #"\."))]
@@ -136,64 +128,78 @@
       "minor" (str a "." (inc b) ".0")
       "patch" (str a "." b "." (inc c)))))
 
-(defn check [root tag]
+(def staged-files
+  {"release/pkg/rust/Cargo.toml" ["rust/Cargo.toml" "native/Cargo.toml"]
+   "host/rust/Cargo.lock" ["rust/Cargo.lock" "native/Cargo.lock"]
+   "host/c/src/capi.rs" ["native/src/capi.rs"]
+   "host/pod/src/main.rs" ["native/src/pod.rs"]
+   "release/pkg/java/pom.xml" ["java/pom.xml"]
+   "release/pkg/csharp/Emon.csproj" ["csharp/Emon.csproj"]
+   "host/js/package.json" ["js/package.json"]
+   "release/pkg/pdfium-wasm/package.json" ["js-pdfium/package.json"]
+   "release/pkg/ppocr/package.json" ["js-ppocr/package.json"]})
+
+(defn staged-mismatches [stage want]
+  (vec (for [{:keys [file re n what]} targets
+             staged (get staged-files file)
+             :let [p (path stage staged)] :when (fs/exists? p)
+             :let [versions (map #(nth % 2) (re-seq re (slurp p)))]
+             :when (or (not= n (count versions)) (some #(not= want %) versions))]
+         [p what (str "staged version fields: " (pr-str versions) "; want " want)])))
+
+(defn check [root tag & [source-only?]]
   (let [want (str/replace tag #"^v" "")]
     (when-not (re-matches semver-re want)
       (die 2 "bb version --check wants a tag like v1.2.3 or 1.2.3, got" (pr-str tag)))
-    (let [bad (mismatches root want)]
+    (let [bad (concat (mismatches root want) (when-not source-only? (staged-mismatches (path root "dist/stage") want)))]
       (if (empty? bad)
-        (println (str "ok: every manifest is " want " (" n-files " files)"))
+        (println (str "ok: templates are placeholders; version.edn is " want " (" n-files " files)"))
         (do (println (str "version mismatch, want " want ":"))
             (doseq [[f what found] bad] (println (str "  " f " (" what "): " found)))
             (System/exit 1))))))
 
-;; ------------------------------------------------------------------------------------------------ the self-test
-
-(defn- same-but-version?
-  "`after` is `before` with only version digits changed (every non-version line is byte-identical)."
-  [before after]
-  (let [ls #(str/split % #"\n" -1)
-        a (ls before) b (ls after)]
-    (and (= (count a) (count b))
-         (every? (fn [[x y]] (or (= x y) (and (re-find semver-re x) (re-find semver-re y)
-                                              (= (str/replace x semver-re "V") (str/replace y semver-re "V")))))
-                 (map vector a b)))))
-
+;; Self-tests use a copy; a bump must leave every tracked template untouched.
 (defn self-test []
-  (let [real (str (fs/absolutize "."))
-        tmp (str (fs/create-temp-dir {:prefix "emon-version-"}))
+  (let [tmp (str (fs/create-temp-dir {:prefix "emon-version-"}))
         files (distinct (cons "version.edn" (map :file targets)))
-        snap #(into {} (map (fn [f] [f (slurp (path % f))]) files))
-        fails (atom [])
-        t! (fn [label ok] (when-not ok (swap! fails conj label)) (println (if ok "  ok  " "  FAIL") label))]
+        snap (into {} (for [f files] [f (slurp f)]))]
     (try
-      (let [real-before (snap real)]
-        (doseq [f files]
-          (fs/create-dirs (fs/parent (path tmp f)))
-          (fs/copy (path real f) (path tmp f)))
-        (let [orig (snap tmp)]
-          (set-version! tmp "9.8.7")
-          (t! "set 9.8.7: check 9.8.7 passes" (empty? (mismatches tmp "9.8.7")))
-          (t! "set 9.8.7: check v9.8.7 passes" (empty? (mismatches tmp (str/replace "v9.8.7" #"^v" ""))))
-          (t! "set 9.8.7: check 0.1.0 reports every file" (= n-files (count (distinct (map first (mismatches tmp "0.1.0"))))))
-          (t! "set changes only version bytes" (every? (fn [f] (same-but-version? (orig f) (slurp (path tmp f)))) files))
-          (t! "bump patch" (= "9.8.8" (bump "9.8.7" "patch")))
-          (t! "bump minor" (= "9.9.0" (bump "9.8.7" "minor")))
-          (t! "bump major" (= "10.0.0" (bump "9.8.7" "major")))
-          (set-version! tmp (bump (current tmp) "minor"))
-          (t! "bump minor is written everywhere" (empty? (mismatches tmp "9.9.0")))
-          ;; one manifest drifts: it is named
-          (let [p (path tmp "host/c/src/capi.rs")]
-            (spit p (str/replace (slurp p) "b\"9.9.0\\0\"" "b\"1.2.3\\0\""))
-            (t! "a drifted manifest is the one named" (= [["host/c/src/capi.rs" "C binding: emon_version()" "1.2.3"]] (mismatches tmp "9.9.0"))))
-          (set-version! tmp "0.1.0")
-          (t! "set back to 0.1.0 restores every file byte for byte (when the real tree is 0.1.0)"
-              (or (not= "0.1.0" (current real)) (seq (mismatches real "0.1.0")) (= orig (snap tmp)))))
-        (t! "the real tree was not touched" (= real-before (snap real))))
-      (finally (fs/delete-tree tmp)))
-    (if (seq @fails)
-      (do (println "self-test FAILED:" (str/join ", " @fails)) (System/exit 1))
-      (println "self-test ok"))))
+      (doseq [[f text] snap]
+        (fs/create-dirs (fs/parent (path tmp f))) (spit (path tmp f) text))
+      (set-version! tmp "9.8.7-rc.1")
+      (assert (empty? (mismatches tmp "9.8.7-rc.1")))
+      (doseq [f (remove #{"version.edn"} files)] (assert (= (snap f) (slurp (path tmp f)))))
+      (assert (= "9.9.0" (bump "9.8.7-rc.1" "minor")))
+      (assert (= "9.8.8" (bump "9.8.7" "patch")))
+      (assert (= "10.0.0" (bump "9.8.7" "major")))
+      (assert (seq (mismatches tmp "9.8.8")))
+      (let [f "host/c/src/capi.rs" p (path tmp f)]
+        (spit p (str/replace (snap f) placeholder "1.2.3"))
+        (assert (= [f] (mapv first (mismatches tmp (current tmp)))))
+        (spit p (str/replace (snap f) "static VERSION" "static RENAMED"))
+        (assert (= [f] (mapv first (mismatches tmp (current tmp)))))
+        (spit p (snap f)))
+      (assert (= "version=9.8.7-rc.1" (stamp-text "version=0.0.0-dev" (current tmp))))
+      (doseq [f (distinct (map :file targets))] (stamp-file! (path tmp f) (current tmp)))
+      (doseq [{:keys [n] :as target} targets]
+        (assert (= (repeat n (current tmp)) (find-versions tmp target))))
+      (let [f (path tmp "release/pkg/rust/Cargo.toml")]
+        (stamp-file! f (current tmp))
+        (assert (str/includes? (slurp f) "9.8.7-rc.1"))
+        (let [stage (path tmp "dist/stage") staged (path stage "rust/Cargo.toml")]
+          (fs/create-dirs (fs/parent staged)) (fs/copy f staged)
+          (assert (empty? (staged-mismatches stage "9.8.7-rc.1")))
+          (assert (seq (staged-mismatches stage "9.8.8")))
+          (java.nio.file.Files/setLastModifiedTime (fs/path staged) (java.nio.file.attribute.FileTime/fromMillis 123000))
+          (stamp-copy! "release/pkg/rust/Cargo.toml" staged (current tmp))
+          (assert (= 123000 (.toMillis (fs/last-modified-time staged))))
+          (stamp-copy! "release/pkg/rust/Cargo.toml" staged "9.8.8")
+          (assert (empty? (staged-mismatches stage "9.8.8")))
+          (spit staged (snap "release/pkg/rust/Cargo.toml"))
+          (assert (seq (staged-mismatches stage "9.8.7-rc.1")))))
+      (assert (= snap (into {} (for [f files] [f (slurp f)]))))
+      (println "self-test ok: one-file bump, placeholders, staged stamping, prereleases, source isolation")
+      (finally (fs/delete-tree tmp)))))
 
 ;; ------------------------------------------------------------------------------------------------ main
 
@@ -203,10 +209,12 @@
     (try
       (cond
         (empty? args) (println (current root))
-        (and (= a "set") b (empty? more)) (do (set-version! root b) (println (str "set " b " in " n-files " files")))
+        (and (= a "--stamp-copy") b (= 1 (count more))) (stamp-copy! b (first more) (current root))
+        (= a "--stamp") (doseq [f (rest args)] (stamp-file! f (current root)))
+        (and (= a "set") b (empty? more)) (do (set-version! root b) (println (str "set " b " in version.edn")))
         (and (= a "bump") (#{"major" "minor" "patch"} b) (empty? more))
         (let [v (bump (current root) b)] (set-version! root v) (println (str "bumped to " v)))
-        (and (= a "--check") b (empty? more)) (check root b)
+        (and (= a "--check") b (or (empty? more) (= ["--source-only"] (vec more)))) (check root b (seq more))
         (and (= a "--self-test") (nil? b)) (self-test)
         :else (die 2 "usage: bb version | set X.Y.Z | bump major|minor|patch | --check TAG | --self-test"))
       (catch clojure.lang.ExceptionInfo e

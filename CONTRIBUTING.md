@@ -78,7 +78,7 @@ not run `bb corpus-link` in a worktree.
 | `bb hosts`, `bb embedders` | the host trees agree; the public surfaces match |
 | `bb api-diff` | the public API is the one `api/surface.edn` froze |
 | `bb release-audit` | licences, the third-party inventory and `THIRD_PARTY_NOTICES.md` |
-| `bb version`, `bb docs` | the version in every manifest; the generated documentation |
+| `bb version`, `bb docs` | the central release version and staged manifests; the generated documentation |
 | `bb package [--check]` | build every registry artifact; `--check` installs each into a clean project and runs the quickstarts |
 | `bb gates [GATE...]` | every gate, or the ones named; fails if a gate exits 0 and prints no score |
 | `bb ci core`, `bb ci plan --base origin/main` | the fast core every pull request runs; the gates a change calls for |

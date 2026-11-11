@@ -9,7 +9,7 @@ on its own.
 <dependency>
   <groupId>com.3sln</groupId>
   <artifactId>emon</artifactId>
-  <version>0.2.0</version>
+  <version>0.0.0-dev</version>
 </dependency>
 ```
 <!-- bb docs:end maven-dependency -->

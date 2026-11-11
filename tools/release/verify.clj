@@ -4,10 +4,9 @@
 ;;   bb release-verify --tag vX.Y.Z [--repo OWNER/REPO] [--dry-run]
 ;;   bb release-verify --self-test
 ;;
-;;   1. version  `bb version --check TAG`: every manifest of the CHECKED-OUT tree equals the tag.
+;;   1. version  `bb version --check TAG`: version.edn equals the tag; tracked manifests are placeholders and staged fields are stamped.
 ;;   2. tag      the tag exists on GitHub and still points at the commit that is checked out (it was not moved after the verification ran).
-;;   3. target   the release's `target_commitish` is a commit (a sha, as draft.yml sets it) and is the commit the tag points at: the draft was published as it was
-;;               drafted, not retargeted at a branch or another commit by hand.
+;;   3. target   the release's `target_commitish` is a commit (a full sha, as release.yml sets it) and is the commit the tag points at: the verified release was published, not retargeted at a branch or another commit by hand.
 ;;   4. status   the NEWEST `emon/verified` commit status on that commit is `success` (verify.yml's: the description starts `verified:` and the target is a workflow run).
 ;; Exit 0 when all hold, 1 when one fails, 2 on usage. On success the verified commit is printed as `sha=...` and appended to $GITHUB_OUTPUT (in Actions),
 ;; and the publish jobs check THAT out, so a tag moved AFTER this step cannot change what is published.
@@ -30,16 +29,17 @@
            :msg (if (:ok? version) (str/trim (:out version)) (str "the checked-out tree is not " tag ":\n" (str/trim (:out version))))}
         t (cond
             unreachable? (skip-or-fail :tag (str "cannot ask GitHub about the tag: " (::rl/error remote)))
-            no-tag? (skip-or-fail :tag (str "no tag " tag " exists" (when dry-run? " (expected before the draft is published)")))
+            no-tag? (skip-or-fail :tag (str "no tag " tag " exists" (when dry-run? " (expected before release.yml creates it)")))
             (and local (not= local remote)) {:check :tag :state :fail :msg (str "tag " tag " is " remote " on GitHub but " local " locally: it was moved (or the clone is stale)")}
             (not= head remote) {:check :tag :state :fail :msg (str "tag " tag " is " remote " but the checked-out commit is " head)}
             :else {:check :tag :state :ok :msg (str tag " is " remote ", the checked-out commit")})
         g (cond
             (or unreachable? no-tag?) (skip-or-fail :target "no commit to compare the release's target with")
             (rl/error? release) (skip-or-fail :target (str "cannot read the release: " (::rl/error release)))
-            (nil? release) (skip-or-fail :target (str "no release for " tag ": a tag is made by publishing the draft that draft.yml created, not by hand"))
+            (nil? release) (skip-or-fail :target (str "no release for " tag ": run release.yml to create the verified release"))
+            (:draft release) {:check :target :state :fail :msg "the release is not published"}
             (not (re-matches #"[0-9a-f]{40}" (str (:target_commitish release))))
-            {:check :target :state :fail :msg (str "the release targets " (pr-str (:target_commitish release)) ", not a commit: it was retargeted after draft.yml set it")}
+            {:check :target :state :fail :msg (str "the release targets " (pr-str (:target_commitish release)) ", not a commit: release.yml requires the full verified commit")}
             (not= (:target_commitish release) remote)
             {:check :target :state :fail :msg (str "the release targets " (:target_commitish release) " but the tag points at " remote)}
             :else {:check :target :state :ok :msg (str "the release targets " remote ", where the tag points")})
@@ -107,6 +107,8 @@
         state-of (fn [m check] (:state (first (filter #(= check (:check %)) (evaluate m)))))
         with-status #(assoc base :statuses [(merge green %)])]
     (t! "all four hold: ok ok ok ok" (= [:ok :ok :ok :ok] (states base)))
+    (t! "an unstamped staged manifest fails verification" (= :fail (state-of (assoc base :version {:ok? false :out "staged version fields: 0.0.0-dev"}) :version)))
+    (t! "an unpublished release cannot authorize registries" (= :fail (state-of (assoc base :release {:target_commitish sha :draft true}) :target)))
     (t! "a manifest that differs fails the version check" (= :fail (state-of (assoc base :version {:ok? false :out "version mismatch"}) :version)))
     (t! "a tag moved on GitHub (local differs) fails" (= :fail (state-of (assoc base :remote other :statuses nil) :tag)))
     (t! "a checkout that is not the tag's commit fails" (= :fail (state-of (assoc base :head other) :tag)))

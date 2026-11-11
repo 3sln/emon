@@ -1,117 +1,80 @@
-# PUBLISH A RELEASE (P11.10, D524, D542, D547, D550). Starts ONLY when the maintainer publishes the DRAFT release (`release: published`; GitHub makes the tag vX.Y.Z at the
-# commit the draft targets, which draft.yml set to a full sha). A manual run (workflow_dispatch) is ALWAYS a dry run: it verifies and checks every credential and every
-# registry's "already published?" answer, and publishes nothing (no job below passes anything but --dry-run on that path; pages is skipped, nothing is attached).
-#
-#   verify  bb release-verify: `bb version --check TAG` on the tagged tree, the tag still points at the commit that is checked out, the release still targets that commit (it
-#           was not retargeted after draft.yml), and the commit status `emon/verified` there is green (verify.yml's). Nothing is published unless this passes. It outputs the
-#           verified COMMIT, and every job below checks out THAT commit, not the tag name, so a tag moved afterwards changes nothing.
-#   assets  the release archives (CLI x5, C x4, pod x4, SHA256SUMS): downloaded from the verify.yml run that `emon/archives` records for that commit, or for its nearest
-#           verified ancestor whose archives are still valid (same version, inside the artifact retention), and attached to the release.
-#   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
-#           what is missing. All use GITHUB_TOKEN plus the registry's own secret; no other credential exists.
-#   Pages deploys independently on push to main (D630); a release must never roll back the site.
-#   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
-#
-# No deployment environment and no approval step (D882): publishing the draft release is the decision. Needs (docs/releasing.md has the order): these repository secrets: CARGO_REGISTRY_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
-# a Trusted Publishing policy on nuget.org (owner 3sln, repo emon, workflow publish.yml, no environment) and the organization variable NUGET_USER (NuGet/login mints a
-# short-lived key per publish); for npm no secret either: a Trusted Publisher on each @3sln package (GitHub Actions, 3sln/emon, publish.yml, no environment); Settings > Pages > Source = GitHub Actions.
-# Never run: needs the credentials, a draft release and Actions credits (D524).
-name: publish
-
+# D900: per-version serialized pipeline. Called only after release.yml validates the ref/version.
+name: release pipeline
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      tag:
-        description: "DRY RUN of this tag (vX.Y.Z); publishes nothing"
+      sha:
         type: string
         required: true
-      ref:
-        description: "DRY RUN: the commit to check out (default main); a tag that does not exist yet is reported, not failed"
+      version:
         type: string
-        default: main
-
+        required: true
+      only:
+        type: string
+        default: ''
+      dry_run:
+        type: boolean
+        default: true
 permissions:
   contents: read
-
-# one publication per tag; a running one is finished, never cancelled (a registry may be mid-upload)
 concurrency:
-  group: publish-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-${{ inputs.version }}
   cancel-in-progress: false
-
 defaults:
   run:
     shell: bash
     working-directory: emon
-
 env:
-  CI: "true"
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
-  # a release event publishes; anything else (workflow_dispatch) is a dry run
-  DRY_FLAG: ${{ github.event_name == 'release' && ' ' || '--dry-run' }}
-
+  CI: 'true'
+  TAG: v${{ inputs.version }}
+  DRY_FLAG: ${{ inputs.dry_run && '--dry-run' || ' ' }}
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    uses: ./.github/workflows/verify.yml
+    with:
+      sha: ${{ inputs.sha }}
+      mode: full
+    secrets: inherit
     permissions:
       contents: read
-      statuses: read
-    outputs:
-      sha: ${{ steps.verify.outputs.sha }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: 3sln/emon
-          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || inputs.ref }}
-          path: emon
-          fetch-depth: 0
-          fetch-tags: true
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
-      - id: verify
-        name: bb release-verify (version, tag, the release's target, emon/verified)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bb release-verify --tag "$TAG" ${DRY_FLAG}
+      statuses: write
 
   assets:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # uploads to the release
-      actions: read # downloads the artifact of the verify.yml run
+      contents: write
+      actions: read
+      statuses: read
     outputs:
-      outcome: ${{ steps.attach.outputs.outcome }}
+      outcome: ${{ steps.release.outputs.outcome }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
           fetch-depth: 0
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:
           bb: 1.3.190
-      - name: Find the archives of this commit (or of its nearest verified ancestor with valid ones) and download them
+      - name: Download and validate verified archives before creating anything public
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ needs.verify.outputs.sha || github.sha }}
-        run: bb release-ops fetch-archives --sha "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/archives" ${DRY_FLAG}
-      - id: attach
-        name: Attach them, with SHA256SUMS, to the release
-        if: github.event_name == 'release'
+          SHA: ${{ inputs.sha }}
+        run: bb release-ops fetch-archives --sha "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/archives"
+      - id: release
+        name: Reuse or create the tag and published release with notes and archives
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          ONLY: ${{ inputs.only }}
         run: |
-          bb release-ops attach --tag "$TAG" --dir "$RUNNER_TEMP/archives"
-          echo "outcome=attached" >> "$GITHUB_OUTPUT"
-
+          bb release-notes --until "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/notes.md"
+          bb release-ops release --tag "$TAG" --sha "$SHA" --notes "$RUNNER_TEMP/notes.md" --dir "$RUNNER_TEMP/archives" --only "$ONLY" ${DRY_FLAG}
   crates:
-    needs: verify
+    needs: assets
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',crates,')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -122,7 +85,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:
@@ -136,7 +99,8 @@ jobs:
         run: bb publish crates ${DRY_FLAG}
 
   npm:
-    needs: verify
+    needs: assets
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',npm,')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -148,7 +112,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:
@@ -195,7 +159,8 @@ jobs:
         run: bb publish npm ${DRY_FLAG}
 
   nuget:
-    needs: verify
+    needs: assets
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',nuget,')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -216,7 +181,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:
@@ -229,7 +194,7 @@ jobs:
       # real publishes only: a dry run (workflow_dispatch) mints no key and `bb publish nuget --dry-run` needs none
       - id: nuget-login
         name: NuGet Trusted Publishing (a short-lived API key)
-        if: github.event_name == 'release'
+        if: ${{ !inputs.dry_run }}
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
           user: ${{ vars.NUGET_USER }}
@@ -240,7 +205,8 @@ jobs:
         run: bb publish nuget ${DRY_FLAG}
 
   maven:
-    needs: verify
+    needs: assets
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',maven,')
     runs-on: ubuntu-latest
     timeout-minutes: 90 # the Central Portal validates a bundle for up to ~40 minutes
     outputs:
@@ -254,7 +220,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:
@@ -272,7 +238,8 @@ jobs:
         run: bb publish maven ${DRY_FLAG}
 
   go:
-    needs: verify
+    needs: assets
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',go,')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -283,7 +250,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
           fetch-depth: 0
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
@@ -308,7 +275,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: 3sln/emon
-          ref: ${{ needs.verify.outputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           path: emon
       - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
         with:

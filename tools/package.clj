@@ -13,9 +13,8 @@
 ;; bundle: jar, pom, sources, javadoc, checksums), csharp (`dotnet pack`), js (`npm pack`, with the WASM module), c (libemon + emon.h per host triple), pod
 ;; (the babashka pod per host triple).
 ;;
-;; THE MANIFESTS are COMMITTED (release/pkg/<host>/, host/js/package.json), not templated: the file a reviewer reads is the file the packager uses, and
-;; `bb version --check` and `bb release-audit` read them. What is ASSEMBLED, as the build scripts of kin/scripts/emon-*-build assemble the gates' trees, is
-;; the source: gen/<lang> without laws and probes, the host trees without test support. The rules below restate those scripts' (names ending test/probe).
+;; D886: committed manifests are templates. stage! stamps their release fields and runtime strings from version.edn.
+;; Source assembly excludes laws, probes and test support.
 ;;
 ;; NOTHING IS UPLOADED. This task never runs `cargo publish`, `npm publish`, `dotnet nuget push` or `mvn deploy`.
 (require '[babashka.fs :as fs]
@@ -65,12 +64,16 @@
   (fs/create-dirs (fs/parent dst))
   (when-not (and (fs/exists? dst) (= text (slurp (str dst)))) (spit (str dst) text)))
 
+(defn- stamp-text [text] (str/replace text "0.0.0-dev" version))
+
 (defn- stage!
   "Make the files under `dir` exactly `files` (relative path -> a source path, or {:text s}) inside the `owned` subdirectories/files: others there are removed."
   [dir files owned]
   (fs/create-dirs dir)
   (doseq [[rel src] files]
-    (if (map? src) (put-text! (:text src) (str dir "/" rel)) (put! (str root "/" src) (str dir "/" rel))))
+    (if (or (map? src) (re-find #"\.(?:rs|toml|lock|json|xml|csproj|md)$" rel))
+      (put-text! (stamp-text (if (map? src) (:text src) (slurp (str root "/" src)))) (str dir "/" rel))
+      (put! (str root "/" src) (str dir "/" rel))))
   (doseq [o owned
           :let [d (str dir "/" o)]
           :when (fs/directory? d)
@@ -327,7 +330,8 @@
       (into {} (for [m host] [(str "src/host/" m ".cs") (str "host/csharp/Emon/" m ".cs")]))
       (into {} (for [s ["Api" "Ffi"], m (listing (str "host/csharp/Emon/" s) ".cs")] [(str "src/host/" s "/" m ".cs") (str "host/csharp/Emon/" s "/" m ".cs")])))))
 
-(def dotnet-env {"DOTNET_CLI_TELEMETRY_OPTOUT" "1" "DOTNET_NOLOGO" "1" "DOTNET_SKIP_FIRST_TIME_EXPERIENCE" "1"})
+(def dotnet-env {"UseSharedCompilation" (or (System/getenv "EMON_CS_SHARED_COMPILATION") "true")
+                 "DOTNET_CLI_TELEMETRY_OPTOUT" "1" "DOTNET_NOLOGO" "1" "DOTNET_SKIP_FIRST_TIME_EXPERIENCE" "1"})
 
 (defn build-csharp! []
   (let [{:keys [path]} (dotnet)
@@ -437,7 +441,7 @@
                         "package/src/tesseract.js" "package/src/tesseract.d.ts" "package/LICENSE" "package/README.md"]]
             (when-not (some #{need} names) (bad! "the tarball has no " need))))
         ;; the optional peer's range names the version that is being published with it
-        (when-not (str/includes? (slurp (str root "/host/js/package.json")) (str "\"@3sln/pdfium-wasm\": \"^" version "\"")) (bad! "host/js/package.json's peer range of @3sln/pdfium-wasm is not ^" version))
+        (when-not (str/includes? (slurp (str dir "/package.json")) (str "\"@3sln/pdfium-wasm\": \"^" version "\"")) (bad! "host/js/package.json's peer range of @3sln/pdfium-wasm is not ^" version))
         (vec (remove nil? [tgz (build-pdfium-wasm!)]))))))
 
 ;; ------------------------------------------------------------------------------------------------------ the native library and the pod
@@ -924,7 +928,10 @@
         cc (or (first (filter have? ["cc" "clang" "gcc"])) (skip! "no C compiler"))
         sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm" "-lc++"] ["-lpthread" "-ldl" "-lm" "-lstdc++"])] ; the C++ runtime: libemon.a holds Tesseract (D552)
     (put-sample! app)
-    (spit (str app "/main.c") (slurp (snippet-file "c/quickstart.c")))
+    (spit (str app "/main.c")
+          (str/replace (str "#include <string.h>\n" (slurp (snippet-file "c/quickstart.c")))
+                       "int main(void) {"
+                       (str "int main(void) {\n  if (strcmp(emon_version(), \"" version "\") != 0) return 91;")))
     (spit (str app "/tour.c") (slurp (snippet-file "c/tour.c")))
     (spit (str app "/neg.c") "#include \"emon.h\"\nint f(emon_error *e) { return emon_test_panic(e); }\n")
     (let [flags ["-std=c11" "-Wall" "-Werror" (str "-I" dir "/include")]
@@ -981,6 +988,7 @@
           (str "(require '[babashka.pods :as pods] '[babashka.fs :as fs])\n"
                "(import '(java.util Base64))\n"
                "(pods/load-pod [\"" dir "/emon-pod\"])\n"
+               "(assert (= \"" version "\" (:version (emon/capabilities))))\n"
                "(let [r (emon/convert {:bytes (.encodeToString (Base64/getEncoder) (fs/read-all-bytes (first *command-line-args*)))} \"\" {:html \"\"})]\n"
                "  (.write System/out (.getBytes ^String (:html r) \"UTF-8\"))\n  (.flush System/out))\n"))
     (let [by-bytes (:out (run {} "bb" script sample-pdf))]
@@ -1085,7 +1093,13 @@
                               [h (if (seq files) {:status :built :files (if (= h :java) (vec (reverse files)) files)} {:status :skip :why "nothing built in DIR"})])))
                     (build-hosts! hosts))]
         (if (:check opts)
-          (let [results (check-hosts! built (:keep opts))]
+          (let [_ (let [ns (create-ns 'emon.package-version)]
+                    (binding [*ns* ns] (refer-clojure) (load-file "tools/version.clj"))
+                    (let [bad (concat ((deref (ns-resolve ns 'mismatches)) root version)
+                                      ((deref (ns-resolve ns 'staged-mismatches)) (str out "/stage") version))]
+                      (when (seq bad) (bad! "release version mismatch: " (pr-str bad)))
+                      (say "  ok   staged artifacts carry " version "; tracked release fields remain 0.0.0-dev")))
+                results (check-hosts! built (:keep opts))]
             (if (verdict built results)
               (say "  ok   package check done")
               (System/exit 1)))

@@ -761,7 +761,7 @@ fn invoke(var: &str, args: &[Edn]) -> Result<Edn, PodError> {
             _ => Err(PodError::usage("emon/option-key? wants a name")),
         },
         "capabilities" => Ok(map(vec![
-            ("version", s("0.2.0")),
+            ("version", s("0.0.0-dev")),
             ("pdfium", Edn::Bool(capabilities() & 1 != 0)),
             ("tesseract", Edn::Bool(capabilities() & 2 != 0)),
             ("codecs", Edn::Bool(capabilities() & 4 != 0)),
@@ -776,6 +776,7 @@ fn describe() -> Bv {
     let vars: Vec<Bv> = ["convert", "intake", "check-options", "option-key?", "capabilities"].iter().map(|n| dict(vec![("name", bs(n))])).collect();
     dict(vec![
         ("format", bs("edn")),
+        ("version", bs(env!("CARGO_PKG_VERSION"))),
         ("namespaces", Bv::List(vec![dict(vec![("name", bs("emon")), ("vars", Bv::List(vars))])])),
         ("ops", dict(vec![("shutdown", dict(vec![]))])),
     ])

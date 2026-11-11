@@ -83,7 +83,7 @@ if(!args.includes('--docs')) {
  for(const [source,url,title] of [...documents,['LICENSE','/licence/','Licence'],['THIRD_PARTY_NOTICES.md','/notices/','Third-party notices']]) {
   let markdown=await fs.readFile(source,'utf8').catch(e=>{if(source==='docs/hosts/README.md')return '# Hosts\n\n'+documents.filter(x=>/^docs\/hosts\/[^/]+\.md$/.test(x[0])&&x[0]!==source).map(x=>`- [${x[2]}](${path.posix.basename(x[0])})`).join('\n');throw e;});
   if(source==='LICENSE') markdown='# Licence\n\n```text\n'+markdown+'\n```';
-  markdown=markdown.replace(/<!--[\s\S]*?-->/g,'');
+  markdown=markdown.replaceAll('<version>0.0.0-dev</version>', '<version>'+data.version+'</version>').replace(/<!--[\s\S]*?-->/g,'');
   const tokens=marked.lexer(markdown);const toc=[];const slugs=new Map();const renderer=new Renderer();
   renderer.heading=function(token){const text=token.text.replace(/<[^>]*>/g,'').replace(/[`*_]/g,'');const base=text.toLowerCase().replace(/[^\p{L}\p{N}\p{M}\s_-]/gu,'').replace(/ /g,'-');const n=slugs.get(base)||0;slugs.set(base,n+1);const id=base+(n?'-'+n:'');if(token.depth===2||token.depth===3)toc.push({id,text,level:token.depth});return `<h${token.depth} id="${escape(id)}">${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`;};
   renderer.table=function(token){const table=Renderer.prototype.table.call(this,token);return `<div class="table-scroll" role="region" aria-label="Table" tabindex="0">${table}</div>`;};

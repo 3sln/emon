@@ -459,7 +459,7 @@
          "\n\n</details>")))
 
 (defn maven-dependency []
-  (str "```xml\n<dependency>\n  <groupId>com.3sln</groupId>\n  <artifactId>emon</artifactId>\n  <version>" @version "</version>\n</dependency>\n```"))
+  (str "```xml\n<dependency>\n  <groupId>com.3sln</groupId>\n  <artifactId>emon</artifactId>\n  <version>" "0.0.0-dev" "</version>\n</dependency>\n```"))
 
 (def generators
   {"maven-dependency" maven-dependency
@@ -606,7 +606,7 @@
 
 (defn check-version [path text]
   (doseq [[_ v] (re-seq #"emon-(\d+\.\d+\.\d+)-" text)]
-    (when (not= v @version) (fail! path ": mentions emon-" v "-..., version.edn says " @version))))
+    (when (not (#{"0.0.0" @version} v)) (fail! path ": mentions emon-" v "-..., version.edn says " @version))))
 
 (defn check-cli-flags []
   (let [cli (slurp "docs/cli.md")]

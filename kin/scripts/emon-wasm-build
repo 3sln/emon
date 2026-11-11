@@ -76,7 +76,7 @@ fi
 cat > "$crate/Cargo.toml.new" <<'TOML'
 [package]
 name = "emon"
-version = "0.2.0"
+version = "0.0.0-dev"
 license = "MIT"
 edition = "2021"
 
@@ -103,7 +103,7 @@ opt-level = 3
 overflow-checks = true
 debug = false
 TOML
-put "$crate/Cargo.toml.new" "$crate/Cargo.toml"
+bb tools/version.clj --stamp-copy "$crate/Cargo.toml.new" "$crate/Cargo.toml"
 rm -f "$crate/Cargo.toml.new"
 
 # unwinding (exception handling), a 16 MiB stack (kin recurses; the native hosts' main thread has 8 MiB, this one is not
@@ -111,7 +111,8 @@ rm -f "$crate/Cargo.toml.new"
 flags="-Ctarget-feature=+exception-handling -Cpanic=unwind -Clink-arg=-zstack-size=16777216"
 [ "${EMON_WASM_PPOCR:-}" != 1 ] || flags="$flags --cfg ppocr_web"
 [ "${EMON_WASM_WARN:-}" = 1 ] || flags="$flags -A warnings"
-put host/rust/Cargo.lock "$crate/Cargo.lock"
+bb tools/version.clj --stamp-copy host/rust/Cargo.lock "$crate/Cargo.lock"
+
 # rust-lld of the nightly links libLLVM through an rpath that is wrong on macOS; the toolchain's own lib/ is where it is
 out=$(cd "$crate" && env RUSTC="$rustc" DYLD_FALLBACK_LIBRARY_PATH="$sysroot/lib" RUSTFLAGS="$flags" "$cargo" build --release -q --target wasm32-unknown-unknown -Zbuild-std=std,panic_unwind 2>&1) || { echo "$out" | head -80 >&2; echo "emon-wasm: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" | grep -v 'exception-handling\|issue #162235\|phased out\|not stably supported\|^$\|^warning: unstable feature' >&2 || true
