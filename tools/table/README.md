@@ -52,7 +52,7 @@ Table-engine comparison (`bb tables-ab`, TR-design)
   - `bb tools/table/ab_freeze.clj --check`
   - `bb -cp tools:tools/lib tools/table/test_abscore.clj`
 
-SCRATCH (`/Volumes/SSK SSD/emon-scratch/trd`, or `EMON_TABLES_AB_SCRATCH`) holds
+SCRATCH (`$EMON_SCRATCH/trd`, default `.cache/scratch/trd`, or `EMON_TABLES_AB_SCRATCH`) holds
 Models, transcripts, logs and the frozen inputs. The repository holds only
 IDs, digests, expectations and scores.
 

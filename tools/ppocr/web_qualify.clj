@@ -4,10 +4,10 @@
          '[cheshire.core :as json] '[clojure.string :as str])
 (def args (apply hash-map *command-line-args*))
 (assert (every? #{"--out" "--limit" "--compare-only" "--candidate"} (keys args)) "unknown option")
-(def out (get args "--out" "/Volumes/SSK SSD/emon-scratch/op2b/qualification"))
-(def qual "/Volumes/SSK SSD/emon-scratch/op1c")
+(def out (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2b/qualification")))
+(def qual (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c"))
 (defn space! []
-  (doseq [p ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+  (doseq [p ["."]]
     (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "disk below 10 GiB: " p))))
 (space!)
 (fs/create-dirs out)

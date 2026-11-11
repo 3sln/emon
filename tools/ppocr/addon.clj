@@ -36,7 +36,8 @@
 (def adapter-file (str (fs/absolutize ".cache/ppocr-release") "/" adapter))
 (def ort (str root "/" (:directory runtime)))
 (defn space! []
-  (doseq [p (if (= "aarch64-apple-darwin" triple) ["." "/Volumes/SSK SSD"] ["."])]
+  ;; Only the build directory: a machine-specific scratch volume has no place in repository tooling (CI has none).
+  (doseq [p ["."]]
     (assert (> (.getUsableSpace (io/file p)) (* 10 1024 1024 1024)) (str "less than 10 GiB free: " p))))
 (defn fetch! [{:keys [file url bytes sha256]}]
   (let [dest (str root "/" file) valid? #(and (fs/regular-file? %) (= bytes (fs/size %)) (= sha256 (sha %)))]

@@ -20,7 +20,7 @@
   until acceptance. --args gives an engine's extra driver arguments; `ab` passes `--tables=legacy` and `--tables=scored`. A driver
   without the option (today's) refuses `--tables=` with usage: `ab` then stops, and only `run`/`baseline` of the current engine work.
 
-  SCRATCH is /Volumes/SSK SSD/emon-scratch/trd (EMON_TABLES_AB_SCRATCH overrides): Models, transcripts and logs stay there, never in
+  SCRATCH is $EMON_SCRATCH/trd (default .cache/scratch/trd) (EMON_TABLES_AB_SCRATCH overrides): Models, transcripts and logs stay there, never in
   the repository. Inputs are checked against their frozen sha256 before use."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
@@ -31,7 +31,7 @@
             [table.abscore :as AS]))
 
 (def root (str (fs/canonicalize ".")))
-(def scratch (or (System/getenv "EMON_TABLES_AB_SCRATCH") "/Volumes/SSK SSD/emon-scratch/trd"))
+(def scratch (or (System/getenv "EMON_TABLES_AB_SCRATCH") (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/trd")))
 (def pops-file "test/tables-ab/populations.json")
 (def manifest (delay (json/parse-string (slurp pops-file))))
 (def args (vec *command-line-args*))

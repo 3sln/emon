@@ -4,6 +4,7 @@
 Counter attribution is deliberately conservative: this is a diagnostic, not
 spatial gold or acceptance scoring. It never fits thresholds on receipts.
 """
+import os
 import argparse, collections, json, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -49,7 +50,7 @@ def main():
     p = argparse.ArgumentParser(__doc__)
     p.add_argument('--out', type=pathlib.Path, required=True)
     a = p.parse_args()
-    scratch = pathlib.Path('/Volumes/SSK SSD/emon-scratch')
+    scratch = pathlib.Path(os.environ.get('EMON_SCRATCH', '.cache/scratch'))
     totals = collections.defaultdict(collections.Counter)
     rescored = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
     rows = []

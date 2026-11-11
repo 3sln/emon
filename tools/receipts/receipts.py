@@ -1,7 +1,7 @@
 """Live, non-gate receipt measurement. Corpus text stays in external scratch."""
 import argparse, collections, json, os, pathlib, re, subprocess, unicodedata, resource, sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SCRATCH = pathlib.Path(os.environ.get('EMON_RECEIPTS_OUT','/Volumes/SSK SSD/emon-scratch/rc'))
+SCRATCH = pathlib.Path(os.environ.get('EMON_RECEIPTS_OUT', os.path.join(os.environ.get('EMON_SCRATCH', '.cache/scratch'), 'rc')))
 def words(s):
     return unicodedata.normalize('NFC', s).casefold().split()
 def walk(n):

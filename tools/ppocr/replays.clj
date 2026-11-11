@@ -5,8 +5,8 @@
          '[cheshire.core :as json] '[clojure.string :as str] '[clojure.java.io :as io])
 (import '[java.util.zip GZIPInputStream] '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
-(def qual (get args "--qualification" "/Volumes/SSK SSD/emon-scratch/op1c"))
-(def out (get args "--out" "/Volumes/SSK SSD/emon-scratch/op2a/qualification-replays"))
+(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c")))
+(def out (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/qualification-replays")))
 (fs/create-dirs out)
 (defn expected-stream [p]
  (if (fs/exists? p) (io/input-stream p) (GZIPInputStream. (io/input-stream (str p ".gz")))))
@@ -62,7 +62,7 @@
 (doseq [[i {:keys [id recording input expected flags]}] (map-indexed vector cases)]
  (let [digest (sha expected)]
   (doseq [[host bin] hosts]
-   (doseq [disk ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+   (doseq [disk ["."]]
     (assert (> (.getUsableSpace (java.io.File. disk)) (* 10 1024 1024 1024)) (str "disk below 10 GiB: " disk)))
    (let [log (str out "/current.err")
          p (process (into [bin "--ocr-engine=ppocr" "--out=bundle" (str "--replay=" recording)] (concat flags [input]))

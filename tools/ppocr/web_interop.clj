@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]] '[cheshire.core :as json]
          '[clojure.string :as str] '[clojure.edn :as edn])
-(def out (or (first *command-line-args*) "/Volumes/SSK SSD/emon-scratch/op2b/interop"))
+(def out (or (first *command-line-args*) (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2b/interop")))
 (fs/create-dirs out)
 (def input "test/raster/receipt-photo.png")
 (def native ".cache/emon-rs-ppocr/target/release/emon-rs")
@@ -12,7 +12,7 @@
 (def no-models {"EMON_CS_SHARED_COMPILATION" "false" "TESSDATA_PREFIX" "/nonexistent/op2b-tessdata"
                 "EMON_PPOCR_MODELS" "/nonexistent/op2b-models" "EMON_PPOCR_LIB" "/nonexistent/op2b-runtime"})
 (defn run! [argv label environment]
-  (doseq [p ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+  (doseq [p ["."]]
     (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "disk below 10 GiB: " p)))
   (let [r @(process argv {:extra-env environment :out :string :err (str out "/" label ".err") :shutdown nil})]
     (assert (zero? (:exit r)) (str "failed: " label))

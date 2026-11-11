@@ -3,11 +3,11 @@
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]] '[clojure.string :as str]
          '[cheshire.core :as json] '[clojure.edn :as edn])
 (def args (apply hash-map *command-line-args*))
-(def out (str (fs/absolutize (get args "--out" "/Volumes/SSK SSD/emon-scratch/op2a/models"))))
+(def out (str (fs/absolutize (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/models")))))
 (fs/create-dirs out)
 (def env {"EMON_CS_SHARED_COMPILATION" "false" "NuGetAudit" "false"})
 (defn run! [label argv & [extra]]
- (doseq [p ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+ (doseq [p ["."]]
   (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "disk below 10 GiB: " p)))
  (let [log (str out "/" label) r @(process argv {:extra-env (merge env extra) :out log :err (str log ".err") :shutdown nil})]
   (assert (zero? (:exit r)) (str label " failed: " (:exit r) "; see " log ".err")) log))
@@ -21,7 +21,7 @@
 (def rust ".cache/emon-rs-ppocr/target/release/emon-rs")
 (def hosts [["rust" rust] ["go" ".cache/emon-go-live/emon-go"] ["java" ".cache/emon-java/emon-java"]
             ["csharp" ".cache/emon-cs/emon-cs"] ["c" ".cache/emon-c-live/emon-c"] ["pod" ".cache/emon-pod/emon-pod"] ["rust-native" ".cache/emon-rs-live/target/release/emon-rs"]])
-(def qualification (get args "--qualification" "/Volumes/SSK SSD/emon-scratch/op1c"))
+(def qualification (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c")))
 (def first-bitmap (:file (first (json/parse-string (slurp (str qualification "/bitmaps.json")) true))))
 (def receipt-bitmap (if (fs/regular-file? first-bitmap) first-bitmap (str/replace first-bitmap "/op1b/" "/op1c/")))
 (def files ["test/raster/receipt-photo.png" "test/raster/h-plain-72dpi.png" "test/raster/h-plain-rot180.png" "test/raster/receipt-empty.png" receipt-bitmap])
@@ -99,5 +99,5 @@
 (assert (pos? @pp-recordings) "integrated fixtures never requested PP")
 (println "live PP Models match on six hosts; available replay APIs match complete bundles without model/runtime paths")
 (run! "qualification-replays.log" ["bb" "tools/ppocr/replays.clj" "--qualification"
-                                   (get args "--qualification" "/Volumes/SSK SSD/emon-scratch/op1c")
+                                   (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c"))
                                    "--out" (str out "/qualification-replays")])

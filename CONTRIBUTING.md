@@ -42,9 +42,9 @@ The corpus is 12 GB. To keep it off the internal disk, keep the data on another 
 gate and tool reads the repo-relative `corpus/` and follows links, so nothing else changes.
 
 1. Copy `local.edn.example` to `local.edn` (gitignored; per checkout) and set `:corpus-dir` to the absolute path of the directory
-   on the drive, e.g. `{:corpus-dir "/Volumes/SSK SSD/emon-corpus"}`. The directory must exist.
-2. Move the data yourself, in this order: copy (`rsync -a corpus/ "/Volumes/SSK SSD/emon-corpus/"`), verify
-   (`rsync -anc corpus/ "/Volumes/SSK SSD/emon-corpus/"` prints nothing when it is complete), then `mv corpus corpus.old` and, when
+   on the drive, e.g. `{:corpus-dir "/Volumes/External/emon-corpus"}`. The directory must exist.
+2. Move the data yourself, in this order: copy (`rsync -a corpus/ "/Volumes/External/emon-corpus/"`), verify
+   (`rsync -anc corpus/ "/Volumes/External/emon-corpus/"` prints nothing when it is complete), then `mv corpus corpus.old` and, when
    all is well, delete it. Or start empty and `bb corpus-pull` into the drive.
 3. `bb corpus-link` creates (or updates) the symlink `corpus -> <:corpus-dir>`. It **refuses** while `corpus/` is a real directory
    and never moves, copies or deletes data. `bb corpus-link --dir PATH` links to PATH without `local.edn`.

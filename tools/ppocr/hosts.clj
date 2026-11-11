@@ -5,11 +5,11 @@
 (import '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
 (assert (every? #{"--qualification" "--out" "--limit" "--skip-build"} (keys args)) "unknown ppocr-hosts option")
-(def qual (get args "--qualification" "/Volumes/SSK SSD/emon-scratch/op1c"))
-(def out (str (fs/absolutize (get args "--out" "/Volumes/SSK SSD/emon-scratch/op2a/hosts"))))
+(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op1c")))
+(def out (str (fs/absolutize (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/hosts")))))
 (def env {"EMON_CS_SHARED_COMPILATION" "false" "NuGetAudit" "false"})
 (defn space! []
- (doseq [p ["/System/Volumes/Data" "/Volumes/SSK SSD"]]
+ (doseq [p ["."]]
   (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "less than 10 GiB free: " p))))
 (space!)
 (fs/create-dirs out)

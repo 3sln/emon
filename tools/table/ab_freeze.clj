@@ -3,7 +3,7 @@
   (:require [babashka.fs :as fs] [cheshire.core :as json] [clojure.string :as str]
             [table.ab-checks :as C]))
 (def root (str (fs/canonicalize ".")))
-(def frozen "/Volumes/SSK SSD/emon-scratch/trd/frozen")
+(def frozen (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/trd/frozen"))
 (def salt "tables-ab/v1/")
 (def exclude #{"ftn_00000" "ftn_02204" "ftn_03429" "ftn_03897" "ftn_04781"
                "cTDaR_t00781" "cTDaR_t10095" "cTDaR_t10202"
