@@ -1,0 +1,17 @@
+;; D883 ruling 6: frozen word calibration belongs to kin. The adjacent
+;; PP bins 6 and 7 pool 18+39 correct / 41+94 observations (weighted PAVA).
+(ns emon.ocalib
+  (:require [emon.lang :refer [I32]]
+            [kin.lang :refer [defn return if < > == !=]]))
+
+(defn ^:pub ^I32 ocal-word [^I32 engine ^I32 calibration ^I32 raw]
+  ;; Tesseract's existing policy scale is held during P13.2; threshold refits
+  ;; remain P13.5. Unknown configurations have no fitted probability.
+  (if (== engine 1) (return raw))
+  (if (!= engine 2) (return -1))
+  (if (< raw 400) (return 0))
+  (if (< raw 500) (return 42))
+  (if (< raw 600) (return 179))
+  (if (< raw 800) (return 422))
+  (if (< raw 900) (return 521))
+  (return 883))

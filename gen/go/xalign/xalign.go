@@ -1302,8 +1302,8 @@ func XaPage(page int32, epages *port.Cells, words *port.Cells, owords *port.Cell
 	// Align one page. See the head of the file. Answers the number of groups appended to `cg`.
 	var w0 int32 = xaLower(words, 24, page)
 	var w1 int32 = xaLower(words, 24, page+1)
-	var o0 int32 = xaLower(owords, 28, page)
-	var o1 int32 = xaLower(owords, 28, page+1)
+	var o0 int32 = xaLower(owords, 32, page)
+	var o1 int32 = xaLower(owords, 32, page+1)
 	var t0 int32 = xaLower(tlines, 20, page)
 	var t1 int32 = xaLower(tlines, 20, page+1)
 	var nt int32 = w1 - w0
@@ -1361,7 +1361,7 @@ func XaPage(page int32, epages *port.Cells, words *port.Cells, owords *port.Cell
 	i = 0
 	for i < no {
 		r = o0 + i
-		xaLoadHead(scr, nt+i, owords, 28, r)
+		xaLoadHead(scr, nt+i, owords, 32, r)
 		xaHbs(scr, nt+i, 9, 3)
 		f = port.CellsAt(owords, (r*28)+evidence.OwfRun())
 		xaHbs(scr, nt+i, 11, f)

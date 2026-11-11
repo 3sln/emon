@@ -103,8 +103,8 @@ public final class Oaline {
                                     }
                                     b = j;
                                     hits += 1;
-                                    if (Evidence.owGet(words, w, Evidence.hdConf()) < conf) {
-                                        conf = Evidence.owGet(words, w, Evidence.hdConf());
+                                    if (Evidence.owConfidence(words, w) < conf) {
+                                        conf = Evidence.owConfidence(words, w);
                                     }
                                 }
                                 j += 1;
@@ -155,7 +155,7 @@ public final class Oaline {
                                 if ((emon.Port.cellsAt(im, 0) == 0) || (emon.Port.cellsAt(im, 1) != 2)) {
                                     compact = 0;
                                 }
-                                margin = Evidence.owGet(words, cw, Evidence.hdConf()) - conf;
+                                margin = Evidence.owConfidence(words, cw) - conf;
                                 if ((compact == 1) && ((malformed == 1) && (Oarb.oaLineMergeMeta(joined, 0, rawlen, start, cn, hits, 1, margin, im, cm) == 1))) {
                                     j = a;
                                     while (j <= b) {
@@ -226,12 +226,12 @@ public final class Oaline {
                                 conf = 1000;
                                 q = j;
                                 while (q < (j + hits)) {
-                                    if (Evidence.owGet(words, first + q, Evidence.hdConf()) < conf) {
-                                        conf = Evidence.owGet(words, first + q, Evidence.hdConf());
+                                    if (Evidence.owConfidence(words, first + q) < conf) {
+                                        conf = Evidence.owConfidence(words, first + q);
                                     }
                                     q += 1;
                                 }
-                                emon.Port.cellsPush(oaz, Evidence.owGet(words, cw, Evidence.hdConf()) - conf);
+                                emon.Port.cellsPush(oaz, Evidence.owConfidence(words, cw) - conf);
                                 emon.Port.cellsPush(oaz, l);
                                 emon.Port.cellsPush(oaz, tr);
                                 emon.Port.cellsPush(oaz, 1);

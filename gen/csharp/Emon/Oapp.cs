@@ -162,7 +162,7 @@ public static class Oapp {
                     p = Evidence.OrGet(runs, run, Evidence.OrfWfirst());
                     end = p + Evidence.OrGet(runs, run, Evidence.OrfWcount());
                     while (p < end) {
-                        if ((Evidence.OwGet(words, p, Evidence.HdConf()) >= 700) && (Evidence.EvOverlapSmall(Evidence.OwGet(words, w, Evidence.HdX0()), Evidence.OwGet(words, w, Evidence.HdY0()), Evidence.OwGet(words, w, Evidence.HdX1()), Evidence.OwGet(words, w, Evidence.HdY1()), Evidence.OwGet(words, p, Evidence.HdX0()), Evidence.OwGet(words, p, Evidence.HdY0()), Evidence.OwGet(words, p, Evidence.HdX1()), Evidence.OwGet(words, p, Evidence.HdY1())) >= 500)) {
+                        if ((Evidence.OwConfidence(words, p) >= 700) && (Evidence.EvOverlapSmall(Evidence.OwGet(words, w, Evidence.HdX0()), Evidence.OwGet(words, w, Evidence.HdY0()), Evidence.OwGet(words, w, Evidence.HdX1()), Evidence.OwGet(words, w, Evidence.HdY1()), Evidence.OwGet(words, p, Evidence.HdX0()), Evidence.OwGet(words, p, Evidence.HdY0()), Evidence.OwGet(words, p, Evidence.HdX1()), Evidence.OwGet(words, p, Evidence.HdY1())) >= 500)) {
                             emon.Port.CellsPush(candidates, i);
                             emon.Port.CellsPush(candidates, Evidence.OwGet(words, p, Evidence.HdTstart()));
                             emon.Port.CellsPush(candidates, Evidence.OwGet(words, p, Evidence.HdTlen()));

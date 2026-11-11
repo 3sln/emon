@@ -76,34 +76,58 @@ export function ocrRequest(rec, bitmap, w) {
 
 /** The integer form `emon_answer_ocr` reads (its layout is `ox-flat` in `kin/ocrport.kin`); `c` is the module's `ocrWord` constants. */
 export function encodeOcr(r, c) {
-  const o = r.orientation || {};
+  const o = r.orientation;
   const osd = r.osd;
   const blocks = r.blocks || [];
   const lines = r.lines || [];
   const words = r.words || [];
-  const v = [
-    o.orient ?? 0, o.writingDirection ?? 0, o.textlineOrder ?? 2, o.deskew ?? 0,
-    osd ? osd.degrees : -1, osd ? pack4(osd.script || '') : 0, osd ? osd.scriptConfidence : -1, osd ? osd.orientationConfidence : -1,
-    lines.length, blocks.length, words.length, 0, 0, 0,
-  ];
-  for (const l of lines) {
-    v.push(...l.box, ...l.baseline, l.block, l.paragraph, l.type ?? 0, -1, -1, -1);
+  const baseline = lines.length > 0 && lines.every(l => l.baseline?.length === 4 && l.baseline.every(Number.isFinite));
+  const symbols = words.some(w => w.symbols?.length);
+  const alts = words.some(w => w.symbols?.some(s => s.alts?.length));
+  const lexicon = words.length > 0 && words.every(w => typeof w.dict === 'boolean');
+  let caps = 256 | 2097152;
+  if (blocks.length) caps |= 1 | 4;
+  if (lines.some(l => l.paragraph !== undefined)) caps |= 2;
+  if (baseline) caps |= 8;
+  if (osd) caps |= 512 | 2048;
+  if (o?.deskew !== undefined) caps |= 1024;
+  if (o?.writingDirection !== undefined) caps |= 4096;
+  if (words.some(w => w.lang)) caps |= 8192;
+  if (lexicon) caps |= 16384;
+  if (words.some(w => w.flags !== undefined)) caps |= 32768;
+  if (words.some(w => w.pointSize >= 0)) caps |= 65536;
+  if (symbols) caps |= 131072 | 262144;
+  if (alts) caps |= 524288;
+  const v = [1, r.engine ?? 1, 0, 0, caps, r.native ?? (caps & ~(r.inferred ?? 0)), r.seg ?? 1, 1, 1000,
+    osd ? osd.degrees / 90 : 0, osd?.orientationConfidence ?? 0,
+    o?.deskew ?? 0, osd ? pack4(osd.script || '') : 0, osd?.scriptConfidence ?? 0,
+    o?.writingDirection ?? 0, o?.textlineOrder ?? 0, 0, r.granularity ?? 0,
+    blocks.length, lines.length, words.length, 0, 0, 0];
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const b = blocks[bi];
+    v.push(...b.box, -1);
+    if (caps & 4096) v.push(b.orient ?? 0, b.writingDirection ?? 0, b.textlineOrder ?? 0);
+    if (caps & 4) v.push(lines.find(l => l.block === bi)?.type ?? 0);
   }
-  for (const b of blocks) v.push(...b.box, b.orient ?? 0, b.writingDirection ?? 0, b.textlineOrder ?? 2);
+  for (let li = 0; li < lines.length; li++) {
+    const l = lines[li];
+    v.push(...l.box, blocks.length ? l.block : -1, words.filter(w => w.line === li).length);
+    if (caps & 2) v.push(l.paragraph ?? -1);
+    if (baseline) v.push(...l.baseline);
+  }
   for (const w of words) {
     const t = cps(w.text);
-    v.push(...w.box, w.conf, w.line, w.block, w.flags ?? 0, w.lang ? pack4(w.lang) : 0, w.pointSize ?? -1, (w.dict ? c.dict : 0) | (w.numeric ? c.numeric : 0), t.length, ...t);
+    v.push(...w.box, w.line, w.conf);
+    if (caps & 8192) v.push(w.lang ? pack4(w.lang) : 0);
+    if (caps & 32768) v.push(w.flags ?? 0);
+    if (caps & 65536) v.push(w.pointSize ?? -1);
+    if (lexicon) v.push(1 | (w.dict ? 2 : 0));
     const syms = w.symbols || [];
-    v.push(syms.length);
+    v.push(syms.length, t.length, ...t);
     for (const s of syms) {
-      const st = cps(s.text);
-      v.push(...s.box, s.conf, st.length, ...st);
-      const alts = s.alts || [];
-      v.push(alts.length);
-      for (const a of alts) {
-        const at = cps(a.text);
-        v.push(a.conf, at.length, ...at);
-      }
+      const st = cps(s.text), choices = s.alts || [];
+      v.push(...s.box, s.conf, st.length, choices.length, ...st);
+      for (const a of choices) { const text = cps(a.text); v.push(text.length, a.conf, ...text); }
     }
   }
   return Int32Array.from(v);

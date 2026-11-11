@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::norm::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 use crate::emon::player::*;
 use crate::emon::scan::*;
@@ -355,7 +356,7 @@ pub fn rt_line_mean(olines: &mut crate::port::Cells, owords: &mut crate::port::C
         return -1;
     }
     while j < c {
-        sum += ow_get(owords, f + j, hd_conf());
+        sum += ow_confidence(owords, f + j);
         j += 1;
     }
     return sum / c;
@@ -367,7 +368,7 @@ pub fn rt_run_score(oruns: &mut crate::port::Cells, olines: &mut crate::port::Ce
     let mut i: i32 = w0;
     let mut sum: i32 = 0;
     while i < (w0 + nw) {
-        sum += (ow_get(owords, i, hd_conf()) * ow_get(owords, i, hd_tlen())) / 16;
+        sum += (ow_confidence(owords, i) * ow_get(owords, i, hd_tlen())) / 16;
         i += 1;
     }
     return sum;
@@ -1128,17 +1129,17 @@ pub fn rt_gap_lines(page: i32, dpi: i32, tlines: &mut crate::port::Cells, mut or
 }
 pub fn rt_answer_score(ans: &mut crate::port::Cells, at: i32) -> i32 {
     // D671: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
-    let mut w: i32 = an_ocr_first(ans, at);
+    let mut w: i32 = oil_first_word(ans, at);
     let mut i: i32 = 0;
     let mut score: i32 = 0;
     let mut area: i32 = 0;
     let mut width: i32 = 0;
     let mut height: i32 = 0;
     let mut conf: i32 = 0;
-    while i < an_ocr_count(ans, at) {
-        width = aw_get(ans, w, aw_w());
-        height = aw_get(ans, w, aw_h());
-        conf = aw_get(ans, w, aw_conf());
+    while i < oil_nwords(ans, at) {
+        width = crate::port::cells_at(ans, w + 2);
+        height = crate::port::cells_at(ans, w + 3);
+        conf = oil_policy_conf(ans, at, w);
         if (width > 0) && ((height > 0) && (width >= height)) {
             area = (width * height) / 100;
             if area > 10000 {
@@ -1148,7 +1149,7 @@ pub fn rt_answer_score(ans: &mut crate::port::Cells, at: i32) -> i32 {
                 score += (area * conf) / 1000;
             }
         }
-        w = aw_next(ans, w);
+        w = oil_word_next(ans, at, w);
         i += 1;
     }
     return score;
@@ -1199,7 +1200,7 @@ pub fn rt_empty_receipt(trigger: i32, ans: &mut crate::port::Cells, at: i32) -> 
     if an_ok(ans, at) != 1 {
         return 1;
     }
-    if an_ocr_count(ans, at) == 0 {
+    if oil_nwords(ans, at) == 0 {
         return 1;
     }
     return 0;
@@ -1320,7 +1321,7 @@ pub fn rt_plan(page: i32, input: i32, born: i32, wanttext: i32, rid: i32, dpi: i
         let ba: i32 = an_find(ans, pu_id(page, ri_body()));
         let receipt: i32 = an_find(ans, pu_id(page, ri_receipt()));
         let receipt_mode: i32 = rt_receipt_active(rtp);
-        if (rt_empty_receipt(rt_receipt_active(rtp), ans, receipt) == 1) && ((crate::port::cells_at(rtp, rtp_body()) == 0) || ((ba >= 0) && ((an_ok(ans, ba) == 1) && (an_ocr_count(ans, ba) == 0)))) {
+        if (rt_empty_receipt(rt_receipt_active(rtp), ans, receipt) == 1) && ((crate::port::cells_at(rtp, rtp_body()) == 0) || ((ba >= 0) && ((an_ok(ans, ba) == 1) && (oil_nwords(ans, ba) == 0)))) {
             asked += rt_ask_thermal(page, dpi, loc, ans, bms, crate::port::bms_get(bms, pu_view_id(page, k0)), nm_paper_gray(ws), rtp, rq, receipt_mode, pixels);
         }
     }
@@ -1535,7 +1536,7 @@ pub(crate) fn rt_run_mean(oruns: &mut crate::port::Cells, owords: &mut crate::po
         return -1;
     }
     while i < (w0 + nw) {
-        sum += ow_get(owords, i, hd_conf());
+        sum += ow_confidence(owords, i);
         i += 1;
     }
     return sum / nw;
@@ -1552,7 +1553,7 @@ pub(crate) fn rt_lines_score(olines: &mut crate::port::Cells, owords: &mut crate
         c = ol_get(olines, l, lh_count());
         j = 0;
         while j < c {
-            sum += (ow_get(owords, f + j, hd_conf()) * ow_get(owords, f + j, hd_tlen())) / 16;
+            sum += (ow_confidence(owords, f + j) * ow_get(owords, f + j, hd_tlen())) / 16;
             j += 1;
         }
         l += 1;
@@ -1572,7 +1573,7 @@ pub(crate) fn rt_lines_conf(olines: &mut crate::port::Cells, owords: &mut crate:
         c = ol_get(olines, l, lh_count());
         j = 0;
         while j < c {
-            sum += ow_get(owords, f + j, hd_conf());
+            sum += ow_confidence(owords, f + j);
             words += 1;
             j += 1;
         }
@@ -1807,13 +1808,13 @@ pub(crate) fn rt_receipt_protect_conf() -> i32 {
     return 900;
 }
 pub(crate) fn rt_receipt_protected(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
-    if (ow_get(ow, w, hd_conf()) >= rt_receipt_protect_conf()) && (ow_get(ow, w, hd_tlen()) >= 2) {
+    if (ow_confidence(ow, w) >= rt_receipt_protect_conf()) && (ow_get(ow, w, hd_tlen()) >= 2) {
         return rt_receipt_word_alpha(ow, et, w);
     }
     return 0;
 }
 pub(crate) fn rt_receipt_word_value(ow: &mut crate::port::Cells, et: &mut crate::port::Cells, w: i32) -> i32 {
-    return up_receipt_value(ow_get(ow, w, hd_conf()), ow_get(ow, w, hd_tlen()), rt_receipt_word_alpha(ow, et, w));
+    return up_receipt_value(ow_confidence(ow, w), ow_get(ow, w, hd_tlen()), rt_receipt_word_alpha(ow, et, w));
 }
 pub(crate) fn rt_receipt_selected_count(ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, scr: &mut crate::port::Cells, n: i32, word: i32, first: i32) -> i32 {
     let mut k: i32 = 0;
@@ -1857,7 +1858,7 @@ pub(crate) fn rt_receipt_safe(runs: &mut crate::port::Cells, ol: &mut crate::por
                 c = c0;
                 count = 0;
                 while c < cn {
-                    if (ow_get(ow, c, hd_conf()) >= rt_receipt_min()) && (rt_receipt_word_equal(ow, et, w, c) == 1) {
+                    if (ow_confidence(ow, c) >= rt_receipt_min()) && (rt_receipt_word_equal(ow, et, w, c) == 1) {
                         count += 1;
                     }
                     c += 1;

@@ -5,38 +5,39 @@ package planprobe
 
 import (
 	"emon/evidence"
+	"emon/oil"
 	"emon/plan"
 	"emon/port"
 )
 
 func ppWords(an *port.Cells, at int32, page int32, view int32, request int32, psm int32, views *port.Cells, oruns *port.Cells, owords *port.Cells, etext *port.Cells) int32 {
 	// One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
-	var nw int32 = plan.AnOcrCount(an, at)
+	var nw int32 = oil.OilNwords(an, at)
 	var run int32 = evidence.OrNew(oruns, page, view)
 	var w0 int32 = evidence.OwCount(owords)
-	var w int32 = plan.AnOcrFirst(an, at)
+	var w int32 = oil.OilFirstWord(an, at)
 	var i int32 = 0
 	evidence.OrSet(oruns, run, evidence.OrfRequest(), request)
 	evidence.OrSet(oruns, run, evidence.OrfPsm(), psm)
 	for i < nw {
-		var px int32 = plan.AwGet(an, w, plan.AwX())
-		var py int32 = plan.AwGet(an, w, plan.AwY())
-		var pw int32 = plan.AwGet(an, w, plan.AwW())
-		var ph int32 = plan.AwGet(an, w, plan.AwH())
+		var px int32 = port.CellsAt(an, w+0)
+		var py int32 = port.CellsAt(an, w+1)
+		var pw int32 = port.CellsAt(an, w+2)
+		var ph int32 = port.CellsAt(an, w+3)
 		var x0 int32 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
 		var y0 int32 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
 		var x1 int32 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
 		var y1 int32 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
 		var ts int32 = evidence.EtxLen(etext)
-		var nc int32 = plan.AwGet(an, w, plan.AwLen())
+		var nc int32 = oil.OilWlen(an, at, w)
 		var k int32 = 0
 		for k < nc {
-			evidence.EtxAppendCp(etext, plan.AwCp(an, w, k))
+			evidence.EtxAppendCp(etext, oil.OilWcp(an, at, w, k))
 			k += 1
 		}
-		var ow int32 = evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, plan.AwGet(an, w, plan.AwConf()), -1)
+		var ow int32 = evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, port.CellsAt(an, w+5), -1)
 		evidence.OwSet(owords, ow, evidence.OwfRun(), run)
-		w = plan.AwNext(an, w)
+		w = oil.OilWordNext(an, at, w)
 		i += 1
 	}
 	evidence.OrSet(oruns, run, evidence.OrfWfirst(), w0)

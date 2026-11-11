@@ -1293,7 +1293,7 @@ func SxDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 				if inone == 1 {
 					nin += 1
 				}
-				csum += evidence.OwGet(owords, wi, evidence.HdConf())
+				csum += evidence.OwConfidence(owords, wi)
 				j += 1
 			}
 			if nin == cnt {

@@ -24,7 +24,7 @@ const x10 = (c) => Math.round((c ?? 0) * 10);
 
 /** tesseract.js's `blocks` of one recognition as the `ocr.js` result (not exported since P11.4, D542: it was a helper for a test, and no test used it). */
 function resultOf(blocks, { wantSymbols, lang, blockType }) {
-  const out = { orientation: { orient: 0, writingDirection: 0, textlineOrder: 2, deskew: 0 }, blocks: [], lines: [], words: [] };
+  const out = { inferred: 8192, blocks: [], lines: [], words: [] };
   let par = -1;
   (blocks || []).forEach((b, bi) => {
     out.blocks.push({ box: box(b.bbox), orient: 0, writingDirection: 0, textlineOrder: 2 });
@@ -35,7 +35,7 @@ function resultOf(blocks, { wantSymbols, lang, blockType }) {
         const bl = l.baseline || {};
         out.lines.push({
           box: box(l.bbox),
-          baseline: [bl.x0 ?? 0, bl.y0 ?? 0, bl.x1 ?? 0, bl.y1 ?? 0],
+          baseline: [bl.x0, bl.y0, bl.x1, bl.y1].every(Number.isFinite) ? [bl.x0, bl.y0, bl.x1, bl.y1] : undefined,
           block: bi,
           paragraph: par,
           type: blockType(b.blocktype),
@@ -43,7 +43,7 @@ function resultOf(blocks, { wantSymbols, lang, blockType }) {
         for (const w of l.words || []) {
           const text = (w.text || '').trim();
           if (!text) continue;
-          const word = { box: box(w.bbox), conf: x10(w.confidence), line: li, block: bi, text, flags: 0, lang, pointSize: -1, dict: false, numeric: false };
+          const word = { box: box(w.bbox), conf: x10(w.confidence), line: li, block: bi, text, lang };
           if (wantSymbols) {
             word.symbols = (w.symbols || []).map((s) => ({ box: box(s.bbox), conf: x10(s.confidence), text: s.text || '', alts: [] }));
             // the symbols must spell the word, as the engine's own do

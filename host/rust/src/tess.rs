@@ -534,37 +534,34 @@ impl Tess {
         // the page's own orientation, direction, order and deskew are the first block's (as the page iterator reports them
         // at its start); each block's own are in the block table
         let (orient, wdir, tlo, deskew) = blocks.first().map(|b| (b.orient, b.wdir, b.tlo, b.deskew)).unwrap_or((0, 0, 0, 0));
-        let (bw, bh) = binary.as_ref().map(|(w, h, _)| (*w, *h)).unwrap_or((0, 0));
-        let at = emon::plan::an_ocr(&mut c, id);
-        for w in &words {
-            let wd = emon::plan::an_ocr_word(&mut c, at, w.bx[0], w.bx[1], w.bx[2], w.bx[3], w.conf, w.line, w.block);
-            for cp in &w.text {
-                emon::plan::an_ocr_cp(&mut c, wd, *cp);
-            }
-        }
-        emon::ocr::ox_begin(&mut c, orient, wdir, tlo, deskew, osd, script, sconf, oconf, lines.len() as i32, blocks.len() as i32, has_binary as i32, bw, bh);
-        for l in &lines {
-            emon::ocr::ox_line(&mut c, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.base[0], l.base[1], l.base[2], l.base[3], l.block, l.par, l.btype, -1, -1, -1);
-        }
+        let at = emon::oil::oil_tess_begin(&mut c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, has_binary as i32);
+        let mut observed = Cells::new();
+        for ch in version().chars() { cells_push(&mut observed, ch as i32); }
+        let observed_len = cells_len(&observed);
+        emon::oil::oil_observed(&mut c, at, &mut observed, 0, observed_len);
         for b in &blocks {
-            emon::ocr::ox_block(&mut c, b.bx[0], b.bx[1], b.bx[2], b.bx[3], b.orient, b.wdir, b.tlo);
+            emon::oil::oil_block(&mut c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, lines.iter().find(|l| l.block == blocks.iter().position(|v| std::ptr::eq(v, b)).unwrap() as i32).map(|l| l.btype).unwrap_or(0));
+        }
+        for l in &lines {
+            emon::oil::oil_line(&mut c, at, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.block, words.iter().filter(|w| w.line == lines.iter().position(|v| std::ptr::eq(v, l)).unwrap() as i32).count() as i32, -1, l.par, l.base[0], l.base[1], l.base[2], l.base[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         for w in &words {
-            let wx = emon::ocr::ox_word(&mut c, w.flags, w.lang, w.psize, w.dflags);
+            let wx = emon::oil::oil_word(&mut c, at, w.bx[0], w.bx[1], w.bx[2], w.bx[3], w.line, w.conf, w.lang, w.flags, w.psize, 1 | ((w.dflags & 1) << 1));
+            for cp in &w.text { emon::oil::oil_word_cp(&mut c, at, wx, *cp); }
             for s in &w.syms {
-                let sx = emon::ocr::ox_sym(&mut c, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf);
+                let sx = emon::oil::oil_sym(&mut c, at, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf);
                 for cp in &s.cps {
-                    emon::ocr::ox_sym_cp(&mut c, sx, *cp);
+                    emon::oil::oil_sym_cp(&mut c, sx, *cp);
                 }
                 for a in &s.alts {
-                    let ax = emon::ocr::ox_alt(&mut c, sx, a.conf);
+                    let ax = emon::oil::oil_alt(&mut c, at, sx, a.conf);
                     for cp in &a.cps {
-                        emon::ocr::ox_alt_cp(&mut c, ax, *cp);
+                        emon::oil::oil_alt_cp(&mut c, ax, *cp);
                     }
                 }
             }
         }
-        emon::plan::an_ocr_end(&mut c, at);
+        emon::oil::oil_end(&mut c, at);
         let bitmap = match (keep_binary, binary) {
             (true, Some((w, h, px))) if !px.is_empty() => Some(std::sync::Arc::new(Bitmap::from_bytes(w, h, 1, &px))),
             _ => None,

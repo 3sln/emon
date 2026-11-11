@@ -1025,7 +1025,7 @@ pub fn sm_px_keep(et: &mut crate::port::Cells, owords: &mut crate::port::Cells, 
     // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
     let ts: i32 = ow_get(owords, row, hd_tstart());
     let tl: i32 = ow_get(owords, row, hd_tlen());
-    let conf: i32 = ow_get(owords, row, hd_conf());
+    let conf: i32 = ow_confidence(owords, row);
     let mut k: i32 = 0;
     let mut n: i32 = 0;
     while k < tl {

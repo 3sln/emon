@@ -7,32 +7,32 @@ package emon;
 public final class Planprobe {
     public static int ppWords(emon.Port.Cells an, int at, int page, int view, int request, int psm, emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells owords, emon.Port.Cells etext) {
         // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
-        int nw = Plan.anOcrCount(an, at);
+        int nw = Oil.oilNwords(an, at);
         int run = Evidence.orNew(oruns, page, view);
         int w0 = Evidence.owCount(owords);
-        int w = Plan.anOcrFirst(an, at);
+        int w = Oil.oilFirstWord(an, at);
         int i = 0;
         Evidence.orSet(oruns, run, Evidence.orfRequest(), request);
         Evidence.orSet(oruns, run, Evidence.orfPsm(), psm);
         while (i < nw) {
-            int px = Plan.awGet(an, w, Plan.awX());
-            int py = Plan.awGet(an, w, Plan.awY());
-            int pw = Plan.awGet(an, w, Plan.awW());
-            int ph = Plan.awGet(an, w, Plan.awH());
+            int px = emon.Port.cellsAt(an, w + 0);
+            int py = emon.Port.cellsAt(an, w + 1);
+            int pw = emon.Port.cellsAt(an, w + 2);
+            int ph = emon.Port.cellsAt(an, w + 3);
             int x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
             int y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
             int x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
             int y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
             int ts = Evidence.etxLen(etext);
-            int nc = Plan.awGet(an, w, Plan.awLen());
+            int nc = Oil.oilWlen(an, at, w);
             int k = 0;
             while (k < nc) {
-                Evidence.etxAppendCp(etext, Plan.awCp(an, w, k));
+                Evidence.etxAppendCp(etext, Oil.oilWcp(an, at, w, k));
                 k += 1;
             }
-            int ow = Evidence.owNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, Plan.awGet(an, w, Plan.awConf()), -1);
+            int ow = Evidence.owNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, emon.Port.cellsAt(an, w + 5), -1);
             Evidence.owSet(owords, ow, Evidence.owfRun(), run);
-            w = Plan.awNext(an, w);
+            w = Oil.oilWordNext(an, at, w);
             i += 1;
         }
         Evidence.orSet(oruns, run, Evidence.orfWfirst(), w0);

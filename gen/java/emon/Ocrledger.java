@@ -180,7 +180,7 @@ public final class Ocrledger {
         if (missing == 0) {
             return 0;
         }
-        lr = Model.ledgerAdd(ledger, Model.drOcrUnrepresented(), Evidence.owGet(owords, w, Evidence.hdPage()), Evidence.owGet(owords, w, Evidence.hdX0()), Evidence.owGet(owords, w, Evidence.hdY0()), Evidence.owGet(owords, w, Evidence.hdX1()), Evidence.owGet(owords, w, Evidence.hdY1()), Evidence.owGet(owords, w, Evidence.hdConf()), Model.srOcr());
+        lr = Model.ledgerAdd(ledger, Model.drOcrUnrepresented(), Evidence.owGet(owords, w, Evidence.hdPage()), Evidence.owGet(owords, w, Evidence.hdX0()), Evidence.owGet(owords, w, Evidence.hdY0()), Evidence.owGet(owords, w, Evidence.hdX1()), Evidence.owGet(owords, w, Evidence.hdY1()), Evidence.owConfidence(owords, w), Model.srOcr());
         ts = emon.Port.cellsLen(text);
         i = 0;
         while (i < emon.Port.cellsLen(norm)) {

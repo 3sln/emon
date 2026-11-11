@@ -78,6 +78,7 @@ import (
 
 	"emon/ocr"
 	"emon/ocrport"
+	"emon/oil"
 	"emon/plan"
 	"emon/port"
 )
@@ -494,42 +495,54 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		orient, wdir, tlo, deskew = blocks[0].orient, blocks[0].wdir, blocks[0].tlo, blocks[0].desk
 	}
 	c := port.NewCells()
-	at := plan.AnOcr(c, id)
-	for i := range words {
-		w := &words[i]
-		wd := plan.AnOcrWord(c, at, w.bx[0], w.bx[1], w.bx[2], w.bx[3], w.conf, w.line, w.block)
-		for _, cp := range w.text {
-			plan.AnOcrCp(c, wd, cp)
-		}
-	}
 	bin := int32(0)
 	if hasBinary {
 		bin = 1
 	}
-	ocr.OxBegin(c, orient, wdir, tlo, deskew, osd, script, sconf, oconf, int32(len(lines)), int32(len(blocks)), bin, binW, binH)
-	for _, l := range lines {
-		ocr.OxLine(c, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.base[0], l.base[1], l.base[2], l.base[3], l.block, l.par, l.btype, -1, -1, -1)
+	at := oil.OilTessBegin(c, id, psm, flags&1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, bin)
+	observed := port.NewCells()
+	for _, ch := range tessVersion() {
+		port.CellsPush(observed, int32(ch))
 	}
-	for _, b := range blocks {
-		ocr.OxBlock(c, b.bx[0], b.bx[1], b.bx[2], b.bx[3], b.orient, b.wdir, b.tlo)
+	oil.OilObserved(c, at, observed, 0, port.CellsLen(observed))
+	for bi, b := range blocks {
+		kind := int32(0)
+		for _, l := range lines {
+			if l.block == int32(bi) {
+				kind = l.btype
+				break
+			}
+		}
+		oil.OilBlock(c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, kind)
 	}
-	for i := range words {
-		w := &words[i]
-		wx := ocr.OxWord(c, w.flags, w.lang, w.psize, w.dflags)
+	for li, l := range lines {
+		nw := int32(0)
+		for _, w := range words {
+			if w.line == int32(li) {
+				nw++
+			}
+		}
+		oil.OilLine(c, at, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.block, nw, -1, l.par, l.base[0], l.base[1], l.base[2], l.base[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	}
+	for _, w := range words {
+		wx := oil.OilWord(c, at, w.bx[0], w.bx[1], w.bx[2], w.bx[3], w.line, w.conf, w.lang, w.flags, w.psize, 1|((w.dflags&1)<<1))
+		for _, cp := range w.text {
+			oil.OilWordCp(c, at, wx, cp)
+		}
 		for _, s := range w.syms {
-			sx := ocr.OxSym(c, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf)
+			sx := oil.OilSym(c, at, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf)
 			for _, cp := range s.cps {
-				ocr.OxSymCp(c, sx, cp)
+				oil.OilSymCp(c, sx, cp)
 			}
 			for _, a := range s.alts {
-				ax := ocr.OxAlt(c, sx, a.conf)
+				ax := oil.OilAlt(c, at, sx, a.conf)
 				for _, cp := range a.cps {
-					ocr.OxAltCp(c, ax, cp)
+					oil.OilAltCp(c, ax, cp)
 				}
 			}
 		}
 	}
-	plan.AnOcrEnd(c, at)
+	oil.OilEnd(c, at)
 	ans := port.PlanAnswer{Rec: cellsVec(c)}
 	if keepBinary && hasBinary && len(binPx) > 0 {
 		ans.Bitmap = port.BitmapFromBytes(binW, binH, 1, binPx)

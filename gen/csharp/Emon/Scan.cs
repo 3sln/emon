@@ -438,12 +438,11 @@ public static class Scan {
         // its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction
         // are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to
         // centipoints.
-        int nl = Ocr.OxNlines(an, ext);
-        int nb = Ocr.OxNblocks(an, ext);
-        int orient0 = Ocr.OxOrient(an, ext);
-        int wdir0 = Ocr.OxWdir(an, ext);
+        int nl = Oil.OilNlines(an, ext);
+        int nb = Oil.OilNblocks(an, ext);
+        int orient0 = Oil.OilOrient(an, ext);
+        int wdir0 = Oil.OilWdir(an, ext);
         int k = 0;
-        int l = 0;
         int px = 0;
         int py = 0;
         int pw = 0;
@@ -474,35 +473,34 @@ public static class Scan {
         int tx1 = 0;
         int ty1 = 0;
         while (k < nl) {
-            l = Ocr.OxLineAt(an, ext, k);
-            px = emon.Port.CellsAt(an, l);
-            py = emon.Port.CellsAt(an, l + 1);
-            pw = emon.Port.CellsAt(an, l + 2);
-            ph = emon.Port.CellsAt(an, l + 3);
+            px = Oil.OilLineField(an, ext, k, 0);
+            py = Oil.OilLineField(an, ext, k, 1);
+            pw = Oil.OilLineField(an, ext, k, 2);
+            ph = Oil.OilLineField(an, ext, k, 3);
             x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
             y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
             x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
             y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
-            bx0 = Evidence.VwPxToCpt(views, view, 0, emon.Port.CellsAt(an, l + 4), emon.Port.CellsAt(an, l + 5));
-            by0 = Evidence.VwPxToCpt(views, view, 1, emon.Port.CellsAt(an, l + 4), emon.Port.CellsAt(an, l + 5));
-            bx1 = Evidence.VwPxToCpt(views, view, 0, emon.Port.CellsAt(an, l + 6), emon.Port.CellsAt(an, l + 7));
-            by1 = Evidence.VwPxToCpt(views, view, 1, emon.Port.CellsAt(an, l + 6), emon.Port.CellsAt(an, l + 7));
-            if (((emon.Port.CellsAt(an, l + 4) == -1) && (emon.Port.CellsAt(an, l + 5) == -1)) && ((emon.Port.CellsAt(an, l + 6) == -1) && (emon.Port.CellsAt(an, l + 7) == -1))) {
+            bx0 = Evidence.VwPxToCpt(views, view, 0, Oil.OilLineField(an, ext, k, 4), Oil.OilLineField(an, ext, k, 5));
+            by0 = Evidence.VwPxToCpt(views, view, 1, Oil.OilLineField(an, ext, k, 4), Oil.OilLineField(an, ext, k, 5));
+            bx1 = Evidence.VwPxToCpt(views, view, 0, Oil.OilLineField(an, ext, k, 6), Oil.OilLineField(an, ext, k, 7));
+            by1 = Evidence.VwPxToCpt(views, view, 1, Oil.OilLineField(an, ext, k, 6), Oil.OilLineField(an, ext, k, 7));
+            if (((Oil.OilLineField(an, ext, k, 4) == -1) && (Oil.OilLineField(an, ext, k, 5) == -1)) && ((Oil.OilLineField(an, ext, k, 6) == -1) && (Oil.OilLineField(an, ext, k, 7) == -1))) {
                 bx0 = x0;
                 by0 = y1;
                 bx1 = x1;
                 by1 = y1;
             }
-            blk = emon.Port.CellsAt(an, l + 8);
-            par = emon.Port.CellsAt(an, l + 9);
-            bty = emon.Port.CellsAt(an, l + 10);
+            blk = Oil.OilLineField(an, ext, k, 8);
+            par = Oil.OilLineField(an, ext, k, 9);
+            bty = Oil.OilLineField(an, ext, k, 10);
             orient = orient0;
             wdir = wdir0;
             bl = -1;
             if ((blk >= 0) && (blk < nb)) {
-                bl = Ocr.OxBlockAt(an, ext, blk);
-                orient = emon.Port.CellsAt(an, bl + 4);
-                wdir = emon.Port.CellsAt(an, bl + 5);
+                bl = Oil.OilBlockAt(an, ext, blk);
+                orient = Oil.OilBlockField(an, ext, blk, 0);
+                wdir = Oil.OilBlockField(an, ext, blk, 1);
             }
             fresh = 0;
             if ((k == 0) || (blk != curblk)) {
@@ -548,9 +546,9 @@ public static class Scan {
             Evidence.OlSet(olines, lrow, Evidence.OlfPy(), py);
             Evidence.OlSet(olines, lrow, Evidence.OlfPw(), pw);
             Evidence.OlSet(olines, lrow, Evidence.OlfPh(), ph);
-            Evidence.OlSet(olines, lrow, Evidence.OlfXheight(), ScCptLen(views, view, emon.Port.CellsAt(an, l + 11)));
-            Evidence.OlSet(olines, lrow, Evidence.OlfAsc(), ScCptLen(views, view, emon.Port.CellsAt(an, l + 12)));
-            Evidence.OlSet(olines, lrow, Evidence.OlfDesc(), ScCptLen(views, view, emon.Port.CellsAt(an, l + 13)));
+            Evidence.OlSet(olines, lrow, Evidence.OlfXheight(), ScCptLen(views, view, Oil.OilLineField(an, ext, k, 11)));
+            Evidence.OlSet(olines, lrow, Evidence.OlfAsc(), ScCptLen(views, view, Oil.OilLineField(an, ext, k, 12)));
+            Evidence.OlSet(olines, lrow, Evidence.OlfDesc(), ScCptLen(views, view, Oil.OilLineField(an, ext, k, 13)));
             bcnt = Evidence.ObGet(oblocks, prow, Evidence.ObfCount());
             Evidence.ObSet(oblocks, prow, Evidence.ObfCount(), bcnt + 1);
             k += 1;
@@ -561,11 +559,11 @@ public static class Scan {
         // The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an
         // olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated
         // after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.
-        int nw = Plan.AnOcrCount(an, at);
+        int nw = Oil.OilNwords(an, at);
         int nl = 0;
         int wdir = 0;
         int tlen = 0;
-        int w = Plan.AnOcrFirst(an, at);
+        int w = Oil.OilFirstWord(an, at);
         int wx = -1;
         int i = 0;
         int px = 0;
@@ -604,20 +602,20 @@ public static class Scan {
         int sy = 0;
         int ps = 0;
         if (ext >= 0) {
-            wx = Ocr.OxFirstWord(an, ext);
-            nl = Ocr.OxNlines(an, ext);
-            wdir = Ocr.OxWdir(an, ext);
+            wx = Oil.OilFirstWord(an, ext);
+            nl = Oil.OilNlines(an, ext);
+            wdir = Oil.OilWdir(an, ext);
         }
         while (i < nw) {
-            px = Plan.AwGet(an, w, Plan.AwX());
-            py = Plan.AwGet(an, w, Plan.AwY());
-            pw = Plan.AwGet(an, w, Plan.AwW());
-            ph = Plan.AwGet(an, w, Plan.AwH());
+            px = emon.Port.CellsAt(an, w + 0);
+            py = emon.Port.CellsAt(an, w + 1);
+            pw = emon.Port.CellsAt(an, w + 2);
+            ph = emon.Port.CellsAt(an, w + 3);
             x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
             y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
             x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
             y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
-            ln = Plan.AwGet(an, w, Plan.AwLine());
+            ln = emon.Port.CellsAt(an, w + 4);
             lrow = -1;
             bx0 = x0;
             by0 = y1;
@@ -635,14 +633,15 @@ public static class Scan {
                 by1 = Evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx1);
             }
             ts = Evidence.EtxLen(etext);
-            nc = Plan.AwGet(an, w, Plan.AwLen());
+            nc = Oil.OilWlen(an, at, w);
             k = 0;
             while (k < nc) {
-                Evidence.EtxAppendCp(etext, Plan.AwCp(an, w, k));
+                Evidence.EtxAppendCp(etext, Oil.OilWcp(an, at, w, k));
                 k += 1;
             }
-            ow = Evidence.OwNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.EvAngle(bx1 - bx0, by1 - by0), ScLd(wdir), ts, nc, lrow, Plan.AwGet(an, w, Plan.AwConf()), -1);
+            ow = Evidence.OwNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.EvAngle(bx1 - bx0, by1 - by0), ScLd(wdir), ts, nc, lrow, emon.Port.CellsAt(an, w + 5), -1);
             Evidence.OwSet(owords, ow, Evidence.OwfRun(), run);
+            Evidence.OwSet(owords, ow, Evidence.OwfPcal(), Ocalib.OcalWord(Oil.OilGet(an, at, Oil.OhEngine()), 0, emon.Port.CellsAt(an, w + 5)));
             Evidence.OwSet(owords, ow, Evidence.OwfPx(), px);
             Evidence.OwSet(owords, ow, Evidence.OwfPy(), py);
             Evidence.OwSet(owords, ow, Evidence.OwfPw(), pw);
@@ -655,20 +654,20 @@ public static class Scan {
                 Evidence.OlSet(olines, lrow, Evidence.LhCount(), lcnt + 1);
             }
             if (wx >= 0) {
-                Evidence.OwSet(owords, ow, Evidence.OwfStyle(), Ocr.OxWflags(an, wx));
-                Evidence.OwSet(owords, ow, Evidence.OwfLang(), Ocr.OxWlang(an, wx));
-                ps = Ocr.OxWpsize(an, wx);
+                Evidence.OwSet(owords, ow, Evidence.OwfStyle(), Oil.OilWflags(an, ext, wx));
+                Evidence.OwSet(owords, ow, Evidence.OwfLang(), Oil.OilWlang(an, ext, wx));
+                ps = Oil.OilWpsize(an, ext, wx);
                 if (ps > 1000000) {
                     ps = 1000000;
                 }
                 if (ps >= 0) {
                     Evidence.OwSet(owords, ow, Evidence.OwfPsize(), ps * 100);
                 }
-                Evidence.OwSet(owords, ow, Evidence.OwfFlags(), Ocr.OxWdflags(an, wx));
-                ns = Ocr.OxNsym(an, wx);
+                Evidence.OwSet(owords, ow, Evidence.OwfFlags(), Oil.OilWordFlags(an, ext, wx));
+                ns = Oil.OilNsym(an, ext, wx);
                 Evidence.OwSet(owords, ow, Evidence.OwfSfirst(), Evidence.OsCount(osyms));
                 Evidence.OwSet(owords, ow, Evidence.OwfScount(), ns);
-                sy = Ocr.OxFirstSym(an, wx);
+                sy = Oil.OilFirstSym(an, ext, wx);
                 j = 0;
                 while (j < ns) {
                     ncp = emon.Port.CellsAt(an, sy + 5);
@@ -701,7 +700,7 @@ public static class Scan {
                     Evidence.OsSet(osyms, sym, Evidence.OsfPw(), pw);
                     Evidence.OsSet(osyms, sym, Evidence.OsfPh(), ph);
                     a0 = Evidence.OaCount(oalts);
-                    a = Ocr.OxSymAlts(an, sy);
+                    a = Oil.OilSymAlts(an, sy);
                     m = 0;
                     while (m < nalt) {
                         acp = emon.Port.CellsAt(an, a);
@@ -714,17 +713,17 @@ public static class Scan {
                             }
                             Evidence.OaAdd(oalts, sym, ts, acp, emon.Port.CellsAt(an, a + 1));
                         }
-                        a = Ocr.OxAltNext(an, a);
+                        a = Oil.OilAltNext(an, a);
                         m += 1;
                     }
                     Evidence.OsSet(osyms, sym, Evidence.OsfAfirst(), a0);
                     Evidence.OsSet(osyms, sym, Evidence.OsfAcount(), Evidence.OaCount(oalts) - a0);
-                    sy = Ocr.OxSymNext(an, sy);
+                    sy = Oil.OilSymNext(an, sy);
                     j += 1;
                 }
-                wx = Ocr.OxWordNext(an, wx);
+                wx = Oil.OilWordNext(an, ext, wx);
             }
-            w = Plan.AwNext(an, w);
+            w = Oil.OilWordNext(an, at, w);
             i += 1;
         }
         return nw;
@@ -733,7 +732,7 @@ public static class Scan {
         // One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the
         // stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request
         // named (0 none: the run records no language, D038). Answers the run's row.
-        int ext = Ocr.OxFind(an, at);
+        int ext = Oil.OilFind(an, at);
         int run = Evidence.OrNew(oruns, page, view);
         int b0 = Evidence.ObCount(oblocks);
         int l0 = Evidence.OlCount(olines);
@@ -744,11 +743,15 @@ public static class Scan {
         int w = 0;
         int rotmed = 0;
         int ts = 0;
+        Evidence.OrSet(oruns, run, Evidence.OrfEngine(), Oil.OilGet(an, at, Oil.OhEngine()));
+        Evidence.OrSet(oruns, run, Evidence.OrfCaps(), Oil.OilGet(an, at, Oil.OhCaps()));
+        Evidence.OrSet(oruns, run, Evidence.OrfNative(), Oil.OilGet(an, at, Oil.OhNative()));
+        Evidence.OrSet(oruns, run, Evidence.OrfEix(), Oil.OilGet(an, at, Oil.OhEngine()) - 1);
         Evidence.OrSet(oruns, run, Evidence.OrfRequest(), request);
         Evidence.OrSet(oruns, run, Evidence.OrfRound(), 1);
         Evidence.OrSet(oruns, run, Evidence.OrfPass(), 1);
         Evidence.OrSet(oruns, run, Evidence.OrfPsm(), 3);
-        Evidence.OrSet(oruns, run, Evidence.OrfFlags(), Ocr.OcfSymbols() + Ocr.OcfOsd());
+        Evidence.OrSet(oruns, run, Evidence.OrfFlags(), (Ocr.OcfSymbols() + Ocr.OcfOsd()) + ((256 * Oil.OilGet(an, at, Oil.OhLg())) + (65536 * Oil.OilGet(an, at, Oil.OhCk()))));
         if (lang > 0) {
             ts = Evidence.EtxLen(etext);
             Evidence.EtxAppendCp(etext, lang / 65536);
@@ -758,14 +761,14 @@ public static class Scan {
             Evidence.OrSet(oruns, run, Evidence.OrfLanglen(), 3);
         }
         if (ext >= 0) {
-            Evidence.OrSet(oruns, run, Evidence.OrfOrient(), Ocr.OxOrient(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfWdir(), Ocr.OxWdir(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfLorder(), Ocr.OxTlorder(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfDeskew(), Ocr.OxDeskew(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfOsd(), Ocr.OxOsd(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfScript(), Ocr.OxScript(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfSconf(), Ocr.OxSconf(an, ext));
-            Evidence.OrSet(oruns, run, Evidence.OrfOconf(), Ocr.OxOconf(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOrient(), Oil.OilOrient(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfWdir(), Oil.OilWdir(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfLorder(), Oil.OilTlorder(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfDeskew(), Oil.OilDeskew(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOsd(), Oil.OilOsd(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfScript(), Oil.OilScript(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfSconf(), Oil.OilSconf(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOconf(), Oil.OilOconf(an, ext));
             nl = ScEvLines(an, ext, view, run, page, views, oblocks, olines);
         }
         nw = ScEvWords(an, at, ext, view, run, page, l0, views, etext, olines, owords, osyms, oalts);
@@ -1511,12 +1514,12 @@ public static class Scan {
         int mh = 0;
         int hh = 0;
         int edge = 0;
-        if (Evidence.OwGet(owords, xw, Evidence.HdConf()) < ScXtraConf()) {
+        if (Evidence.OwConfidence(owords, xw) < ScXtraConf()) {
             return 0;
         }
         int letters = ScCountClass(etext, Evidence.OwGet(owords, xw, Evidence.HdTstart()), Evidence.OwGet(owords, xw, Evidence.HdTlen()), 0);
         if (letters > 0) {
-            if ((letters < ScXtraTextLetters()) || (Evidence.OwGet(owords, xw, Evidence.HdConf()) < ScXtraTextConf())) {
+            if ((letters < ScXtraTextLetters()) || (Evidence.OwConfidence(owords, xw) < ScXtraTextConf())) {
                 return 0;
             }
         }
@@ -1548,7 +1551,7 @@ public static class Scan {
             return 0;
         }
         if ((mh > 0) && ((2 * (Evidence.OwGet(owords, xw, Evidence.HdY1()) - Evidence.OwGet(owords, xw, Evidence.HdY0()))) < mh)) {
-            if (Evidence.OwGet(owords, xw, Evidence.HdConf()) < ScXtraSmallConf()) {
+            if (Evidence.OwConfidence(owords, xw) < ScXtraSmallConf()) {
                 return 0;
             }
         }
@@ -1912,7 +1915,7 @@ public static class Scan {
         // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
         int ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
         int n = Evidence.OwGet(owords, w, Evidence.HdTlen());
-        int conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+        int conf = Evidence.OwConfidence(owords, w);
         int f = 0;
         int c = 0;
         if (ScAdmitWord(conf, floor) == 0) {
@@ -1976,7 +1979,7 @@ public static class Scan {
         }
         while (i < m) {
             w = emon.Port.CellsAt(scr, fb + i);
-            conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+            conf = Evidence.OwConfidence(owords, w);
             sum += conf;
             tch += Evidence.OwGet(owords, w, Evidence.HdTlen());
             if (conf > mx) {
@@ -2040,7 +2043,7 @@ public static class Scan {
         int changed = 0;
         while (i < m) {
             w = emon.Port.CellsAt(scr, fb + i);
-            conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+            conf = Evidence.OwConfidence(owords, w);
             sum += conf;
             tch += Evidence.OwGet(owords, w, Evidence.HdTlen());
             if (conf > mx) {
@@ -2054,7 +2057,7 @@ public static class Scan {
             w = emon.Port.CellsAt(scr, fb + i);
             ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
             n = Evidence.OwGet(owords, w, Evidence.HdTlen());
-            conf = Evidence.OwGet(owords, w, Evidence.HdConf());
+            conf = Evidence.OwConfidence(owords, w);
             f = ScDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.CellsAt(scr, ScAdmitFloor()));
             emon.Port.CellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.CellsSet(scr, fb + ((3 * fm) + i), 0);
@@ -2311,7 +2314,7 @@ public static class Scan {
                             gap = nx0 - ox1;
                         }
                     }
-                    r = Evidence.WdNew(words, page, Evidence.OwGet(owords, wi, Evidence.HdX0()), Evidence.OwGet(owords, wi, Evidence.HdY0()), Evidence.OwGet(owords, wi, Evidence.HdX1()), Evidence.OwGet(owords, wi, Evidence.HdY1()), Evidence.OwGet(owords, wi, Evidence.HdBx0()), Evidence.OwGet(owords, wi, Evidence.HdBy0()), Evidence.OwGet(owords, wi, Evidence.HdBx1()), Evidence.OwGet(owords, wi, Evidence.HdBy1()), rot, dir, Evidence.OwGet(owords, wi, Evidence.HdTstart()), Evidence.OwGet(owords, wi, Evidence.HdTlen()), lnx, Evidence.OwGet(owords, wi, Evidence.HdConf()), -1);
+                    r = Evidence.WdNew(words, page, Evidence.OwGet(owords, wi, Evidence.HdX0()), Evidence.OwGet(owords, wi, Evidence.HdY0()), Evidence.OwGet(owords, wi, Evidence.HdX1()), Evidence.OwGet(owords, wi, Evidence.HdY1()), Evidence.OwGet(owords, wi, Evidence.HdBx0()), Evidence.OwGet(owords, wi, Evidence.HdBy0()), Evidence.OwGet(owords, wi, Evidence.HdBx1()), Evidence.OwGet(owords, wi, Evidence.HdBy1()), rot, dir, Evidence.OwGet(owords, wi, Evidence.HdTstart()), Evidence.OwGet(owords, wi, Evidence.HdTlen()), lnx, Evidence.OwConfidence(owords, wi), -1);
                     Evidence.WdSet(words, r, Evidence.WfStyle(), Evidence.OwGet(owords, wi, Evidence.OwfStyle()));
                     Evidence.WdSet(words, r, Evidence.WfSize(), size);
                     Evidence.WdSet(words, r, Evidence.WfFont(), -1);
@@ -2529,7 +2532,7 @@ public static class Scan {
                             gap = nx0 - ox1;
                         }
                     }
-                    r = Evidence.WdNew(words, page, Evidence.OwGet(owords, wi, Evidence.HdX0()), Evidence.OwGet(owords, wi, Evidence.HdY0()), Evidence.OwGet(owords, wi, Evidence.HdX1()), Evidence.OwGet(owords, wi, Evidence.HdY1()), Evidence.OwGet(owords, wi, Evidence.HdBx0()), Evidence.OwGet(owords, wi, Evidence.HdBy0()), Evidence.OwGet(owords, wi, Evidence.HdBx1()), Evidence.OwGet(owords, wi, Evidence.HdBy1()), rot, dir, ts, tl, lnx, Evidence.OwGet(owords, wi, Evidence.HdConf()), -1);
+                    r = Evidence.WdNew(words, page, Evidence.OwGet(owords, wi, Evidence.HdX0()), Evidence.OwGet(owords, wi, Evidence.HdY0()), Evidence.OwGet(owords, wi, Evidence.HdX1()), Evidence.OwGet(owords, wi, Evidence.HdY1()), Evidence.OwGet(owords, wi, Evidence.HdBx0()), Evidence.OwGet(owords, wi, Evidence.HdBy0()), Evidence.OwGet(owords, wi, Evidence.HdBx1()), Evidence.OwGet(owords, wi, Evidence.HdBy1()), rot, dir, ts, tl, lnx, Evidence.OwConfidence(owords, wi), -1);
                     Evidence.WdSet(words, r, Evidence.WfStyle(), Evidence.OwGet(owords, wi, Evidence.OwfStyle()));
                     Evidence.WdSet(words, r, Evidence.WfSize(), size);
                     Evidence.WdSet(words, r, Evidence.WfFont(), -1);
@@ -2640,12 +2643,14 @@ public static class Scan {
         // run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
         int cropx = Evidence.VwGet(views, vdec, Evidence.VwfCropx());
         int cropy = Evidence.VwGet(views, vdec, Evidence.VwfCropy());
+        int binaryWidth = Evidence.VwGet(views, vdec, Evidence.VwfPxw());
+        int binaryHeight = Evidence.VwGet(views, vdec, Evidence.VwfPxh());
         int run = ScAnswer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-        int ext = Ocr.OxFind(an, at);
+        int ext = Oil.OilFind(an, at);
         int vbin = -1;
         if (ext >= 0) {
-            if (Ocr.OxBinary(an, ext) == 1) {
-                vbin = Evidence.VwNew(views, page, Evidence.VkEngineBinary(), request, vdec, Ocr.OxBw(an, ext), Ocr.OxBh(an, ext), dpi100, Plan.LayFull(), -1, 0, 0, cropx, cropy, 1);
+            if (Oil.OilBinary(an, ext) == 1) {
+                vbin = Evidence.VwNew(views, page, Evidence.VkEngineBinary(), request, vdec, binaryWidth, binaryHeight, dpi100, Plan.LayFull(), -1, 0, 0, cropx, cropy, 1);
                 Evidence.OrSet(oruns, run, Evidence.OrfBview(), vbin);
             }
         }
@@ -3001,7 +3006,7 @@ public static class Scan {
         int ts = Evidence.OwGet(owords, w, Evidence.HdTstart());
         int n = Evidence.OwGet(owords, w, Evidence.HdTlen());
         int flags = Evidence.OwGet(owords, w, Evidence.OwfFlags());
-        int score = Evidence.OwGet(owords, w, Evidence.HdConf());
+        int score = Evidence.OwConfidence(owords, w);
         int i = 0;
         int latin = 0;
         int rejected = 0;

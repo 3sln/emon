@@ -1227,7 +1227,7 @@ public static class Ofuse {
         while (i < n) {
             w = emon.Port.CellsAt(seq, i);
             emon.Port.CellsPush(refs, w);
-            sum += (long) Evidence.OwGet(words, w, Evidence.HdConf());
+            sum += (long) Evidence.OwConfidence(words, w);
             if ((Evidence.OwGet(words, w, Evidence.OwfFlags()) & Evidence.OeDictionary()) == 0) {
                 dictionary = 0;
             }
@@ -1344,7 +1344,7 @@ public static class Ofuse {
                 sum = (long) 0;
                 j = 0;
                 while (j < emon.Port.CellsLen(seq)) {
-                    sum += (long) Evidence.OwGet(words, emon.Port.CellsAt(seq, j), Evidence.HdConf());
+                    sum += (long) Evidence.OwConfidence(words, emon.Port.CellsAt(seq, j));
                     j += 1;
                 }
                 confidence = (int) (sum / ((long) emon.Port.CellsLen(seq)));
@@ -1420,7 +1420,7 @@ public static class Ofuse {
         int seen = 0;
         int covered = 0;
         while (i < (first + n)) {
-            if (Evidence.OwGet(words, i, Evidence.HdConf()) < OfInsertConf()) {
+            if (Evidence.OwConfidence(words, i) < OfInsertConf()) {
                 return 0;
             }
             if (OfEligible(words, text, i) == 0) {
@@ -1503,7 +1503,7 @@ public static class Ofuse {
                             v = emon.Port.CellsAt(sel, j);
                             run = Evidence.OwGet(words, v, Evidence.OwfRun());
                             if ((run >= 0) && (run < Evidence.OrCount(runs))) {
-                                if (((Evidence.OrGet(runs, run, Evidence.OrfRequest()) % 256) != 23) && ((Evidence.OwGet(words, w, Evidence.HdPage()) == Evidence.OwGet(words, v, Evidence.HdPage())) && (Evidence.OwGet(words, v, Evidence.HdConf()) >= OfInsertConf()))) {
+                                if (((Evidence.OrGet(runs, run, Evidence.OrfRequest()) % 256) != 23) && ((Evidence.OwGet(words, w, Evidence.HdPage()) == Evidence.OwGet(words, v, Evidence.HdPage())) && (Evidence.OwConfidence(words, v) >= OfInsertConf()))) {
                                     if ((OfWordSame(words, text, w, v, 0) == 1) && (Evidence.EvOverlapSmall(Evidence.OwGet(words, w, Evidence.HdX0()), Evidence.OwGet(words, w, Evidence.HdY0()), Evidence.OwGet(words, w, Evidence.HdX1()), Evidence.OwGet(words, w, Evidence.HdY1()), Evidence.OwGet(words, v, Evidence.HdX0()), Evidence.OwGet(words, v, Evidence.HdY0()), Evidence.OwGet(words, v, Evidence.HdX1()), Evidence.OwGet(words, v, Evidence.HdY1())) == 0)) {
                                         found = 1;
                                     }

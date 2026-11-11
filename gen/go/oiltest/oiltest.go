@@ -122,3 +122,52 @@ func TestInvalidNativeMaskCannotStartARecord(emonT *testing.T) {
 	port.AssertEq(emonT, oil.OilBegin(c, 13, oil.OenTesseract(), 0, oil.OcBaseline(), 1, 1, 0, 0), -1, "native must be a subset")
 	port.AssertEq(emonT, port.CellsLen(c), 0, "a rejected header did not change the answer stream")
 }
+
+func TestAbsentRowmetricsNeverReadFollowingColumns(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenTesseract(), oil.OcAngle(), 0, 1, 1, 0, 0)
+	oil.OilLine(c, at, 1, 2, 3, 4, -1, 0, -1, -1, 0, 0, 0, 0, 777, 888, 999, 0, 0, 0, 0, 0, 0, 0, 0, -321)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilLineField(c, at, 0, 11), -1, "absent xheight does not read angle")
+	port.AssertEq(emonT, oil.OilLineField(c, at, 0, 12), -1, "absent ascender does not read past row")
+	port.AssertEq(emonT, oil.OilLineField(c, at, 0, 13), -1, "absent descender does not read past record")
+}
+
+func TestPpDoesNotClaimOsd(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenPpocr(), 0, 0, 1, 1, 0, 1)
+	port.AssertEq(emonT, oil.OilHeaderField(c, at, 9, oil.OcOrient(), -1), -1, "no orientation measurement")
+	port.AssertEq(emonT, oil.OilHeaderField(c, at, 10, oil.OcOrient(), -1), -1, "no orientation confidence")
+}
+
+func TestBrowserMissingBaselineIsAbsent(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenTesseract(), 0, 0, 1, 1, 0, 0)
+	oil.OilLine(c, at, 1, 2, 30, 4, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilLineField(c, at, 0, 4), -1, "baseline zero is not a measurement")
+	port.AssertEq(emonT, oil.OilHeaderField(c, at, 9, oil.OcOrient(), -1), -1, "browser never ran OSD")
+}
+
+func TestFlatOilRoundtripsAndRejectsOverflowingTextBeforeWriting(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var flat *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var bad *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 7, oil.OenTesseract(), 0, 0, 1, 1, 0, 0)
+	var i int32 = 4
+	oil.OilLine(c, at, 1, 2, 3, 4, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var word int32 = oil.OilWord(c, at, 1, 2, 3, 4, 0, 900, 0, 0, -1, 0)
+	oil.OilWordCp(c, at, word, 65)
+	oil.OilEnd(c, at)
+	for i < port.CellsLen(c) {
+		port.CellsPush(flat, port.CellsAt(c, i))
+		i += 1
+	}
+	port.AssertEq(emonT, oil.OilFlat(flat, 77, out), 0, "canonical flat OIL accepted")
+	port.AssertEq(emonT, port.CellsAt(out, 2), 77, "request id belongs to the envelope")
+	port.AssertEq(emonT, port.CellsLen(out), port.CellsLen(c), "flat roundtrip length")
+	port.CellsSet(flat, word+3, 2147483647)
+	port.AssertEq(emonT, oil.OilFlat(flat, 77, bad), -1, "text count cannot overflow cursor")
+	port.AssertEq(emonT, port.CellsLen(bad), 0, "malformed form writes nothing")
+}

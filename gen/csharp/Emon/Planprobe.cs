@@ -7,32 +7,32 @@ namespace emon;
 public static class Planprobe {
     internal static int PpWords(emon.Port.Cells an, int at, int page, int view, int request, int psm, emon.Port.Cells views, emon.Port.Cells oruns, emon.Port.Cells owords, emon.Port.Cells etext) {
         // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
-        int nw = Plan.AnOcrCount(an, at);
+        int nw = Oil.OilNwords(an, at);
         int run = Evidence.OrNew(oruns, page, view);
         int w0 = Evidence.OwCount(owords);
-        int w = Plan.AnOcrFirst(an, at);
+        int w = Oil.OilFirstWord(an, at);
         int i = 0;
         Evidence.OrSet(oruns, run, Evidence.OrfRequest(), request);
         Evidence.OrSet(oruns, run, Evidence.OrfPsm(), psm);
         while (i < nw) {
-            int px = Plan.AwGet(an, w, Plan.AwX());
-            int py = Plan.AwGet(an, w, Plan.AwY());
-            int pw = Plan.AwGet(an, w, Plan.AwW());
-            int ph = Plan.AwGet(an, w, Plan.AwH());
+            int px = emon.Port.CellsAt(an, w + 0);
+            int py = emon.Port.CellsAt(an, w + 1);
+            int pw = emon.Port.CellsAt(an, w + 2);
+            int ph = emon.Port.CellsAt(an, w + 3);
             int x0 = Evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph);
             int y0 = Evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph);
             int x1 = Evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph);
             int y1 = Evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph);
             int ts = Evidence.EtxLen(etext);
-            int nc = Plan.AwGet(an, w, Plan.AwLen());
+            int nc = Oil.OilWlen(an, at, w);
             int k = 0;
             while (k < nc) {
-                Evidence.EtxAppendCp(etext, Plan.AwCp(an, w, k));
+                Evidence.EtxAppendCp(etext, Oil.OilWcp(an, at, w, k));
                 k += 1;
             }
-            int ow = Evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, Plan.AwGet(an, w, Plan.AwConf()), -1);
+            int ow = Evidence.OwNew(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, emon.Port.CellsAt(an, w + 5), -1);
             Evidence.OwSet(owords, ow, Evidence.OwfRun(), run);
-            w = Plan.AwNext(an, w);
+            w = Oil.OilWordNext(an, at, w);
             i += 1;
         }
         Evidence.OrSet(oruns, run, Evidence.OrfWfirst(), w0);

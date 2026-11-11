@@ -106,8 +106,8 @@ pub fn oa_line_fuse(page: i32, rtp: &mut crate::port::Cells, mut runs: &mut crat
                                 }
                                 b = j;
                                 hits += 1;
-                                if ow_get(words, w, hd_conf()) < conf {
-                                    conf = ow_get(words, w, hd_conf());
+                                if ow_confidence(words, w) < conf {
+                                    conf = ow_confidence(words, w);
                                 }
                             }
                             j += 1;
@@ -158,7 +158,7 @@ pub fn oa_line_fuse(page: i32, rtp: &mut crate::port::Cells, mut runs: &mut crat
                             if (crate::port::cells_at(im, 0) == 0) || (crate::port::cells_at(im, 1) != 2) {
                                 compact = 0;
                             }
-                            margin = ow_get(words, cw, hd_conf()) - conf;
+                            margin = ow_confidence(words, cw) - conf;
                             if (compact == 1) && ((malformed == 1) && (oa_line_merge_meta(joined, 0, rawlen, start, cn, hits, 1, margin, im, cm) == 1)) {
                                 j = a;
                                 while j <= b {
@@ -229,12 +229,12 @@ pub fn oa_line_fuse(page: i32, rtp: &mut crate::port::Cells, mut runs: &mut crat
                             conf = 1000;
                             q = j;
                             while q < (j + hits) {
-                                if ow_get(words, first + q, hd_conf()) < conf {
-                                    conf = ow_get(words, first + q, hd_conf());
+                                if ow_confidence(words, first + q) < conf {
+                                    conf = ow_confidence(words, first + q);
                                 }
                                 q += 1;
                             }
-                            crate::port::cells_push(oaz, ow_get(words, cw, hd_conf()) - conf);
+                            crate::port::cells_push(oaz, ow_confidence(words, cw) - conf);
                             crate::port::cells_push(oaz, l);
                             crate::port::cells_push(oaz, tr);
                             crate::port::cells_push(oaz, 1);

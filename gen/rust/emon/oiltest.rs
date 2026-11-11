@@ -117,3 +117,52 @@ fn test_invalid_native_mask_cannot_start_a_record() {
     crate::testport::assert_eq(oil_begin(c, 13, oen_tesseract(), 0, oc_baseline(), 1, 1, 0, 0), -1, "native must be a subset");
     crate::testport::assert_eq(crate::port::cells_len(c), 0, "a rejected header did not change the answer stream");
 }
+#[test]
+fn test_absent_rowmetrics_never_read_following_columns() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_tesseract(), oc_angle(), 0, 1, 1, 0, 0);
+    oil_line(c, at, 1, 2, 3, 4, -1, 0, -1, -1, 0, 0, 0, 0, 777, 888, 999, 0, 0, 0, 0, 0, 0, 0, 0, -321);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_line_field(c, at, 0, 11), -1, "absent xheight does not read angle");
+    crate::testport::assert_eq(oil_line_field(c, at, 0, 12), -1, "absent ascender does not read past row");
+    crate::testport::assert_eq(oil_line_field(c, at, 0, 13), -1, "absent descender does not read past record");
+}
+#[test]
+fn test_pp_does_not_claim_osd() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 1, 0, 1);
+    crate::testport::assert_eq(oil_header_field(c, at, 9, oc_orient(), -1), -1, "no orientation measurement");
+    crate::testport::assert_eq(oil_header_field(c, at, 10, oc_orient(), -1), -1, "no orientation confidence");
+}
+#[test]
+fn test_browser_missing_baseline_is_absent() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_tesseract(), 0, 0, 1, 1, 0, 0);
+    oil_line(c, at, 1, 2, 30, 4, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_line_field(c, at, 0, 4), -1, "baseline zero is not a measurement");
+    crate::testport::assert_eq(oil_header_field(c, at, 9, oc_orient(), -1), -1, "browser never ran OSD");
+}
+#[test]
+fn test_flat_oil_roundtrips_and_rejects_overflowing_text_before_writing() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let bad: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 7, oen_tesseract(), 0, 0, 1, 1, 0, 0);
+    let mut i: i32 = 4;
+    oil_line(c, at, 1, 2, 3, 4, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let word: i32 = oil_word(c, at, 1, 2, 3, 4, 0, 900, 0, 0, -1, 0);
+    oil_word_cp(c, at, word, 65);
+    oil_end(c, at);
+    while i < crate::port::cells_len(c) {
+        crate::port::cells_push(flat, crate::port::cells_at(c, i));
+        i += 1;
+    }
+    crate::testport::assert_eq(oil_flat(flat, 77, out), 0, "canonical flat OIL accepted");
+    crate::testport::assert_eq(crate::port::cells_at(out, 2), 77, "request id belongs to the envelope");
+    crate::testport::assert_eq(crate::port::cells_len(out), crate::port::cells_len(c), "flat roundtrip length");
+    crate::port::cells_set(flat, word + 3, 2147483647);
+    crate::testport::assert_eq(oil_flat(flat, 77, bad), -1, "text count cannot overflow cursor");
+    crate::testport::assert_eq(crate::port::cells_len(bad), 0, "malformed form writes nothing");
+}

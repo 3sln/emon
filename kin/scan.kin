@@ -36,17 +36,14 @@
 ;;     `xo-angle` is): a scan that was fed in 1 degree off is a page of upright lines, and one line that is not is still not.
 ;; The evidence rows (`olines`, `owords`) keep the engine's own numbers; only the pipeline's rows are normalised.
 (ns emon.scan
-  (:require [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
+  (:require [emon.oil :refer [oh-caps oh-ck oh-engine oh-lg oh-native oil-alt oil-alt-next oil-binary oil-block oil-block-at oil-block-field oil-deskew oil-find oil-first-sym oil-first-word oil-get oil-line oil-line-field oil-nblocks oil-nlines oil-nsym oil-nwords oil-oconf oil-orient oil-osd oil-sconf oil-script oil-sym oil-sym-alts oil-sym-next oil-tlorder oil-wcp oil-wdir oil-wflags oil-wlang oil-wlen oil-word oil-word-flags oil-word-next oil-wpsize]]
+            [emon.ocalib :refer [ocal-word]]
+            [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.pdfsrc :refer [ps-len ps-u8 ps-missed]]
-            [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end rq-decode an-find an-ok an-arg an-status
-                               an-ocr-count an-ocr-first aw-get aw-cp aw-next aw-x aw-y aw-w aw-h aw-conf
-                               aw-line aw-block aw-len flt-dct us-requests us-done lay-full]]
-            [emon.ocr :refer [ocf-symbols ocf-osd ocf-dpi-unit ox-find ox-line-at ox-first-word ox-block-at
-                              ox-wflags ox-wlang ox-wpsize ox-wdflags ox-nsym ox-first-sym ox-sym-next
-                              ox-sym-alts ox-alt-next ox-word-next ox-nlines ox-nblocks ox-orient ox-wdir
-                              ox-tlorder ox-deskew ox-osd ox-script ox-sconf ox-oconf ox-binary ox-bw ox-bh]]
-            [emon.evidence :refer [ep-new ep-set vw-new vw-get vwf-cropx vwf-cropy vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
+            [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end rq-decode an-find an-ok an-arg an-status flt-dct us-requests us-done lay-full]]
+            [emon.ocr :refer [ocf-symbols ocf-osd ocf-dpi-unit]]
+            [emon.evidence :refer [ow-confidence ep-new ep-set vw-new vw-get vwf-cropx vwf-cropy vwf-pxw vwf-pxh vw-px-to-cpt vw-box-to-cpt im-new im-get im-count
                                    or-new or-get or-set or-count op-re-rotated ob-new ob-set ob-get ob-count
                                    ol-new ol-set ol-get ol-count ow-new ow-set ow-get ow-count
                                    os-new os-set os-get os-count oa-add oa-count wd-new wd-set wd-get wd-count
@@ -60,12 +57,12 @@
                                    rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick
                                    co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 cf-conf cf-ink ik-get ikf-role ir-body
                                    oe-garbage oe-rule-ghost oe-corrected
-                                   orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
+                                   orf-engine orf-eix orf-caps orf-native orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
                                    orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
                                    orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
                                    obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
                                    olf-retry-gap olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
-                                   owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
+                                   owf-pcal owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
                                    owf-px owf-py owf-pw owf-ph owf-from
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
                                    wf-style wf-size wf-font wf-gap wf-wbreak wf-src lf-src lf-order ls-revised ls-frame
@@ -307,12 +304,11 @@
   (comment "its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction")
   (comment "are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to")
   (comment "centipoints.")
-  (let [^I32 nl (ox-nlines an ext)
-        ^I32 nb (ox-nblocks an ext)
-        ^I32 orient0 (ox-orient an ext)
-        ^I32 wdir0 (ox-wdir an ext)
+  (let [^I32 nl (oil-nlines an ext)
+        ^I32 nb (oil-nblocks an ext)
+        ^I32 orient0 (oil-orient an ext)
+        ^I32 wdir0 (oil-wdir an ext)
         ^:mut ^I32 k 0
-        ^:mut ^I32 l 0
         ^:mut ^I32 px 0
         ^:mut ^I32 py 0
         ^:mut ^I32 pw 0
@@ -343,35 +339,34 @@
         ^:mut ^I32 tx1 0
         ^:mut ^I32 ty1 0]
     (while (< k nl)
-      (do (set l (ox-line-at an ext k))
-          (set px (cells-at an l))
-          (set py (cells-at an (+ l 1)))
-          (set pw (cells-at an (+ l 2)))
-          (set ph (cells-at an (+ l 3)))
+      (do (set px (oil-line-field an ext k 0))
+          (set py (oil-line-field an ext k 1))
+          (set pw (oil-line-field an ext k 2))
+          (set ph (oil-line-field an ext k 3))
           (set x0 (vw-box-to-cpt views view 0 px py pw ph))
           (set y0 (vw-box-to-cpt views view 1 px py pw ph))
           (set x1 (vw-box-to-cpt views view 2 px py pw ph))
           (set y1 (vw-box-to-cpt views view 3 px py pw ph))
-          (set bx0 (vw-px-to-cpt views view 0 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
-          (set by0 (vw-px-to-cpt views view 1 (cells-at an (+ l 4)) (cells-at an (+ l 5))))
-          (set bx1 (vw-px-to-cpt views view 0 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
-          (set by1 (vw-px-to-cpt views view 1 (cells-at an (+ l 6)) (cells-at an (+ l 7))))
+          (set bx0 (vw-px-to-cpt views view 0 (oil-line-field an ext k 4) (oil-line-field an ext k 5)))
+          (set by0 (vw-px-to-cpt views view 1 (oil-line-field an ext k 4) (oil-line-field an ext k 5)))
+          (set bx1 (vw-px-to-cpt views view 0 (oil-line-field an ext k 6) (oil-line-field an ext k 7)))
+          (set by1 (vw-px-to-cpt views view 1 (oil-line-field an ext k 6) (oil-line-field an ext k 7)))
           ;; All four -1 cells mean an absent engine baseline. Use the same
           ;; box-bottom layout fallback as an answer without an extension;
           ;; the recorded answer keeps its unknown sentinel unchanged.
-          (if (and (and (== (cells-at an (+ l 4)) -1) (== (cells-at an (+ l 5)) -1))
-                   (and (== (cells-at an (+ l 6)) -1) (== (cells-at an (+ l 7)) -1)))
+          (if (and (and (== (oil-line-field an ext k 4) -1) (== (oil-line-field an ext k 5) -1))
+                   (and (== (oil-line-field an ext k 6) -1) (== (oil-line-field an ext k 7) -1)))
             (do (set bx0 x0) (set by0 y1) (set bx1 x1) (set by1 y1)))
-          (set blk (cells-at an (+ l 8)))
-          (set par (cells-at an (+ l 9)))
-          (set bty (cells-at an (+ l 10)))
+          (set blk (oil-line-field an ext k 8))
+          (set par (oil-line-field an ext k 9))
+          (set bty (oil-line-field an ext k 10))
           (set orient orient0)
           (set wdir wdir0)
           (set bl -1)
           (if (and (>= blk 0) (< blk nb))
-            (do (set bl (ox-block-at an ext blk))
-                (set orient (cells-at an (+ bl 4)))
-                (set wdir (cells-at an (+ bl 5)))))
+            (do (set bl (oil-block-at an ext blk))
+                (set orient (oil-block-field an ext blk 0))
+                (set wdir (oil-block-field an ext blk 1))))
           (set fresh 0)
           (if (or (== k 0) (!= blk curblk))
             (do (set tx0 x0)
@@ -411,9 +406,9 @@
           (ol-set olines lrow (olf-py) py)
           (ol-set olines lrow (olf-pw) pw)
           (ol-set olines lrow (olf-ph) ph)
-          (ol-set olines lrow (olf-xheight) (sc-cpt-len views view (cells-at an (+ l 11))))
-          (ol-set olines lrow (olf-asc) (sc-cpt-len views view (cells-at an (+ l 12))))
-          (ol-set olines lrow (olf-desc) (sc-cpt-len views view (cells-at an (+ l 13))))
+          (ol-set olines lrow (olf-xheight) (sc-cpt-len views view (oil-line-field an ext k 11)))
+          (ol-set olines lrow (olf-asc) (sc-cpt-len views view (oil-line-field an ext k 12)))
+          (ol-set olines lrow (olf-desc) (sc-cpt-len views view (oil-line-field an ext k 13)))
           (set bcnt (ob-get oblocks prow (obf-count)))
           (ob-set oblocks prow (obf-count) (+ bcnt 1))
           (set k (+ k 1))))
@@ -425,11 +420,11 @@
   (comment "The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an")
   (comment "olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated")
   (comment "after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.")
-  (let [^I32 nw (an-ocr-count an at)
+  (let [^I32 nw (oil-nwords an at)
         ^:mut ^I32 nl 0
         ^:mut ^I32 wdir 0
         ^:mut ^I32 tlen 0
-        ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 w (oil-first-word an at)
         ^:mut ^I32 wx -1
         ^:mut ^I32 i 0
         ^:mut ^I32 px 0
@@ -468,19 +463,19 @@
         ^:mut ^I32 sy 0
         ^:mut ^I32 ps 0]
     (if (>= ext 0)
-      (do (set wx (ox-first-word an ext))
-          (set nl (ox-nlines an ext))
-          (set wdir (ox-wdir an ext))))
+      (do (set wx (oil-first-word an ext))
+          (set nl (oil-nlines an ext))
+          (set wdir (oil-wdir an ext))))
     (while (< i nw)
-      (do (set px (aw-get an w (aw-x)))
-          (set py (aw-get an w (aw-y)))
-          (set pw (aw-get an w (aw-w)))
-          (set ph (aw-get an w (aw-h)))
+      (do (set px (cells-at an (+ w 0)))
+          (set py (cells-at an (+ w 1)))
+          (set pw (cells-at an (+ w 2)))
+          (set ph (cells-at an (+ w 3)))
           (set x0 (vw-box-to-cpt views view 0 px py pw ph))
           (set y0 (vw-box-to-cpt views view 1 px py pw ph))
           (set x1 (vw-box-to-cpt views view 2 px py pw ph))
           (set y1 (vw-box-to-cpt views view 3 px py pw ph))
-          (set ln (aw-get an w (aw-line)))
+          (set ln (cells-at an (+ w 4)))
           (set lrow -1)
           (set bx0 x0)
           (set by0 y1)
@@ -497,15 +492,16 @@
                 (set by0 (ev-baseline-at lx0 ly0 lx1 ly1 bx0))
                 (set by1 (ev-baseline-at lx0 ly0 lx1 ly1 bx1))))
           (set ts (etx-len etext))
-          (set nc (aw-get an w (aw-len)))
+          (set nc (oil-wlen an at w))
           (set k 0)
           (while (< k nc)
-            (do (etx-append-cp etext (aw-cp an w k))
+            (do (etx-append-cp etext (oil-wcp an at w k))
                 (set k (+ k 1))))
           (set ow (ow-new owords page x0 y0 x1 y1 bx0 by0 bx1 by1
                           (ev-angle (- bx1 bx0) (- by1 by0)) (sc-ld wdir) ts nc lrow
-                          (aw-get an w (aw-conf)) -1))
+                          (cells-at an (+ w 5)) -1))
           (ow-set owords ow (owf-run) run)
+          (ow-set owords ow (owf-pcal) (ocal-word (oil-get an at (oh-engine)) 0 (cells-at an (+ w 5))))
           (ow-set owords ow (owf-px) px)
           (ow-set owords ow (owf-py) py)
           (ow-set owords ow (owf-pw) pw)
@@ -515,16 +511,16 @@
                 (if (== lcnt 0) (ol-set olines lrow (lh-first) ow))
                 (ol-set olines lrow (lh-count) (+ lcnt 1))))
           (if (>= wx 0)
-            (do (ow-set owords ow (owf-style) (ox-wflags an wx))
-                (ow-set owords ow (owf-lang) (ox-wlang an wx))
-                (set ps (ox-wpsize an wx))
+            (do (ow-set owords ow (owf-style) (oil-wflags an ext wx))
+                (ow-set owords ow (owf-lang) (oil-wlang an ext wx))
+                (set ps (oil-wpsize an ext wx))
                 (if (> ps 1000000) (set ps 1000000))
                 (if (>= ps 0) (ow-set owords ow (owf-psize) (* ps 100)))
-                (ow-set owords ow (owf-flags) (ox-wdflags an wx))
-                (set ns (ox-nsym an wx))
+                (ow-set owords ow (owf-flags) (oil-word-flags an ext wx))
+                (set ns (oil-nsym an ext wx))
                 (ow-set owords ow (owf-sfirst) (os-count osyms))
                 (ow-set owords ow (owf-scount) ns)
-                (set sy (ox-first-sym an wx))
+                (set sy (oil-first-sym an ext wx))
                 (set j 0)
                 (while (< j ns)
                   (do (set ncp (cells-at an (+ sy 5)))
@@ -555,7 +551,7 @@
                       (os-set osyms sym (osf-pw) pw)
                       (os-set osyms sym (osf-ph) ph)
                       (set a0 (oa-count oalts))
-                      (set a (ox-sym-alts an sy))
+                      (set a (oil-sym-alts an sy))
                       (set m 0)
                       (while (< m nalt)
                         (do (set acp (cells-at an a))
@@ -566,14 +562,14 @@
                                     (do (etx-append-cp etext (cells-at an (+ (+ a 2) k)))
                                         (set k (+ k 1))))
                                   (oa-add oalts sym ts acp (cells-at an (+ a 1)))))
-                            (set a (ox-alt-next an a))
+                            (set a (oil-alt-next an a))
                             (set m (+ m 1))))
                       (os-set osyms sym (osf-afirst) a0)
                       (os-set osyms sym (osf-acount) (- (oa-count oalts) a0))
-                      (set sy (ox-sym-next an sy))
+                      (set sy (oil-sym-next an sy))
                       (set j (+ j 1))))
-                (set wx (ox-word-next an wx))))
-          (set w (aw-next an w))
+                (set wx (oil-word-next an ext wx))))
+          (set w (oil-word-next an at w))
           (set i (+ i 1))))
     (return nw)))
 
@@ -584,7 +580,7 @@
   (comment "One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the")
   (comment "stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request")
   (comment "named (0 none: the run records no language, D038). Answers the run's row.")
-  (let [^I32 ext (ox-find an at)
+  (let [^I32 ext (oil-find an at)
         ^I32 run (or-new oruns page view)
         ^I32 b0 (ob-count oblocks)
         ^I32 l0 (ol-count olines)
@@ -595,11 +591,16 @@
         ^:mut ^I32 w 0
         ^:mut ^I32 rotmed 0
         ^:mut ^I32 ts 0]
+    (or-set oruns run (orf-engine) (oil-get an at (oh-engine)))
+    (or-set oruns run (orf-caps) (oil-get an at (oh-caps)))
+    (or-set oruns run (orf-native) (oil-get an at (oh-native)))
+    (or-set oruns run (orf-eix) (- (oil-get an at (oh-engine)) 1))
     (or-set oruns run (orf-request) request)
     (or-set oruns run (orf-round) 1)
     (or-set oruns run (orf-pass) 1)
     (or-set oruns run (orf-psm) 3)
-    (or-set oruns run (orf-flags) (+ (ocf-symbols) (ocf-osd)))
+    (or-set oruns run (orf-flags) (+ (+ (ocf-symbols) (ocf-osd))
+                                     (+ (* 256 (oil-get an at (oh-lg))) (* 65536 (oil-get an at (oh-ck))))))
     (if (> lang 0)
       (do (set ts (etx-len etext))
           (etx-append-cp etext (quot lang 65536))
@@ -608,14 +609,14 @@
           (or-set oruns run (orf-lang) ts)
           (or-set oruns run (orf-langlen) 3)))
     (if (>= ext 0)
-      (do (or-set oruns run (orf-orient) (ox-orient an ext))
-          (or-set oruns run (orf-wdir) (ox-wdir an ext))
-          (or-set oruns run (orf-lorder) (ox-tlorder an ext))
-          (or-set oruns run (orf-deskew) (ox-deskew an ext))
-          (or-set oruns run (orf-osd) (ox-osd an ext))
-          (or-set oruns run (orf-script) (ox-script an ext))
-          (or-set oruns run (orf-sconf) (ox-sconf an ext))
-          (or-set oruns run (orf-oconf) (ox-oconf an ext))
+      (do (or-set oruns run (orf-orient) (oil-orient an ext))
+          (or-set oruns run (orf-wdir) (oil-wdir an ext))
+          (or-set oruns run (orf-lorder) (oil-tlorder an ext))
+          (or-set oruns run (orf-deskew) (oil-deskew an ext))
+          (or-set oruns run (orf-osd) (oil-osd an ext))
+          (or-set oruns run (orf-script) (oil-script an ext))
+          (or-set oruns run (orf-sconf) (oil-sconf an ext))
+          (or-set oruns run (orf-oconf) (oil-oconf an ext))
           (set nl (sc-ev-lines an ext view run page views oblocks olines))))
     (set nw (sc-ev-words an at ext view run page l0 views etext olines owords osyms oalts))
     (or-set oruns run (orf-bfirst) b0)
@@ -1124,10 +1125,10 @@
         ^:mut ^I32 mh 0
         ^:mut ^I32 hh 0
         ^:mut ^I32 edge 0]
-    (if (< (ow-get owords xw (hd-conf)) (sc-xtra-conf)) (return 0))
+    (if (< (ow-confidence owords xw) (sc-xtra-conf)) (return 0))
     (let [^I32 letters (sc-count-class etext (ow-get owords xw (hd-tstart)) (ow-get owords xw (hd-tlen)) 0)]
       (if (> letters 0)
-        (if (or (< letters (sc-xtra-text-letters)) (< (ow-get owords xw (hd-conf)) (sc-xtra-text-conf))) (return 0))))
+        (if (or (< letters (sc-xtra-text-letters)) (< (ow-confidence owords xw) (sc-xtra-text-conf))) (return 0))))
     (if (== (sc-implausible etext (ow-get owords xw (hd-tstart)) (ow-get owords xw (hd-tlen))) 1) (return 0))
     (while (< j cnt)
       (do (set hh (- (ow-get owords (+ w0 j) (hd-y1)) (ow-get owords (+ w0 j) (hd-y0))))
@@ -1142,7 +1143,7 @@
           (set j (+ j 1))))
     (if (and (> cnt 0) (<= xb edge)) (return 0))
     (if (and (> mh 0) (< (* 2 (- (ow-get owords xw (hd-y1)) (ow-get owords xw (hd-y0)))) mh))
-      (if (< (ow-get owords xw (hd-conf)) (sc-xtra-small-conf)) (return 0)))
+      (if (< (ow-confidence owords xw) (sc-xtra-small-conf)) (return 0)))
     (comment "A different first-pass line can already hold this ink (a table row split at its last column). Check the entire first-pass run in two dimensions, not just the partner line.")
     (if (and (> cnt 0) (!= (ow-get owords w0 (owf-run)) (ow-get owords xw (owf-run))))
       (do (set j 0)
@@ -1393,7 +1394,7 @@
   (comment "(`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.")
   (let [^I32 ts (ow-get owords w (hd-tstart))
         ^I32 n (ow-get owords w (hd-tlen))
-        ^I32 conf (ow-get owords w (hd-conf))
+        ^I32 conf (ow-confidence owords w)
         ^:mut ^I32 f 0
         ^:mut ^I32 c 0]
     (if (== (sc-admit-word conf floor) 0) (set f 1))
@@ -1433,7 +1434,7 @@
     (if (<= m 0) (return 0))
     (while (< i m)
       (do (set w (cells-at scr (+ fb i)))
-          (set conf (ow-get owords w (hd-conf)))
+          (set conf (ow-confidence owords w))
           (set sum (+ sum conf))
           (set tch (+ tch (ow-get owords w (hd-tlen))))
           (if (> conf mx) (set mx conf))
@@ -1486,7 +1487,7 @@
         ^:mut ^I32 changed 0]
     (while (< i m)
       (do (set w (cells-at scr (+ fb i)))
-          (set conf (ow-get owords w (hd-conf)))
+          (set conf (ow-confidence owords w))
           (set sum (+ sum conf))
           (set tch (+ tch (ow-get owords w (hd-tlen))))
           (if (> conf mx) (set mx conf))
@@ -1497,7 +1498,7 @@
       (do (set w (cells-at scr (+ fb i)))
           (set ts (ow-get owords w (hd-tstart)))
           (set n (ow-get owords w (hd-tlen)))
-          (set conf (ow-get owords w (hd-conf)))
+          (set conf (ow-confidence owords w))
           (set f (sc-drop-fate owords etext rules page m w lmean mx tch (cells-at scr (sc-admit-floor))))
           (cells-set scr (+ fb (+ (* 2 fm) i)) -1)
           (cells-set scr (+ fb (+ (* 3 fm) i)) 0)
@@ -1695,7 +1696,7 @@
                                      (ow-get owords wi (hd-bx1)) (ow-get owords wi (hd-by1))
                                      rot dir
                                      (ow-get owords wi (hd-tstart)) (ow-get owords wi (hd-tlen))
-                                     lnx (ow-get owords wi (hd-conf)) -1))
+                                     lnx (ow-confidence owords wi) -1))
                       (wd-set words r (wf-style) (ow-get owords wi (owf-style)))
                       (wd-set words r (wf-size) size)
                       (wd-set words r (wf-font) -1)
@@ -1883,7 +1884,7 @@
                                      (ow-get owords wi (hd-bx0)) (ow-get owords wi (hd-by0))
                                      (ow-get owords wi (hd-bx1)) (ow-get owords wi (hd-by1))
                                      rot dir ts tl
-                                     lnx (ow-get owords wi (hd-conf)) -1))
+                                     lnx (ow-confidence owords wi) -1))
                       (wd-set words r (wf-style) (ow-get owords wi (owf-style)))
                       (wd-set words r (wf-size) size)
                       (wd-set words r (wf-font) -1)
@@ -1977,12 +1978,14 @@
   (comment "run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.")
   (let [^I32 cropx (vw-get views vdec (vwf-cropx))
         ^I32 cropy (vw-get views vdec (vwf-cropy))
+        ^I32 binary-width (vw-get views vdec (vwf-pxw))
+        ^I32 binary-height (vw-get views vdec (vwf-pxh))
         ^I32 run (sc-answer an at page vdec request lang views epages etext oruns oblocks olines owords osyms oalts feats)
-        ^I32 ext (ox-find an at)
+        ^I32 ext (oil-find an at)
         ^:mut ^I32 vbin -1]
     (if (>= ext 0)
-      (if (== (ox-binary an ext) 1)
-        (do (set vbin (vw-new views page (vk-engine-binary) request vdec (ox-bw an ext) (ox-bh an ext) dpi100 (lay-full) -1 0 0 cropx cropy 1))
+      (if (== (oil-binary an ext) 1)
+        (do (set vbin (vw-new views page (vk-engine-binary) request vdec binary-width binary-height dpi100 (lay-full) -1 0 0 cropx cropy 1))
             (or-set oruns run (orf-bview) vbin))))
     (return run)))
 
@@ -2235,7 +2238,7 @@
   (let [^I32 ts (ow-get owords w (hd-tstart))
         ^I32 n (ow-get owords w (hd-tlen))
         ^I32 flags (ow-get owords w (owf-flags))
-        ^:mut ^I32 score (ow-get owords w (hd-conf))
+        ^:mut ^I32 score (ow-confidence owords w)
         ^:mut ^I32 i 0
         ^:mut ^I32 latin 0
         ^:mut ^I32 rejected 0

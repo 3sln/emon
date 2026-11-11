@@ -48,8 +48,8 @@ pub(crate) fn ap_put_run(mut t: &mut String, etext: &mut crate::port::Cells, ref
         ea = crate::port::cells_at(refs, (first + k) * 2);
         row = crate::port::cells_at(refs, ((first + k) * 2) + 1);
         if ea == ea_owords() {
-            ap_put_word(t, etext, owords, 28, row);
-            ap_put_box(t, owords, 28, row);
+            ap_put_word(t, etext, owords, 32, row);
+            ap_put_box(t, owords, 32, row);
         } else {
             ap_put_word(t, etext, words, 24, row);
             ap_put_box(t, words, 24, row);

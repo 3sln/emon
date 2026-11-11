@@ -1886,6 +1886,30 @@ public final class Evidence {
     public static int ekIdentity() {
         return 164;
     }
+    public static int ekEngine() {
+        return 165;
+    }
+    public static int ekEix() {
+        return 166;
+    }
+    public static int ekCaps() {
+        return 167;
+    }
+    public static int ekNative() {
+        return 168;
+    }
+    public static int ekPcal() {
+        return 169;
+    }
+    public static int ekProv() {
+        return 170;
+    }
+    public static int ekAgree() {
+        return 171;
+    }
+    public static int ekQfirst() {
+        return 173;
+    }
     public static int ekEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "emon-evidence");
@@ -2543,6 +2567,38 @@ public final class Evidence {
             emon.Port.textAscii(t, "identity");
             return 1;
         }
+        if (code == 165) {
+            emon.Port.textAscii(t, "engine");
+            return 1;
+        }
+        if (code == 166) {
+            emon.Port.textAscii(t, "eix");
+            return 1;
+        }
+        if (code == 167) {
+            emon.Port.textAscii(t, "caps");
+            return 1;
+        }
+        if (code == 168) {
+            emon.Port.textAscii(t, "native");
+            return 1;
+        }
+        if (code == 169) {
+            emon.Port.textAscii(t, "pcal");
+            return 1;
+        }
+        if (code == 170) {
+            emon.Port.textAscii(t, "prov");
+            return 1;
+        }
+        if (code == 171) {
+            emon.Port.textAscii(t, "agree");
+            return 1;
+        }
+        if (code == 173) {
+            emon.Port.textAscii(t, "qfirst");
+            return 1;
+        }
         return 0;
     }
     public static int xoConf() {
@@ -2990,16 +3046,16 @@ public final class Evidence {
         return 20;
     }
     public static int orStride() {
-        return 28;
+        return 32;
     }
     public static int obStride() {
         return 16;
     }
     public static int olStride() {
-        return 24;
+        return 28;
     }
     public static int owStride() {
-        return 28;
+        return 32;
     }
     public static int osStride() {
         return 20;
@@ -4236,6 +4292,10 @@ public final class Evidence {
         14, 22, 7, 131, 0, 0,
         14, 24, 7, 4, 0, 0,
         14, 26, 7, 3, 0, 0,
+        14, 28, 1, 165, 0, 0,
+        14, 29, 1, 166, 0, 0,
+        14, 30, 1, 167, 0, 0,
+        14, 31, 1, 168, 0, 0,
         15, 0, 1, 9, -2147483648, 0,
         15, 1, 3, 15, -2147483648, 0,
         15, 5, 8, 31, 0, 9,
@@ -4259,6 +4319,10 @@ public final class Evidence {
         16, 17, 2, 94, -1, 0,
         16, 18, 2, 95, -1, 0,
         16, 19, 10, 36, -2147483648, 0,
+        16, 24, 1, 170, 0, 0,
+        16, 25, 1, 171, 0, 0,
+        16, 26, 1, 39, 0, 0,
+        16, 27, 1, 173, -1, 0,
         17, 0, 1, 9, -2147483648, 0,
         17, 1, 3, 15, -2147483648, 0,
         17, 5, 4, 16, -2147483648, 0,
@@ -4276,6 +4340,10 @@ public final class Evidence {
         17, 22, 2, 136, -1, 0,
         17, 23, 10, 36, -2147483648, 0,
         17, 27, 14, 153, 0, 0,
+        17, 28, 1, 169, -1, 0,
+        17, 29, 1, 170, 0, 0,
+        17, 30, 1, 171, 0, 0,
+        17, 31, 1, 39, 0, 0,
         18, 0, 1, 9, -2147483648, 0,
         18, 1, 3, 15, -2147483648, 0,
         18, 5, 1, 10, -1, 0,
@@ -4364,21 +4432,21 @@ public final class Evidence {
         97, 15,
         112, 19,
         131, 16,
-        147, 21,
-        168, 10,
-        178, 13,
-        191, 17,
-        208, 9,
-        217, 3,
+        147, 25,
+        172, 10,
+        182, 17,
+        199, 21,
         220, 9,
-        229, 16,
-        245, 11,
-        256, 15,
-        271, 10
+        229, 3,
+        232, 9,
+        241, 16,
+        257, 11,
+        268, 15,
+        283, 10
     };
     public static final int[] EV_STRIDES = {
-        12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
-        28, 20, 4, 12, 24, 20, 24, 20
+        12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 32, 16, 28,
+        32, 20, 4, 12, 24, 20, 24, 20
     };
     public static final int[] EV_CK = {
         2, 7, 1, 6, 7, 5,
@@ -4801,25 +4869,25 @@ public final class Evidence {
         return r;
     }
     public static int orCount(emon.Port.Cells c) {
-        return evCount(c, 28);
+        return evCount(c, 32);
     }
     public static int orGet(emon.Port.Cells c, int i, int f) {
-        return evGet(c, 28, i, f);
+        return evGet(c, 32, i, f);
     }
     public static int orSet(emon.Port.Cells c, int i, int f, int v) {
-        return evSet(c, 28, i, f, v);
+        return evSet(c, 32, i, f, v);
     }
     public static int orNew(emon.Port.Cells c, int vPage, int vView) {
         // Append a row of oruns: page view; every other field is its default.
-        int r = evPush(c, 28);
-        evSet(c, 28, r, 0, vPage);
-        evSet(c, 28, r, 1, vView);
-        evSet(c, 28, r, 2, -1);
-        evSet(c, 28, r, 3, -1);
-        evSet(c, 28, r, 11, -1);
-        evSet(c, 28, r, 17, -1);
-        evSet(c, 28, r, 19, -1);
-        evSet(c, 28, r, 20, -1);
+        int r = evPush(c, 32);
+        evSet(c, 32, r, 0, vPage);
+        evSet(c, 32, r, 1, vView);
+        evSet(c, 32, r, 2, -1);
+        evSet(c, 32, r, 3, -1);
+        evSet(c, 32, r, 11, -1);
+        evSet(c, 32, r, 17, -1);
+        evSet(c, 32, r, 19, -1);
+        evSet(c, 32, r, 20, -1);
         return r;
     }
     public static int obCount(emon.Port.Cells c) {
@@ -4847,49 +4915,16 @@ public final class Evidence {
         return r;
     }
     public static int olCount(emon.Port.Cells c) {
-        return evCount(c, 24);
+        return evCount(c, 28);
     }
     public static int olGet(emon.Port.Cells c, int i, int f) {
-        return evGet(c, 24, i, f);
+        return evGet(c, 28, i, f);
     }
     public static int olSet(emon.Port.Cells c, int i, int f, int v) {
-        return evSet(c, 24, i, f, v);
+        return evSet(c, 28, i, f, v);
     }
     public static int olNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vFirst, int vCount) {
         // Append a row of olines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
-        int r = evPush(c, 24);
-        evSet(c, 24, r, 0, vPage);
-        evSet(c, 24, r, 1, vX0);
-        evSet(c, 24, r, 2, vY0);
-        evSet(c, 24, r, 3, vX1);
-        evSet(c, 24, r, 4, vY1);
-        evSet(c, 24, r, 5, vBx0);
-        evSet(c, 24, r, 6, vBy0);
-        evSet(c, 24, r, 7, vBx1);
-        evSet(c, 24, r, 8, vBy1);
-        evSet(c, 24, r, 9, vRot);
-        evSet(c, 24, r, 10, vDir);
-        evSet(c, 24, r, 11, vFirst);
-        evSet(c, 24, r, 12, vCount);
-        evSet(c, 24, r, 13, -1);
-        evSet(c, 24, r, 14, -1);
-        evSet(c, 24, r, 15, -1);
-        evSet(c, 24, r, 16, -1);
-        evSet(c, 24, r, 17, -1);
-        evSet(c, 24, r, 18, -1);
-        return r;
-    }
-    public static int owCount(emon.Port.Cells c) {
-        return evCount(c, 28);
-    }
-    public static int owGet(emon.Port.Cells c, int i, int f) {
-        return evGet(c, 28, i, f);
-    }
-    public static int owSet(emon.Port.Cells c, int i, int f, int v) {
-        return evSet(c, 28, i, f, v);
-    }
-    public static int owNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vTstart, int vTlen, int vLine, int vConf, int vFeat) {
-        // Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
         int r = evPush(c, 28);
         evSet(c, 28, r, 0, vPage);
         evSet(c, 28, r, 1, vX0);
@@ -4902,14 +4937,49 @@ public final class Evidence {
         evSet(c, 28, r, 8, vBy1);
         evSet(c, 28, r, 9, vRot);
         evSet(c, 28, r, 10, vDir);
-        evSet(c, 28, r, 11, vTstart);
-        evSet(c, 28, r, 12, vTlen);
-        evSet(c, 28, r, 13, vLine);
-        evSet(c, 28, r, 14, vConf);
-        evSet(c, 28, r, 15, vFeat);
+        evSet(c, 28, r, 11, vFirst);
+        evSet(c, 28, r, 12, vCount);
+        evSet(c, 28, r, 13, -1);
+        evSet(c, 28, r, 14, -1);
+        evSet(c, 28, r, 15, -1);
+        evSet(c, 28, r, 16, -1);
         evSet(c, 28, r, 17, -1);
         evSet(c, 28, r, 18, -1);
-        evSet(c, 28, r, 22, -1);
+        evSet(c, 28, r, 27, -1);
+        return r;
+    }
+    public static int owCount(emon.Port.Cells c) {
+        return evCount(c, 32);
+    }
+    public static int owGet(emon.Port.Cells c, int i, int f) {
+        return evGet(c, 32, i, f);
+    }
+    public static int owSet(emon.Port.Cells c, int i, int f, int v) {
+        return evSet(c, 32, i, f, v);
+    }
+    public static int owNew(emon.Port.Cells c, int vPage, int vX0, int vY0, int vX1, int vY1, int vBx0, int vBy0, int vBx1, int vBy1, int vRot, int vDir, int vTstart, int vTlen, int vLine, int vConf, int vFeat) {
+        // Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+        int r = evPush(c, 32);
+        evSet(c, 32, r, 0, vPage);
+        evSet(c, 32, r, 1, vX0);
+        evSet(c, 32, r, 2, vY0);
+        evSet(c, 32, r, 3, vX1);
+        evSet(c, 32, r, 4, vY1);
+        evSet(c, 32, r, 5, vBx0);
+        evSet(c, 32, r, 6, vBy0);
+        evSet(c, 32, r, 7, vBx1);
+        evSet(c, 32, r, 8, vBy1);
+        evSet(c, 32, r, 9, vRot);
+        evSet(c, 32, r, 10, vDir);
+        evSet(c, 32, r, 11, vTstart);
+        evSet(c, 32, r, 12, vTlen);
+        evSet(c, 32, r, 13, vLine);
+        evSet(c, 32, r, 14, vConf);
+        evSet(c, 32, r, 15, vFeat);
+        evSet(c, 32, r, 17, -1);
+        evSet(c, 32, r, 18, -1);
+        evSet(c, 32, r, 22, -1);
+        evSet(c, 32, r, 28, -1);
         return r;
     }
     public static int osCount(emon.Port.Cells c) {
@@ -5797,7 +5867,7 @@ public final class Evidence {
     public static int evRotMedian(emon.Port.Cells olines, int first, int cnt) {
         // The page's dominant text angle for `xo-angle`: the lower median of the `rot` of the OCR lines
         // [first, first + cnt) (an OCR run's); 0 for no line.
-        return evLowerMedian(olines, 24, first, cnt, lhRot());
+        return evLowerMedian(olines, 28, first, cnt, lhRot());
     }
     public static int evWordCls(int c) {
         // A code point's class for `xo-implausible`: 1 lowercase letter, 2 uppercase letter, 3 digit, 0 anything
@@ -5947,12 +6017,12 @@ public final class Evidence {
             return 0;
         }
         while (i < cnt) {
-            h = evGet(owords, 28, first + i, hdY1()) - evGet(owords, 28, first + i, hdY0());
+            h = evGet(owords, 32, first + i, hdY1()) - evGet(owords, 32, first + i, hdY0());
             less = 0;
             leq = 0;
             j = 0;
             while (j < cnt) {
-                hj = evGet(owords, 28, first + j, hdY1()) - evGet(owords, 28, first + j, hdY0());
+                hj = evGet(owords, 32, first + j, hdY1()) - evGet(owords, 32, first + j, hdY0());
                 if (hj < h) {
                     less += 1;
                 }
@@ -5968,6 +6038,55 @@ public final class Evidence {
         }
         return 0;
     }
+    public static int orfEngine() {
+        return 28;
+    }
+    public static int orfEix() {
+        return 29;
+    }
+    public static int orfCaps() {
+        return 30;
+    }
+    public static int orfNative() {
+        return 31;
+    }
+    public static int olfProv() {
+        return 24;
+    }
+    public static int olfAgree() {
+        return 25;
+    }
+    public static int olfAlts() {
+        return 26;
+    }
+    public static int olfQfirst() {
+        return 27;
+    }
+    public static int owfPcal() {
+        return 28;
+    }
+    public static int owfProv() {
+        return 29;
+    }
+    public static int owfAgree() {
+        return 30;
+    }
+    public static int owfAlts() {
+        return 31;
+    }
+    public static int owConfidence(emon.Port.Cells c, int word) {
+        int p = owGet(c, word, owfPcal());
+        if (p >= 0) {
+            return p;
+        }
+        return owGet(c, word, hdConf());
+    }
+    public static int orGranularity(emon.Port.Cells c, int run) {
+        return (orGet(c, run, orfFlags()) / 256) % 256;
+    }
+    public static int orConfidenceKind(emon.Port.Cells c, int run) {
+        return (orGet(c, run, orfFlags()) / 65536) % 256;
+    }
     public static int evFeatOcr(emon.Port.Cells feats, emon.Port.Cells epages, emon.Port.Cells etext, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, int w, int rotmed, int altclose) {
         // Stage 1 features of OCR word w (SPEC 8.4.5): a new `feats` row, the word's `feat` pointed at it,
         // columns 2-8, 17, 19, 20, 21, 28 and 29 computed from the answer alone (the others -1).
@@ -5980,13 +6099,13 @@ public final class Evidence {
         // width, per-mille (along the writing direction); 28 the code points; 29 the distance to the nearest page
         // edge. The text is `etext`'s.
         int row = feNew(feats, 17, w);
-        int sf = evGet(owords, 28, w, owfSfirst());
-        int sn = evGet(owords, 28, w, owfScount());
-        int ts = evGet(owords, 28, w, hdTstart());
-        int tl = evGet(owords, 28, w, hdTlen());
-        int pg = evGet(owords, 28, w, hdPage());
-        int lineix = evGet(owords, 28, w, hdLine());
-        int rot = evGet(owords, 28, w, hdRot());
+        int sf = evGet(owords, 32, w, owfSfirst());
+        int sn = evGet(owords, 32, w, owfScount());
+        int ts = evGet(owords, 32, w, hdTstart());
+        int tl = evGet(owords, 32, w, hdTlen());
+        int pg = evGet(owords, 32, w, hdPage());
+        int lineix = evGet(owords, 32, w, hdLine());
+        int rot = evGet(owords, 32, w, hdRot());
         int s = 0;
         int lo = -1;
         int sum = 0;
@@ -6007,8 +6126,8 @@ public final class Evidence {
         int xm = 0;
         int ym = 0;
         int ep = 0;
-        evSet(owords, 28, w, hdFeat(), row);
-        feSet(feats, row, xoConf(), evGet(owords, 28, w, hdConf()));
+        evSet(owords, 32, w, hdFeat(), row);
+        feSet(feats, row, xoConf(), owConfidence(owords, w));
         s = sf;
         while (s < (sf + sn)) {
             sc = evGet(osyms, 20, s, osfConf());
@@ -6051,7 +6170,7 @@ public final class Evidence {
             feSet(feats, row, xoMargin(), minmargin);
             feSet(feats, row, xoAmbiguous(), ambiguous);
         }
-        feSet(feats, row, xoEngineFlags(), evGet(owords, 28, w, owfFlags()));
+        feSet(feats, row, xoEngineFlags(), evGet(owords, 32, w, owfFlags()));
         feSet(feats, row, xoImplausible(), evImplausible(etext, ts, tl));
         d = rot - rotmed;
         if (d < 0) {
@@ -6064,15 +6183,15 @@ public final class Evidence {
         feSet(feats, row, xoSpacing(), evSpacing(osyms, sf, sn, rot));
         feSet(feats, row, xoLength(), tl);
         if (lineix >= 0) {
-            lf = evGet(olines, 24, lineix, lhFirst());
-            lc = evGet(olines, 24, lineix, lhCount());
+            lf = evGet(olines, 28, lineix, lhFirst());
+            lc = evGet(olines, 28, lineix, lhCount());
             med = evHeightMedian(owords, lf, lc);
             if (med > 0) {
-                feSet(feats, row, xoRelHeight(), (int) ((((long) (evGet(owords, 28, w, hdY1()) - evGet(owords, 28, w, hdY0()))) * ((long) 1000)) / ((long) med)));
+                feSet(feats, row, xoRelHeight(), (int) ((((long) (evGet(owords, 32, w, hdY1()) - evGet(owords, 32, w, hdY0()))) * ((long) 1000)) / ((long) med)));
             }
-            xm = (evGet(owords, 28, w, hdBx0()) + evGet(owords, 28, w, hdBx1())) / 2;
-            ym = (evGet(owords, 28, w, hdBy0()) + evGet(owords, 28, w, hdBy1())) / 2;
-            d = ym - evBaselineAt(evGet(olines, 24, lineix, lhBx0()), evGet(olines, 24, lineix, lhBy0()), evGet(olines, 24, lineix, lhBx1()), evGet(olines, 24, lineix, lhBy1()), xm);
+            xm = (evGet(owords, 32, w, hdBx0()) + evGet(owords, 32, w, hdBx1())) / 2;
+            ym = (evGet(owords, 32, w, hdBy0()) + evGet(owords, 32, w, hdBy1())) / 2;
+            d = ym - evBaselineAt(evGet(olines, 28, lineix, lhBx0()), evGet(olines, 28, lineix, lhBy0()), evGet(olines, 28, lineix, lhBx1()), evGet(olines, 28, lineix, lhBy1()), xm);
             if (d < 0) {
                 d = 0 - d;
             }
@@ -6080,15 +6199,15 @@ public final class Evidence {
         }
         ep = evPageRow(epages, pg);
         if (ep >= 0) {
-            d = evGet(owords, 28, w, hdX0());
-            if (evGet(owords, 28, w, hdY0()) < d) {
-                d = evGet(owords, 28, w, hdY0());
+            d = evGet(owords, 32, w, hdX0());
+            if (evGet(owords, 32, w, hdY0()) < d) {
+                d = evGet(owords, 32, w, hdY0());
             }
-            if ((evGet(epages, 12, ep, epfWidth()) - evGet(owords, 28, w, hdX1())) < d) {
-                d = evGet(epages, 12, ep, epfWidth()) - evGet(owords, 28, w, hdX1());
+            if ((evGet(epages, 12, ep, epfWidth()) - evGet(owords, 32, w, hdX1())) < d) {
+                d = evGet(epages, 12, ep, epfWidth()) - evGet(owords, 32, w, hdX1());
             }
-            if ((evGet(epages, 12, ep, epfHeight()) - evGet(owords, 28, w, hdY1())) < d) {
-                d = evGet(epages, 12, ep, epfHeight()) - evGet(owords, 28, w, hdY1());
+            if ((evGet(epages, 12, ep, epfHeight()) - evGet(owords, 32, w, hdY1())) < d) {
+                d = evGet(epages, 12, ep, epfHeight()) - evGet(owords, 32, w, hdY1());
             }
             if (d < 0) {
                 d = 0;
@@ -6253,8 +6372,8 @@ public final class Evidence {
             i += 1;
         }
         i = 0;
-        while (i < (emon.Port.cellsLen(owords) / 28)) {
-            v1 = emon.Port.cellsAt(owords, (i * 28) + 15);
+        while (i < (emon.Port.cellsLen(owords) / 32)) {
+            v1 = emon.Port.cellsAt(owords, (i * 32) + 15);
             if (v1 >= 0) {
                 if ((emon.Port.cellsAt(feats, v1 * 32) != 17) || (emon.Port.cellsAt(feats, (v1 * 32) + 1) != i)) {
                     return 102;

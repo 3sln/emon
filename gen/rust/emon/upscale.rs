@@ -2,8 +2,7 @@
 // source: emon.upscale
 
 use crate::emon::norm::*;
-use crate::emon::ocr::*;
-use crate::emon::plan::*;
+use crate::emon::oil::*;
 
 pub fn up_xh_trigger() -> i32 {
     // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).
@@ -74,11 +73,10 @@ pub fn up_eff_dpi100(xh: i32) -> i32 {
     return (xh * 720000) / up_body_xh();
 }
 pub fn up_xheight(an: &mut crate::port::Cells, ext: i32, mut hist: &mut crate::port::Cells) -> i32 {
-    // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height
+    // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `oil-find`): the median over its text lines of the engine's row x-height
     // (`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).
-    let nl: i32 = ox_nlines(an, ext);
+    let nl: i32 = oil_nlines(an, ext);
     let mut k: i32 = 0;
-    let mut l: i32 = 0;
     let mut xh: i32 = 0;
     let mut w: i32 = 0;
     let mut total: i32 = 0;
@@ -90,13 +88,12 @@ pub fn up_xheight(an: &mut crate::port::Cells, ext: i32, mut hist: &mut crate::p
     }
     k = 0;
     while k < nl {
-        l = ox_line_at(an, ext, k);
         // a line of text (block type 0), its width and its x-height
-        if crate::port::cells_at(an, l + 10) == 0 {
-            w = crate::port::cells_at(an, l + 2);
-            xh = crate::port::cells_at(an, l + 11);
+        if oil_line_field(an, ext, k, 10) == 0 {
+            w = oil_line_field(an, ext, k, 2);
+            xh = oil_line_field(an, ext, k, 11);
             if xh <= 0 {
-                xh = (crate::port::cells_at(an, l + 3) * up_line_share()) / 100;
+                xh = (oil_line_field(an, ext, k, 3) * up_line_share()) / 100;
             }
             if (xh > 0) && (w > 0) {
                 if xh > 100 {
@@ -123,29 +120,29 @@ pub fn up_xheight(an: &mut crate::port::Cells, ext: i32, mut hist: &mut crate::p
 }
 pub fn up_score(an: &mut crate::port::Cells, at: i32) -> i32 {
     // How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).
-    let n: i32 = an_ocr_count(an, at);
-    let mut w: i32 = an_ocr_first(an, at);
+    let n: i32 = oil_nwords(an, at);
+    let mut w: i32 = oil_first_word(an, at);
     let mut i: i32 = 0;
     let mut sum: i32 = 0;
     while i < n {
-        sum += (aw_get(an, w, aw_conf()) * aw_get(an, w, aw_len())) / 16;
-        w = aw_next(an, w);
+        sum += (oil_policy_conf(an, at, w) * oil_wlen(an, at, w)) / 16;
+        w = oil_word_next(an, at, w);
         i += 1;
     }
     return sum;
 }
 pub fn up_mean_conf(an: &mut crate::port::Cells, at: i32) -> i32 {
     // The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
-    let n: i32 = an_ocr_count(an, at);
-    let mut w: i32 = an_ocr_first(an, at);
+    let n: i32 = oil_nwords(an, at);
+    let mut w: i32 = oil_first_word(an, at);
     let mut i: i32 = 0;
     let mut sum: i32 = 0;
     if n <= 0 {
         return -1;
     }
     while i < n {
-        sum += aw_get(an, w, aw_conf());
-        w = aw_next(an, w);
+        sum += oil_policy_conf(an, at, w);
+        w = oil_word_next(an, at, w);
         i += 1;
     }
     return sum / n;
@@ -153,7 +150,7 @@ pub fn up_mean_conf(an: &mut crate::port::Cells, at: i32) -> i32 {
 pub fn up_hint(an: &mut crate::port::Cells, at: i32, k: i32, dpi100: i32, mut hist: &mut crate::port::Cells) -> i32 {
     // The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
     // the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
-    let ext: i32 = ox_find(an, at);
+    let ext: i32 = oil_find(an, at);
     let mut est: i32 = dpi100;
     let mut xh: i32 = -1;
     let mut v: i32 = 0;
@@ -174,8 +171,8 @@ pub fn up_hint(an: &mut crate::port::Cells, at: i32, k: i32, dpi100: i32, mut hi
 }
 pub fn up_factor(an: &mut crate::port::Cells, at: i32, pxw: i32, pxh: i32, mut hist: &mut crate::port::Cells) -> i32 {
     // By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
-    let ext: i32 = ox_find(an, at);
-    let words: i32 = an_ocr_count(an, at);
+    let ext: i32 = oil_find(an, at);
+    let words: i32 = oil_nwords(an, at);
     let mut k: i32 = 1;
     let mut xh: i32 = 0;
     let mut side: i32 = pxw;
@@ -183,7 +180,7 @@ pub fn up_factor(an: &mut crate::port::Cells, at: i32, pxw: i32, pxh: i32, mut h
         return 1;
     }
     // a page the engine is sure is turned is read upright first: the size of its lines says nothing
-    if nm_orient(ox_osd(an, ext), ox_oconf(an, ext), nm_osd_conf()) > 0 {
+    if nm_orient(oil_osd(an, ext), oil_oconf(an, ext), nm_osd_conf()) > 0 {
         return 1;
     }
     if pxh > side {
@@ -358,8 +355,8 @@ pub fn up_receipt_value(conf: i32, spanlen: i32, alpha: i32) -> i32 {
     return 0;
 }
 pub fn up_receipt_score(an: &mut crate::port::Cells, at: i32) -> i32 {
-    let n: i32 = an_ocr_count(an, at);
-    let mut w: i32 = an_ocr_first(an, at);
+    let n: i32 = oil_nwords(an, at);
+    let mut w: i32 = oil_first_word(an, at);
     let mut i: i32 = 0;
     let mut j: i32 = 0;
     let mut cp: i32 = 0;
@@ -368,15 +365,15 @@ pub fn up_receipt_score(an: &mut crate::port::Cells, at: i32) -> i32 {
     while i < n {
         alpha = 0;
         j = 0;
-        while j < aw_get(an, w, aw_len()) {
-            cp = aw_cp(an, w, j);
+        while j < oil_wlen(an, at, w) {
+            cp = oil_wcp(an, at, w, j);
             if up_receipt_alpha(cp) == 1 {
                 alpha = 1;
             }
             j += 1;
         }
-        sum += up_receipt_value(aw_get(an, w, aw_conf()), aw_get(an, w, aw_len()), alpha);
-        w = aw_next(an, w);
+        sum += up_receipt_value(oil_policy_conf(an, at, w), oil_wlen(an, at, w), alpha);
+        w = oil_word_next(an, at, w);
         i += 1;
     }
     return sum;

@@ -2157,8 +2157,8 @@ pub fn gf_fuse(np: i32, epages: &mut crate::port::Cells, inks: &mut crate::port:
         qj = gf_range_end(prims, 24, 0, qi, p);
         bi = gf_advance(oblocks, 16, 0, bi, p);
         bj = gf_range_end(oblocks, 16, 0, bi, p);
-        wi = gf_advance(owords, 28, 0, wi, p);
-        wj = gf_range_end(owords, 28, 0, wi, p);
+        wi = gf_advance(owords, 32, 0, wi, p);
+        wj = gf_range_end(owords, 32, 0, wi, p);
         ti = gf_advance(words, 24, 0, ti, p);
         tj = gf_range_end(words, 24, 0, ti, p);
         pi = gf_advance(pa, 24, 0, pi, p);

@@ -3,8 +3,10 @@
 
 use crate::emon::evidence::*;
 use crate::emon::model::*;
+use crate::emon::ocalib::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrledger::*;
+use crate::emon::oil::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::pdflex::*;
 use crate::emon::pdfsrc::*;
@@ -443,12 +445,11 @@ pub(crate) fn sc_ev_lines(an: &mut crate::port::Cells, ext: i32, view: i32, run:
     // its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction
     // are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to
     // centipoints.
-    let nl: i32 = ox_nlines(an, ext);
-    let nb: i32 = ox_nblocks(an, ext);
-    let orient0: i32 = ox_orient(an, ext);
-    let wdir0: i32 = ox_wdir(an, ext);
+    let nl: i32 = oil_nlines(an, ext);
+    let nb: i32 = oil_nblocks(an, ext);
+    let orient0: i32 = oil_orient(an, ext);
+    let wdir0: i32 = oil_wdir(an, ext);
     let mut k: i32 = 0;
-    let mut l: i32 = 0;
     let mut px: i32 = 0;
     let mut py: i32 = 0;
     let mut pw: i32 = 0;
@@ -479,35 +480,34 @@ pub(crate) fn sc_ev_lines(an: &mut crate::port::Cells, ext: i32, view: i32, run:
     let mut tx1: i32 = 0;
     let mut ty1: i32 = 0;
     while k < nl {
-        l = ox_line_at(an, ext, k);
-        px = crate::port::cells_at(an, l);
-        py = crate::port::cells_at(an, l + 1);
-        pw = crate::port::cells_at(an, l + 2);
-        ph = crate::port::cells_at(an, l + 3);
+        px = oil_line_field(an, ext, k, 0);
+        py = oil_line_field(an, ext, k, 1);
+        pw = oil_line_field(an, ext, k, 2);
+        ph = oil_line_field(an, ext, k, 3);
         x0 = vw_box_to_cpt(views, view, 0, px, py, pw, ph);
         y0 = vw_box_to_cpt(views, view, 1, px, py, pw, ph);
         x1 = vw_box_to_cpt(views, view, 2, px, py, pw, ph);
         y1 = vw_box_to_cpt(views, view, 3, px, py, pw, ph);
-        bx0 = vw_px_to_cpt(views, view, 0, crate::port::cells_at(an, l + 4), crate::port::cells_at(an, l + 5));
-        by0 = vw_px_to_cpt(views, view, 1, crate::port::cells_at(an, l + 4), crate::port::cells_at(an, l + 5));
-        bx1 = vw_px_to_cpt(views, view, 0, crate::port::cells_at(an, l + 6), crate::port::cells_at(an, l + 7));
-        by1 = vw_px_to_cpt(views, view, 1, crate::port::cells_at(an, l + 6), crate::port::cells_at(an, l + 7));
-        if ((crate::port::cells_at(an, l + 4) == -1) && (crate::port::cells_at(an, l + 5) == -1)) && ((crate::port::cells_at(an, l + 6) == -1) && (crate::port::cells_at(an, l + 7) == -1)) {
+        bx0 = vw_px_to_cpt(views, view, 0, oil_line_field(an, ext, k, 4), oil_line_field(an, ext, k, 5));
+        by0 = vw_px_to_cpt(views, view, 1, oil_line_field(an, ext, k, 4), oil_line_field(an, ext, k, 5));
+        bx1 = vw_px_to_cpt(views, view, 0, oil_line_field(an, ext, k, 6), oil_line_field(an, ext, k, 7));
+        by1 = vw_px_to_cpt(views, view, 1, oil_line_field(an, ext, k, 6), oil_line_field(an, ext, k, 7));
+        if ((oil_line_field(an, ext, k, 4) == -1) && (oil_line_field(an, ext, k, 5) == -1)) && ((oil_line_field(an, ext, k, 6) == -1) && (oil_line_field(an, ext, k, 7) == -1)) {
             bx0 = x0;
             by0 = y1;
             bx1 = x1;
             by1 = y1;
         }
-        blk = crate::port::cells_at(an, l + 8);
-        par = crate::port::cells_at(an, l + 9);
-        bty = crate::port::cells_at(an, l + 10);
+        blk = oil_line_field(an, ext, k, 8);
+        par = oil_line_field(an, ext, k, 9);
+        bty = oil_line_field(an, ext, k, 10);
         orient = orient0;
         wdir = wdir0;
         bl = -1;
         if (blk >= 0) && (blk < nb) {
-            bl = ox_block_at(an, ext, blk);
-            orient = crate::port::cells_at(an, bl + 4);
-            wdir = crate::port::cells_at(an, bl + 5);
+            bl = oil_block_at(an, ext, blk);
+            orient = oil_block_field(an, ext, blk, 0);
+            wdir = oil_block_field(an, ext, blk, 1);
         }
         fresh = 0;
         if (k == 0) || (blk != curblk) {
@@ -553,9 +553,9 @@ pub(crate) fn sc_ev_lines(an: &mut crate::port::Cells, ext: i32, view: i32, run:
         ol_set(olines, lrow, olf_py(), py);
         ol_set(olines, lrow, olf_pw(), pw);
         ol_set(olines, lrow, olf_ph(), ph);
-        ol_set(olines, lrow, olf_xheight(), sc_cpt_len(views, view, crate::port::cells_at(an, l + 11)));
-        ol_set(olines, lrow, olf_asc(), sc_cpt_len(views, view, crate::port::cells_at(an, l + 12)));
-        ol_set(olines, lrow, olf_desc(), sc_cpt_len(views, view, crate::port::cells_at(an, l + 13)));
+        ol_set(olines, lrow, olf_xheight(), sc_cpt_len(views, view, oil_line_field(an, ext, k, 11)));
+        ol_set(olines, lrow, olf_asc(), sc_cpt_len(views, view, oil_line_field(an, ext, k, 12)));
+        ol_set(olines, lrow, olf_desc(), sc_cpt_len(views, view, oil_line_field(an, ext, k, 13)));
         bcnt = ob_get(oblocks, prow, obf_count());
         ob_set(oblocks, prow, obf_count(), bcnt + 1);
         k += 1;
@@ -566,11 +566,11 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
     // The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an
     // olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated
     // after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.
-    let nw: i32 = an_ocr_count(an, at);
+    let nw: i32 = oil_nwords(an, at);
     let mut nl: i32 = 0;
     let mut wdir: i32 = 0;
     let mut tlen: i32 = 0;
-    let mut w: i32 = an_ocr_first(an, at);
+    let mut w: i32 = oil_first_word(an, at);
     let mut wx: i32 = -1;
     let mut i: i32 = 0;
     let mut px: i32 = 0;
@@ -609,20 +609,20 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
     let mut sy: i32 = 0;
     let mut ps: i32 = 0;
     if ext >= 0 {
-        wx = ox_first_word(an, ext);
-        nl = ox_nlines(an, ext);
-        wdir = ox_wdir(an, ext);
+        wx = oil_first_word(an, ext);
+        nl = oil_nlines(an, ext);
+        wdir = oil_wdir(an, ext);
     }
     while i < nw {
-        px = aw_get(an, w, aw_x());
-        py = aw_get(an, w, aw_y());
-        pw = aw_get(an, w, aw_w());
-        ph = aw_get(an, w, aw_h());
+        px = crate::port::cells_at(an, w + 0);
+        py = crate::port::cells_at(an, w + 1);
+        pw = crate::port::cells_at(an, w + 2);
+        ph = crate::port::cells_at(an, w + 3);
         x0 = vw_box_to_cpt(views, view, 0, px, py, pw, ph);
         y0 = vw_box_to_cpt(views, view, 1, px, py, pw, ph);
         x1 = vw_box_to_cpt(views, view, 2, px, py, pw, ph);
         y1 = vw_box_to_cpt(views, view, 3, px, py, pw, ph);
-        ln = aw_get(an, w, aw_line());
+        ln = crate::port::cells_at(an, w + 4);
         lrow = -1;
         bx0 = x0;
         by0 = y1;
@@ -640,14 +640,15 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
             by1 = ev_baseline_at(lx0, ly0, lx1, ly1, bx1);
         }
         ts = etx_len(etext);
-        nc = aw_get(an, w, aw_len());
+        nc = oil_wlen(an, at, w);
         k = 0;
         while k < nc {
-            etx_append_cp(etext, aw_cp(an, w, k));
+            etx_append_cp(etext, oil_wcp(an, at, w, k));
             k += 1;
         }
-        ow = ow_new(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, ev_angle(bx1 - bx0, by1 - by0), sc_ld(wdir), ts, nc, lrow, aw_get(an, w, aw_conf()), -1);
+        ow = ow_new(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, ev_angle(bx1 - bx0, by1 - by0), sc_ld(wdir), ts, nc, lrow, crate::port::cells_at(an, w + 5), -1);
         ow_set(owords, ow, owf_run(), run);
+        ow_set(owords, ow, owf_pcal(), ocal_word(oil_get(an, at, oh_engine()), 0, crate::port::cells_at(an, w + 5)));
         ow_set(owords, ow, owf_px(), px);
         ow_set(owords, ow, owf_py(), py);
         ow_set(owords, ow, owf_pw(), pw);
@@ -660,20 +661,20 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
             ol_set(olines, lrow, lh_count(), lcnt + 1);
         }
         if wx >= 0 {
-            ow_set(owords, ow, owf_style(), ox_wflags(an, wx));
-            ow_set(owords, ow, owf_lang(), ox_wlang(an, wx));
-            ps = ox_wpsize(an, wx);
+            ow_set(owords, ow, owf_style(), oil_wflags(an, ext, wx));
+            ow_set(owords, ow, owf_lang(), oil_wlang(an, ext, wx));
+            ps = oil_wpsize(an, ext, wx);
             if ps > 1000000 {
                 ps = 1000000;
             }
             if ps >= 0 {
                 ow_set(owords, ow, owf_psize(), ps * 100);
             }
-            ow_set(owords, ow, owf_flags(), ox_wdflags(an, wx));
-            ns = ox_nsym(an, wx);
+            ow_set(owords, ow, owf_flags(), oil_word_flags(an, ext, wx));
+            ns = oil_nsym(an, ext, wx);
             ow_set(owords, ow, owf_sfirst(), os_count(osyms));
             ow_set(owords, ow, owf_scount(), ns);
-            sy = ox_first_sym(an, wx);
+            sy = oil_first_sym(an, ext, wx);
             j = 0;
             while j < ns {
                 ncp = crate::port::cells_at(an, sy + 5);
@@ -706,7 +707,7 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
                 os_set(osyms, sym, osf_pw(), pw);
                 os_set(osyms, sym, osf_ph(), ph);
                 a0 = oa_count(oalts);
-                a = ox_sym_alts(an, sy);
+                a = oil_sym_alts(an, sy);
                 m = 0;
                 while m < nalt {
                     acp = crate::port::cells_at(an, a);
@@ -719,17 +720,17 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
                         }
                         oa_add(oalts, sym, ts, acp, crate::port::cells_at(an, a + 1));
                     }
-                    a = ox_alt_next(an, a);
+                    a = oil_alt_next(an, a);
                     m += 1;
                 }
                 os_set(osyms, sym, osf_afirst(), a0);
                 os_set(osyms, sym, osf_acount(), oa_count(oalts) - a0);
-                sy = ox_sym_next(an, sy);
+                sy = oil_sym_next(an, sy);
                 j += 1;
             }
-            wx = ox_word_next(an, wx);
+            wx = oil_word_next(an, ext, wx);
         }
-        w = aw_next(an, w);
+        w = oil_word_next(an, at, w);
         i += 1;
     }
     return nw;
@@ -738,7 +739,7 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
     // One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the
     // stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request
     // named (0 none: the run records no language, D038). Answers the run's row.
-    let ext: i32 = ox_find(an, at);
+    let ext: i32 = oil_find(an, at);
     let run: i32 = or_new(oruns, page, view);
     let b0: i32 = ob_count(oblocks);
     let l0: i32 = ol_count(olines);
@@ -749,11 +750,15 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
     let mut w: i32 = 0;
     let mut rotmed: i32 = 0;
     let mut ts: i32 = 0;
+    or_set(oruns, run, orf_engine(), oil_get(an, at, oh_engine()));
+    or_set(oruns, run, orf_caps(), oil_get(an, at, oh_caps()));
+    or_set(oruns, run, orf_native(), oil_get(an, at, oh_native()));
+    or_set(oruns, run, orf_eix(), oil_get(an, at, oh_engine()) - 1);
     or_set(oruns, run, orf_request(), request);
     or_set(oruns, run, orf_round(), 1);
     or_set(oruns, run, orf_pass(), 1);
     or_set(oruns, run, orf_psm(), 3);
-    or_set(oruns, run, orf_flags(), ocf_symbols() + ocf_osd());
+    or_set(oruns, run, orf_flags(), (ocf_symbols() + ocf_osd()) + ((256 * oil_get(an, at, oh_lg())) + (65536 * oil_get(an, at, oh_ck()))));
     if lang > 0 {
         ts = etx_len(etext);
         etx_append_cp(etext, lang / 65536);
@@ -763,14 +768,14 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
         or_set(oruns, run, orf_langlen(), 3);
     }
     if ext >= 0 {
-        or_set(oruns, run, orf_orient(), ox_orient(an, ext));
-        or_set(oruns, run, orf_wdir(), ox_wdir(an, ext));
-        or_set(oruns, run, orf_lorder(), ox_tlorder(an, ext));
-        or_set(oruns, run, orf_deskew(), ox_deskew(an, ext));
-        or_set(oruns, run, orf_osd(), ox_osd(an, ext));
-        or_set(oruns, run, orf_script(), ox_script(an, ext));
-        or_set(oruns, run, orf_sconf(), ox_sconf(an, ext));
-        or_set(oruns, run, orf_oconf(), ox_oconf(an, ext));
+        or_set(oruns, run, orf_orient(), oil_orient(an, ext));
+        or_set(oruns, run, orf_wdir(), oil_wdir(an, ext));
+        or_set(oruns, run, orf_lorder(), oil_tlorder(an, ext));
+        or_set(oruns, run, orf_deskew(), oil_deskew(an, ext));
+        or_set(oruns, run, orf_osd(), oil_osd(an, ext));
+        or_set(oruns, run, orf_script(), oil_script(an, ext));
+        or_set(oruns, run, orf_sconf(), oil_sconf(an, ext));
+        or_set(oruns, run, orf_oconf(), oil_oconf(an, ext));
         nl = sc_ev_lines(an, ext, view, run, page, views, oblocks, olines);
     }
     nw = sc_ev_words(an, at, ext, view, run, page, l0, views, etext, olines, owords, osyms, oalts);
@@ -1516,12 +1521,12 @@ pub fn sc_xtra_ok(owords: &mut crate::port::Cells, etext: &mut crate::port::Cell
     let mut mh: i32 = 0;
     let mut hh: i32 = 0;
     let mut edge: i32 = 0;
-    if ow_get(owords, xw, hd_conf()) < sc_xtra_conf() {
+    if ow_confidence(owords, xw) < sc_xtra_conf() {
         return 0;
     }
     let letters: i32 = sc_count_class(etext, ow_get(owords, xw, hd_tstart()), ow_get(owords, xw, hd_tlen()), 0);
     if letters > 0 {
-        if (letters < sc_xtra_text_letters()) || (ow_get(owords, xw, hd_conf()) < sc_xtra_text_conf()) {
+        if (letters < sc_xtra_text_letters()) || (ow_confidence(owords, xw) < sc_xtra_text_conf()) {
             return 0;
         }
     }
@@ -1553,7 +1558,7 @@ pub fn sc_xtra_ok(owords: &mut crate::port::Cells, etext: &mut crate::port::Cell
         return 0;
     }
     if (mh > 0) && ((2 * (ow_get(owords, xw, hd_y1()) - ow_get(owords, xw, hd_y0()))) < mh) {
-        if ow_get(owords, xw, hd_conf()) < sc_xtra_small_conf() {
+        if ow_confidence(owords, xw) < sc_xtra_small_conf() {
             return 0;
         }
     }
@@ -1917,7 +1922,7 @@ pub(crate) fn sc_drop_fate(owords: &mut crate::port::Cells, etext: &mut crate::p
     // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
     let ts: i32 = ow_get(owords, w, hd_tstart());
     let n: i32 = ow_get(owords, w, hd_tlen());
-    let conf: i32 = ow_get(owords, w, hd_conf());
+    let conf: i32 = ow_confidence(owords, w);
     let mut f: i32 = 0;
     let mut c: i32 = 0;
     if sc_admit_word(conf, floor) == 0 {
@@ -1981,7 +1986,7 @@ pub fn sc_kept_words(mut owords: &mut crate::port::Cells, etext: &mut crate::por
     }
     while i < m {
         w = crate::port::cells_at(scr, fb + i);
-        conf = ow_get(owords, w, hd_conf());
+        conf = ow_confidence(owords, w);
         sum += conf;
         tch += ow_get(owords, w, hd_tlen());
         if conf > mx {
@@ -2045,7 +2050,7 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
     let mut changed: i32 = 0;
     while i < m {
         w = crate::port::cells_at(scr, fb + i);
-        conf = ow_get(owords, w, hd_conf());
+        conf = ow_confidence(owords, w);
         sum += conf;
         tch += ow_get(owords, w, hd_tlen());
         if conf > mx {
@@ -2059,7 +2064,7 @@ pub(crate) fn sc_fates(mut owords: &mut crate::port::Cells, mut etext: &mut crat
         w = crate::port::cells_at(scr, fb + i);
         ts = ow_get(owords, w, hd_tstart());
         n = ow_get(owords, w, hd_tlen());
-        conf = ow_get(owords, w, hd_conf());
+        conf = ow_confidence(owords, w);
         f = sc_drop_fate(owords, etext, rules, page, m, w, lmean, mx, tch, crate::port::cells_at(scr, sc_admit_floor()));
         crate::port::cells_set(scr, fb + ((2 * fm) + i), -1);
         crate::port::cells_set(scr, fb + ((3 * fm) + i), 0);
@@ -2316,7 +2321,7 @@ pub(crate) fn sc_emit_core(olines: &mut crate::port::Cells, owords: &mut crate::
                         gap = nx0 - ox1;
                     }
                 }
-                r = wd_new(words, page, ow_get(owords, wi, hd_x0()), ow_get(owords, wi, hd_y0()), ow_get(owords, wi, hd_x1()), ow_get(owords, wi, hd_y1()), ow_get(owords, wi, hd_bx0()), ow_get(owords, wi, hd_by0()), ow_get(owords, wi, hd_bx1()), ow_get(owords, wi, hd_by1()), rot, dir, ow_get(owords, wi, hd_tstart()), ow_get(owords, wi, hd_tlen()), lnx, ow_get(owords, wi, hd_conf()), -1);
+                r = wd_new(words, page, ow_get(owords, wi, hd_x0()), ow_get(owords, wi, hd_y0()), ow_get(owords, wi, hd_x1()), ow_get(owords, wi, hd_y1()), ow_get(owords, wi, hd_bx0()), ow_get(owords, wi, hd_by0()), ow_get(owords, wi, hd_bx1()), ow_get(owords, wi, hd_by1()), rot, dir, ow_get(owords, wi, hd_tstart()), ow_get(owords, wi, hd_tlen()), lnx, ow_confidence(owords, wi), -1);
                 wd_set(words, r, wf_style(), ow_get(owords, wi, owf_style()));
                 wd_set(words, r, wf_size(), size);
                 wd_set(words, r, wf_font(), -1);
@@ -2534,7 +2539,7 @@ pub fn sc_emit_vetted(olines: &mut crate::port::Cells, mut owords: &mut crate::p
                         gap = nx0 - ox1;
                     }
                 }
-                r = wd_new(words, page, ow_get(owords, wi, hd_x0()), ow_get(owords, wi, hd_y0()), ow_get(owords, wi, hd_x1()), ow_get(owords, wi, hd_y1()), ow_get(owords, wi, hd_bx0()), ow_get(owords, wi, hd_by0()), ow_get(owords, wi, hd_bx1()), ow_get(owords, wi, hd_by1()), rot, dir, ts, tl, lnx, ow_get(owords, wi, hd_conf()), -1);
+                r = wd_new(words, page, ow_get(owords, wi, hd_x0()), ow_get(owords, wi, hd_y0()), ow_get(owords, wi, hd_x1()), ow_get(owords, wi, hd_y1()), ow_get(owords, wi, hd_bx0()), ow_get(owords, wi, hd_by0()), ow_get(owords, wi, hd_bx1()), ow_get(owords, wi, hd_by1()), rot, dir, ts, tl, lnx, ow_confidence(owords, wi), -1);
                 wd_set(words, r, wf_style(), ow_get(owords, wi, owf_style()));
                 wd_set(words, r, wf_size(), size);
                 wd_set(words, r, wf_font(), -1);
@@ -2645,12 +2650,14 @@ pub fn sc_page_evidence(an: &mut crate::port::Cells, at: i32, page: i32, request
     // run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
     let cropx: i32 = vw_get(views, vdec, vwf_cropx());
     let cropy: i32 = vw_get(views, vdec, vwf_cropy());
+    let binary_width: i32 = vw_get(views, vdec, vwf_pxw());
+    let binary_height: i32 = vw_get(views, vdec, vwf_pxh());
     let run: i32 = sc_answer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-    let ext: i32 = ox_find(an, at);
+    let ext: i32 = oil_find(an, at);
     let mut vbin: i32 = -1;
     if ext >= 0 {
-        if ox_binary(an, ext) == 1 {
-            vbin = vw_new(views, page, vk_engine_binary(), request, vdec, ox_bw(an, ext), ox_bh(an, ext), dpi100, lay_full(), -1, 0, 0, cropx, cropy, 1);
+        if oil_binary(an, ext) == 1 {
+            vbin = vw_new(views, page, vk_engine_binary(), request, vdec, binary_width, binary_height, dpi100, lay_full(), -1, 0, 0, cropx, cropy, 1);
             or_set(oruns, run, orf_bview(), vbin);
         }
     }
@@ -3006,7 +3013,7 @@ pub(crate) fn sc_word_base(owords: &mut crate::port::Cells, etext: &mut crate::p
     let ts: i32 = ow_get(owords, w, hd_tstart());
     let n: i32 = ow_get(owords, w, hd_tlen());
     let flags: i32 = ow_get(owords, w, owf_flags());
-    let mut score: i32 = ow_get(owords, w, hd_conf());
+    let mut score: i32 = ow_confidence(owords, w);
     let mut i: i32 = 0;
     let mut latin: i32 = 0;
     let mut rejected: i32 = 0;

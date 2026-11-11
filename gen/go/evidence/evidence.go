@@ -1921,6 +1921,30 @@ func EkOarb() int32 {
 func EkIdentity() int32 {
 	return 164
 }
+func EkEngine() int32 {
+	return 165
+}
+func EkEix() int32 {
+	return 166
+}
+func EkCaps() int32 {
+	return 167
+}
+func EkNative() int32 {
+	return 168
+}
+func EkPcal() int32 {
+	return 169
+}
+func EkProv() int32 {
+	return 170
+}
+func EkAgree() int32 {
+	return 171
+}
+func EkQfirst() int32 {
+	return 173
+}
 func EkEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-evidence")
@@ -2578,6 +2602,38 @@ func EkEmitName(t *strings.Builder, code int32) int32 {
 		port.TextAscii(t, "identity")
 		return 1
 	}
+	if code == 165 {
+		port.TextAscii(t, "engine")
+		return 1
+	}
+	if code == 166 {
+		port.TextAscii(t, "eix")
+		return 1
+	}
+	if code == 167 {
+		port.TextAscii(t, "caps")
+		return 1
+	}
+	if code == 168 {
+		port.TextAscii(t, "native")
+		return 1
+	}
+	if code == 169 {
+		port.TextAscii(t, "pcal")
+		return 1
+	}
+	if code == 170 {
+		port.TextAscii(t, "prov")
+		return 1
+	}
+	if code == 171 {
+		port.TextAscii(t, "agree")
+		return 1
+	}
+	if code == 173 {
+		port.TextAscii(t, "qfirst")
+		return 1
+	}
 	return 0
 }
 
@@ -3041,7 +3097,7 @@ func ImStride() int32 {
 }
 
 func OrStride() int32 {
-	return 28
+	return 32
 }
 
 func ObStride() int32 {
@@ -3049,11 +3105,11 @@ func ObStride() int32 {
 }
 
 func OlStride() int32 {
-	return 24
+	return 28
 }
 
 func OwStride() int32 {
-	return 28
+	return 32
 }
 
 func OsStride() int32 {
@@ -4476,7 +4532,7 @@ func TlfConf() int32 {
 	return 16
 }
 
-var EvFd [1686]int32 = [1686]int32{
+var EvFd [1758]int32 = [1758]int32{
 	1, 0, 1, 9, -2147483648, 0,
 	1, 1, 2, 34, 0, 0,
 	1, 2, 2, 74, 0, 0,
@@ -4645,6 +4701,10 @@ var EvFd [1686]int32 = [1686]int32{
 	14, 22, 7, 131, 0, 0,
 	14, 24, 7, 4, 0, 0,
 	14, 26, 7, 3, 0, 0,
+	14, 28, 1, 165, 0, 0,
+	14, 29, 1, 166, 0, 0,
+	14, 30, 1, 167, 0, 0,
+	14, 31, 1, 168, 0, 0,
 	15, 0, 1, 9, -2147483648, 0,
 	15, 1, 3, 15, -2147483648, 0,
 	15, 5, 8, 31, 0, 9,
@@ -4668,6 +4728,10 @@ var EvFd [1686]int32 = [1686]int32{
 	16, 17, 2, 94, -1, 0,
 	16, 18, 2, 95, -1, 0,
 	16, 19, 10, 36, -2147483648, 0,
+	16, 24, 1, 170, 0, 0,
+	16, 25, 1, 171, 0, 0,
+	16, 26, 1, 39, 0, 0,
+	16, 27, 1, 173, -1, 0,
 	17, 0, 1, 9, -2147483648, 0,
 	17, 1, 3, 15, -2147483648, 0,
 	17, 5, 4, 16, -2147483648, 0,
@@ -4685,6 +4749,10 @@ var EvFd [1686]int32 = [1686]int32{
 	17, 22, 2, 136, -1, 0,
 	17, 23, 10, 36, -2147483648, 0,
 	17, 27, 14, 153, 0, 0,
+	17, 28, 1, 169, -1, 0,
+	17, 29, 1, 170, 0, 0,
+	17, 30, 1, 171, 0, 0,
+	17, 31, 1, 39, 0, 0,
 	18, 0, 1, 9, -2147483648, 0,
 	18, 1, 3, 15, -2147483648, 0,
 	18, 5, 1, 10, -1, 0,
@@ -4774,22 +4842,22 @@ var EvFx [48]int32 = [48]int32{
 	97, 15,
 	112, 19,
 	131, 16,
-	147, 21,
-	168, 10,
-	178, 13,
-	191, 17,
-	208, 9,
-	217, 3,
+	147, 25,
+	172, 10,
+	182, 17,
+	199, 21,
 	220, 9,
-	229, 16,
-	245, 11,
-	256, 15,
-	271, 10,
+	229, 3,
+	232, 9,
+	241, 16,
+	257, 11,
+	268, 15,
+	283, 10,
 }
 
 var EvStrides [24]int32 = [24]int32{
-	12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 28, 16, 24,
-	28, 20, 4, 12, 24, 20, 24, 20,
+	12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 32, 16, 28,
+	32, 20, 4, 12, 24, 20, 24, 20,
 }
 
 var EvCk [528]int32 = [528]int32{
@@ -5264,28 +5332,28 @@ func ImNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int3
 }
 
 func OrCount(c *port.Cells) int32 {
-	return evCount(c, 28)
+	return evCount(c, 32)
 }
 
 func OrGet(c *port.Cells, i int32, f int32) int32 {
-	return evGet(c, 28, i, f)
+	return evGet(c, 32, i, f)
 }
 
 func OrSet(c *port.Cells, i int32, f int32, v int32) int32 {
-	return evSet(c, 28, i, f, v)
+	return evSet(c, 32, i, f, v)
 }
 
 func OrNew(c *port.Cells, vPage int32, vView int32) int32 {
 	// Append a row of oruns: page view; every other field is its default.
-	var r int32 = evPush(c, 28)
-	evSet(c, 28, r, 0, vPage)
-	evSet(c, 28, r, 1, vView)
-	evSet(c, 28, r, 2, -1)
-	evSet(c, 28, r, 3, -1)
-	evSet(c, 28, r, 11, -1)
-	evSet(c, 28, r, 17, -1)
-	evSet(c, 28, r, 19, -1)
-	evSet(c, 28, r, 20, -1)
+	var r int32 = evPush(c, 32)
+	evSet(c, 32, r, 0, vPage)
+	evSet(c, 32, r, 1, vView)
+	evSet(c, 32, r, 2, -1)
+	evSet(c, 32, r, 3, -1)
+	evSet(c, 32, r, 11, -1)
+	evSet(c, 32, r, 17, -1)
+	evSet(c, 32, r, 19, -1)
+	evSet(c, 32, r, 20, -1)
 	return r
 }
 
@@ -5318,56 +5386,19 @@ func ObNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int3
 }
 
 func OlCount(c *port.Cells) int32 {
-	return evCount(c, 24)
+	return evCount(c, 28)
 }
 
 func OlGet(c *port.Cells, i int32, f int32) int32 {
-	return evGet(c, 24, i, f)
+	return evGet(c, 28, i, f)
 }
 
 func OlSet(c *port.Cells, i int32, f int32, v int32) int32 {
-	return evSet(c, 24, i, f, v)
+	return evSet(c, 28, i, f, v)
 }
 
 func OlNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vFirst int32, vCount int32) int32 {
 	// Append a row of olines: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir first count; every other field is its default.
-	var r int32 = evPush(c, 24)
-	evSet(c, 24, r, 0, vPage)
-	evSet(c, 24, r, 1, vX0)
-	evSet(c, 24, r, 2, vY0)
-	evSet(c, 24, r, 3, vX1)
-	evSet(c, 24, r, 4, vY1)
-	evSet(c, 24, r, 5, vBx0)
-	evSet(c, 24, r, 6, vBy0)
-	evSet(c, 24, r, 7, vBx1)
-	evSet(c, 24, r, 8, vBy1)
-	evSet(c, 24, r, 9, vRot)
-	evSet(c, 24, r, 10, vDir)
-	evSet(c, 24, r, 11, vFirst)
-	evSet(c, 24, r, 12, vCount)
-	evSet(c, 24, r, 13, -1)
-	evSet(c, 24, r, 14, -1)
-	evSet(c, 24, r, 15, -1)
-	evSet(c, 24, r, 16, -1)
-	evSet(c, 24, r, 17, -1)
-	evSet(c, 24, r, 18, -1)
-	return r
-}
-
-func OwCount(c *port.Cells) int32 {
-	return evCount(c, 28)
-}
-
-func OwGet(c *port.Cells, i int32, f int32) int32 {
-	return evGet(c, 28, i, f)
-}
-
-func OwSet(c *port.Cells, i int32, f int32, v int32) int32 {
-	return evSet(c, 28, i, f, v)
-}
-
-func OwNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vTstart int32, vTlen int32, vLine int32, vConf int32, vFeat int32) int32 {
-	// Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
 	var r int32 = evPush(c, 28)
 	evSet(c, 28, r, 0, vPage)
 	evSet(c, 28, r, 1, vX0)
@@ -5380,14 +5411,53 @@ func OwNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int3
 	evSet(c, 28, r, 8, vBy1)
 	evSet(c, 28, r, 9, vRot)
 	evSet(c, 28, r, 10, vDir)
-	evSet(c, 28, r, 11, vTstart)
-	evSet(c, 28, r, 12, vTlen)
-	evSet(c, 28, r, 13, vLine)
-	evSet(c, 28, r, 14, vConf)
-	evSet(c, 28, r, 15, vFeat)
+	evSet(c, 28, r, 11, vFirst)
+	evSet(c, 28, r, 12, vCount)
+	evSet(c, 28, r, 13, -1)
+	evSet(c, 28, r, 14, -1)
+	evSet(c, 28, r, 15, -1)
+	evSet(c, 28, r, 16, -1)
 	evSet(c, 28, r, 17, -1)
 	evSet(c, 28, r, 18, -1)
-	evSet(c, 28, r, 22, -1)
+	evSet(c, 28, r, 27, -1)
+	return r
+}
+
+func OwCount(c *port.Cells) int32 {
+	return evCount(c, 32)
+}
+
+func OwGet(c *port.Cells, i int32, f int32) int32 {
+	return evGet(c, 32, i, f)
+}
+
+func OwSet(c *port.Cells, i int32, f int32, v int32) int32 {
+	return evSet(c, 32, i, f, v)
+}
+
+func OwNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int32, vBx0 int32, vBy0 int32, vBx1 int32, vBy1 int32, vRot int32, vDir int32, vTstart int32, vTlen int32, vLine int32, vConf int32, vFeat int32) int32 {
+	// Append a row of owords: page x0 y0 x1 y1 bx0 by0 bx1 by1 rot dir tstart tlen line conf feat; every other field is its default.
+	var r int32 = evPush(c, 32)
+	evSet(c, 32, r, 0, vPage)
+	evSet(c, 32, r, 1, vX0)
+	evSet(c, 32, r, 2, vY0)
+	evSet(c, 32, r, 3, vX1)
+	evSet(c, 32, r, 4, vY1)
+	evSet(c, 32, r, 5, vBx0)
+	evSet(c, 32, r, 6, vBy0)
+	evSet(c, 32, r, 7, vBx1)
+	evSet(c, 32, r, 8, vBy1)
+	evSet(c, 32, r, 9, vRot)
+	evSet(c, 32, r, 10, vDir)
+	evSet(c, 32, r, 11, vTstart)
+	evSet(c, 32, r, 12, vTlen)
+	evSet(c, 32, r, 13, vLine)
+	evSet(c, 32, r, 14, vConf)
+	evSet(c, 32, r, 15, vFeat)
+	evSet(c, 32, r, 17, -1)
+	evSet(c, 32, r, 18, -1)
+	evSet(c, 32, r, 22, -1)
+	evSet(c, 32, r, 28, -1)
 	return r
 }
 
@@ -6336,7 +6406,7 @@ func evLowerMedian(c *port.Cells, stride int32, first int32, cnt int32, f int32)
 func EvRotMedian(olines *port.Cells, first int32, cnt int32) int32 {
 	// The page's dominant text angle for `xo-angle`: the lower median of the `rot` of the OCR lines
 	// [first, first + cnt) (an OCR run's); 0 for no line.
-	return evLowerMedian(olines, 24, first, cnt, LhRot())
+	return evLowerMedian(olines, 28, first, cnt, LhRot())
 }
 
 func evWordCls(c int32) int32 {
@@ -6493,12 +6563,12 @@ func evHeightMedian(owords *port.Cells, first int32, cnt int32) int32 {
 		return 0
 	}
 	for i < cnt {
-		h = evGet(owords, 28, first+i, HdY1()) - evGet(owords, 28, first+i, HdY0())
+		h = evGet(owords, 32, first+i, HdY1()) - evGet(owords, 32, first+i, HdY0())
 		less = 0
 		leq = 0
 		j = 0
 		for j < cnt {
-			hj = evGet(owords, 28, first+j, HdY1()) - evGet(owords, 28, first+j, HdY0())
+			hj = evGet(owords, 32, first+j, HdY1()) - evGet(owords, 32, first+j, HdY0())
 			if hj < h {
 				less += 1
 			}
@@ -6515,6 +6585,70 @@ func evHeightMedian(owords *port.Cells, first int32, cnt int32) int32 {
 	return 0
 }
 
+func OrfEngine() int32 {
+	return 28
+}
+
+func OrfEix() int32 {
+	return 29
+}
+
+func OrfCaps() int32 {
+	return 30
+}
+
+func OrfNative() int32 {
+	return 31
+}
+
+func OlfProv() int32 {
+	return 24
+}
+
+func OlfAgree() int32 {
+	return 25
+}
+
+func OlfAlts() int32 {
+	return 26
+}
+
+func OlfQfirst() int32 {
+	return 27
+}
+
+func OwfPcal() int32 {
+	return 28
+}
+
+func OwfProv() int32 {
+	return 29
+}
+
+func OwfAgree() int32 {
+	return 30
+}
+
+func OwfAlts() int32 {
+	return 31
+}
+
+func OwConfidence(c *port.Cells, word int32) int32 {
+	var p int32 = OwGet(c, word, OwfPcal())
+	if p >= 0 {
+		return p
+	}
+	return OwGet(c, word, HdConf())
+}
+
+func OrGranularity(c *port.Cells, run int32) int32 {
+	return (OrGet(c, run, OrfFlags()) / 256) % 256
+}
+
+func OrConfidenceKind(c *port.Cells, run int32) int32 {
+	return (OrGet(c, run, OrfFlags()) / 65536) % 256
+}
+
 func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, w int32, rotmed int32, altclose int32) int32 {
 	// Stage 1 features of OCR word w (SPEC 8.4.5): a new `feats` row, the word's `feat` pointed at it,
 	// columns 2-8, 17, 19, 20, 21, 28 and 29 computed from the answer alone (the others -1).
@@ -6527,13 +6661,13 @@ func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines 
 	// width, per-mille (along the writing direction); 28 the code points; 29 the distance to the nearest page
 	// edge. The text is `etext`'s.
 	var row int32 = FeNew(feats, 17, w)
-	var sf int32 = evGet(owords, 28, w, OwfSfirst())
-	var sn int32 = evGet(owords, 28, w, OwfScount())
-	var ts int32 = evGet(owords, 28, w, HdTstart())
-	var tl int32 = evGet(owords, 28, w, HdTlen())
-	var pg int32 = evGet(owords, 28, w, HdPage())
-	var lineix int32 = evGet(owords, 28, w, HdLine())
-	var rot int32 = evGet(owords, 28, w, HdRot())
+	var sf int32 = evGet(owords, 32, w, OwfSfirst())
+	var sn int32 = evGet(owords, 32, w, OwfScount())
+	var ts int32 = evGet(owords, 32, w, HdTstart())
+	var tl int32 = evGet(owords, 32, w, HdTlen())
+	var pg int32 = evGet(owords, 32, w, HdPage())
+	var lineix int32 = evGet(owords, 32, w, HdLine())
+	var rot int32 = evGet(owords, 32, w, HdRot())
 	var s int32 = 0
 	var lo int32 = -1
 	var sum int32 = 0
@@ -6554,8 +6688,8 @@ func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines 
 	var xm int32 = 0
 	var ym int32 = 0
 	var ep int32 = 0
-	evSet(owords, 28, w, HdFeat(), row)
-	FeSet(feats, row, XoConf(), evGet(owords, 28, w, HdConf()))
+	evSet(owords, 32, w, HdFeat(), row)
+	FeSet(feats, row, XoConf(), OwConfidence(owords, w))
 	s = sf
 	for s < (sf + sn) {
 		sc = evGet(osyms, 20, s, OsfConf())
@@ -6598,7 +6732,7 @@ func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines 
 		FeSet(feats, row, XoMargin(), minmargin)
 		FeSet(feats, row, XoAmbiguous(), ambiguous)
 	}
-	FeSet(feats, row, XoEngineFlags(), evGet(owords, 28, w, OwfFlags()))
+	FeSet(feats, row, XoEngineFlags(), evGet(owords, 32, w, OwfFlags()))
 	FeSet(feats, row, XoImplausible(), evImplausible(etext, ts, tl))
 	d = rot - rotmed
 	if d < 0 {
@@ -6611,15 +6745,15 @@ func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines 
 	FeSet(feats, row, XoSpacing(), evSpacing(osyms, sf, sn, rot))
 	FeSet(feats, row, XoLength(), tl)
 	if lineix >= 0 {
-		lf = evGet(olines, 24, lineix, LhFirst())
-		lc = evGet(olines, 24, lineix, LhCount())
+		lf = evGet(olines, 28, lineix, LhFirst())
+		lc = evGet(olines, 28, lineix, LhCount())
 		med = evHeightMedian(owords, lf, lc)
 		if med > 0 {
-			FeSet(feats, row, XoRelHeight(), int32((int64(evGet(owords, 28, w, HdY1())-evGet(owords, 28, w, HdY0()))*int64(1000))/int64(med)))
+			FeSet(feats, row, XoRelHeight(), int32((int64(evGet(owords, 32, w, HdY1())-evGet(owords, 32, w, HdY0()))*int64(1000))/int64(med)))
 		}
-		xm = (evGet(owords, 28, w, HdBx0()) + evGet(owords, 28, w, HdBx1())) / 2
-		ym = (evGet(owords, 28, w, HdBy0()) + evGet(owords, 28, w, HdBy1())) / 2
-		d = ym - EvBaselineAt(evGet(olines, 24, lineix, LhBx0()), evGet(olines, 24, lineix, LhBy0()), evGet(olines, 24, lineix, LhBx1()), evGet(olines, 24, lineix, LhBy1()), xm)
+		xm = (evGet(owords, 32, w, HdBx0()) + evGet(owords, 32, w, HdBx1())) / 2
+		ym = (evGet(owords, 32, w, HdBy0()) + evGet(owords, 32, w, HdBy1())) / 2
+		d = ym - EvBaselineAt(evGet(olines, 28, lineix, LhBx0()), evGet(olines, 28, lineix, LhBy0()), evGet(olines, 28, lineix, LhBx1()), evGet(olines, 28, lineix, LhBy1()), xm)
 		if d < 0 {
 			d = 0 - d
 		}
@@ -6627,15 +6761,15 @@ func EvFeatOcr(feats *port.Cells, epages *port.Cells, etext *port.Cells, olines 
 	}
 	ep = EvPageRow(epages, pg)
 	if ep >= 0 {
-		d = evGet(owords, 28, w, HdX0())
-		if evGet(owords, 28, w, HdY0()) < d {
-			d = evGet(owords, 28, w, HdY0())
+		d = evGet(owords, 32, w, HdX0())
+		if evGet(owords, 32, w, HdY0()) < d {
+			d = evGet(owords, 32, w, HdY0())
 		}
-		if (evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 28, w, HdX1())) < d {
-			d = evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 28, w, HdX1())
+		if (evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 32, w, HdX1())) < d {
+			d = evGet(epages, 12, ep, EpfWidth()) - evGet(owords, 32, w, HdX1())
 		}
-		if (evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 28, w, HdY1())) < d {
-			d = evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 28, w, HdY1())
+		if (evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 32, w, HdY1())) < d {
+			d = evGet(epages, 12, ep, EpfHeight()) - evGet(owords, 32, w, HdY1())
 		}
 		if d < 0 {
 			d = 0
@@ -6803,8 +6937,8 @@ func EvCheck(epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.
 		i += 1
 	}
 	i = 0
-	for i < (port.CellsLen(owords) / 28) {
-		v1 = port.CellsAt(owords, (i*28)+15)
+	for i < (port.CellsLen(owords) / 32) {
+		v1 = port.CellsAt(owords, (i*32)+15)
 		if v1 >= 0 {
 			if (port.CellsAt(feats, v1*32) != 17) || (port.CellsAt(feats, (v1*32)+1) != i) {
 				return 102

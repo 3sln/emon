@@ -113,8 +113,8 @@ func OaLineFuse(page int32, rtp *port.Cells, runs *port.Cells, lines *port.Cells
 								}
 								b = j
 								hits += 1
-								if evidence.OwGet(words, w, evidence.HdConf()) < conf {
-									conf = evidence.OwGet(words, w, evidence.HdConf())
+								if evidence.OwConfidence(words, w) < conf {
+									conf = evidence.OwConfidence(words, w)
 								}
 							}
 							j += 1
@@ -165,7 +165,7 @@ func OaLineFuse(page int32, rtp *port.Cells, runs *port.Cells, lines *port.Cells
 							if (port.CellsAt(im, 0) == 0) || (port.CellsAt(im, 1) != 2) {
 								compact = 0
 							}
-							margin = evidence.OwGet(words, cw, evidence.HdConf()) - conf
+							margin = evidence.OwConfidence(words, cw) - conf
 							if (compact == 1) && ((malformed == 1) && (oarb.OaLineMergeMeta(joined, 0, rawlen, start, cn, hits, 1, margin, im, cm) == 1)) {
 								j = a
 								for j <= b {
@@ -236,12 +236,12 @@ func OaLineFuse(page int32, rtp *port.Cells, runs *port.Cells, lines *port.Cells
 							conf = 1000
 							q = j
 							for q < (j + hits) {
-								if evidence.OwGet(words, first+q, evidence.HdConf()) < conf {
-									conf = evidence.OwGet(words, first+q, evidence.HdConf())
+								if evidence.OwConfidence(words, first+q) < conf {
+									conf = evidence.OwConfidence(words, first+q)
 								}
 								q += 1
 							}
-							port.CellsPush(oaz, evidence.OwGet(words, cw, evidence.HdConf())-conf)
+							port.CellsPush(oaz, evidence.OwConfidence(words, cw)-conf)
 							port.CellsPush(oaz, l)
 							port.CellsPush(oaz, tr)
 							port.CellsPush(oaz, 1)

@@ -103,8 +103,8 @@ public static class Oaline {
                                     }
                                     b = j;
                                     hits += 1;
-                                    if (Evidence.OwGet(words, w, Evidence.HdConf()) < conf) {
-                                        conf = Evidence.OwGet(words, w, Evidence.HdConf());
+                                    if (Evidence.OwConfidence(words, w) < conf) {
+                                        conf = Evidence.OwConfidence(words, w);
                                     }
                                 }
                                 j += 1;
@@ -155,7 +155,7 @@ public static class Oaline {
                                 if ((emon.Port.CellsAt(im, 0) == 0) || (emon.Port.CellsAt(im, 1) != 2)) {
                                     compact = 0;
                                 }
-                                margin = Evidence.OwGet(words, cw, Evidence.HdConf()) - conf;
+                                margin = Evidence.OwConfidence(words, cw) - conf;
                                 if ((compact == 1) && ((malformed == 1) && (Oarb.OaLineMergeMeta(joined, 0, rawlen, start, cn, hits, 1, margin, im, cm) == 1))) {
                                     j = a;
                                     while (j <= b) {
@@ -226,12 +226,12 @@ public static class Oaline {
                                 conf = 1000;
                                 q = j;
                                 while (q < (j + hits)) {
-                                    if (Evidence.OwGet(words, first + q, Evidence.HdConf()) < conf) {
-                                        conf = Evidence.OwGet(words, first + q, Evidence.HdConf());
+                                    if (Evidence.OwConfidence(words, first + q) < conf) {
+                                        conf = Evidence.OwConfidence(words, first + q);
                                     }
                                     q += 1;
                                 }
-                                emon.Port.CellsPush(oaz, Evidence.OwGet(words, cw, Evidence.HdConf()) - conf);
+                                emon.Port.CellsPush(oaz, Evidence.OwConfidence(words, cw) - conf);
                                 emon.Port.CellsPush(oaz, l);
                                 emon.Port.CellsPush(oaz, tr);
                                 emon.Port.CellsPush(oaz, 1);

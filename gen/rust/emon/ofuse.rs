@@ -1227,7 +1227,7 @@ pub(crate) fn of_add_candidate(words: &mut crate::port::Cells, text: &mut crate:
     while i < n {
         w = crate::port::cells_at(seq, i);
         crate::port::cells_push(refs, w);
-        sum += ow_get(words, w, hd_conf()) as i64;
+        sum += ow_confidence(words, w) as i64;
         if (ow_get(words, w, owf_flags()) & oe_dictionary()) == 0 {
             dictionary = 0;
         }
@@ -1344,7 +1344,7 @@ pub fn of_candidates(words: &mut crate::port::Cells, text: &mut crate::port::Cel
             sum = 0 as i64;
             j = 0;
             while j < crate::port::cells_len(seq) {
-                sum += ow_get(words, crate::port::cells_at(seq, j), hd_conf()) as i64;
+                sum += ow_confidence(words, crate::port::cells_at(seq, j)) as i64;
                 j += 1;
             }
             confidence = (sum / (crate::port::cells_len(seq) as i64)) as i32;
@@ -1420,7 +1420,7 @@ pub fn of_pp_complete(words: &mut crate::port::Cells, text: &mut crate::port::Ce
     let mut seen: i32 = 0;
     let mut covered: i32 = 0;
     while i < (first + n) {
-        if ow_get(words, i, hd_conf()) < of_insert_conf() {
+        if ow_confidence(words, i) < of_insert_conf() {
             return 0;
         }
         if of_eligible(words, text, i) == 0 {
@@ -1503,7 +1503,7 @@ pub fn of_pp_repeat_choice(runs: &mut crate::port::Cells, words: &mut crate::por
                         v = crate::port::cells_at(sel, j);
                         run = ow_get(words, v, owf_run());
                         if (run >= 0) && (run < or_count(runs)) {
-                            if ((or_get(runs, run, orf_request()) % 256) != 23) && ((ow_get(words, w, hd_page()) == ow_get(words, v, hd_page())) && (ow_get(words, v, hd_conf()) >= of_insert_conf())) {
+                            if ((or_get(runs, run, orf_request()) % 256) != 23) && ((ow_get(words, w, hd_page()) == ow_get(words, v, hd_page())) && (ow_confidence(words, v) >= of_insert_conf())) {
                                 if (of_word_same(words, text, w, v, 0) == 1) && (ev_overlap_small(ow_get(words, w, hd_x0()), ow_get(words, w, hd_y0()), ow_get(words, w, hd_x1()), ow_get(words, w, hd_y1()), ow_get(words, v, hd_x0()), ow_get(words, v, hd_y0()), ow_get(words, v, hd_x1()), ow_get(words, v, hd_y1())) == 0) {
                                     found = 1;
                                 }

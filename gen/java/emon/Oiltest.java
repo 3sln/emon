@@ -109,4 +109,49 @@ public final class Oiltest {
         emon.Testport.assertEq(Oil.oilBegin(c, 13, Oil.oenTesseract(), 0, Oil.ocBaseline(), 1, 1, 0, 0), -1, "native must be a subset");
         emon.Testport.assertEq(emon.Port.cellsLen(c), 0, "a rejected header did not change the answer stream");
     }
+    public static void testAbsentRowmetricsNeverReadFollowingColumns() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenTesseract(), Oil.ocAngle(), 0, 1, 1, 0, 0);
+        Oil.oilLine(c, at, 1, 2, 3, 4, -1, 0, -1, -1, 0, 0, 0, 0, 777, 888, 999, 0, 0, 0, 0, 0, 0, 0, 0, -321);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilLineField(c, at, 0, 11), -1, "absent xheight does not read angle");
+        emon.Testport.assertEq(Oil.oilLineField(c, at, 0, 12), -1, "absent ascender does not read past row");
+        emon.Testport.assertEq(Oil.oilLineField(c, at, 0, 13), -1, "absent descender does not read past record");
+    }
+    public static void testPpDoesNotClaimOsd() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 1, 0, 1);
+        emon.Testport.assertEq(Oil.oilHeaderField(c, at, 9, Oil.ocOrient(), -1), -1, "no orientation measurement");
+        emon.Testport.assertEq(Oil.oilHeaderField(c, at, 10, Oil.ocOrient(), -1), -1, "no orientation confidence");
+    }
+    public static void testBrowserMissingBaselineIsAbsent() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenTesseract(), 0, 0, 1, 1, 0, 0);
+        Oil.oilLine(c, at, 1, 2, 30, 4, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilLineField(c, at, 0, 4), -1, "baseline zero is not a measurement");
+        emon.Testport.assertEq(Oil.oilHeaderField(c, at, 9, Oil.ocOrient(), -1), -1, "browser never ran OSD");
+    }
+    public static void testFlatOilRoundtripsAndRejectsOverflowingTextBeforeWriting() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells flat = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Port.Cells bad = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 7, Oil.oenTesseract(), 0, 0, 1, 1, 0, 0);
+        int i = 4;
+        Oil.oilLine(c, at, 1, 2, 3, 4, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.oilWord(c, at, 1, 2, 3, 4, 0, 900, 0, 0, -1, 0);
+        Oil.oilWordCp(c, at, word, 65);
+        Oil.oilEnd(c, at);
+        while (i < emon.Port.cellsLen(c)) {
+            emon.Port.cellsPush(flat, emon.Port.cellsAt(c, i));
+            i += 1;
+        }
+        emon.Testport.assertEq(Oil.oilFlat(flat, 77, out), 0, "canonical flat OIL accepted");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 2), 77, "request id belongs to the envelope");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), emon.Port.cellsLen(c), "flat roundtrip length");
+        emon.Port.cellsSet(flat, word + 3, 2147483647);
+        emon.Testport.assertEq(Oil.oilFlat(flat, 77, bad), -1, "text count cannot overflow cursor");
+        emon.Testport.assertEq(emon.Port.cellsLen(bad), 0, "malformed form writes nothing");
+    }
 }

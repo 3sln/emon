@@ -214,7 +214,7 @@ public static class Sigpx {
         int y = 0;
         while (i < n) {
             if ((Evidence.OwGet(owords, i, Evidence.HdPage()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount)))) {
-                if (Evidence.OwGet(owords, i, Evidence.HdConf()) >= SpConf()) {
+                if (Evidence.OwConfidence(owords, i) >= SpConf()) {
                     ts = Evidence.OwGet(owords, i, Evidence.HdTstart());
                     tl = Evidence.OwGet(owords, i, Evidence.HdTlen());
                     letters = 0;
@@ -723,7 +723,7 @@ public static class Sigpx {
                     if (inone == 1) {
                         nin += 1;
                     }
-                    csum += Evidence.OwGet(owords, wi, Evidence.HdConf());
+                    csum += Evidence.OwConfidence(owords, wi);
                     j += 1;
                 }
                 if ((nin == cnt) && (csum < (cnt * 600))) {

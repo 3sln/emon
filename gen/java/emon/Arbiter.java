@@ -281,7 +281,7 @@ public final class Arbiter {
         while (k < no) {
             row = arRef(refs, of + k, 1);
             olen += arAlnum(owords, etext, row);
-            csum += Evidence.owGet(owords, row, Evidence.hdConf());
+            csum += Evidence.owConfidence(owords, row);
             f = Evidence.owGet(owords, row, Evidence.hdFeat());
             if (f >= 0) {
                 v = Evidence.feGet(feats, f, Evidence.xoImplausible());
@@ -643,7 +643,7 @@ public final class Arbiter {
             r = Player.fwCopyWord(nfw, ofw, tj, lrow);
             emon.Port.cellsSet(nfw, (r * 24) + 11, Evidence.owGet(owords, orow, Evidence.hdTstart()));
             emon.Port.cellsSet(nfw, (r * 24) + 12, Evidence.owGet(owords, orow, Evidence.hdTlen()));
-            emon.Port.cellsSet(nfw, (r * 24) + 14, Evidence.owGet(owords, orow, Evidence.hdConf()));
+            emon.Port.cellsSet(nfw, (r * 24) + 14, Evidence.owConfidence(owords, orow));
             emon.Port.cellsSet(nfw, (r * 24) + 15, -1);
             // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
             if (nt > 0) {

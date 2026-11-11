@@ -6,6 +6,7 @@ package retarget
 import (
 	"emon/evidence"
 	"emon/norm"
+	"emon/oil"
 	"emon/plan"
 	"emon/player"
 	"emon/port"
@@ -440,7 +441,7 @@ func RtLineMean(olines *port.Cells, owords *port.Cells, l int32) int32 {
 		return -1
 	}
 	for j < c {
-		sum += evidence.OwGet(owords, f+j, evidence.HdConf())
+		sum += evidence.OwConfidence(owords, f+j)
 		j += 1
 	}
 	return sum / c
@@ -453,7 +454,7 @@ func RtRunScore(oruns *port.Cells, olines *port.Cells, owords *port.Cells, run i
 	var i int32 = w0
 	var sum int32 = 0
 	for i < (w0 + nw) {
-		sum += (evidence.OwGet(owords, i, evidence.HdConf()) * evidence.OwGet(owords, i, evidence.HdTlen())) / 16
+		sum += (evidence.OwConfidence(owords, i) * evidence.OwGet(owords, i, evidence.HdTlen())) / 16
 		i += 1
 	}
 	return sum
@@ -1245,17 +1246,17 @@ func RtGapLines(page int32, dpi int32, tlines *port.Cells, oruns *port.Cells, ru
 
 func RtAnswerScore(ans *port.Cells, at int32) int32 {
 	// D671: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
-	var w int32 = plan.AnOcrFirst(ans, at)
+	var w int32 = oil.OilFirstWord(ans, at)
 	var i int32 = 0
 	var score int32 = 0
 	var area int32 = 0
 	var width int32 = 0
 	var height int32 = 0
 	var conf int32 = 0
-	for i < plan.AnOcrCount(ans, at) {
-		width = plan.AwGet(ans, w, plan.AwW())
-		height = plan.AwGet(ans, w, plan.AwH())
-		conf = plan.AwGet(ans, w, plan.AwConf())
+	for i < oil.OilNwords(ans, at) {
+		width = port.CellsAt(ans, w+2)
+		height = port.CellsAt(ans, w+3)
+		conf = oil.OilPolicyConf(ans, at, w)
 		if (width > 0) && ((height > 0) && (width >= height)) {
 			area = (width * height) / 100
 			if area > 10000 {
@@ -1265,7 +1266,7 @@ func RtAnswerScore(ans *port.Cells, at int32) int32 {
 				score += (area * conf) / 1000
 			}
 		}
-		w = plan.AwNext(ans, w)
+		w = oil.OilWordNext(ans, at, w)
 		i += 1
 	}
 	return score
@@ -1319,7 +1320,7 @@ func RtEmptyReceipt(trigger int32, ans *port.Cells, at int32) int32 {
 	if plan.AnOk(ans, at) != 1 {
 		return 1
 	}
-	if plan.AnOcrCount(ans, at) == 0 {
+	if oil.OilNwords(ans, at) == 0 {
 		return 1
 	}
 	return 0
@@ -1444,7 +1445,7 @@ func RtPlan(page int32, input int32, born int32, wanttext int32, rid int32, dpi 
 		var ba int32 = plan.AnFind(ans, plan.PuId(page, RiBody()))
 		var receipt int32 = plan.AnFind(ans, plan.PuId(page, RiReceipt()))
 		var receiptMode int32 = RtReceiptActive(rtp)
-		if (RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((plan.AnOk(ans, ba) == 1) && (plan.AnOcrCount(ans, ba) == 0)))) {
+		if (RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((plan.AnOk(ans, ba) == 1) && (oil.OilNwords(ans, ba) == 0)))) {
 			asked += rtAskThermal(page, dpi, loc, ans, bms, port.BmsGet(bms, plan.PuViewId(page, k0)), norm.NmPaperGray(ws), rtp, rq, receiptMode, pixels)
 		}
 	}
@@ -1664,7 +1665,7 @@ func rtRunMean(oruns *port.Cells, owords *port.Cells, run int32) int32 {
 		return -1
 	}
 	for i < (w0 + nw) {
-		sum += evidence.OwGet(owords, i, evidence.HdConf())
+		sum += evidence.OwConfidence(owords, i)
 		i += 1
 	}
 	return sum / nw
@@ -1682,7 +1683,7 @@ func rtLinesScore(olines *port.Cells, owords *port.Cells, l0 int32, n int32) int
 		c = evidence.OlGet(olines, l, evidence.LhCount())
 		j = 0
 		for j < c {
-			sum += (evidence.OwGet(owords, f+j, evidence.HdConf()) * evidence.OwGet(owords, f+j, evidence.HdTlen())) / 16
+			sum += (evidence.OwConfidence(owords, f+j) * evidence.OwGet(owords, f+j, evidence.HdTlen())) / 16
 			j += 1
 		}
 		l += 1
@@ -1703,7 +1704,7 @@ func rtLinesConf(olines *port.Cells, owords *port.Cells, l0 int32, n int32) int3
 		c = evidence.OlGet(olines, l, evidence.LhCount())
 		j = 0
 		for j < c {
-			sum += evidence.OwGet(owords, f+j, evidence.HdConf())
+			sum += evidence.OwConfidence(owords, f+j)
 			words += 1
 			j += 1
 		}
@@ -1950,14 +1951,14 @@ func rtReceiptProtectConf() int32 {
 }
 
 func rtReceiptProtected(ow *port.Cells, et *port.Cells, w int32) int32 {
-	if (evidence.OwGet(ow, w, evidence.HdConf()) >= rtReceiptProtectConf()) && (evidence.OwGet(ow, w, evidence.HdTlen()) >= 2) {
+	if (evidence.OwConfidence(ow, w) >= rtReceiptProtectConf()) && (evidence.OwGet(ow, w, evidence.HdTlen()) >= 2) {
 		return rtReceiptWordAlpha(ow, et, w)
 	}
 	return 0
 }
 
 func rtReceiptWordValue(ow *port.Cells, et *port.Cells, w int32) int32 {
-	return upscale.UpReceiptValue(evidence.OwGet(ow, w, evidence.HdConf()), evidence.OwGet(ow, w, evidence.HdTlen()), rtReceiptWordAlpha(ow, et, w))
+	return upscale.UpReceiptValue(evidence.OwConfidence(ow, w), evidence.OwGet(ow, w, evidence.HdTlen()), rtReceiptWordAlpha(ow, et, w))
 }
 
 func rtReceiptSelectedCount(ol *port.Cells, ow *port.Cells, et *port.Cells, scr *port.Cells, n int32, word int32, first int32) int32 {
@@ -2003,7 +2004,7 @@ func rtReceiptSafe(runs *port.Cells, ol *port.Cells, ow *port.Cells, et *port.Ce
 				c = c0
 				count = 0
 				for c < cn {
-					if (evidence.OwGet(ow, c, evidence.HdConf()) >= RtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1) {
+					if (evidence.OwConfidence(ow, c) >= RtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1) {
 						count += 1
 					}
 					c += 1

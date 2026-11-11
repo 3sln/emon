@@ -193,7 +193,7 @@ func ocWord(owords *port.Cells, w int32, et *port.Cells, ledger *port.Cells, tex
 	if missing == 0 {
 		return 0
 	}
-	lr = model.LedgerAdd(ledger, model.DrOcrUnrepresented(), evidence.OwGet(owords, w, evidence.HdPage()), evidence.OwGet(owords, w, evidence.HdX0()), evidence.OwGet(owords, w, evidence.HdY0()), evidence.OwGet(owords, w, evidence.HdX1()), evidence.OwGet(owords, w, evidence.HdY1()), evidence.OwGet(owords, w, evidence.HdConf()), model.SrOcr())
+	lr = model.LedgerAdd(ledger, model.DrOcrUnrepresented(), evidence.OwGet(owords, w, evidence.HdPage()), evidence.OwGet(owords, w, evidence.HdX0()), evidence.OwGet(owords, w, evidence.HdY0()), evidence.OwGet(owords, w, evidence.HdX1()), evidence.OwGet(owords, w, evidence.HdY1()), evidence.OwConfidence(owords, w), model.SrOcr())
 	ts = port.CellsLen(text)
 	i = 0
 	for i < port.CellsLen(norm) {

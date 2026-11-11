@@ -1022,7 +1022,7 @@ public static class Sealmark {
         // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
         int ts = Evidence.OwGet(owords, row, Evidence.HdTstart());
         int tl = Evidence.OwGet(owords, row, Evidence.HdTlen());
-        int conf = Evidence.OwGet(owords, row, Evidence.HdConf());
+        int conf = Evidence.OwConfidence(owords, row);
         int k = 0;
         int n = 0;
         while (k < tl) {

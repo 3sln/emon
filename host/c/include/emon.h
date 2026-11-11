@@ -231,7 +231,7 @@ int emon_fail(emon_session *s, int short_read, const char *message, emon_error *
 int emon_step(emon_session *s, emon_step_out *out, emon_error *err);
 
 /* Answer an owed request with a raw record `[len kind id status ...]` (a failed or unsupported one is four cells: kin's emon.plan), or an
- * `ocr` request from the flat integer form of your engine's reading (kin's `ox-flat`, emon.ocrport: the layout is written once, in kin). */
+ * `ocr` request from the flat integer form of your engine's reading (kin's `oil-flat`, emon.ocrport: the layout is written once, in kin). */
 int emon_answer(emon_session *s, const int32_t *cells, size_t ncells, emon_error *err);
 int emon_answer_ocr(emon_session *s, int32_t id, const int32_t *cells, size_t ncells, emon_error *err);
 /* A `render` or `crop` request (with js-render=1) from your renderer's WHOLE page: `width` x `height` pixels of RGB (3 channels, row-major,

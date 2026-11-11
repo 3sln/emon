@@ -40,7 +40,7 @@
                                 node-set-src node-conf node-set-conf node-flags node-add-flag node-add-src node-region-head
                                 node-region-count node-kind region-page region-x0 region-y0 region-x1 region-y1 region-next
                                 fl-text-layer-suspect fl-low-conf]]
-            [emon.evidence :refer [xo-kin-ink xo-angle xo-rel-height xo-margin xo-body-share xo-in-table-image xo-rule-like mf-alpha ea-etext hd-page hd-rot ev-overlap-small ev-page-row ev-rot-median ep-get epf-width epf-height fe-get
+            [emon.evidence :refer [ow-confidence xo-kin-ink xo-angle xo-rel-height xo-margin xo-body-share xo-in-table-image xo-rule-like mf-alpha ea-etext hd-page hd-rot ev-overlap-small ev-page-row ev-rot-median ep-get epf-width epf-height fe-get
                                    rf-get ow-get ow-count or-count or-get orf-page orf-lfirst orf-lcount ol-get lh-first lh-count
                                    im-count im-get mf-page mf-x0 mf-y0 mf-x1 mf-y1
                                    hd-feat hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-line
@@ -261,7 +261,7 @@
     (while (< k no)
       (do (set row (ar-ref refs (+ of k) 1))
           (set olen (+ olen (ar-alnum owords etext row)))
-          (set csum (+ csum (ow-get owords row (hd-conf))))
+          (set csum (+ csum (ow-confidence owords row)))
           (set f (ow-get owords row (hd-feat)))
           (if (>= f 0)
             (do (set v (fe-get feats f (xo-implausible)))
@@ -562,7 +562,7 @@
           (set r (fw-copy-word nfw ofw tj lrow))
           (cells-set nfw (+ (* r 24) 11) (ow-get owords orow (hd-tstart)))
           (cells-set nfw (+ (* r 24) 12) (ow-get owords orow (hd-tlen)))
-          (cells-set nfw (+ (* r 24) 14) (ow-get owords orow (hd-conf)))
+          (cells-set nfw (+ (* r 24) 14) (ow-confidence owords orow))
           (cells-set nfw (+ (* r 24) 15) -1)
           (comment "a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)")
           (if (> nt 0)

@@ -22,7 +22,7 @@
   (:require [emon.lang :refer [I32 I64 Cells Bitmap BitmapSet i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8 bitmap-hash]]
             [emon.plan :refer [an-find an-ok pu-id pu-view-id]]
-            [emon.evidence :refer [ev-sin ev-cos vw-px-to-cpt vw-cpt-to-px vw-new vw-get vw-set vk-polar vk-cropped vwf-flags vwf-layer vwf-a vwf-b vwf-c vwf-d vwf-e vwf-f
+            [emon.evidence :refer [ow-confidence ev-sin ev-cos vw-px-to-cpt vw-cpt-to-px vw-new vw-get vw-set vk-polar vk-cropped vwf-flags vwf-layer vwf-a vwf-b vwf-c vwf-d vwf-e vwf-f
                                    pm-count pm-get pmf-page pmf-x0 pmf-y0 pmf-x1 pmf-y1 pmf-kind pmf-cx pmf-cy pmf-rx pmf-ry pmf-rot pmf-stroke pmf-color pmf-ink
                                    pmf-conf pmf-flags pmf-fill pm-rect pm-ellipse pm-circle pm-curve pm-ring
                                    ik-get ikf-role ir-body ir-color
@@ -989,7 +989,7 @@
                                 (set inone 1)))
                             (set q (+ q 1))))
                       (if (== inone 1) (set nin (+ nin 1)))
-                      (set csum (+ csum (ow-get owords wi (hd-conf))))
+                      (set csum (+ csum (ow-confidence owords wi)))
                       (set j (+ j 1))))
                 (if (== nin cnt) (set allin 1))
                 (comment "or most of it, and the engine unsure of it: a line of the ring's letters that the first pass cut across the ring's edge")

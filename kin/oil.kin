@@ -3,7 +3,8 @@
 ;; followed by the 24-cell header, blocks, lines, variable words and sidecars.
 ;; Optional groups occupy no cells when their capability is clear.
 (ns emon.oil
-  (:require [emon.lang :refer [I32 I64 Cells defenum i64 i32 mul64 shr64]]
+  (:require [emon.ocalib :refer [ocal-word]]
+            [emon.lang :refer [I32 I64 Cells defenum i64 i32 mul64 shr64]]
             [emon.port :refer [cells-at cells-len cells-push cells-set]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * quot rem < > <= >= == != and or bit-and bit-xor]]))
@@ -296,3 +297,232 @@
     (oil-insert c (+ (+ alt 2) n) cp)
     (cells-set c (+ alt 1) (+ n 1)))
   (return 0))
+
+;; Guard before computing an optional column's address. Public field readers
+;; return the policy fallback without touching storage when a group is absent.
+(defn ^:pub ^I32 oil-line-field [^Cells c ^I32 at ^I32 index ^I32 field]
+  (let [^I32 caps (oil-get c at (oh-caps))
+        ^I32 row (oil-line-at c at index)
+        ^:mut ^I32 p (+ row 6)]
+    (if (< field 4) (return (cells-at c (+ row field))))
+    (if (== field 8)
+      (do (if (== (oil-has caps (oc-blocks)) 0) (return index))
+          (return (cells-at c (+ row 4)))))
+    (if (== field 10)
+      (do (if (== (oil-has caps (oc-btype)) 0) (return 0))
+          (let [^I32 block (cells-at c (+ row 4))]
+            (if (< block 0) (return 0))
+            (let [^I32 b (oil-block-at c at block)]
+              (return (cells-at c (+ (+ b 5) (* 3 (oil-has caps (oc-wdir))))))))))
+    (set p (+ p (oil-has caps (oc-lconf))))
+    (if (== field 9)
+      (do (if (== (oil-has caps (oc-paras)) 0) (return index))
+          (return (cells-at c p))))
+    (set p (+ p (oil-has caps (oc-paras))))
+    (if (and (>= field 4) (<= field 7))
+      (do (if (== (oil-has caps (oc-baseline)) 0) (return -1))
+          (return (cells-at c (+ p (- field 4))))))
+    (set p (+ p (* 4 (oil-has caps (oc-baseline)))))
+    (if (and (>= field 11) (<= field 13))
+      (do (if (== (oil-has caps (oc-rowmetrics)) 0) (return -1))
+          (return (cells-at c (+ p (- field 11))))))
+    (return -1)))
+
+(defn ^:pub ^I32 oil-header-field [^Cells c ^I32 at ^I32 field ^I32 capability ^I32 fallback]
+  (if (== (oil-has (oil-get c at (oh-caps)) capability) 0) (return fallback))
+  (return (oil-get c at field)))
+
+(defn ^:pub ^I32 oil-word-field [^Cells c ^I32 at ^I32 word ^I32 capability ^I32 fallback]
+  (let [^I32 caps (oil-get c at (oh-caps)) ^:mut ^I32 p (+ word 6)]
+    (if (== (oil-has caps capability) 0) (return fallback))
+    (if (== capability (oc-wlang)) (return (cells-at c p)))
+    (set p (+ p (oil-has caps (oc-wlang))))
+    (if (== capability (oc-style)) (return (cells-at c p)))
+    (set p (+ p (oil-has caps (oc-style))))
+    (if (== capability (oc-psize)) (return (cells-at c p)))
+    (set p (+ p (oil-has caps (oc-psize))))
+    (return (cells-at c p))))
+
+(defn ^:pub ^I32 oil-find [^Cells c ^I32 at]
+  (if (< at 0) (return -1))
+  (if (< (cells-at c at) 28) (return -1))
+  (if (!= (oil-get c at 0) (oil-version)) (return -1))
+  (return at))
+
+(defn ^:pub ^I32 oil-orient [^Cells c ^I32 at]
+  (return (oil-header-field c at 9 (oc-orient) 0)))
+
+(defn ^:pub ^I32 oil-oconf [^Cells c ^I32 at]
+  (return (oil-header-field c at 10 (oc-orient) -1)))
+
+(defn ^:pub ^I32 oil-deskew [^Cells c ^I32 at]
+  (return (oil-header-field c at 11 (oc-deskew) 0)))
+
+(defn ^:pub ^I32 oil-script [^Cells c ^I32 at]
+  (return (oil-header-field c at 12 (oc-script) 0)))
+
+(defn ^:pub ^I32 oil-sconf [^Cells c ^I32 at]
+  (return (oil-header-field c at 13 (oc-script) -1)))
+
+(defn ^:pub ^I32 oil-wdir [^Cells c ^I32 at]
+  (return (oil-header-field c at 14 (oc-wdir) 0)))
+
+(defn ^:pub ^I32 oil-tlorder [^Cells c ^I32 at]
+  (return (oil-header-field c at 15 (oc-wdir) 0)))
+
+(defn ^:pub ^I32 oil-binary [^Cells c ^I32 at]
+  (return (oil-header-field c at 22 (oc-binary) 0)))
+
+(defn ^:pub ^I32 oil-osd [^Cells c ^I32 at]
+  (if (== (oil-has (oil-get c at (oh-caps)) (oc-orient)) 0) (return -1))
+  (return (* 90 (oil-get c at (oh-orient)))))
+
+(defn ^:pub ^I32 oil-nlines [^Cells c ^I32 at] (return (oil-get c at (oh-nlines))))
+
+(defn ^:pub ^I32 oil-nblocks [^Cells c ^I32 at] (return (oil-get c at (oh-nblocks))))
+
+(defn ^:pub ^I32 oil-nwords [^Cells c ^I32 at] (return (oil-get c at (oh-nwords))))
+
+(defn ^:pub ^I32 oil-wflags [^Cells c ^I32 at ^I32 w] (return (oil-word-field c at w (oc-style) 0)))
+
+(defn ^:pub ^I32 oil-wlang [^Cells c ^I32 at ^I32 w] (return (oil-word-field c at w (oc-wlang) 0)))
+
+(defn ^:pub ^I32 oil-wpsize [^Cells c ^I32 at ^I32 w] (return (oil-word-field c at w (oc-psize) -1)))
+
+(defn ^:pub ^I32 oil-wlex [^Cells c ^I32 at ^I32 w] (return (oil-word-field c at w (oc-lexicon) 0)))
+
+(defn ^:pub ^I32 oil-nsym [^Cells c ^I32 at ^I32 w] (let [^I32 p (oil-word-text c at w)] (return (cells-at c (- p 1)))))
+(defn ^:pub ^I32 oil-first-sym [^Cells c ^I32 at ^I32 w]
+  (let [^I32 p (oil-word-text c at w)] (return (+ (+ p 1) (cells-at c p)))))
+(defn ^:pub ^I32 oil-wlen [^Cells c ^I32 at ^I32 w] (let [^I32 p (oil-word-text c at w)] (return (cells-at c p))))
+(defn ^:pub ^I32 oil-wcp [^Cells c ^I32 at ^I32 w ^I32 k] (let [^I32 p (oil-word-text c at w)] (return (cells-at c (+ (+ p 1) k)))))
+(defn ^:pub ^I32 oil-sym-alts [^Cells c ^I32 sym] (return (+ (+ sym 7) (cells-at c (+ sym 5)))))
+(defn ^:pub ^I32 oil-alt-next [^Cells c ^I32 alt] (return (+ (+ alt 2) (cells-at c alt))))
+
+(defn ^:pub ^I32 oil-block-field [^Cells c ^I32 at ^I32 index ^I32 field]
+  (if (== (oil-has (oil-get c at (oh-caps)) (oc-wdir)) 0) (return 0))
+  (let [^I32 p (oil-block-at c at index)] (return (cells-at c (+ (+ p 5) field)))))
+
+(defn ^:pub ^I32 oil-word-flags [^Cells c ^I32 at ^I32 word]
+  (comment "Evidence dictionary and numeric bits. Numeric is derived from text, not an engine claim.")
+  (let [^I32 n (oil-wlen c at word) ^:mut ^I32 i 0 ^:mut ^I32 digits 0 ^:mut ^I32 other 0
+        ^:mut ^I32 flags 0]
+    (if (!= (bit-and (oil-wlex c at word) 2) 0) (set flags 1))
+    (while (< i n)
+      (let [^I32 cp (oil-wcp c at word i)]
+        (if (and (>= cp 48) (<= cp 57))
+          (set digits (+ digits 1))
+          (if (and (!= cp 46) (and (!= cp 44) (and (!= cp 45) (!= cp 43)))) (set other 1)))
+        (set i (+ i 1))))
+    (if (and (> digits 0) (== other 0)) (set flags (+ flags 2)))
+    (return flags)))
+
+(defn ^:pub ^I32 oil-seg-from-tess [^I32 psm]
+  (if (== psm 6) (return (sg-block)))
+  (if (== psm 7) (return (sg-single-line)))
+  (if (== psm 11) (return (sg-sparse)))
+  (if (== psm 8) (return (sg-single-word)))
+  (return (sg-page-auto)))
+
+(defn ^:pub ^I32 oil-tess-begin [^:mut ^Cells c ^I32 id ^I32 psm ^I32 symbols
+                                ^I32 orient ^I32 wdir ^I32 order ^I32 deskew
+                                ^I32 osd ^I32 script ^I32 sconf ^I32 oconf ^I32 binary]
+  (let [^:mut ^I32 caps 2225423 ^:mut ^I32 at 0]
+    ;; blocks, paragraphs, kind, baseline, raw word confidence, deskew,
+    ;; direction, language, lexicon, style, size and measured reading order.
+    (if (!= symbols 0) (set caps (+ caps 917504)))
+    (if (>= osd 0) (set caps (+ caps 2560)))
+    (if (!= binary 0) (set caps (+ caps (oc-binary))))
+    (set at (oil-begin c id (oen-tesseract) caps caps (oil-seg-from-tess psm) (oil-ck-word) 0 (lg-layout)))
+    (oil-set c at (oh-orient) (quot osd 90))
+    (oil-set c at (oh-oconf) oconf)
+    (oil-set c at (oh-deskew) deskew)
+    (oil-set c at (oh-script) script)
+    (oil-set c at (oh-sconf) sconf)
+    (oil-set c at (oh-wdir) wdir)
+    (oil-set c at (oh-lorder) order)
+    (oil-set c at (oh-binary) binary)
+    (return at)))
+
+(defn ^I32 oil-flat-word-end [^Cells v ^I32 p ^I32 caps]
+  (let [^I32 n (cells-len v) ^:mut ^I32 q (+ p 6) ^:mut ^I32 i 0 ^:mut ^I32 j 0
+        ^:mut ^I32 count 0 ^:mut ^I32 alts 0]
+    (set q (+ (+ (+ (+ q (oil-has caps (oc-wlang))) (oil-has caps (oc-style))) (oil-has caps (oc-psize))) (oil-has caps (oc-lexicon))))
+    (if (!= (oil-has caps (oc-walts)) 0)
+      (do (if (>= q n) (return -1))
+          (set count (cells-at v q)) (set q (+ q 1))
+          (if (< count 0) (return -1))
+          (while (< i count)
+            (do (if (>= (+ q 1) n) (return -1))
+                (if (< (cells-at v (+ q 1)) 0) (return -1))
+                (if (> (cells-at v (+ q 1)) (- (- n q) 2)) (return -1))
+                (set q (+ (+ q 2) (cells-at v (+ q 1))))
+                (if (> q n) (return -1))
+                (set i (+ i 1))))))
+    (if (>= (+ q 1) n) (return -1))
+    (set count (cells-at v q))
+    (if (< count 0) (return -1))
+    (if (and (== (oil-has caps (oc-symbols)) 0) (!= count 0)) (return -1))
+    (if (< (cells-at v (+ q 1)) 0) (return -1))
+    (if (> (cells-at v (+ q 1)) (- (- n q) 2)) (return -1))
+    (set q (+ (+ q 2) (cells-at v (+ q 1))))
+    (set i 0)
+    (while (< i count)
+      (do (if (>= (+ q 6) n) (return -1))
+          (if (< (cells-at v (+ q 5)) 0) (return -1))
+          (if (> (cells-at v (+ q 5)) (- (- n q) 7)) (return -1))
+          (set alts (cells-at v (+ q 6)))
+          (if (< alts 0) (return -1))
+          (if (and (== (oil-has caps (oc-alts)) 0) (!= alts 0)) (return -1))
+          (set q (+ (+ q 7) (cells-at v (+ q 5))))
+          (set j 0)
+          (while (< j alts)
+            (do (if (>= (+ q 1) n) (return -1))
+                (if (< (cells-at v q) 0) (return -1))
+                (if (> (cells-at v q) (- (- n q) 2)) (return -1))
+                (set q (+ (+ q 2) (cells-at v q)))
+                (if (> q n) (return -1))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (if (> q n) (return -1))
+    (return q)))
+
+(defn ^:pub ^I32 oil-flat [^Cells v ^I32 id ^:mut ^Cells out]
+  (comment "Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.")
+  (let [^I32 n (cells-len v) ^:mut ^I32 p 24 ^:mut ^I32 i 0 ^:mut ^I32 caps 0
+        ^:mut ^I32 nb 0 ^:mut ^I32 nl 0 ^:mut ^I32 nw 0]
+    (if (< n 24) (return -1))
+    (if (!= (cells-at v 0) (oil-version)) (return -1))
+    (if (or (< (cells-at v 1) 1) (> (cells-at v 1) 5)) (return -1))
+    (if (or (< (cells-at v 7) 0) (> (cells-at v 7) 3)) (return -1))
+    (if (< (cells-at v 21) 0) (return -1))
+    (set caps (cells-at v 4))
+    (if (or (< caps 0) (> caps 8388607)) (return -1))
+    (if (== (oil-native-check caps (cells-at v 5)) 0) (return -1))
+    (set nb (cells-at v 18)) (set nl (cells-at v 19)) (set nw (cells-at v 20))
+    (if (or (< nb 0) (or (< nl 0) (< nw 0))) (return -1))
+    (if (or (> nb n) (or (> nl n) (> nw n))) (return -1))
+    (if (and (== (oil-has caps (oc-blocks)) 0) (!= nb 0)) (return -1))
+    (set p (+ (+ p (* nb (oil-block-stride caps))) (* nl (oil-line-stride caps))))
+    (if (> p n) (return -1))
+    (while (< i nw)
+      (do (set p (oil-flat-word-end v p caps))
+          (if (< p 0) (return -1))
+          (set i (+ i 1))))
+    ;; Sidecar rows are length framed; registration and sealing follow below.
+    (set i 0)
+    (while (< i (cells-at v 21))
+      (do (if (>= (+ p 5) n) (return -1))
+          (if (< (cells-at v p) 6) (return -1))
+          (if (> (cells-at v p) (- n p)) (return -1))
+          (set p (+ p (cells-at v p)))
+          (if (> p n) (return -1))
+          (set i (+ i 1))))
+    (if (!= p n) (return -1))
+    (cells-push out (+ n 4)) (cells-push out 3) (cells-push out id) (cells-push out 0)
+    (set i 0)
+    (while (< i n) (do (cells-push out (cells-at v i)) (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 oil-policy-conf [^Cells c ^I32 at ^I32 word]
+  (return (ocal-word (oil-get c at (oh-engine)) 0 (cells-at c (+ word 5)))))

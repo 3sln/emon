@@ -74,11 +74,10 @@ public final class Upscale {
         return (xh * 720000) / upBodyXh();
     }
     public static int upXheight(emon.Port.Cells an, int ext, emon.Port.Cells hist) {
-        // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height
+        // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `oil-find`): the median over its text lines of the engine's row x-height
         // (`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).
-        int nl = Ocr.oxNlines(an, ext);
+        int nl = Oil.oilNlines(an, ext);
         int k = 0;
-        int l = 0;
         int xh = 0;
         int w = 0;
         int total = 0;
@@ -90,13 +89,12 @@ public final class Upscale {
         }
         k = 0;
         while (k < nl) {
-            l = Ocr.oxLineAt(an, ext, k);
             // a line of text (block type 0), its width and its x-height
-            if (emon.Port.cellsAt(an, l + 10) == 0) {
-                w = emon.Port.cellsAt(an, l + 2);
-                xh = emon.Port.cellsAt(an, l + 11);
+            if (Oil.oilLineField(an, ext, k, 10) == 0) {
+                w = Oil.oilLineField(an, ext, k, 2);
+                xh = Oil.oilLineField(an, ext, k, 11);
                 if (xh <= 0) {
-                    xh = (emon.Port.cellsAt(an, l + 3) * upLineShare()) / 100;
+                    xh = (Oil.oilLineField(an, ext, k, 3) * upLineShare()) / 100;
                 }
                 if ((xh > 0) && (w > 0)) {
                     if (xh > 100) {
@@ -123,29 +121,29 @@ public final class Upscale {
     }
     public static int upScore(emon.Port.Cells an, int at) {
         // How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).
-        int n = Plan.anOcrCount(an, at);
-        int w = Plan.anOcrFirst(an, at);
+        int n = Oil.oilNwords(an, at);
+        int w = Oil.oilFirstWord(an, at);
         int i = 0;
         int sum = 0;
         while (i < n) {
-            sum += (Plan.awGet(an, w, Plan.awConf()) * Plan.awGet(an, w, Plan.awLen())) / 16;
-            w = Plan.awNext(an, w);
+            sum += (Oil.oilPolicyConf(an, at, w) * Oil.oilWlen(an, at, w)) / 16;
+            w = Oil.oilWordNext(an, at, w);
             i += 1;
         }
         return sum;
     }
     public static int upMeanConf(emon.Port.Cells an, int at) {
         // The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
-        int n = Plan.anOcrCount(an, at);
-        int w = Plan.anOcrFirst(an, at);
+        int n = Oil.oilNwords(an, at);
+        int w = Oil.oilFirstWord(an, at);
         int i = 0;
         int sum = 0;
         if (n <= 0) {
             return -1;
         }
         while (i < n) {
-            sum += Plan.awGet(an, w, Plan.awConf());
-            w = Plan.awNext(an, w);
+            sum += Oil.oilPolicyConf(an, at, w);
+            w = Oil.oilWordNext(an, at, w);
             i += 1;
         }
         return sum / n;
@@ -153,7 +151,7 @@ public final class Upscale {
     public static int upHint(emon.Port.Cells an, int at, int k, int dpi100, emon.Port.Cells hist) {
         // The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
         // the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
-        int ext = Ocr.oxFind(an, at);
+        int ext = Oil.oilFind(an, at);
         int est = dpi100;
         int xh = -1;
         int v = 0;
@@ -174,8 +172,8 @@ public final class Upscale {
     }
     public static int upFactor(emon.Port.Cells an, int at, int pxw, int pxh, emon.Port.Cells hist) {
         // By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
-        int ext = Ocr.oxFind(an, at);
-        int words = Plan.anOcrCount(an, at);
+        int ext = Oil.oilFind(an, at);
+        int words = Oil.oilNwords(an, at);
         int k = 1;
         int xh = 0;
         int side = pxw;
@@ -183,7 +181,7 @@ public final class Upscale {
             return 1;
         }
         // a page the engine is sure is turned is read upright first: the size of its lines says nothing
-        if (Norm.nmOrient(Ocr.oxOsd(an, ext), Ocr.oxOconf(an, ext), Norm.nmOsdConf()) > 0) {
+        if (Norm.nmOrient(Oil.oilOsd(an, ext), Oil.oilOconf(an, ext), Norm.nmOsdConf()) > 0) {
             return 1;
         }
         if (pxh > side) {
@@ -358,8 +356,8 @@ public final class Upscale {
         return 0;
     }
     public static int upReceiptScore(emon.Port.Cells an, int at) {
-        int n = Plan.anOcrCount(an, at);
-        int w = Plan.anOcrFirst(an, at);
+        int n = Oil.oilNwords(an, at);
+        int w = Oil.oilFirstWord(an, at);
         int i = 0;
         int j = 0;
         int cp = 0;
@@ -368,15 +366,15 @@ public final class Upscale {
         while (i < n) {
             alpha = 0;
             j = 0;
-            while (j < Plan.awGet(an, w, Plan.awLen())) {
-                cp = Plan.awCp(an, w, j);
+            while (j < Oil.oilWlen(an, at, w)) {
+                cp = Oil.oilWcp(an, at, w, j);
                 if (upReceiptAlpha(cp) == 1) {
                     alpha = 1;
                 }
                 j += 1;
             }
-            sum += upReceiptValue(Plan.awGet(an, w, Plan.awConf()), Plan.awGet(an, w, Plan.awLen()), alpha);
-            w = Plan.awNext(an, w);
+            sum += upReceiptValue(Oil.oilPolicyConf(an, at, w), Oil.oilWlen(an, at, w), alpha);
+            w = Oil.oilWordNext(an, at, w);
             i += 1;
         }
         return sum;

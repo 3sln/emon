@@ -540,36 +540,35 @@ public final class Tess implements Ocr {
             deskew = b0.desk;
         }
         Port.Cells c = Port.newCells();
-        int at = Plan.anOcr(c, id);
+        int at = emon.Oil.oilTessBegin(c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, hasBinary ? 1 : 0);
+        Port.Cells observed = Port.newCells();
+        tessVersion().codePoints().forEach(cp -> Port.cellsPush(observed, cp));
+        emon.Oil.oilObserved(c, at, observed, 0, Port.cellsLen(observed));
+        for (int bi = 0; bi < blocks.size(); bi++) {
+            Block ob = blocks.get(bi);
+            int kind = 0;
+            for (Line l : lines) { if (l.block == bi) { kind = l.btype; break; } }
+            emon.Oil.oilBlock(c, at, ob.bx[0], ob.bx[1], ob.bx[2], ob.bx[3], -1, ob.orient, ob.wdir, ob.tlo, kind);
+        }
+        for (int li = 0; li < lines.size(); li++) {
+            Line l = lines.get(li);
+            int nw = 0;
+            for (Word w2 : words) { if (w2.line == li) nw++; }
+            emon.Oil.oilLine(c, at, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.block, nw, -1, l.par, l.base[0], l.base[1], l.base[2], l.base[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         for (Word w2 : words) {
-            int wd = Plan.anOcrWord(c, at, w2.bx[0], w2.bx[1], w2.bx[2], w2.bx[3], w2.conf, w2.line, w2.block);
-            for (int cp : w2.text) {
-                Plan.anOcrCp(c, wd, cp);
-            }
-        }
-        emon.Ocr.oxBegin(c, orient, wdir, tlo, deskew, osd, script, sconf, oconf, lines.size(), blocks.size(), hasBinary ? 1 : 0, binW, binH);
-        for (Line l : lines) {
-            emon.Ocr.oxLine(c, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.base[0], l.base[1], l.base[2], l.base[3], l.block, l.par, l.btype, -1, -1, -1);
-        }
-        for (Block bl : blocks) {
-            emon.Ocr.oxBlock(c, bl.bx[0], bl.bx[1], bl.bx[2], bl.bx[3], bl.orient, bl.wdir, bl.tlo);
-        }
-        for (Word w2 : words) {
-            int wx = emon.Ocr.oxWord(c, w2.flags, w2.lang, w2.psize, w2.dflags);
+            int wx = emon.Oil.oilWord(c, at, w2.bx[0], w2.bx[1], w2.bx[2], w2.bx[3], w2.line, w2.conf, w2.lang, w2.flags, w2.psize, 1 | ((w2.dflags & 1) << 1));
+            for (int cp : w2.text) emon.Oil.oilWordCp(c, at, wx, cp);
             for (Sym s : w2.syms) {
-                int sx = emon.Ocr.oxSym(c, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf);
-                for (int cp : s.cps) {
-                    emon.Ocr.oxSymCp(c, sx, cp);
-                }
+                int sx = emon.Oil.oilSym(c, at, wx, s.bx[0], s.bx[1], s.bx[2], s.bx[3], s.conf);
+                for (int cp : s.cps) emon.Oil.oilSymCp(c, sx, cp);
                 for (Alt a : s.alts) {
-                    int ax = emon.Ocr.oxAlt(c, sx, a.conf);
-                    for (int cp : a.cps) {
-                        emon.Ocr.oxAltCp(c, ax, cp);
-                    }
+                    int ax = emon.Oil.oilAlt(c, at, sx, a.conf);
+                    for (int cp : a.cps) emon.Oil.oilAltCp(c, ax, cp);
                 }
             }
         }
-        Plan.anOcrEnd(c, at);
+        emon.Oil.oilEnd(c, at);
         int[] rec = Port.cellsVec(c);
         Port.Bitmap bmp = null;
         if (keepBinary && hasBinary && binPx != null && binPx.length > 0) {

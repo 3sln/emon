@@ -287,7 +287,7 @@ pub(crate) fn ar_fill(g: i32, pageagree: i32, cg: &mut crate::port::Cells, refs:
     while k < no {
         row = ar_ref(refs, of + k, 1);
         olen += ar_alnum(owords, etext, row);
-        csum += ow_get(owords, row, hd_conf());
+        csum += ow_confidence(owords, row);
         f = ow_get(owords, row, hd_feat());
         if f >= 0 {
             v = fe_get(feats, f, xo_implausible());
@@ -649,7 +649,7 @@ pub(crate) fn ar_emit_ocr(g: i32, cg: &mut crate::port::Cells, refs: &mut crate:
         r = fw_copy_word(nfw, ofw, tj, lrow);
         crate::port::cells_set(nfw, (r * 24) + 11, ow_get(owords, orow, hd_tstart()));
         crate::port::cells_set(nfw, (r * 24) + 12, ow_get(owords, orow, hd_tlen()));
-        crate::port::cells_set(nfw, (r * 24) + 14, ow_get(owords, orow, hd_conf()));
+        crate::port::cells_set(nfw, (r * 24) + 14, ow_confidence(owords, orow));
         crate::port::cells_set(nfw, (r * 24) + 15, -1);
         // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
         if nt > 0 {

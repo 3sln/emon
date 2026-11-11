@@ -21,10 +21,11 @@
 ;; page, and the unit adopts the enlarged reading in place of the first pass when it reads at least as much (`up-score`). Hosts do nothing new: the
 ;; resampling is not theirs.
 (ns emon.upscale
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+  (:require [emon.oil :refer [oil-find oil-first-word oil-line oil-line-field oil-nlines oil-nwords oil-oconf oil-osd oil-policy-conf oil-wcp oil-wlen oil-word oil-word-next]]
+            [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-conf aw-len aw-cp]]
-            [emon.ocr :refer [ox-find ox-nlines ox-line-at ox-osd ox-oconf]]
+            [emon.plan :refer []]
+            [emon.ocr :refer []]
             [emon.norm :refer [nm-orient nm-osd-conf]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -59,11 +60,10 @@
   (return (quot (* xh 720000) (up-body-xh))))
 
 (defn ^:pub ^I32 up-xheight [^Cells an ^I32 ext ^:mut ^Cells hist]
-  (comment "The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height")
+  (comment "The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `oil-find`): the median over its text lines of the engine's row x-height")
   (comment "(`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).")
-  (let [^I32 nl (ox-nlines an ext)
+  (let [^I32 nl (oil-nlines an ext)
         ^:mut ^I32 k 0
-        ^:mut ^I32 l 0
         ^:mut ^I32 xh 0
         ^:mut ^I32 w 0
         ^:mut ^I32 total 0
@@ -74,12 +74,11 @@
           (set k (+ k 1))))
     (set k 0)
     (while (< k nl)
-      (do (set l (ox-line-at an ext k))
-          (comment "a line of text (block type 0), its width and its x-height")
-          (if (== (cells-at an (+ l 10)) 0)
-            (do (set w (cells-at an (+ l 2)))
-                (set xh (cells-at an (+ l 11)))
-                (if (<= xh 0) (set xh (quot (* (cells-at an (+ l 3)) (up-line-share)) 100)))
+      (do (comment "a line of text (block type 0), its width and its x-height")
+          (if (== (oil-line-field an ext k 10) 0)
+            (do (set w (oil-line-field an ext k 2))
+                (set xh (oil-line-field an ext k 11))
+                (if (<= xh 0) (set xh (quot (* (oil-line-field an ext k 3) (up-line-share)) 100)))
                 (if (and (> xh 0) (> w 0))
                   (do (if (> xh 100) (set xh 100))
                       (cells-set hist xh (+ (cells-at hist xh) w))
@@ -95,33 +94,33 @@
 
 (defn ^:pub ^I32 up-score [^Cells an ^I32 at]
   (comment "How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).")
-  (let [^I32 n (an-ocr-count an at)
-        ^:mut ^I32 w (an-ocr-first an at)
+  (let [^I32 n (oil-nwords an at)
+        ^:mut ^I32 w (oil-first-word an at)
         ^:mut ^I32 i 0
         ^:mut ^I32 sum 0]
     (while (< i n)
-      (do (set sum (+ sum (quot (* (aw-get an w (aw-conf)) (aw-get an w (aw-len))) 16)))
-          (set w (aw-next an w))
+      (do (set sum (+ sum (quot (* (oil-policy-conf an at w) (oil-wlen an at w)) 16)))
+          (set w (oil-word-next an at w))
           (set i (+ i 1))))
     (return sum)))
 
 (defn ^:pub ^I32 up-mean-conf [^Cells an ^I32 at]
   (comment "The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.")
-  (let [^I32 n (an-ocr-count an at)
-        ^:mut ^I32 w (an-ocr-first an at)
+  (let [^I32 n (oil-nwords an at)
+        ^:mut ^I32 w (oil-first-word an at)
         ^:mut ^I32 i 0
         ^:mut ^I32 sum 0]
     (if (<= n 0) (return -1))
     (while (< i n)
-      (do (set sum (+ sum (aw-get an w (aw-conf))))
-          (set w (aw-next an w))
+      (do (set sum (+ sum (oil-policy-conf an at w)))
+          (set w (oil-word-next an at w))
           (set i (+ i 1))))
     (return (quot sum n))))
 
 (defn ^:pub ^I32 up-hint [^Cells an ^I32 at ^I32 k ^I32 dpi100 ^:mut ^Cells hist]
   (comment "The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,")
   (comment "the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.")
-  (let [^I32 ext (ox-find an at)
+  (let [^I32 ext (oil-find an at)
         ^:mut ^I32 est dpi100
         ^:mut ^I32 xh -1
         ^:mut ^I32 v 0]
@@ -134,14 +133,14 @@
 
 (defn ^:pub ^I32 up-factor [^Cells an ^I32 at ^I32 pxw ^I32 pxh ^:mut ^Cells hist]
   (comment "By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.")
-  (let [^I32 ext (ox-find an at)
-        ^I32 words (an-ocr-count an at)
+  (let [^I32 ext (oil-find an at)
+        ^I32 words (oil-nwords an at)
         ^:mut ^I32 k 1
         ^:mut ^I32 xh 0
         ^:mut ^I32 side pxw]
     (if (< ext 0) (return 1))
     (comment "a page the engine is sure is turned is read upright first: the size of its lines says nothing")
-    (if (> (nm-orient (ox-osd an ext) (ox-oconf an ext) (nm-osd-conf)) 0) (return 1))
+    (if (> (nm-orient (oil-osd an ext) (oil-oconf an ext) (nm-osd-conf)) 0) (return 1))
     (if (> pxh side) (set side pxh))
     (if (< words (up-rescue-words))
       (if (<= side (up-rescue-side)) (set k (up-rescue-k)))
@@ -271,14 +270,14 @@
   (return 0))
 
 (defn ^:pub ^I32 up-receipt-score [^Cells an ^I32 at]
-  (let [^I32 n (an-ocr-count an at) ^:mut ^I32 w (an-ocr-first an at)
+  (let [^I32 n (oil-nwords an at) ^:mut ^I32 w (oil-first-word an at)
         ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 cp 0 ^:mut ^I32 alpha 0 ^:mut ^I32 sum 0]
     (while (< i n)
       (do (set alpha 0) (set j 0)
-          (while (< j (aw-get an w (aw-len)))
-            (do (set cp (aw-cp an w j))
+          (while (< j (oil-wlen an at w))
+            (do (set cp (oil-wcp an at w j))
                 (if (== (up-receipt-alpha cp) 1) (set alpha 1))
                 (set j (+ j 1))))
-          (set sum (+ sum (up-receipt-value (aw-get an w (aw-conf)) (aw-get an w (aw-len)) alpha)))
-          (set w (aw-next an w)) (set i (+ i 1))))
+          (set sum (+ sum (up-receipt-value (oil-policy-conf an at w) (oil-wlen an at w) alpha)))
+          (set w (oil-word-next an at w)) (set i (+ i 1))))
     (return sum)))

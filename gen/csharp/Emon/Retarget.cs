@@ -352,7 +352,7 @@ public static class Retarget {
             return -1;
         }
         while (j < c) {
-            sum += Evidence.OwGet(owords, f + j, Evidence.HdConf());
+            sum += Evidence.OwConfidence(owords, f + j);
             j += 1;
         }
         return sum / c;
@@ -364,7 +364,7 @@ public static class Retarget {
         int i = w0;
         int sum = 0;
         while (i < (w0 + nw)) {
-            sum += (Evidence.OwGet(owords, i, Evidence.HdConf()) * Evidence.OwGet(owords, i, Evidence.HdTlen())) / 16;
+            sum += (Evidence.OwConfidence(owords, i) * Evidence.OwGet(owords, i, Evidence.HdTlen())) / 16;
             i += 1;
         }
         return sum;
@@ -1125,17 +1125,17 @@ public static class Retarget {
     }
     public static int RtAnswerScore(emon.Port.Cells ans, int at) {
         // D671: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
-        int w = Plan.AnOcrFirst(ans, at);
+        int w = Oil.OilFirstWord(ans, at);
         int i = 0;
         int score = 0;
         int area = 0;
         int width = 0;
         int height = 0;
         int conf = 0;
-        while (i < Plan.AnOcrCount(ans, at)) {
-            width = Plan.AwGet(ans, w, Plan.AwW());
-            height = Plan.AwGet(ans, w, Plan.AwH());
-            conf = Plan.AwGet(ans, w, Plan.AwConf());
+        while (i < Oil.OilNwords(ans, at)) {
+            width = emon.Port.CellsAt(ans, w + 2);
+            height = emon.Port.CellsAt(ans, w + 3);
+            conf = Oil.OilPolicyConf(ans, at, w);
             if ((width > 0) && ((height > 0) && (width >= height))) {
                 area = (width * height) / 100;
                 if (area > 10000) {
@@ -1145,7 +1145,7 @@ public static class Retarget {
                     score += (area * conf) / 1000;
                 }
             }
-            w = Plan.AwNext(ans, w);
+            w = Oil.OilWordNext(ans, at, w);
             i += 1;
         }
         return score;
@@ -1196,7 +1196,7 @@ public static class Retarget {
         if (Plan.AnOk(ans, at) != 1) {
             return 1;
         }
-        if (Plan.AnOcrCount(ans, at) == 0) {
+        if (Oil.OilNwords(ans, at) == 0) {
             return 1;
         }
         return 0;
@@ -1317,7 +1317,7 @@ public static class Retarget {
             int ba = Plan.AnFind(ans, Plan.PuId(page, RiBody()));
             int receipt = Plan.AnFind(ans, Plan.PuId(page, RiReceipt()));
             int receiptMode = RtReceiptActive(rtp);
-            if ((RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((Plan.AnOk(ans, ba) == 1) && (Plan.AnOcrCount(ans, ba) == 0))))) {
+            if ((RtEmptyReceipt(RtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.CellsAt(rtp, RtpBody()) == 0) || ((ba >= 0) && ((Plan.AnOk(ans, ba) == 1) && (Oil.OilNwords(ans, ba) == 0))))) {
                 asked += RtAskThermal(page, dpi, loc, ans, bms, emon.Port.BmsGet(bms, Plan.PuViewId(page, k0)), Norm.NmPaperGray(ws), rtp, rq, receiptMode, pixels);
             }
         }
@@ -1532,7 +1532,7 @@ public static class Retarget {
             return -1;
         }
         while (i < (w0 + nw)) {
-            sum += Evidence.OwGet(owords, i, Evidence.HdConf());
+            sum += Evidence.OwConfidence(owords, i);
             i += 1;
         }
         return sum / nw;
@@ -1549,7 +1549,7 @@ public static class Retarget {
             c = Evidence.OlGet(olines, l, Evidence.LhCount());
             j = 0;
             while (j < c) {
-                sum += (Evidence.OwGet(owords, f + j, Evidence.HdConf()) * Evidence.OwGet(owords, f + j, Evidence.HdTlen())) / 16;
+                sum += (Evidence.OwConfidence(owords, f + j) * Evidence.OwGet(owords, f + j, Evidence.HdTlen())) / 16;
                 j += 1;
             }
             l += 1;
@@ -1569,7 +1569,7 @@ public static class Retarget {
             c = Evidence.OlGet(olines, l, Evidence.LhCount());
             j = 0;
             while (j < c) {
-                sum += Evidence.OwGet(owords, f + j, Evidence.HdConf());
+                sum += Evidence.OwConfidence(owords, f + j);
                 words += 1;
                 j += 1;
             }
@@ -1804,13 +1804,13 @@ public static class Retarget {
         return 900;
     }
     internal static int RtReceiptProtected(emon.Port.Cells ow, emon.Port.Cells et, int w) {
-        if ((Evidence.OwGet(ow, w, Evidence.HdConf()) >= RtReceiptProtectConf()) && (Evidence.OwGet(ow, w, Evidence.HdTlen()) >= 2)) {
+        if ((Evidence.OwConfidence(ow, w) >= RtReceiptProtectConf()) && (Evidence.OwGet(ow, w, Evidence.HdTlen()) >= 2)) {
             return RtReceiptWordAlpha(ow, et, w);
         }
         return 0;
     }
     internal static int RtReceiptWordValue(emon.Port.Cells ow, emon.Port.Cells et, int w) {
-        return Upscale.UpReceiptValue(Evidence.OwGet(ow, w, Evidence.HdConf()), Evidence.OwGet(ow, w, Evidence.HdTlen()), RtReceiptWordAlpha(ow, et, w));
+        return Upscale.UpReceiptValue(Evidence.OwConfidence(ow, w), Evidence.OwGet(ow, w, Evidence.HdTlen()), RtReceiptWordAlpha(ow, et, w));
     }
     internal static int RtReceiptSelectedCount(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int word, int first) {
         int k = 0;
@@ -1854,7 +1854,7 @@ public static class Retarget {
                     c = c0;
                     count = 0;
                     while (c < cn) {
-                        if ((Evidence.OwGet(ow, c, Evidence.HdConf()) >= RtReceiptMin()) && (RtReceiptWordEqual(ow, et, w, c) == 1)) {
+                        if ((Evidence.OwConfidence(ow, c) >= RtReceiptMin()) && (RtReceiptWordEqual(ow, et, w, c) == 1)) {
                             count += 1;
                         }
                         c += 1;

@@ -163,7 +163,7 @@ pub fn pp_sums(page: i32, request: i32, runs: &mut crate::port::Cells, lines: &m
                 p = or_get(runs, run, orf_wfirst());
                 end = p + or_get(runs, run, orf_wcount());
                 while p < end {
-                    if (ow_get(words, p, hd_conf()) >= 700) && (ev_overlap_small(ow_get(words, w, hd_x0()), ow_get(words, w, hd_y0()), ow_get(words, w, hd_x1()), ow_get(words, w, hd_y1()), ow_get(words, p, hd_x0()), ow_get(words, p, hd_y0()), ow_get(words, p, hd_x1()), ow_get(words, p, hd_y1())) >= 500) {
+                    if (ow_confidence(words, p) >= 700) && (ev_overlap_small(ow_get(words, w, hd_x0()), ow_get(words, w, hd_y0()), ow_get(words, w, hd_x1()), ow_get(words, w, hd_y1()), ow_get(words, p, hd_x0()), ow_get(words, p, hd_y0()), ow_get(words, p, hd_x1()), ow_get(words, p, hd_y1())) >= 500) {
                         crate::port::cells_push(candidates, i);
                         crate::port::cells_push(candidates, ow_get(words, p, hd_tstart()));
                         crate::port::cells_push(candidates, ow_get(words, p, hd_tlen()));

@@ -904,7 +904,7 @@ pub unsafe extern "C" fn emon_answer(s: *mut emon_session, cells: *const i32, nc
     })
 }
 
-// An `ocr` answer from the flat integer form a caller makes of its engine's reading; the form and the record are kin's (`ox-flat`,
+// An `ocr` answer from the flat integer form a caller makes of its engine's reading; the form and the record are kin's (`oil-flat`,
 // `emon.ocrport`), so the layout is written once and a malformed form is refused by kin.
 #[no_mangle]
 pub unsafe extern "C" fn emon_answer_ocr(s: *mut emon_session, id: i32, cells: *const i32, ncells: usize, err: *mut emon_error) -> c_int {

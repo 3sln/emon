@@ -39,22 +39,22 @@ public final class Scriptcheck {
     }
     public static int skDict(int nw, emon.Port.Cells an, int ext) {
         // How many of the answer's `nw` words the engine read from its dictionary.
-        int w = Ocr.oxFirstWord(an, ext);
+        int w = Oil.oilFirstWord(an, ext);
         int i = 0;
         int k = 0;
         while (i < nw) {
-            if ((Ocr.oxWdflags(an, w) & Ocr.ocwDict()) != 0) {
+            if ((Oil.oilWordFlags(an, ext, w) & Ocr.ocwDict()) != 0) {
                 k += 1;
             }
-            w = Ocr.oxWordNext(an, w);
+            w = Oil.oilWordNext(an, ext, w);
             i += 1;
         }
         return k;
     }
     public static int skUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
         // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
-        int ext = Ocr.oxFind(an, at);
-        int nw = Plan.anOcrCount(an, at);
+        int ext = Oil.oilFind(an, at);
+        int nw = Oil.oilNwords(an, at);
         int w = 0;
         int i = 0;
         int lang = 0;
@@ -63,7 +63,7 @@ public final class Scriptcheck {
         if (ext < 0) {
             return 0;
         }
-        script = Ocr.oxScript(an, ext);
+        script = Oil.oilScript(an, ext);
         if (script <= 0) {
             return 0;
         }
@@ -73,7 +73,7 @@ public final class Scriptcheck {
         if (script == Ocrport.scLatf()) {
             return 0;
         }
-        if (Ocr.oxSconf(an, ext) < skWeakConf()) {
+        if (Oil.oilSconf(an, ext) < skWeakConf()) {
             return 0;
         }
         if (nw < skMinWords()) {
@@ -81,21 +81,21 @@ public final class Scriptcheck {
         }
         // P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
         // reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
-        if (Ocr.oxSconf(an, ext) < skMinConf()) {
+        if (Oil.oilSconf(an, ext) < skMinConf()) {
             if ((skDict(nw, an, ext) * 1000) >= (nw * skDictShare())) {
                 return 0;
             }
         }
-        w = Ocr.oxFirstWord(an, ext);
+        w = Oil.oilFirstWord(an, ext);
         while (i < nw) {
-            lang = Ocr.oxWlang(an, w);
+            lang = Oil.oilWlang(an, ext, w);
             if (lang > 0) {
                 n = skUnpack(lang, scr);
                 if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, 0, n)) == 1) {
                     return 0;
                 }
             }
-            w = Ocr.oxWordNext(an, w);
+            w = Oil.oilWordNext(an, ext, w);
             i += 1;
         }
         return 1;
@@ -107,8 +107,8 @@ public final class Scriptcheck {
             return at;
         }
         int found = Plan.anFind(ans, id);
-        int ext = Ocr.oxFind(ans, at);
-        int script = Ocr.oxScript(ans, ext);
+        int ext = Oil.oilFind(ans, at);
+        int script = Oil.oilScript(ans, ext);
         if (found >= 0) {
             if (Plan.anOk(ans, found) == 1) {
                 return found;

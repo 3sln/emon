@@ -536,36 +536,35 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             deskew = b0.Desk;
         }
         Port.Cells c = Port.NewCells();
-        int at = emon.Plan.AnOcr(c, id);
+        int at = emon.Oil.OilTessBegin(c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, hasBinary ? 1 : 0);
+        Port.Cells observed = Port.NewCells();
+        foreach (char versionChar in TessVersion()) Port.CellsPush(observed, versionChar);
+        emon.Oil.OilObserved(c, at, observed, 0, Port.CellsLen(observed));
+        for (int bi = 0; bi < blocks.Count; bi++) {
+            Block ob = blocks[bi];
+            int kind = 0;
+            foreach (Line l in lines) { if (l.Block == bi) { kind = l.Btype; break; } }
+            emon.Oil.OilBlock(c, at, ob.Bx[0], ob.Bx[1], ob.Bx[2], ob.Bx[3], -1, ob.Orient, ob.Wdir, ob.Tlo, kind);
+        }
+        for (int li = 0; li < lines.Count; li++) {
+            Line l = lines[li];
+            int nw = 0;
+            foreach (Word w2 in words) { if (w2.Line == li) nw++; }
+            emon.Oil.OilLine(c, at, l.Bx[0], l.Bx[1], l.Bx[2], l.Bx[3], l.Block, nw, -1, l.Par, l.Base[0], l.Base[1], l.Base[2], l.Base[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         foreach (Word w2 in words) {
-            int wd = emon.Plan.AnOcrWord(c, at, w2.Bx[0], w2.Bx[1], w2.Bx[2], w2.Bx[3], w2.Conf, w2.Line, w2.Block);
-            foreach (int cp in w2.Text) {
-                emon.Plan.AnOcrCp(c, wd, cp);
-            }
-        }
-        emon.Ocr.OxBegin(c, orient, wdir, tlo, deskew, osd, script, sconf, oconf, lines.Count, blocks.Count, hasBinary ? 1 : 0, binW, binH);
-        foreach (Line l in lines) {
-            emon.Ocr.OxLine(c, l.Bx[0], l.Bx[1], l.Bx[2], l.Bx[3], l.Base[0], l.Base[1], l.Base[2], l.Base[3], l.Block, l.Par, l.Btype, -1, -1, -1);
-        }
-        foreach (Block bl in blocks) {
-            emon.Ocr.OxBlock(c, bl.Bx[0], bl.Bx[1], bl.Bx[2], bl.Bx[3], bl.Orient, bl.Wdir, bl.Tlo);
-        }
-        foreach (Word w2 in words) {
-            int wx = emon.Ocr.OxWord(c, w2.Flags, w2.Lang, w2.Psize, w2.Dflags);
+            int wx = emon.Oil.OilWord(c, at, w2.Bx[0], w2.Bx[1], w2.Bx[2], w2.Bx[3], w2.Line, w2.Conf, w2.Lang, w2.Flags, w2.Psize, 1 | ((w2.Dflags & 1) << 1));
+            foreach (int cp in w2.Text) emon.Oil.OilWordCp(c, at, wx, cp);
             foreach (Sym s in w2.Syms) {
-                int sx = emon.Ocr.OxSym(c, wx, s.Bx[0], s.Bx[1], s.Bx[2], s.Bx[3], s.Conf);
-                foreach (int cp in s.Cps) {
-                    emon.Ocr.OxSymCp(c, sx, cp);
-                }
+                int sx = emon.Oil.OilSym(c, at, wx, s.Bx[0], s.Bx[1], s.Bx[2], s.Bx[3], s.Conf);
+                foreach (int cp in s.Cps) emon.Oil.OilSymCp(c, sx, cp);
                 foreach (Alt a in s.Alts) {
-                    int ax = emon.Ocr.OxAlt(c, sx, a.Conf);
-                    foreach (int cp in a.Cps) {
-                        emon.Ocr.OxAltCp(c, ax, cp);
-                    }
+                    int ax = emon.Oil.OilAlt(c, at, sx, a.Conf);
+                    foreach (int cp in a.Cps) emon.Oil.OilAltCp(c, ax, cp);
                 }
             }
         }
-        emon.Plan.AnOcrEnd(c, at);
+        emon.Oil.OilEnd(c, at);
         int[] rec = Port.CellsVec(c);
         Port.Bitmap bmp = null;
         if (keepBinary && hasBinary && binPx != null && binPx.Length > 0) {

@@ -174,7 +174,7 @@ func PpSums(page int32, request int32, runs *port.Cells, lines *port.Cells, word
 				p = evidence.OrGet(runs, run, evidence.OrfWfirst())
 				end = p + evidence.OrGet(runs, run, evidence.OrfWcount())
 				for p < end {
-					if (evidence.OwGet(words, p, evidence.HdConf()) >= 700) && (evidence.EvOverlapSmall(evidence.OwGet(words, w, evidence.HdX0()), evidence.OwGet(words, w, evidence.HdY0()), evidence.OwGet(words, w, evidence.HdX1()), evidence.OwGet(words, w, evidence.HdY1()), evidence.OwGet(words, p, evidence.HdX0()), evidence.OwGet(words, p, evidence.HdY0()), evidence.OwGet(words, p, evidence.HdX1()), evidence.OwGet(words, p, evidence.HdY1())) >= 500) {
+					if (evidence.OwConfidence(words, p) >= 700) && (evidence.EvOverlapSmall(evidence.OwGet(words, w, evidence.HdX0()), evidence.OwGet(words, w, evidence.HdY0()), evidence.OwGet(words, w, evidence.HdX1()), evidence.OwGet(words, w, evidence.HdY1()), evidence.OwGet(words, p, evidence.HdX0()), evidence.OwGet(words, p, evidence.HdY0()), evidence.OwGet(words, p, evidence.HdX1()), evidence.OwGet(words, p, evidence.HdY1())) >= 500) {
 						port.CellsPush(candidates, i)
 						port.CellsPush(candidates, evidence.OwGet(words, p, evidence.HdTstart()))
 						port.CellsPush(candidates, evidence.OwGet(words, p, evidence.HdTlen()))

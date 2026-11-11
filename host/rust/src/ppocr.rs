@@ -3,7 +3,6 @@
 use crate::engine::Ocr;
 use crate::plan::{Answer, Bitmaps, PlanError, Request};
 use crate::port::{cells_at, cells_len, crypto_sha256, Cells};
-use crate::ppocr_ctc::Calibration;
 use crate::ppocr_image::Image;
 use crate::ppocr_pipeline::Pipeline;
 use std::path::{Path, PathBuf};
@@ -14,7 +13,6 @@ pub struct PpOcr {
     model_dir: PathBuf,
     incumbent: crate::tess::TessOcr,
     lexicon: Mutex<crate::tess::Tess>,
-    calibration: Calibration,
     identity: String,
 }
 fn verify(path: &Path, want: &str) -> Result<(), String> {
@@ -59,7 +57,6 @@ impl PpOcr {
             verify(&dir.join(name), sha)?;
         }
         // Filled only after the independent training-pool calibration finishes.
-        let calibration = Calibration::new(include!("ppocr_calibration.rs"))?;
         let incumbent = crate::tess::TessOcr::new(None)?;
         verify(&Path::new(incumbent.data_dir()).join("eng.traineddata"),
                "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2")?;
@@ -71,7 +68,6 @@ impl PpOcr {
             model_dir: dir.to_path_buf(),
             incumbent,
             lexicon,
-            calibration,
             identity: identity(),
         })
     }
@@ -206,58 +202,28 @@ impl Ocr for PpOcr {
                 .read(&image).map_err(PlanError::Fulfil)?
         };
         let mut out = Cells::new();
-        let at = crate::emon::plan::an_ocr(&mut out, req.id());
-        for word in &reading.words {
-            let b = word.bounds;
-            let confidence = self
-                .calibration
-                .confidence(word.posterior)
-                .map_err(PlanError::Fulfil)?;
-            let k = crate::emon::plan::an_ocr_word(
-                &mut out,
-                at,
-                b[0] + dx,
-                b[1] + dy,
-                b[2],
-                b[3],
-                confidence,
-                word.line as i32,
-                word.line as i32,
-            );
-            for cp in word.text.chars() {
-                crate::emon::plan::an_ocr_cp(&mut out, k, cp as i32);
-            }
-        }
-        let n = reading.lines.len() as i32;
-        crate::emon::ocr::ox_begin(&mut out, 0, -1, -1, 0, 0, 0, -1, -1, n, n, 0, 0, 0);
+        // Segments are not layout blocks; OSD never ran on this engine.
+        let caps = 32 | 64 | 256 | 8192 | 16384;
+        let at = crate::emon::oil::oil_begin(&mut out, req.id(), 2, caps, 32 | 256, 1, 1, 1701734144, 1);
         for (i, b) in reading.lines.iter().enumerate() {
-            crate::emon::ocr::ox_line(
-                &mut out,
-                b[0] + dx,
-                b[1] + dy,
-                b[2],
-                b[3],
-                -1,
-                -1,
-                -1,
-                -1,
-                i as i32,
-                i as i32,
-                crate::emon::ocr::bt_text(),
-                -1,
-                -1,
-                -1,
-            );
-        }
-        for b in &reading.lines {
-            crate::emon::ocr::ox_block(&mut out, b[0] + dx, b[1] + dy, b[2], b[3], 0, -1, -1);
+            let q = reading.quads[i];
+            let px = |v: f64| v.round().clamp(0., image.width as f64) as i32 + dx;
+            let py = |v: f64| v.round().clamp(0., image.height as f64) as i32 + dy;
+            let angle = crate::emon::evidence::ev_angle(px(q[1].x) - px(q[0].x), py(q[1].y) - py(q[0].y));
+            let angle = if angle > 18000 { angle - 36000 } else { angle };
+            let count = reading.words.iter().filter(|w| w.line == i).count() as i32;
+            crate::emon::oil::oil_line(&mut out, at, b[0] + dx, b[1] + dy, b[2], b[3], -1, count, -1, -1, 0, 0, 0, 0, 0, 0, 0,
+                px(q[0].x), py(q[0].y), px(q[1].x), py(q[1].y), px(q[2].x), py(q[2].y), px(q[3].x), py(q[3].y), angle);
         }
         let mut lexicon = self.lexicon.lock().map_err(|_| fail("PP lexicon lock poisoned"))?;
         for word in &reading.words {
-            let flags = if lexicon.valid_english_word(&word.text) { crate::emon::ocr::ocw_dict() } else { 0 };
-            crate::emon::ocr::ox_word(&mut out, 0, 1701734144, -1, flags);
+            let b = word.bounds;
+            let lex = 1 | if lexicon.valid_english_word(&word.text) { 2 } else { 0 };
+            let k = crate::emon::oil::oil_word(&mut out, at, b[0] + dx, b[1] + dy, b[2], b[3], word.line as i32,
+                word.posterior / 1000, 1701734144, 0, -1, lex);
+            for cp in word.text.chars() { crate::emon::oil::oil_word_cp(&mut out, at, k, cp as i32); }
         }
-        crate::emon::plan::an_ocr_end(&mut out, at);
+        crate::emon::oil::oil_end(&mut out, at);
         Ok(Answer {
             rec: (0..cells_len(&out)).map(|i| cells_at(&out, i)).collect(),
             bitmap: None,

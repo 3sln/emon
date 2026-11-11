@@ -39,7 +39,7 @@
   (:require [emon.lang :refer [I32 I64 Cells i64 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
             [emon.sealfield :refer [sf-fields sf-prep sf-script sf-digit]]
-            [emon.evidence :refer [pa-get pa-count pt-get gl-get ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-page hd-tstart hd-tlen hd-conf rf-add
+            [emon.evidence :refer [ow-confidence pa-get pa-count pt-get gl-get ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-page hd-tstart hd-tlen hd-conf rf-add
                                    pf-page pf-kind pf-x0 pf-y0 pf-x1 pf-y1 pf-fill pf-stroke pf-width pf-flags pf-pfirst pf-pcount
                                    ptf-x ptf-y ptf-op gf-fill ea-paths ea-owords ev-page-row ep-get epf-width epf-height
                                    pg-closed pg-filled pg-stroked pg-clip pa-curve pa-rect pa-other po-move po-line po-curve po-close]]
@@ -739,7 +739,7 @@
   (comment "and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).")
   (let [^I32 ts (ow-get owords row (hd-tstart))
         ^I32 tl (ow-get owords row (hd-tlen))
-        ^I32 conf (ow-get owords row (hd-conf))
+        ^I32 conf (ow-confidence owords row)
         ^:mut ^I32 k 0
         ^:mut ^I32 n 0]
     (while (< k tl)

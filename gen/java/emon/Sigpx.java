@@ -214,7 +214,7 @@ public final class Sigpx {
         int y = 0;
         while (i < n) {
             if ((Evidence.owGet(owords, i, Evidence.hdPage()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount)))) {
-                if (Evidence.owGet(owords, i, Evidence.hdConf()) >= spConf()) {
+                if (Evidence.owConfidence(owords, i) >= spConf()) {
                     ts = Evidence.owGet(owords, i, Evidence.hdTstart());
                     tl = Evidence.owGet(owords, i, Evidence.hdTlen());
                     letters = 0;
@@ -723,7 +723,7 @@ public final class Sigpx {
                     if (inone == 1) {
                         nin += 1;
                     }
-                    csum += Evidence.owGet(owords, wi, Evidence.hdConf());
+                    csum += Evidence.owConfidence(owords, wi);
                     j += 1;
                 }
                 if ((nin == cnt) && (csum < (cnt * 600))) {

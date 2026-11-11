@@ -74,11 +74,10 @@ public static class Upscale {
         return (xh * 720000) / UpBodyXh();
     }
     public static int UpXheight(emon.Port.Cells an, int ext, emon.Port.Cells hist) {
-        // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height
+        // The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `oil-find`): the median over its text lines of the engine's row x-height
         // (`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).
-        int nl = Ocr.OxNlines(an, ext);
+        int nl = Oil.OilNlines(an, ext);
         int k = 0;
-        int l = 0;
         int xh = 0;
         int w = 0;
         int total = 0;
@@ -90,13 +89,12 @@ public static class Upscale {
         }
         k = 0;
         while (k < nl) {
-            l = Ocr.OxLineAt(an, ext, k);
             // a line of text (block type 0), its width and its x-height
-            if (emon.Port.CellsAt(an, l + 10) == 0) {
-                w = emon.Port.CellsAt(an, l + 2);
-                xh = emon.Port.CellsAt(an, l + 11);
+            if (Oil.OilLineField(an, ext, k, 10) == 0) {
+                w = Oil.OilLineField(an, ext, k, 2);
+                xh = Oil.OilLineField(an, ext, k, 11);
                 if (xh <= 0) {
-                    xh = (emon.Port.CellsAt(an, l + 3) * UpLineShare()) / 100;
+                    xh = (Oil.OilLineField(an, ext, k, 3) * UpLineShare()) / 100;
                 }
                 if ((xh > 0) && (w > 0)) {
                     if (xh > 100) {
@@ -123,29 +121,29 @@ public static class Upscale {
     }
     public static int UpScore(emon.Port.Cells an, int at) {
         // How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).
-        int n = Plan.AnOcrCount(an, at);
-        int w = Plan.AnOcrFirst(an, at);
+        int n = Oil.OilNwords(an, at);
+        int w = Oil.OilFirstWord(an, at);
         int i = 0;
         int sum = 0;
         while (i < n) {
-            sum += (Plan.AwGet(an, w, Plan.AwConf()) * Plan.AwGet(an, w, Plan.AwLen())) / 16;
-            w = Plan.AwNext(an, w);
+            sum += (Oil.OilPolicyConf(an, at, w) * Oil.OilWlen(an, at, w)) / 16;
+            w = Oil.OilWordNext(an, at, w);
             i += 1;
         }
         return sum;
     }
     public static int UpMeanConf(emon.Port.Cells an, int at) {
         // The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
-        int n = Plan.AnOcrCount(an, at);
-        int w = Plan.AnOcrFirst(an, at);
+        int n = Oil.OilNwords(an, at);
+        int w = Oil.OilFirstWord(an, at);
         int i = 0;
         int sum = 0;
         if (n <= 0) {
             return -1;
         }
         while (i < n) {
-            sum += Plan.AwGet(an, w, Plan.AwConf());
-            w = Plan.AwNext(an, w);
+            sum += Oil.OilPolicyConf(an, at, w);
+            w = Oil.OilWordNext(an, at, w);
             i += 1;
         }
         return sum / n;
@@ -153,7 +151,7 @@ public static class Upscale {
     public static int UpHint(emon.Port.Cells an, int at, int k, int dpi100, emon.Port.Cells hist) {
         // The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
         // the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
-        int ext = Ocr.OxFind(an, at);
+        int ext = Oil.OilFind(an, at);
         int est = dpi100;
         int xh = -1;
         int v = 0;
@@ -174,8 +172,8 @@ public static class Upscale {
     }
     public static int UpFactor(emon.Port.Cells an, int at, int pxw, int pxh, emon.Port.Cells hist) {
         // By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
-        int ext = Ocr.OxFind(an, at);
-        int words = Plan.AnOcrCount(an, at);
+        int ext = Oil.OilFind(an, at);
+        int words = Oil.OilNwords(an, at);
         int k = 1;
         int xh = 0;
         int side = pxw;
@@ -183,7 +181,7 @@ public static class Upscale {
             return 1;
         }
         // a page the engine is sure is turned is read upright first: the size of its lines says nothing
-        if (Norm.NmOrient(Ocr.OxOsd(an, ext), Ocr.OxOconf(an, ext), Norm.NmOsdConf()) > 0) {
+        if (Norm.NmOrient(Oil.OilOsd(an, ext), Oil.OilOconf(an, ext), Norm.NmOsdConf()) > 0) {
             return 1;
         }
         if (pxh > side) {
@@ -358,8 +356,8 @@ public static class Upscale {
         return 0;
     }
     public static int UpReceiptScore(emon.Port.Cells an, int at) {
-        int n = Plan.AnOcrCount(an, at);
-        int w = Plan.AnOcrFirst(an, at);
+        int n = Oil.OilNwords(an, at);
+        int w = Oil.OilFirstWord(an, at);
         int i = 0;
         int j = 0;
         int cp = 0;
@@ -368,15 +366,15 @@ public static class Upscale {
         while (i < n) {
             alpha = 0;
             j = 0;
-            while (j < Plan.AwGet(an, w, Plan.AwLen())) {
-                cp = Plan.AwCp(an, w, j);
+            while (j < Oil.OilWlen(an, at, w)) {
+                cp = Oil.OilWcp(an, at, w, j);
                 if (UpReceiptAlpha(cp) == 1) {
                     alpha = 1;
                 }
                 j += 1;
             }
-            sum += UpReceiptValue(Plan.AwGet(an, w, Plan.AwConf()), Plan.AwGet(an, w, Plan.AwLen()), alpha);
-            w = Plan.AwNext(an, w);
+            sum += UpReceiptValue(Oil.OilPolicyConf(an, at, w), Oil.OilWlen(an, at, w), alpha);
+            w = Oil.OilWordNext(an, at, w);
             i += 1;
         }
         return sum;

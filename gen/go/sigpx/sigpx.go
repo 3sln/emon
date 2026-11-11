@@ -243,7 +243,7 @@ func spMaskWords(page1 int32, owords *port.Cells, etext *port.Cells, views *port
 	var y int32 = 0
 	for i < n {
 		if (evidence.OwGet(owords, i, evidence.HdPage()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount))) {
-			if evidence.OwGet(owords, i, evidence.HdConf()) >= SpConf() {
+			if evidence.OwConfidence(owords, i) >= SpConf() {
 				ts = evidence.OwGet(owords, i, evidence.HdTstart())
 				tl = evidence.OwGet(owords, i, evidence.HdTlen())
 				letters = 0
@@ -764,7 +764,7 @@ func SpDropLines(scr *port.Cells, nsel int32, olines *port.Cells, owords *port.C
 				if inone == 1 {
 					nin += 1
 				}
-				csum += evidence.OwGet(owords, wi, evidence.HdConf())
+				csum += evidence.OwConfidence(owords, wi)
 				j += 1
 			}
 			if (nin == cnt) && (csum < (cnt * 600)) {

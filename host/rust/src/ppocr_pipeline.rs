@@ -15,6 +15,7 @@ pub struct ReadingWord {
 pub struct Reading {
     pub words: Vec<ReadingWord>,
     pub lines: Vec<[i32; 4]>,
+    pub quads: Vec<Quad>,
 }
 pub struct Pipeline {
     detector: Session,
@@ -98,6 +99,7 @@ impl Pipeline {
         let mut reading = Reading {
             words: Vec::new(),
             lines: Vec::new(),
+            quads: Vec::new(),
         };
         for mut q in boxes {
             if q[3].sub(q[0]).length() > q[1].sub(q[0]).length() * 1.5 {
@@ -127,6 +129,7 @@ impl Pipeline {
             }
             let line = reading.lines.len();
             reading.lines.push(box_of(q, image.width, image.height));
+            reading.quads.push(q);
             for word in ws {
                 // Measured CTC support in padded tensor pixels, inverse-scaled to
                 // the actual crop. This deliberately does not spread words evenly.

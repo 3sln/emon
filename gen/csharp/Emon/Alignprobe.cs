@@ -43,8 +43,8 @@ public static class Alignprobe {
             ea = emon.Port.CellsAt(refs, (first + k) * 2);
             row = emon.Port.CellsAt(refs, ((first + k) * 2) + 1);
             if (ea == Evidence.EaOwords()) {
-                ApPutWord(t, etext, owords, 28, row);
-                ApPutBox(t, owords, 28, row);
+                ApPutWord(t, etext, owords, 32, row);
+                ApPutBox(t, owords, 32, row);
             } else {
                 ApPutWord(t, etext, words, 24, row);
                 ApPutBox(t, words, 24, row);

@@ -22,7 +22,7 @@
 (ns emon.sigpx
   (:require [emon.lang :refer [I32 Cells Bitmap]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bitmap-w bitmap-h bitmap-channels bitmap-u8]]
-            [emon.evidence :refer [rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-thick
+            [emon.evidence :refer [ow-confidence rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-thick
                                    ow-count ow-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
                                    vw-cpt-to-px vw-px-to-cpt
                                    ol-get lh-first lh-count]]
@@ -166,7 +166,7 @@
         ^:mut ^I32 y 0]
     (while (< i n)
       (do (if (and (== (ow-get owords i (hd-page)) page1) (or (< i skipfirst) (>= i (+ skipfirst skipcount))))
-            (if (>= (ow-get owords i (hd-conf)) (sp-conf))
+            (if (>= (ow-confidence owords i) (sp-conf))
               (do (set ts (ow-get owords i (hd-tstart)))
                   (set tl (ow-get owords i (hd-tlen)))
                   (set letters 0)
@@ -534,7 +534,7 @@
                               (set inone 1))
                             (set q (+ q 1))))
                       (if (== inone 1) (set nin (+ nin 1)))
-                      (set csum (+ csum (ow-get owords wi (hd-conf))))
+                      (set csum (+ csum (ow-confidence owords wi)))
                       (set j (+ j 1))))
                 (if (and (== nin cnt) (< csum (* cnt 600))) (set gone 1))
                 (if (and (>= (* nin 100) (* cnt 60)) (< csum (* cnt 450))) (set gone 1))))

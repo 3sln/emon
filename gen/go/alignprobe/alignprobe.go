@@ -57,8 +57,8 @@ func apPutRun(t *strings.Builder, etext *port.Cells, refs *port.Cells, words *po
 		ea = port.CellsAt(refs, (first+k)*2)
 		row = port.CellsAt(refs, ((first+k)*2)+1)
 		if ea == evidence.EaOwords() {
-			apPutWord(t, etext, owords, 28, row)
-			apPutBox(t, owords, 28, row)
+			apPutWord(t, etext, owords, 32, row)
+			apPutBox(t, owords, 32, row)
 		} else {
 			apPutWord(t, etext, words, 24, row)
 			apPutBox(t, words, 24, row)

@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrport::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 
 pub fn sk_min_conf() -> i32 {
@@ -41,22 +42,22 @@ pub fn sk_unpack(lang: i32, mut out: &mut crate::port::Cells) -> i32 {
 }
 pub(crate) fn sk_dict(nw: i32, an: &mut crate::port::Cells, ext: i32) -> i32 {
     // How many of the answer's `nw` words the engine read from its dictionary.
-    let mut w: i32 = ox_first_word(an, ext);
+    let mut w: i32 = oil_first_word(an, ext);
     let mut i: i32 = 0;
     let mut k: i32 = 0;
     while i < nw {
-        if (ox_wdflags(an, w) & ocw_dict()) != 0 {
+        if (oil_word_flags(an, ext, w) & ocw_dict()) != 0 {
             k += 1;
         }
-        w = ox_word_next(an, w);
+        w = oil_word_next(an, ext, w);
         i += 1;
     }
     return k;
 }
 pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
-    let ext: i32 = ox_find(an, at);
-    let nw: i32 = an_ocr_count(an, at);
+    let ext: i32 = oil_find(an, at);
+    let nw: i32 = oil_nwords(an, at);
     let mut w: i32 = 0;
     let mut i: i32 = 0;
     let mut lang: i32 = 0;
@@ -65,7 +66,7 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     if ext < 0 {
         return 0;
     }
-    script = ox_script(an, ext);
+    script = oil_script(an, ext);
     if script <= 0 {
         return 0;
     }
@@ -75,7 +76,7 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     if script == sc_latf() {
         return 0;
     }
-    if ox_sconf(an, ext) < sk_weak_conf() {
+    if oil_sconf(an, ext) < sk_weak_conf() {
         return 0;
     }
     if nw < sk_min_words() {
@@ -83,21 +84,21 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     }
     // P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
     // reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
-    if ox_sconf(an, ext) < sk_min_conf() {
+    if oil_sconf(an, ext) < sk_min_conf() {
         if (sk_dict(nw, an, ext) * 1000) >= (nw * sk_dict_share()) {
             return 0;
         }
     }
-    w = ox_first_word(an, ext);
+    w = oil_first_word(an, ext);
     while i < nw {
-        lang = ox_wlang(an, w);
+        lang = oil_wlang(an, ext, w);
         if lang > 0 {
             n = sk_unpack(lang, scr);
             if op_script_reads(script, op_model_script(scr, 0, n)) == 1 {
                 return 0;
             }
         }
-        w = ox_word_next(an, w);
+        w = oil_word_next(an, ext, w);
         i += 1;
     }
     return 1;
@@ -109,8 +110,8 @@ pub fn sk_route(ans: &mut crate::port::Cells, at: i32, id: i32, bitmap: i32, dpi
         return at;
     }
     let found: i32 = an_find(ans, id);
-    let ext: i32 = ox_find(ans, at);
-    let script: i32 = ox_script(ans, ext);
+    let ext: i32 = oil_find(ans, at);
+    let script: i32 = oil_script(ans, ext);
     if found >= 0 {
         if an_ok(ans, found) == 1 {
             return found;

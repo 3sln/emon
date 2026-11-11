@@ -1220,7 +1220,7 @@ public final class Sealpx {
                     if (inone == 1) {
                         nin += 1;
                     }
-                    csum += Evidence.owGet(owords, wi, Evidence.hdConf());
+                    csum += Evidence.owConfidence(owords, wi);
                     j += 1;
                 }
                 if (nin == cnt) {

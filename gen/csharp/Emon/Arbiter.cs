@@ -281,7 +281,7 @@ public static class Arbiter {
         while (k < no) {
             row = ArRef(refs, of + k, 1);
             olen += ArAlnum(owords, etext, row);
-            csum += Evidence.OwGet(owords, row, Evidence.HdConf());
+            csum += Evidence.OwConfidence(owords, row);
             f = Evidence.OwGet(owords, row, Evidence.HdFeat());
             if (f >= 0) {
                 v = Evidence.FeGet(feats, f, Evidence.XoImplausible());
@@ -643,7 +643,7 @@ public static class Arbiter {
             r = Player.FwCopyWord(nfw, ofw, tj, lrow);
             emon.Port.CellsSet(nfw, (r * 24) + 11, Evidence.OwGet(owords, orow, Evidence.HdTstart()));
             emon.Port.CellsSet(nfw, (r * 24) + 12, Evidence.OwGet(owords, orow, Evidence.HdTlen()));
-            emon.Port.CellsSet(nfw, (r * 24) + 14, Evidence.OwGet(owords, orow, Evidence.HdConf()));
+            emon.Port.CellsSet(nfw, (r * 24) + 14, Evidence.OwConfidence(owords, orow));
             emon.Port.CellsSet(nfw, (r * 24) + 15, -1);
             // a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
             if (nt > 0) {

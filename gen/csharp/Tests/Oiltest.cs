@@ -119,4 +119,53 @@ public static class Oiltest {
         emon.Testport.AssertEq(Oil.OilBegin(c, 13, Oil.OenTesseract(), 0, Oil.OcBaseline(), 1, 1, 0, 0), -1, "native must be a subset");
         emon.Testport.AssertEq(emon.Port.CellsLen(c), 0, "a rejected header did not change the answer stream");
     }
+    [Xunit.Fact]
+    public static void TestAbsentRowmetricsNeverReadFollowingColumns() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenTesseract(), Oil.OcAngle(), 0, 1, 1, 0, 0);
+        Oil.OilLine(c, at, 1, 2, 3, 4, -1, 0, -1, -1, 0, 0, 0, 0, 777, 888, 999, 0, 0, 0, 0, 0, 0, 0, 0, -321);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilLineField(c, at, 0, 11), -1, "absent xheight does not read angle");
+        emon.Testport.AssertEq(Oil.OilLineField(c, at, 0, 12), -1, "absent ascender does not read past row");
+        emon.Testport.AssertEq(Oil.OilLineField(c, at, 0, 13), -1, "absent descender does not read past record");
+    }
+    [Xunit.Fact]
+    public static void TestPpDoesNotClaimOsd() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 1, 0, 1);
+        emon.Testport.AssertEq(Oil.OilHeaderField(c, at, 9, Oil.OcOrient(), -1), -1, "no orientation measurement");
+        emon.Testport.AssertEq(Oil.OilHeaderField(c, at, 10, Oil.OcOrient(), -1), -1, "no orientation confidence");
+    }
+    [Xunit.Fact]
+    public static void TestBrowserMissingBaselineIsAbsent() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenTesseract(), 0, 0, 1, 1, 0, 0);
+        Oil.OilLine(c, at, 1, 2, 30, 4, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilLineField(c, at, 0, 4), -1, "baseline zero is not a measurement");
+        emon.Testport.AssertEq(Oil.OilHeaderField(c, at, 9, Oil.OcOrient(), -1), -1, "browser never ran OSD");
+    }
+    [Xunit.Fact]
+    public static void TestFlatOilRoundtripsAndRejectsOverflowingTextBeforeWriting() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells flat = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Port.Cells bad = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 7, Oil.OenTesseract(), 0, 0, 1, 1, 0, 0);
+        int i = 4;
+        Oil.OilLine(c, at, 1, 2, 3, 4, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.OilWord(c, at, 1, 2, 3, 4, 0, 900, 0, 0, -1, 0);
+        Oil.OilWordCp(c, at, word, 65);
+        Oil.OilEnd(c, at);
+        while (i < emon.Port.CellsLen(c)) {
+            emon.Port.CellsPush(flat, emon.Port.CellsAt(c, i));
+            i += 1;
+        }
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 77, @out), 0, "canonical flat OIL accepted");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 2), 77, "request id belongs to the envelope");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), emon.Port.CellsLen(c), "flat roundtrip length");
+        emon.Port.CellsSet(flat, word + 3, 2147483647);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 77, bad), -1, "text count cannot overflow cursor");
+        emon.Testport.AssertEq(emon.Port.CellsLen(bad), 0, "malformed form writes nothing");
+    }
 }

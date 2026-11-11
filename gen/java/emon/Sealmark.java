@@ -1022,7 +1022,7 @@ public final class Sealmark {
         // and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
         int ts = Evidence.owGet(owords, row, Evidence.hdTstart());
         int tl = Evidence.owGet(owords, row, Evidence.hdTlen());
-        int conf = Evidence.owGet(owords, row, Evidence.hdConf());
+        int conf = Evidence.owConfidence(owords, row);
         int k = 0;
         int n = 0;
         while (k < tl) {

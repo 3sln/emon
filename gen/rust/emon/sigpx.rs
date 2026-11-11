@@ -217,7 +217,7 @@ pub(crate) fn sp_mask_words(page1: i32, owords: &mut crate::port::Cells, etext: 
     let mut y: i32 = 0;
     while i < n {
         if (ow_get(owords, i, hd_page()) == page1) && ((i < skipfirst) || (i >= (skipfirst + skipcount))) {
-            if ow_get(owords, i, hd_conf()) >= sp_conf() {
+            if ow_confidence(owords, i) >= sp_conf() {
                 ts = ow_get(owords, i, hd_tstart());
                 tl = ow_get(owords, i, hd_tlen());
                 letters = 0;
@@ -726,7 +726,7 @@ pub fn sp_drop_lines(mut scr: &mut crate::port::Cells, nsel: i32, olines: &mut c
                 if inone == 1 {
                     nin += 1;
                 }
-                csum += ow_get(owords, wi, hd_conf());
+                csum += ow_confidence(owords, wi);
                 j += 1;
             }
             if (nin == cnt) && (csum < (cnt * 600)) {

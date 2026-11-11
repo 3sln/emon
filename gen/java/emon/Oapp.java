@@ -162,7 +162,7 @@ public final class Oapp {
                     p = Evidence.orGet(runs, run, Evidence.orfWfirst());
                     end = p + Evidence.orGet(runs, run, Evidence.orfWcount());
                     while (p < end) {
-                        if ((Evidence.owGet(words, p, Evidence.hdConf()) >= 700) && (Evidence.evOverlapSmall(Evidence.owGet(words, w, Evidence.hdX0()), Evidence.owGet(words, w, Evidence.hdY0()), Evidence.owGet(words, w, Evidence.hdX1()), Evidence.owGet(words, w, Evidence.hdY1()), Evidence.owGet(words, p, Evidence.hdX0()), Evidence.owGet(words, p, Evidence.hdY0()), Evidence.owGet(words, p, Evidence.hdX1()), Evidence.owGet(words, p, Evidence.hdY1())) >= 500)) {
+                        if ((Evidence.owConfidence(words, p) >= 700) && (Evidence.evOverlapSmall(Evidence.owGet(words, w, Evidence.hdX0()), Evidence.owGet(words, w, Evidence.hdY0()), Evidence.owGet(words, w, Evidence.hdX1()), Evidence.owGet(words, w, Evidence.hdY1()), Evidence.owGet(words, p, Evidence.hdX0()), Evidence.owGet(words, p, Evidence.hdY0()), Evidence.owGet(words, p, Evidence.hdX1()), Evidence.owGet(words, p, Evidence.hdY1())) >= 500)) {
                             emon.Port.cellsPush(candidates, i);
                             emon.Port.cellsPush(candidates, Evidence.owGet(words, p, Evidence.hdTstart()));
                             emon.Port.cellsPush(candidates, Evidence.owGet(words, p, Evidence.hdTlen()));

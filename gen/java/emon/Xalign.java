@@ -1254,8 +1254,8 @@ public final class Xalign {
         // Align one page. See the head of the file. Answers the number of groups appended to `cg`.
         int w0 = xaLower(words, 24, page);
         int w1 = xaLower(words, 24, page + 1);
-        int o0 = xaLower(owords, 28, page);
-        int o1 = xaLower(owords, 28, page + 1);
+        int o0 = xaLower(owords, 32, page);
+        int o1 = xaLower(owords, 32, page + 1);
         int t0 = xaLower(tlines, 20, page);
         int t1 = xaLower(tlines, 20, page + 1);
         int nt = w1 - w0;
@@ -1313,7 +1313,7 @@ public final class Xalign {
         i = 0;
         while (i < no) {
             r = o0 + i;
-            xaLoadHead(scr, nt + i, owords, 28, r);
+            xaLoadHead(scr, nt + i, owords, 32, r);
             xaHbs(scr, nt + i, 9, 3);
             f = emon.Port.cellsAt(owords, (r * 28) + Evidence.owfRun());
             xaHbs(scr, nt + i, 11, f);

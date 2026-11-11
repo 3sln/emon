@@ -1224,7 +1224,7 @@ pub fn sx_drop_lines(mut scr: &mut crate::port::Cells, nsel: i32, olines: &mut c
                 if inone == 1 {
                     nin += 1;
                 }
-                csum += ow_get(owords, wi, hd_conf());
+                csum += ow_confidence(owords, wi);
                 j += 1;
             }
             if nin == cnt {

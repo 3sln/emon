@@ -289,12 +289,12 @@ impl Session {
         run.offer(Answer { rec, bitmap: None }).map_err(|e| Fault::Usage(e.to_string()))
     }
 
-    // An `ocr` answer from the flat integer form a caller makes of its engine's reading; the form and the record are kin's (`ox-flat`,
+    // An `ocr` answer from the flat integer form a caller makes of its engine's reading; the form and the record are kin's (`oil-flat`,
     // `emon.ocrport`), so the layout is written once and a malformed form is refused by kin.
     pub fn answer_ocr(&mut self, id: i32, flat: &[i32]) -> Result<(), Fault> {
         let mut flat = cells_of(flat);
         let mut out = Cells::new();
-        if emon::ocrport::ox_flat(&mut flat, id, &mut out) != 0 {
+        if emon::oil::oil_flat(&mut flat, id, &mut out) != 0 {
             return Err(Fault::Usage("the ocr form is malformed".to_string()));
         }
         self.answer(cells_vec(&out))

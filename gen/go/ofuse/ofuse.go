@@ -1258,7 +1258,7 @@ func ofAddCandidate(words *port.Cells, text *port.Cells, run int32, seq *port.Ce
 	for i < n {
 		w = port.CellsAt(seq, i)
 		port.CellsPush(refs, w)
-		sum += int64(evidence.OwGet(words, w, evidence.HdConf()))
+		sum += int64(evidence.OwConfidence(words, w))
 		if (evidence.OwGet(words, w, evidence.OwfFlags()) & evidence.OeDictionary()) == 0 {
 			dictionary = 0
 		}
@@ -1376,7 +1376,7 @@ func OfCandidates(words *port.Cells, text *port.Cells, rows *port.Cells, parents
 			sum = int64(0)
 			j = 0
 			for j < port.CellsLen(seq) {
-				sum += int64(evidence.OwGet(words, port.CellsAt(seq, j), evidence.HdConf()))
+				sum += int64(evidence.OwConfidence(words, port.CellsAt(seq, j)))
 				j += 1
 			}
 			confidence = int32(sum / int64(port.CellsLen(seq)))
@@ -1455,7 +1455,7 @@ func OfPpComplete(words *port.Cells, text *port.Cells, first int32, n int32, com
 	var seen int32 = 0
 	var covered int32 = 0
 	for i < (first + n) {
-		if evidence.OwGet(words, i, evidence.HdConf()) < OfInsertConf() {
+		if evidence.OwConfidence(words, i) < OfInsertConf() {
 			return 0
 		}
 		if OfEligible(words, text, i) == 0 {
@@ -1540,7 +1540,7 @@ func OfPpRepeatChoice(runs *port.Cells, words *port.Cells, text *port.Cells, c *
 						v = port.CellsAt(sel, j)
 						run = evidence.OwGet(words, v, evidence.OwfRun())
 						if (run >= 0) && (run < evidence.OrCount(runs)) {
-							if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) != 23) && ((evidence.OwGet(words, w, evidence.HdPage()) == evidence.OwGet(words, v, evidence.HdPage())) && (evidence.OwGet(words, v, evidence.HdConf()) >= OfInsertConf())) {
+							if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) != 23) && ((evidence.OwGet(words, w, evidence.HdPage()) == evidence.OwGet(words, v, evidence.HdPage())) && (evidence.OwConfidence(words, v) >= OfInsertConf())) {
 								if (ofWordSame(words, text, w, v, 0) == 1) && (evidence.EvOverlapSmall(evidence.OwGet(words, w, evidence.HdX0()), evidence.OwGet(words, w, evidence.HdY0()), evidence.OwGet(words, w, evidence.HdX1()), evidence.OwGet(words, w, evidence.HdY1()), evidence.OwGet(words, v, evidence.HdX0()), evidence.OwGet(words, v, evidence.HdY0()), evidence.OwGet(words, v, evidence.HdX1()), evidence.OwGet(words, v, evidence.HdY1())) == 0) {
 									found = 1
 								}

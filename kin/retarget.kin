@@ -31,11 +31,12 @@
 ;;
 ;; THE PLAN'S SCRATCH `rtp` (the caller's, `rt-prep` makes it) holds what was decided, so that the three functions agree: see the `rtp-*`.
 (ns emon.retarget
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
+  (:require [emon.oil :refer [oil-first-word oil-nwords oil-policy-conf oil-word oil-word-next]]
+            [emon.lang :refer [I32 Cells Bitmap BitmapSet i64 i32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-put bms-get bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8
                                bitmap-gray-into bitmap-hash bitmap-quarter-into bitmap-lut-into]]
-            [emon.plan :refer [an-ocr-count an-ocr-first aw-next aw-get aw-w aw-h aw-conf rq-render an-find an-ok an-arg view-base pu-id pu-view-id pi-decode pi-ocr pi-render-text-only lay-text-only]]
-            [emon.evidence :refer [ik-count ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
+            [emon.plan :refer [rq-render an-find an-ok an-arg view-base pu-id pu-view-id pi-decode pi-ocr pi-render-text-only lay-text-only]]
+            [emon.evidence :refer [ow-confidence ik-count ik-get ikf-count ikf-role ir-body ir-light ir-color ir-background
                                    co-count co-get cf-page cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf
                                    ol-new ol-set olf-run olf-retry-gap tlf-ink tlf-conf ol-get ow-get ow-count ol-count or-get or-set or-count fe-get xo-body-share rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1
                                    olf-px olf-py olf-pw olf-ph owf-px owf-py owf-pw owf-ph lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 hd-x0 hd-y0 hd-x1 hd-y1 hd-conf hd-tstart hd-tlen hd-feat
@@ -191,7 +192,7 @@
         ^:mut ^I32 sum 0]
     (if (<= c 0) (return -1))
     (while (< j c)
-      (do (set sum (+ sum (ow-get owords (+ f j) (hd-conf))))
+      (do (set sum (+ sum (ow-confidence owords (+ f j))))
           (set j (+ j 1))))
     (return (quot sum c))))
 
@@ -202,7 +203,7 @@
         ^:mut ^I32 i w0
         ^:mut ^I32 sum 0]
     (while (< i (+ w0 nw))
-      (do (set sum (+ sum (quot (* (ow-get owords i (hd-conf)) (ow-get owords i (hd-tlen))) 16)))
+      (do (set sum (+ sum (quot (* (ow-confidence owords i) (ow-get owords i (hd-tlen))) 16)))
           (set i (+ i 1))))
     (return sum)))
 
@@ -779,16 +780,16 @@
     (return made)))
 (defn ^:pub ^I32 rt-answer-score [^Cells ans ^I32 at]
   (comment "D671: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.")
-  (let [^:mut ^I32 w (an-ocr-first ans at) ^:mut ^I32 i 0 ^:mut ^I32 score 0 ^:mut ^I32 area 0
+  (let [^:mut ^I32 w (oil-first-word ans at) ^:mut ^I32 i 0 ^:mut ^I32 score 0 ^:mut ^I32 area 0
         ^:mut ^I32 width 0 ^:mut ^I32 height 0 ^:mut ^I32 conf 0]
-    (while (< i (an-ocr-count ans at))
-      (do (set width (aw-get ans w (aw-w))) (set height (aw-get ans w (aw-h)))
-          (set conf (aw-get ans w (aw-conf)))
+    (while (< i (oil-nwords ans at))
+      (do (set width (cells-at ans (+ w 2))) (set height (cells-at ans (+ w 3)))
+          (set conf (oil-policy-conf ans at w))
           (if (and (> width 0) (and (> height 0) (>= width height)))
             (do (set area (quot (* width height) 100))
                 (if (> area 10000) (set area 10000))
                 (if (> conf 0) (set score (+ score (quot (* area conf) 1000))))))
-          (set w (aw-next ans w)) (set i (+ i 1))))
+          (set w (oil-word-next ans at w)) (set i (+ i 1))))
     (return score)))
 
 (defn ^:pub ^I32 rt-thermal-into [^Bitmap gray ^Bitmap dst ^I32 paper]
@@ -819,7 +820,7 @@
   (if (== (rt-receipt-mode trigger) 0) (return 1))
   (if (< at 0) (return 0))
   (if (!= (an-ok ans at) 1) (return 1))
-  (if (== (an-ocr-count ans at) 0) (return 1))
+  (if (== (oil-nwords ans at) 0) (return 1))
   (return 0))
 
 (defn ^I32 rt-ask-thermal [^I32 page ^I32 dpi ^Cells loc ^Cells ans ^BitmapSet bms ^Bitmap gray ^I32 paper
@@ -906,7 +907,7 @@
       (let [^I32 ba (an-find ans (pu-id page (ri-body))) ^I32 receipt (an-find ans (pu-id page (ri-receipt))) ^I32 receipt-mode (rt-receipt-active rtp)]
         (if (and (== (rt-empty-receipt (rt-receipt-active rtp) ans receipt) 1)
                  (or (== (cells-at rtp (rtp-body)) 0)
-                     (and (>= ba 0) (and (== (an-ok ans ba) 1) (== (an-ocr-count ans ba) 0)))))
+                     (and (>= ba 0) (and (== (an-ok ans ba) 1) (== (oil-nwords ans ba) 0)))))
           (set asked (+ asked (rt-ask-thermal page dpi loc ans bms (bms-get bms (pu-view-id page k0)) (nm-paper-gray ws) rtp rq
                                             receipt-mode pixels))))))
     (if (!= q 0)
@@ -1077,7 +1078,7 @@
         ^:mut ^I32 sum 0]
     (if (<= nw 0) (return -1))
     (while (< i (+ w0 nw))
-      (do (set sum (+ sum (ow-get owords i (hd-conf))))
+      (do (set sum (+ sum (ow-confidence owords i)))
           (set i (+ i 1))))
     (return (quot sum nw))))
 
@@ -1093,7 +1094,7 @@
           (set c (ol-get olines l (lh-count)))
           (set j 0)
           (while (< j c)
-            (do (set sum (+ sum (quot (* (ow-get owords (+ f j) (hd-conf)) (ow-get owords (+ f j) (hd-tlen))) 16)))
+            (do (set sum (+ sum (quot (* (ow-confidence owords (+ f j)) (ow-get owords (+ f j) (hd-tlen))) 16)))
                 (set j (+ j 1))))
           (set l (+ l 1))))
     (return sum)))
@@ -1111,7 +1112,7 @@
           (set c (ol-get olines l (lh-count)))
           (set j 0)
           (while (< j c)
-            (do (set sum (+ sum (ow-get owords (+ f j) (hd-conf))))
+            (do (set sum (+ sum (ow-confidence owords (+ f j))))
                 (set words (+ words 1))
                 (set j (+ j 1))))
           (set l (+ l 1))))
@@ -1272,10 +1273,10 @@
     (return 0)))
 (defn ^I32 rt-receipt-protect-conf [] (return 900))
 (defn ^I32 rt-receipt-protected [^Cells ow ^Cells et ^I32 w]
-  (if (and (>= (ow-get ow w (hd-conf)) (rt-receipt-protect-conf)) (>= (ow-get ow w (hd-tlen)) 2)) (return (rt-receipt-word-alpha ow et w)))
+  (if (and (>= (ow-confidence ow w) (rt-receipt-protect-conf)) (>= (ow-get ow w (hd-tlen)) 2)) (return (rt-receipt-word-alpha ow et w)))
   (return 0))
 (defn ^I32 rt-receipt-word-value [^Cells ow ^Cells et ^I32 w]
-  (return (up-receipt-value (ow-get ow w (hd-conf)) (ow-get ow w (hd-tlen)) (rt-receipt-word-alpha ow et w))))
+  (return (up-receipt-value (ow-confidence ow w) (ow-get ow w (hd-tlen)) (rt-receipt-word-alpha ow et w))))
 (defn ^I32 rt-receipt-selected-count [^Cells ol ^Cells ow ^Cells et ^Cells scr ^I32 n ^I32 word ^I32 first]
   (let [^:mut ^I32 k 0 ^:mut ^I32 w 0 ^:mut ^I32 end 0 ^:mut ^I32 count 0 ^:mut ^I32 line 0]
     (while (< k n)
@@ -1299,7 +1300,7 @@
                 (if (and (!= (ol-get ol line (olf-run)) first) (== (rt-receipt-protected ow et w) 1))
                   (do (set c c0) (set count 0)
                       (while (< c cn)
-                        (do (if (and (>= (ow-get ow c (hd-conf)) (rt-receipt-min)) (== (rt-receipt-word-equal ow et w c) 1)) (set count (+ count 1)))
+                        (do (if (and (>= (ow-confidence ow c) (rt-receipt-min)) (== (rt-receipt-word-equal ow et w c) 1)) (set count (+ count 1)))
                             (set c (+ c 1))))
                       (if (< count (rt-receipt-selected-count ol ow et scr n w first)) (return 0))))
                 (set w (+ w 1))))

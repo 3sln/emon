@@ -3,7 +3,7 @@
 (ns emon.oapp
   (:require [emon.lang :refer [I32 I64 Cells i64]]
             [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
-            [emon.evidence :refer [ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf or-count or-get orf-request orf-wfirst orf-wcount
+            [emon.evidence :refer [ow-confidence ow-get hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf or-count or-get orf-request orf-wfirst orf-wcount
                                    ol-get lh-first lh-count lh-dir ev-overlap-small rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-conf]]
             [emon.scan :refer [sc-sel-base sc-xtra-base sc-sel-max sc-line-words sc-kept-words sc-fate-base]]
             [emon.ofmt :refer [fmt-value fmt-digit]]
@@ -87,7 +87,7 @@
                       (cells-push inc (ow-get words w (hd-tstart))) (cells-push inc (ow-get words w (hd-tlen)))
                       (set p (or-get runs run (orf-wfirst))) (set end (+ p (or-get runs run (orf-wcount))))
                       (while (< p end)
-                        (do (if (and (>= (ow-get words p (hd-conf)) 700)
+                        (do (if (and (>= (ow-confidence words p) 700)
                                      (>= (ev-overlap-small (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))
                                                             (ow-get words p (hd-x0)) (ow-get words p (hd-y0)) (ow-get words p (hd-x1)) (ow-get words p (hd-y1))) 500))
                               (do (cells-push candidates i) (cells-push candidates (ow-get words p (hd-tstart))) (cells-push candidates (ow-get words p (hd-tlen))) (cells-push sources p)))

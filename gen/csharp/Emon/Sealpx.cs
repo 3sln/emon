@@ -1220,7 +1220,7 @@ public static class Sealpx {
                     if (inone == 1) {
                         nin += 1;
                     }
-                    csum += Evidence.OwGet(owords, wi, Evidence.HdConf());
+                    csum += Evidence.OwConfidence(owords, wi);
                     j += 1;
                 }
                 if (nin == cnt) {

@@ -39,22 +39,22 @@ public static class Scriptcheck {
     }
     internal static int SkDict(int nw, emon.Port.Cells an, int ext) {
         // How many of the answer's `nw` words the engine read from its dictionary.
-        int w = Ocr.OxFirstWord(an, ext);
+        int w = Oil.OilFirstWord(an, ext);
         int i = 0;
         int k = 0;
         while (i < nw) {
-            if ((Ocr.OxWdflags(an, w) & Ocr.OcwDict()) != 0) {
+            if ((Oil.OilWordFlags(an, ext, w) & Ocr.OcwDict()) != 0) {
                 k += 1;
             }
-            w = Ocr.OxWordNext(an, w);
+            w = Oil.OilWordNext(an, ext, w);
             i += 1;
         }
         return k;
     }
     public static int SkUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
         // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
-        int ext = Ocr.OxFind(an, at);
-        int nw = Plan.AnOcrCount(an, at);
+        int ext = Oil.OilFind(an, at);
+        int nw = Oil.OilNwords(an, at);
         int w = 0;
         int i = 0;
         int lang = 0;
@@ -63,7 +63,7 @@ public static class Scriptcheck {
         if (ext < 0) {
             return 0;
         }
-        script = Ocr.OxScript(an, ext);
+        script = Oil.OilScript(an, ext);
         if (script <= 0) {
             return 0;
         }
@@ -73,7 +73,7 @@ public static class Scriptcheck {
         if (script == Ocrport.ScLatf()) {
             return 0;
         }
-        if (Ocr.OxSconf(an, ext) < SkWeakConf()) {
+        if (Oil.OilSconf(an, ext) < SkWeakConf()) {
             return 0;
         }
         if (nw < SkMinWords()) {
@@ -81,21 +81,21 @@ public static class Scriptcheck {
         }
         // P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
         // reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
-        if (Ocr.OxSconf(an, ext) < SkMinConf()) {
+        if (Oil.OilSconf(an, ext) < SkMinConf()) {
             if ((SkDict(nw, an, ext) * 1000) >= (nw * SkDictShare())) {
                 return 0;
             }
         }
-        w = Ocr.OxFirstWord(an, ext);
+        w = Oil.OilFirstWord(an, ext);
         while (i < nw) {
-            lang = Ocr.OxWlang(an, w);
+            lang = Oil.OilWlang(an, ext, w);
             if (lang > 0) {
                 n = SkUnpack(lang, scr);
                 if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, 0, n)) == 1) {
                     return 0;
                 }
             }
-            w = Ocr.OxWordNext(an, w);
+            w = Oil.OilWordNext(an, ext, w);
             i += 1;
         }
         return 1;
@@ -107,8 +107,8 @@ public static class Scriptcheck {
             return at;
         }
         int found = Plan.AnFind(ans, id);
-        int ext = Ocr.OxFind(ans, at);
-        int script = Ocr.OxScript(ans, ext);
+        int ext = Oil.OilFind(ans, at);
+        int script = Oil.OilScript(ans, ext);
         if (found >= 0) {
             if (Plan.AnOk(ans, found) == 1) {
                 return found;

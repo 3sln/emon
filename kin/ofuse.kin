@@ -5,7 +5,7 @@
   (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
             [emon.ofmt :refer [ofmt-valid fmt-digit]]
             [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
-            [emon.evidence :refer [co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
+            [emon.evidence :refer [ow-confidence co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
                                    hd-line hd-tstart hd-tlen hd-conf hd-feat owf-flags oe-garbage oe-dictionary owf-run owf-from ev-overlap-small
                                    or-new or-count or-get or-set orf-page orf-view orf-pass orf-request orf-lfirst orf-lcount orf-wfirst orf-wcount
                                    ol-new ol-count ol-get ol-set lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1 lh-rot lh-dir lh-first lh-count olf-run
@@ -1090,7 +1090,7 @@
     (cells-push c run) (cells-push c (cells-len refs)) (cells-push c n) (cells-push c 0)
     (while (< i n)
       (do (set w (cells-at seq i)) (cells-push refs w)
-          (set sum (+ sum (i64 (ow-get words w (hd-conf)))))
+          (set sum (+ sum (i64 (ow-confidence words w))))
           (if (== (bit-and (ow-get words w (owf-flags)) (oe-dictionary)) 0) (set dictionary 0))
           (if (== (ofmt-valid text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 0) (set valid 0))
           (set j 0)
@@ -1147,7 +1147,7 @@
                 (cells-set c (+ (* found (of-cstride)) 3) candidate-votes)
                 (set sum (i64 0)) (set j 0)
                 (while (< j (cells-len seq))
-                  (do (set sum (+ sum (i64 (ow-get words (cells-at seq j) (hd-conf))))) (set j (+ j 1))))
+                  (do (set sum (+ sum (i64 (ow-confidence words (cells-at seq j))))) (set j (+ j 1))))
                 (set confidence (i32 (quot sum (i64 (cells-len seq)))))
                 (if (> confidence (of-cget c found 4)) (cells-set c (+ (* found (of-cstride)) 4) confidence))))
           (set i (+ i 3))))
@@ -1190,7 +1190,7 @@
   (if (<= n 0) (return 0))
   (let [^:mut ^I32 i first ^:mut ^I32 j 0 ^:mut ^I32 seen 0 ^:mut ^I32 covered 0]
     (while (< i (+ first n))
-      (do (if (< (ow-get words i (hd-conf)) (of-insert-conf)) (return 0))
+      (do (if (< (ow-confidence words i) (of-insert-conf)) (return 0))
           (if (== (of-eligible words text i) 0) (return 0))
           (if (and (== (bit-and (ow-get words i (owf-flags)) (oe-dictionary)) 0)
                    (== (ofmt-valid text (ow-get words i (hd-tstart)) (ow-get words i (hd-tlen))) 0)) (return 0))
@@ -1244,7 +1244,7 @@
                               (if (and (>= run 0) (< run (or-count runs)))
                                 (if (and (!= (rem (or-get runs run (orf-request)) 256) 23)
                                          (and (== (ow-get words w (hd-page)) (ow-get words v (hd-page)))
-                                              (>= (ow-get words v (hd-conf)) (of-insert-conf))))
+                                              (>= (ow-confidence words v) (of-insert-conf))))
                                   (if (and (== (of-word-same words text w v 0) 1)
                                            (== (ev-overlap-small (ow-get words w (hd-x0)) (ow-get words w (hd-y0)) (ow-get words w (hd-x1)) (ow-get words w (hd-y1))
                                                                   (ow-get words v (hd-x0)) (ow-get words v (hd-y0)) (ow-get words v (hd-x1)) (ow-get words v (hd-y1))) 0))

@@ -23,13 +23,10 @@
 ;; only its `Src` and the answers, so a discarded attempt (a miss) leaves no
 ;; trace, and a replay sees what the recording saw.
 (ns emon.planprobe
-  (:require [emon.lang :refer [I32 Cells Src]]
-            [emon.port :refer [src-len src-u8 src-missed]]
-            [emon.plan :refer [us-done us-requests us-need-bytes lay-full flt-none
-                               rq-render rq-decode rq-ocr rq-ocr-lang rq-ocr-end
-                               an-find an-ok an-arg an-ocr-count an-ocr-first
-                               aw-get aw-cp aw-next aw-x aw-y aw-w aw-h aw-conf
-                               aw-len]]
+  (:require [emon.oil :refer [oil-nwords oil-first-word oil-wlen oil-wcp oil-word-next]]
+            [emon.lang :refer [I32 Cells Src]]
+            [emon.port :refer [cells-at src-len src-u8 src-missed]]
+            [emon.plan :refer [us-done us-requests us-need-bytes lay-full flt-none rq-render rq-decode rq-ocr rq-ocr-lang rq-ocr-end an-find an-ok an-arg]]
             [emon.evidence :refer [ev-init im-new vw-new vw-box-to-cpt ow-new ow-set or-new or-set
                                    etx-append-cp etx-len owf-run
                                    orf-request orf-psm orf-wfirst orf-wcount ow-count
@@ -40,32 +37,32 @@
 (defn ^I32 pp-words [^Cells an ^I32 at ^I32 page ^I32 view ^I32 request ^I32 psm
                      ^:mut ^Cells views ^:mut ^Cells oruns ^:mut ^Cells owords ^:mut ^Cells etext]
   (comment "One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.")
-  (let [^I32 nw (an-ocr-count an at)
+  (let [^I32 nw (oil-nwords an at)
         ^I32 run (or-new oruns page view)
         ^I32 w0 (ow-count owords)
-        ^:mut ^I32 w (an-ocr-first an at)
+        ^:mut ^I32 w (oil-first-word an at)
         ^:mut ^I32 i 0]
     (or-set oruns run (orf-request) request)
     (or-set oruns run (orf-psm) psm)
     (while (< i nw)
-      (do (let [^I32 px (aw-get an w (aw-x))
-                ^I32 py (aw-get an w (aw-y))
-                ^I32 pw (aw-get an w (aw-w))
-                ^I32 ph (aw-get an w (aw-h))
+      (do (let [^I32 px (cells-at an (+ w 0))
+                ^I32 py (cells-at an (+ w 1))
+                ^I32 pw (cells-at an (+ w 2))
+                ^I32 ph (cells-at an (+ w 3))
                 ^I32 x0 (vw-box-to-cpt views view 0 px py pw ph)
                 ^I32 y0 (vw-box-to-cpt views view 1 px py pw ph)
                 ^I32 x1 (vw-box-to-cpt views view 2 px py pw ph)
                 ^I32 y1 (vw-box-to-cpt views view 3 px py pw ph)
                 ^I32 ts (etx-len etext)
-                ^I32 nc (aw-get an w (aw-len))
+                ^I32 nc (oil-wlen an at w)
                 ^:mut ^I32 k 0]
             (while (< k nc)
-              (do (etx-append-cp etext (aw-cp an w k))
+              (do (etx-append-cp etext (oil-wcp an at w k))
                   (set k (+ k 1))))
             (let [^I32 ow (ow-new owords page x0 y0 x1 y1 x0 y1 x1 y1 0 0 ts nc -1
-                                  (aw-get an w (aw-conf)) -1)]
+                                  (cells-at an (+ w 5)) -1)]
               (ow-set owords ow (owf-run) run)))
-          (set w (aw-next an w))
+          (set w (oil-word-next an at w))
           (set i (+ i 1))))
     (or-set oruns run (orf-wfirst) w0)
     (or-set oruns run (orf-wcount) nw)

@@ -2,7 +2,7 @@
 (ns emon.oiltest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-eq64 new-cells]]
-            [emon.port :refer [cells-at cells-len cells-push]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set]]
             [emon.oil :refer [oil-has oil-block-stride oil-line-stride oil-word-base
                               oil-pm oil-native-check oc-orient
                               oc-baseline oc-rowmetrics oc-blocks oc-btype oc-wdir
@@ -11,8 +11,8 @@
                               oil-begin oil-end oil-line oil-word oil-word-cp
                               oil-sym oil-sym-cp oil-alt oil-alt-cp oil-first-word
                               oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
-                              oil-walt oil-walt-cp]]
-            [kin.lang :refer [defn return let + -]]))
+                              oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat]]
+            [kin.lang :refer [defn return let set while if do + - <]]))
 
 (deftest test-capabilities-determine-the-physical-row-strides
   (assert-eq (oil-block-stride 0) 5 "only the block base")
@@ -112,3 +112,43 @@
   (let [^Cells c (new-cells)]
     (assert-eq (oil-begin c 13 (oen-tesseract) 0 (oc-baseline) 1 1 0 0) -1 "native must be a subset")
     (assert-eq (cells-len c) 0 "a rejected header did not change the answer stream")))
+
+(deftest test-absent-rowmetrics-never-read-following-columns
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 1 (oen-tesseract) (oc-angle) 0 1 1 0 0)]
+    (oil-line c at 1 2 3 4 -1 0 -1 -1 0 0 0 0 777 888 999 0 0 0 0 0 0 0 0 -321)
+    (oil-end c at)
+    (assert-eq (oil-line-field c at 0 11) -1 "absent xheight does not read angle")
+    (assert-eq (oil-line-field c at 0 12) -1 "absent ascender does not read past row")
+    (assert-eq (oil-line-field c at 0 13) -1 "absent descender does not read past record")))
+
+(deftest test-pp-does-not-claim-osd
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 1 (oen-ppocr) 0 0 1 1 0 1)]
+    (assert-eq (oil-header-field c at 9 (oc-orient) -1) -1 "no orientation measurement")
+    (assert-eq (oil-header-field c at 10 (oc-orient) -1) -1 "no orientation confidence")))
+
+(deftest test-browser-missing-baseline-is-absent
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 1 (oen-tesseract) 0 0 1 1 0 0)]
+    (oil-line c at 1 2 30 4 -1 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (oil-end c at)
+    (assert-eq (oil-line-field c at 0 4) -1 "baseline zero is not a measurement")
+    (assert-eq (oil-header-field c at 9 (oc-orient) -1) -1 "browser never ran OSD")))
+
+(deftest test-flat-oil-roundtrips-and-rejects-overflowing-text-before-writing
+  (let [^Cells c (new-cells) ^Cells flat (new-cells) ^Cells out (new-cells) ^Cells bad (new-cells)
+        ^I32 at (oil-begin c 7 (oen-tesseract) 0 0 1 1 0 0)
+        ^:mut ^I32 i 4]
+    (oil-line c at 1 2 3 4 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (let [^I32 word (oil-word c at 1 2 3 4 0 900 0 0 -1 0)]
+      (oil-word-cp c at word 65)
+      (oil-end c at)
+      (while (< i (cells-len c))
+        (do (cells-push flat (cells-at c i)) (set i (+ i 1))))
+      (assert-eq (oil-flat flat 77 out) 0 "canonical flat OIL accepted")
+      (assert-eq (cells-at out 2) 77 "request id belongs to the envelope")
+      (assert-eq (cells-len out) (cells-len c) "flat roundtrip length")
+      (cells-set flat (+ word 3) 2147483647)
+      (assert-eq (oil-flat flat 77 bad) -1 "text count cannot overflow cursor")
+      (assert-eq (cells-len bad) 0 "malformed form writes nothing"))))

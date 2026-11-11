@@ -2153,8 +2153,8 @@ public static class Gfuse {
             qj = GfRangeEnd(prims, 24, 0, qi, p);
             bi = GfAdvance(oblocks, 16, 0, bi, p);
             bj = GfRangeEnd(oblocks, 16, 0, bi, p);
-            wi = GfAdvance(owords, 28, 0, wi, p);
-            wj = GfRangeEnd(owords, 28, 0, wi, p);
+            wi = GfAdvance(owords, 32, 0, wi, p);
+            wj = GfRangeEnd(owords, 32, 0, wi, p);
             ti = GfAdvance(words, 24, 0, ti, p);
             tj = GfRangeEnd(words, 24, 0, ti, p);
             pi = GfAdvance(pa, 24, 0, pi, p);

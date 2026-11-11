@@ -352,7 +352,7 @@ public final class Retarget {
             return -1;
         }
         while (j < c) {
-            sum += Evidence.owGet(owords, f + j, Evidence.hdConf());
+            sum += Evidence.owConfidence(owords, f + j);
             j += 1;
         }
         return sum / c;
@@ -364,7 +364,7 @@ public final class Retarget {
         int i = w0;
         int sum = 0;
         while (i < (w0 + nw)) {
-            sum += (Evidence.owGet(owords, i, Evidence.hdConf()) * Evidence.owGet(owords, i, Evidence.hdTlen())) / 16;
+            sum += (Evidence.owConfidence(owords, i) * Evidence.owGet(owords, i, Evidence.hdTlen())) / 16;
             i += 1;
         }
         return sum;
@@ -1125,17 +1125,17 @@ public final class Retarget {
     }
     public static int rtAnswerScore(emon.Port.Cells ans, int at) {
         // D671: upright trial quality is recognized text area times word confidence; narrow vertical strips do not vote. Accumulate scaled area to bound sums.
-        int w = Plan.anOcrFirst(ans, at);
+        int w = Oil.oilFirstWord(ans, at);
         int i = 0;
         int score = 0;
         int area = 0;
         int width = 0;
         int height = 0;
         int conf = 0;
-        while (i < Plan.anOcrCount(ans, at)) {
-            width = Plan.awGet(ans, w, Plan.awW());
-            height = Plan.awGet(ans, w, Plan.awH());
-            conf = Plan.awGet(ans, w, Plan.awConf());
+        while (i < Oil.oilNwords(ans, at)) {
+            width = emon.Port.cellsAt(ans, w + 2);
+            height = emon.Port.cellsAt(ans, w + 3);
+            conf = Oil.oilPolicyConf(ans, at, w);
             if ((width > 0) && ((height > 0) && (width >= height))) {
                 area = (width * height) / 100;
                 if (area > 10000) {
@@ -1145,7 +1145,7 @@ public final class Retarget {
                     score += (area * conf) / 1000;
                 }
             }
-            w = Plan.awNext(ans, w);
+            w = Oil.oilWordNext(ans, at, w);
             i += 1;
         }
         return score;
@@ -1196,7 +1196,7 @@ public final class Retarget {
         if (Plan.anOk(ans, at) != 1) {
             return 1;
         }
-        if (Plan.anOcrCount(ans, at) == 0) {
+        if (Oil.oilNwords(ans, at) == 0) {
             return 1;
         }
         return 0;
@@ -1317,7 +1317,7 @@ public final class Retarget {
             int ba = Plan.anFind(ans, Plan.puId(page, riBody()));
             int receipt = Plan.anFind(ans, Plan.puId(page, riReceipt()));
             int receiptMode = rtReceiptActive(rtp);
-            if ((rtEmptyReceipt(rtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.cellsAt(rtp, rtpBody()) == 0) || ((ba >= 0) && ((Plan.anOk(ans, ba) == 1) && (Plan.anOcrCount(ans, ba) == 0))))) {
+            if ((rtEmptyReceipt(rtReceiptActive(rtp), ans, receipt) == 1) && ((emon.Port.cellsAt(rtp, rtpBody()) == 0) || ((ba >= 0) && ((Plan.anOk(ans, ba) == 1) && (Oil.oilNwords(ans, ba) == 0))))) {
                 asked += rtAskThermal(page, dpi, loc, ans, bms, emon.Port.bmsGet(bms, Plan.puViewId(page, k0)), Norm.nmPaperGray(ws), rtp, rq, receiptMode, pixels);
             }
         }
@@ -1532,7 +1532,7 @@ public final class Retarget {
             return -1;
         }
         while (i < (w0 + nw)) {
-            sum += Evidence.owGet(owords, i, Evidence.hdConf());
+            sum += Evidence.owConfidence(owords, i);
             i += 1;
         }
         return sum / nw;
@@ -1549,7 +1549,7 @@ public final class Retarget {
             c = Evidence.olGet(olines, l, Evidence.lhCount());
             j = 0;
             while (j < c) {
-                sum += (Evidence.owGet(owords, f + j, Evidence.hdConf()) * Evidence.owGet(owords, f + j, Evidence.hdTlen())) / 16;
+                sum += (Evidence.owConfidence(owords, f + j) * Evidence.owGet(owords, f + j, Evidence.hdTlen())) / 16;
                 j += 1;
             }
             l += 1;
@@ -1569,7 +1569,7 @@ public final class Retarget {
             c = Evidence.olGet(olines, l, Evidence.lhCount());
             j = 0;
             while (j < c) {
-                sum += Evidence.owGet(owords, f + j, Evidence.hdConf());
+                sum += Evidence.owConfidence(owords, f + j);
                 words += 1;
                 j += 1;
             }
@@ -1804,13 +1804,13 @@ public final class Retarget {
         return 900;
     }
     public static int rtReceiptProtected(emon.Port.Cells ow, emon.Port.Cells et, int w) {
-        if ((Evidence.owGet(ow, w, Evidence.hdConf()) >= rtReceiptProtectConf()) && (Evidence.owGet(ow, w, Evidence.hdTlen()) >= 2)) {
+        if ((Evidence.owConfidence(ow, w) >= rtReceiptProtectConf()) && (Evidence.owGet(ow, w, Evidence.hdTlen()) >= 2)) {
             return rtReceiptWordAlpha(ow, et, w);
         }
         return 0;
     }
     public static int rtReceiptWordValue(emon.Port.Cells ow, emon.Port.Cells et, int w) {
-        return Upscale.upReceiptValue(Evidence.owGet(ow, w, Evidence.hdConf()), Evidence.owGet(ow, w, Evidence.hdTlen()), rtReceiptWordAlpha(ow, et, w));
+        return Upscale.upReceiptValue(Evidence.owConfidence(ow, w), Evidence.owGet(ow, w, Evidence.hdTlen()), rtReceiptWordAlpha(ow, et, w));
     }
     public static int rtReceiptSelectedCount(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells scr, int n, int word, int first) {
         int k = 0;
@@ -1854,7 +1854,7 @@ public final class Retarget {
                     c = c0;
                     count = 0;
                     while (c < cn) {
-                        if ((Evidence.owGet(ow, c, Evidence.hdConf()) >= rtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1)) {
+                        if ((Evidence.owConfidence(ow, c) >= rtReceiptMin()) && (rtReceiptWordEqual(ow, et, w, c) == 1)) {
                             count += 1;
                         }
                         c += 1;

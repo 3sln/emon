@@ -8,6 +8,7 @@ import (
 	"emon/model"
 	"emon/ocr"
 	"emon/ocrport"
+	"emon/oil"
 	"emon/plan"
 	"emon/port"
 )
@@ -51,14 +52,14 @@ func SkUnpack(lang int32, out *port.Cells) int32 {
 
 func skDict(nw int32, an *port.Cells, ext int32) int32 {
 	// How many of the answer's `nw` words the engine read from its dictionary.
-	var w int32 = ocr.OxFirstWord(an, ext)
+	var w int32 = oil.OilFirstWord(an, ext)
 	var i int32 = 0
 	var k int32 = 0
 	for i < nw {
-		if (ocr.OxWdflags(an, w) & ocr.OcwDict()) != 0 {
+		if (oil.OilWordFlags(an, ext, w) & ocr.OcwDict()) != 0 {
 			k += 1
 		}
-		w = ocr.OxWordNext(an, w)
+		w = oil.OilWordNext(an, ext, w)
 		i += 1
 	}
 	return k
@@ -66,8 +67,8 @@ func skDict(nw int32, an *port.Cells, ext int32) int32 {
 
 func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	// 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
-	var ext int32 = ocr.OxFind(an, at)
-	var nw int32 = plan.AnOcrCount(an, at)
+	var ext int32 = oil.OilFind(an, at)
+	var nw int32 = oil.OilNwords(an, at)
 	var w int32 = 0
 	var i int32 = 0
 	var lang int32 = 0
@@ -76,7 +77,7 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	if ext < 0 {
 		return 0
 	}
-	script = ocr.OxScript(an, ext)
+	script = oil.OilScript(an, ext)
 	if script <= 0 {
 		return 0
 	}
@@ -86,7 +87,7 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	if script == ocrport.ScLatf() {
 		return 0
 	}
-	if ocr.OxSconf(an, ext) < SkWeakConf() {
+	if oil.OilSconf(an, ext) < SkWeakConf() {
 		return 0
 	}
 	if nw < SkMinWords() {
@@ -94,21 +95,21 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	}
 	// P12.6 (R2): OSD names the script of an Urdu, a Han photo or an Ethiopic page in a legacy font at a confidence under `sk-min-conf`; its word is then believed only when the
 	// reading backs it: a page whose words the engine's dictionary knows (`sk-dict-share` or more of them) is Latin, whatever OSD says; a page it knows few words of is junk in a script it cannot read.
-	if ocr.OxSconf(an, ext) < SkMinConf() {
+	if oil.OilSconf(an, ext) < SkMinConf() {
 		if (skDict(nw, an, ext) * 1000) >= (nw * SkDictShare()) {
 			return 0
 		}
 	}
-	w = ocr.OxFirstWord(an, ext)
+	w = oil.OilFirstWord(an, ext)
 	for i < nw {
-		lang = ocr.OxWlang(an, w)
+		lang = oil.OilWlang(an, ext, w)
 		if lang > 0 {
 			n = SkUnpack(lang, scr)
 			if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, 0, n)) == 1 {
 				return 0
 			}
 		}
-		w = ocr.OxWordNext(an, w)
+		w = oil.OilWordNext(an, ext, w)
 		i += 1
 	}
 	return 1
@@ -121,8 +122,8 @@ func SkRoute(ans *port.Cells, at int32, id int32, bitmap int32, dpi int32, rq *p
 		return at
 	}
 	var found int32 = plan.AnFind(ans, id)
-	var ext int32 = ocr.OxFind(ans, at)
-	var script int32 = ocr.OxScript(ans, ext)
+	var ext int32 = oil.OilFind(ans, at)
+	var script int32 = oil.OilScript(ans, ext)
 	if found >= 0 {
 		if plan.AnOk(ans, found) == 1 {
 			return found

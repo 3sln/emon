@@ -5,8 +5,7 @@ package upscale
 
 import (
 	"emon/norm"
-	"emon/ocr"
-	"emon/plan"
+	"emon/oil"
 	"emon/port"
 )
 
@@ -96,11 +95,10 @@ func UpEffDpi100(xh int32) int32 {
 }
 
 func UpXheight(an *port.Cells, ext int32, hist *port.Cells) int32 {
-	// The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `ox-find`): the median over its text lines of the engine's row x-height
+	// The page's typical x-height in pixels, from the extension of the OCR answer (`ext`, `oil-find`): the median over its text lines of the engine's row x-height
 	// (`up-line-share` per cent of the line's box where it says none), each line weighted by its width. -1 for no line. `hist` is scratch (`up-bins` cells are made).
-	var nl int32 = ocr.OxNlines(an, ext)
+	var nl int32 = oil.OilNlines(an, ext)
 	var k int32 = 0
-	var l int32 = 0
 	var xh int32 = 0
 	var w int32 = 0
 	var total int32 = 0
@@ -112,13 +110,12 @@ func UpXheight(an *port.Cells, ext int32, hist *port.Cells) int32 {
 	}
 	k = 0
 	for k < nl {
-		l = ocr.OxLineAt(an, ext, k)
 		// a line of text (block type 0), its width and its x-height
-		if port.CellsAt(an, l+10) == 0 {
-			w = port.CellsAt(an, l+2)
-			xh = port.CellsAt(an, l+11)
+		if oil.OilLineField(an, ext, k, 10) == 0 {
+			w = oil.OilLineField(an, ext, k, 2)
+			xh = oil.OilLineField(an, ext, k, 11)
 			if xh <= 0 {
-				xh = (port.CellsAt(an, l+3) * UpLineShare()) / 100
+				xh = (oil.OilLineField(an, ext, k, 3) * UpLineShare()) / 100
 			}
 			if (xh > 0) && (w > 0) {
 				if xh > 100 {
@@ -146,13 +143,13 @@ func UpXheight(an *port.Cells, ext int32, hist *port.Cells) int32 {
 
 func UpScore(an *port.Cells, at int32) int32 {
 	// How much the OCR answer at `at` read: the sum over its words of confidence times length, over 16 (`rt-lines-score`'s measure).
-	var n int32 = plan.AnOcrCount(an, at)
-	var w int32 = plan.AnOcrFirst(an, at)
+	var n int32 = oil.OilNwords(an, at)
+	var w int32 = oil.OilFirstWord(an, at)
 	var i int32 = 0
 	var sum int32 = 0
 	for i < n {
-		sum += (plan.AwGet(an, w, plan.AwConf()) * plan.AwGet(an, w, plan.AwLen())) / 16
-		w = plan.AwNext(an, w)
+		sum += (oil.OilPolicyConf(an, at, w) * oil.OilWlen(an, at, w)) / 16
+		w = oil.OilWordNext(an, at, w)
 		i += 1
 	}
 	return sum
@@ -160,16 +157,16 @@ func UpScore(an *port.Cells, at int32) int32 {
 
 func UpMeanConf(an *port.Cells, at int32) int32 {
 	// The mean confidence (per mille) of the words of the OCR answer at `at`; -1 for none.
-	var n int32 = plan.AnOcrCount(an, at)
-	var w int32 = plan.AnOcrFirst(an, at)
+	var n int32 = oil.OilNwords(an, at)
+	var w int32 = oil.OilFirstWord(an, at)
 	var i int32 = 0
 	var sum int32 = 0
 	if n <= 0 {
 		return -1
 	}
 	for i < n {
-		sum += plan.AwGet(an, w, plan.AwConf())
-		w = plan.AwNext(an, w)
+		sum += oil.OilPolicyConf(an, at, w)
+		w = oil.OilWordNext(an, at, w)
 		i += 1
 	}
 	return sum / n
@@ -178,7 +175,7 @@ func UpMeanConf(an *port.Cells, at int32) int32 {
 func UpHint(an *port.Cells, at int32, k int32, dpi100 int32, hist *port.Cells) int32 {
 	// The resolution, in dots per inch, the engine is told an enlargement by `k` has: the resolution the first pass's text says the raster has (`up-eff-dpi100`; `dpi100`,
 	// the resolution it was taken at, when no line was measured) times `k`: a hint of its size heuristics, at least 70 and at most 1200.
-	var ext int32 = ocr.OxFind(an, at)
+	var ext int32 = oil.OilFind(an, at)
 	var est int32 = dpi100
 	var xh int32 = -1
 	var v int32 = 0
@@ -200,8 +197,8 @@ func UpHint(an *port.Cells, at int32, k int32, dpi100 int32, hist *port.Cells) i
 
 func UpFactor(an *port.Cells, at int32, pxw int32, pxh int32, hist *port.Cells) int32 {
 	// By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
-	var ext int32 = ocr.OxFind(an, at)
-	var words int32 = plan.AnOcrCount(an, at)
+	var ext int32 = oil.OilFind(an, at)
+	var words int32 = oil.OilNwords(an, at)
 	var k int32 = 1
 	var xh int32 = 0
 	var side int32 = pxw
@@ -209,7 +206,7 @@ func UpFactor(an *port.Cells, at int32, pxw int32, pxh int32, hist *port.Cells) 
 		return 1
 	}
 	// a page the engine is sure is turned is read upright first: the size of its lines says nothing
-	if norm.NmOrient(ocr.OxOsd(an, ext), ocr.OxOconf(an, ext), norm.NmOsdConf()) > 0 {
+	if norm.NmOrient(oil.OilOsd(an, ext), oil.OilOconf(an, ext), norm.NmOsdConf()) > 0 {
 		return 1
 	}
 	if pxh > side {
@@ -391,8 +388,8 @@ func UpReceiptValue(conf int32, spanlen int32, alpha int32) int32 {
 }
 
 func UpReceiptScore(an *port.Cells, at int32) int32 {
-	var n int32 = plan.AnOcrCount(an, at)
-	var w int32 = plan.AnOcrFirst(an, at)
+	var n int32 = oil.OilNwords(an, at)
+	var w int32 = oil.OilFirstWord(an, at)
 	var i int32 = 0
 	var j int32 = 0
 	var cp int32 = 0
@@ -401,15 +398,15 @@ func UpReceiptScore(an *port.Cells, at int32) int32 {
 	for i < n {
 		alpha = 0
 		j = 0
-		for j < plan.AwGet(an, w, plan.AwLen()) {
-			cp = plan.AwCp(an, w, j)
+		for j < oil.OilWlen(an, at, w) {
+			cp = oil.OilWcp(an, at, w, j)
 			if UpReceiptAlpha(cp) == 1 {
 				alpha = 1
 			}
 			j += 1
 		}
-		sum += UpReceiptValue(plan.AwGet(an, w, plan.AwConf()), plan.AwGet(an, w, plan.AwLen()), alpha)
-		w = plan.AwNext(an, w)
+		sum += UpReceiptValue(oil.OilPolicyConf(an, at, w), oil.OilWlen(an, at, w), alpha)
+		w = oil.OilWordNext(an, at, w)
 		i += 1
 	}
 	return sum

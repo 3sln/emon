@@ -2,36 +2,37 @@
 // source: emon.planprobe
 
 use crate::emon::evidence::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 
 pub(crate) fn pp_words(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, request: i32, psm: i32, mut views: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut etext: &mut crate::port::Cells) -> i32 {
     // One OCR answer as an OCR run and its words on `page`; `view` is the row of the bitmap's view.
-    let nw: i32 = an_ocr_count(an, at);
+    let nw: i32 = oil_nwords(an, at);
     let run: i32 = or_new(oruns, page, view);
     let w0: i32 = ow_count(owords);
-    let mut w: i32 = an_ocr_first(an, at);
+    let mut w: i32 = oil_first_word(an, at);
     let mut i: i32 = 0;
     or_set(oruns, run, orf_request(), request);
     or_set(oruns, run, orf_psm(), psm);
     while i < nw {
-        let px: i32 = aw_get(an, w, aw_x());
-        let py: i32 = aw_get(an, w, aw_y());
-        let pw: i32 = aw_get(an, w, aw_w());
-        let ph: i32 = aw_get(an, w, aw_h());
+        let px: i32 = crate::port::cells_at(an, w + 0);
+        let py: i32 = crate::port::cells_at(an, w + 1);
+        let pw: i32 = crate::port::cells_at(an, w + 2);
+        let ph: i32 = crate::port::cells_at(an, w + 3);
         let x0: i32 = vw_box_to_cpt(views, view, 0, px, py, pw, ph);
         let y0: i32 = vw_box_to_cpt(views, view, 1, px, py, pw, ph);
         let x1: i32 = vw_box_to_cpt(views, view, 2, px, py, pw, ph);
         let y1: i32 = vw_box_to_cpt(views, view, 3, px, py, pw, ph);
         let ts: i32 = etx_len(etext);
-        let nc: i32 = aw_get(an, w, aw_len());
+        let nc: i32 = oil_wlen(an, at, w);
         let mut k: i32 = 0;
         while k < nc {
-            etx_append_cp(etext, aw_cp(an, w, k));
+            etx_append_cp(etext, oil_wcp(an, at, w, k));
             k += 1;
         }
-        let ow: i32 = ow_new(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, aw_get(an, w, aw_conf()), -1);
+        let ow: i32 = ow_new(owords, page, x0, y0, x1, y1, x0, y1, x1, y1, 0, 0, ts, nc, -1, crate::port::cells_at(an, w + 5), -1);
         ow_set(owords, ow, owf_run(), run);
-        w = aw_next(an, w);
+        w = oil_word_next(an, at, w);
         i += 1;
     }
     or_set(oruns, run, orf_wfirst(), w0);

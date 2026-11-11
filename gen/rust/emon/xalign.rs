@@ -1255,8 +1255,8 @@ pub fn xa_page(page: i32, epages: &mut crate::port::Cells, words: &mut crate::po
     // Align one page. See the head of the file. Answers the number of groups appended to `cg`.
     let w0: i32 = xa_lower(words, 24, page);
     let w1: i32 = xa_lower(words, 24, page + 1);
-    let o0: i32 = xa_lower(owords, 28, page);
-    let o1: i32 = xa_lower(owords, 28, page + 1);
+    let o0: i32 = xa_lower(owords, 32, page);
+    let o1: i32 = xa_lower(owords, 32, page + 1);
     let t0: i32 = xa_lower(tlines, 20, page);
     let t1: i32 = xa_lower(tlines, 20, page + 1);
     let nt: i32 = w1 - w0;
@@ -1314,7 +1314,7 @@ pub fn xa_page(page: i32, epages: &mut crate::port::Cells, words: &mut crate::po
     i = 0;
     while i < no {
         r = o0 + i;
-        xa_load_head(scr, nt + i, owords, 28, r);
+        xa_load_head(scr, nt + i, owords, 32, r);
         xa_hbs(scr, nt + i, 9, 3);
         f = crate::port::cells_at(owords, (r * 28) + owf_run());
         xa_hbs(scr, nt + i, 11, f);

@@ -180,7 +180,7 @@ public static class Ocrledger {
         if (missing == 0) {
             return 0;
         }
-        lr = Model.LedgerAdd(ledger, Model.DrOcrUnrepresented(), Evidence.OwGet(owords, w, Evidence.HdPage()), Evidence.OwGet(owords, w, Evidence.HdX0()), Evidence.OwGet(owords, w, Evidence.HdY0()), Evidence.OwGet(owords, w, Evidence.HdX1()), Evidence.OwGet(owords, w, Evidence.HdY1()), Evidence.OwGet(owords, w, Evidence.HdConf()), Model.SrOcr());
+        lr = Model.LedgerAdd(ledger, Model.DrOcrUnrepresented(), Evidence.OwGet(owords, w, Evidence.HdPage()), Evidence.OwGet(owords, w, Evidence.HdX0()), Evidence.OwGet(owords, w, Evidence.HdY0()), Evidence.OwGet(owords, w, Evidence.HdX1()), Evidence.OwGet(owords, w, Evidence.HdY1()), Evidence.OwConfidence(owords, w), Model.SrOcr());
         ts = emon.Port.CellsLen(text);
         i = 0;
         while (i < emon.Port.CellsLen(norm)) {

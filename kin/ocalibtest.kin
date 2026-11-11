@@ -1,0 +1,28 @@
+(ns emon.ocalibtest
+  (:require [emon.lang :refer [I32]]
+            [emon.test :refer [deftest assert-eq assert-that]]
+            [emon.ocalib :refer [ocal-word]]
+            [kin.lang :refer [defn let set while if do + - < >= quot]]))
+
+(deftest test-pp-word-calibration-is-monotone-at-every-permille
+  (let [^:mut ^I32 i 0 ^:mut ^I32 previous 0]
+    (while (< i 1001)
+      (let [^I32 p (ocal-word 2 0 i)]
+        (assert-that (>= p previous) "weighted isotonic calibration")
+        (set previous p) (set i (+ i 1))))))
+
+(deftest test-pp-calibration-floors-millionths-at-bin-edges
+  (let [^:mut ^I32 edge 100000]
+    (while (< edge 1000000)
+      (do
+        (assert-eq (ocal-word 2 0 (quot (- edge 1) 1000))
+                   (ocal-word 2 0 (- (quot edge 1000) 1)) "below edge")
+        (assert-eq (ocal-word 2 0 (quot (+ edge 1) 1000))
+                   (ocal-word 2 0 (quot edge 1000)) "above edge")
+        (set edge (+ edge 100000))))))
+
+(deftest test-pp-inverted-bins-pool-the-original-fit-observations
+  (assert-eq (ocal-word 2 0 600) 422 "57 correct of 135")
+  (assert-eq (ocal-word 2 0 799) 422 "same pooled bin")
+  (assert-eq (ocal-word 2 0 800) 521 "next frozen bin")
+  (assert-eq (ocal-word 3 0 1000) -1 "unfitted engine is not a zero probability"))

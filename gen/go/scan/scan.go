@@ -6,8 +6,10 @@ package scan
 import (
 	"emon/evidence"
 	"emon/model"
+	"emon/ocalib"
 	"emon/ocr"
 	"emon/ocrledger"
+	"emon/oil"
 	"emon/pdfdoc"
 	"emon/pdflex"
 	"emon/pdfsrc"
@@ -459,12 +461,11 @@ func scEvLines(an *port.Cells, ext int32, view int32, run int32, page int32, vie
 	// its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction
 	// are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to
 	// centipoints.
-	var nl int32 = ocr.OxNlines(an, ext)
-	var nb int32 = ocr.OxNblocks(an, ext)
-	var orient0 int32 = ocr.OxOrient(an, ext)
-	var wdir0 int32 = ocr.OxWdir(an, ext)
+	var nl int32 = oil.OilNlines(an, ext)
+	var nb int32 = oil.OilNblocks(an, ext)
+	var orient0 int32 = oil.OilOrient(an, ext)
+	var wdir0 int32 = oil.OilWdir(an, ext)
 	var k int32 = 0
-	var l int32 = 0
 	var px int32 = 0
 	var py int32 = 0
 	var pw int32 = 0
@@ -495,35 +496,34 @@ func scEvLines(an *port.Cells, ext int32, view int32, run int32, page int32, vie
 	var tx1 int32 = 0
 	var ty1 int32 = 0
 	for k < nl {
-		l = ocr.OxLineAt(an, ext, k)
-		px = port.CellsAt(an, l)
-		py = port.CellsAt(an, l+1)
-		pw = port.CellsAt(an, l+2)
-		ph = port.CellsAt(an, l+3)
+		px = oil.OilLineField(an, ext, k, 0)
+		py = oil.OilLineField(an, ext, k, 1)
+		pw = oil.OilLineField(an, ext, k, 2)
+		ph = oil.OilLineField(an, ext, k, 3)
 		x0 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
 		y0 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
 		x1 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
 		y1 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
-		bx0 = evidence.VwPxToCpt(views, view, 0, port.CellsAt(an, l+4), port.CellsAt(an, l+5))
-		by0 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+4), port.CellsAt(an, l+5))
-		bx1 = evidence.VwPxToCpt(views, view, 0, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
-		by1 = evidence.VwPxToCpt(views, view, 1, port.CellsAt(an, l+6), port.CellsAt(an, l+7))
-		if ((port.CellsAt(an, l+4) == -1) && (port.CellsAt(an, l+5) == -1)) && ((port.CellsAt(an, l+6) == -1) && (port.CellsAt(an, l+7) == -1)) {
+		bx0 = evidence.VwPxToCpt(views, view, 0, oil.OilLineField(an, ext, k, 4), oil.OilLineField(an, ext, k, 5))
+		by0 = evidence.VwPxToCpt(views, view, 1, oil.OilLineField(an, ext, k, 4), oil.OilLineField(an, ext, k, 5))
+		bx1 = evidence.VwPxToCpt(views, view, 0, oil.OilLineField(an, ext, k, 6), oil.OilLineField(an, ext, k, 7))
+		by1 = evidence.VwPxToCpt(views, view, 1, oil.OilLineField(an, ext, k, 6), oil.OilLineField(an, ext, k, 7))
+		if ((oil.OilLineField(an, ext, k, 4) == -1) && (oil.OilLineField(an, ext, k, 5) == -1)) && ((oil.OilLineField(an, ext, k, 6) == -1) && (oil.OilLineField(an, ext, k, 7) == -1)) {
 			bx0 = x0
 			by0 = y1
 			bx1 = x1
 			by1 = y1
 		}
-		blk = port.CellsAt(an, l+8)
-		par = port.CellsAt(an, l+9)
-		bty = port.CellsAt(an, l+10)
+		blk = oil.OilLineField(an, ext, k, 8)
+		par = oil.OilLineField(an, ext, k, 9)
+		bty = oil.OilLineField(an, ext, k, 10)
 		orient = orient0
 		wdir = wdir0
 		bl = -1
 		if (blk >= 0) && (blk < nb) {
-			bl = ocr.OxBlockAt(an, ext, blk)
-			orient = port.CellsAt(an, bl+4)
-			wdir = port.CellsAt(an, bl+5)
+			bl = oil.OilBlockAt(an, ext, blk)
+			orient = oil.OilBlockField(an, ext, blk, 0)
+			wdir = oil.OilBlockField(an, ext, blk, 1)
 		}
 		fresh = 0
 		if (k == 0) || (blk != curblk) {
@@ -569,9 +569,9 @@ func scEvLines(an *port.Cells, ext int32, view int32, run int32, page int32, vie
 		evidence.OlSet(olines, lrow, evidence.OlfPy(), py)
 		evidence.OlSet(olines, lrow, evidence.OlfPw(), pw)
 		evidence.OlSet(olines, lrow, evidence.OlfPh(), ph)
-		evidence.OlSet(olines, lrow, evidence.OlfXheight(), scCptLen(views, view, port.CellsAt(an, l+11)))
-		evidence.OlSet(olines, lrow, evidence.OlfAsc(), scCptLen(views, view, port.CellsAt(an, l+12)))
-		evidence.OlSet(olines, lrow, evidence.OlfDesc(), scCptLen(views, view, port.CellsAt(an, l+13)))
+		evidence.OlSet(olines, lrow, evidence.OlfXheight(), scCptLen(views, view, oil.OilLineField(an, ext, k, 11)))
+		evidence.OlSet(olines, lrow, evidence.OlfAsc(), scCptLen(views, view, oil.OilLineField(an, ext, k, 12)))
+		evidence.OlSet(olines, lrow, evidence.OlfDesc(), scCptLen(views, view, oil.OilLineField(an, ext, k, 13)))
 		bcnt = evidence.ObGet(oblocks, prow, evidence.ObfCount())
 		evidence.ObSet(oblocks, prow, evidence.ObfCount(), bcnt+1)
 		k += 1
@@ -583,11 +583,11 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 	// The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an
 	// olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated
 	// after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.
-	var nw int32 = plan.AnOcrCount(an, at)
+	var nw int32 = oil.OilNwords(an, at)
 	var nl int32 = 0
 	var wdir int32 = 0
 	var tlen int32 = 0
-	var w int32 = plan.AnOcrFirst(an, at)
+	var w int32 = oil.OilFirstWord(an, at)
 	var wx int32 = -1
 	var i int32 = 0
 	var px int32 = 0
@@ -626,20 +626,20 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 	var sy int32 = 0
 	var ps int32 = 0
 	if ext >= 0 {
-		wx = ocr.OxFirstWord(an, ext)
-		nl = ocr.OxNlines(an, ext)
-		wdir = ocr.OxWdir(an, ext)
+		wx = oil.OilFirstWord(an, ext)
+		nl = oil.OilNlines(an, ext)
+		wdir = oil.OilWdir(an, ext)
 	}
 	for i < nw {
-		px = plan.AwGet(an, w, plan.AwX())
-		py = plan.AwGet(an, w, plan.AwY())
-		pw = plan.AwGet(an, w, plan.AwW())
-		ph = plan.AwGet(an, w, plan.AwH())
+		px = port.CellsAt(an, w+0)
+		py = port.CellsAt(an, w+1)
+		pw = port.CellsAt(an, w+2)
+		ph = port.CellsAt(an, w+3)
 		x0 = evidence.VwBoxToCpt(views, view, 0, px, py, pw, ph)
 		y0 = evidence.VwBoxToCpt(views, view, 1, px, py, pw, ph)
 		x1 = evidence.VwBoxToCpt(views, view, 2, px, py, pw, ph)
 		y1 = evidence.VwBoxToCpt(views, view, 3, px, py, pw, ph)
-		ln = plan.AwGet(an, w, plan.AwLine())
+		ln = port.CellsAt(an, w+4)
 		lrow = -1
 		bx0 = x0
 		by0 = y1
@@ -657,14 +657,15 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 			by1 = evidence.EvBaselineAt(lx0, ly0, lx1, ly1, bx1)
 		}
 		ts = evidence.EtxLen(etext)
-		nc = plan.AwGet(an, w, plan.AwLen())
+		nc = oil.OilWlen(an, at, w)
 		k = 0
 		for k < nc {
-			evidence.EtxAppendCp(etext, plan.AwCp(an, w, k))
+			evidence.EtxAppendCp(etext, oil.OilWcp(an, at, w, k))
 			k += 1
 		}
-		ow = evidence.OwNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, evidence.EvAngle(bx1-bx0, by1-by0), scLd(wdir), ts, nc, lrow, plan.AwGet(an, w, plan.AwConf()), -1)
+		ow = evidence.OwNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, evidence.EvAngle(bx1-bx0, by1-by0), scLd(wdir), ts, nc, lrow, port.CellsAt(an, w+5), -1)
 		evidence.OwSet(owords, ow, evidence.OwfRun(), run)
+		evidence.OwSet(owords, ow, evidence.OwfPcal(), ocalib.OcalWord(oil.OilGet(an, at, oil.OhEngine()), 0, port.CellsAt(an, w+5)))
 		evidence.OwSet(owords, ow, evidence.OwfPx(), px)
 		evidence.OwSet(owords, ow, evidence.OwfPy(), py)
 		evidence.OwSet(owords, ow, evidence.OwfPw(), pw)
@@ -677,20 +678,20 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 			evidence.OlSet(olines, lrow, evidence.LhCount(), lcnt+1)
 		}
 		if wx >= 0 {
-			evidence.OwSet(owords, ow, evidence.OwfStyle(), ocr.OxWflags(an, wx))
-			evidence.OwSet(owords, ow, evidence.OwfLang(), ocr.OxWlang(an, wx))
-			ps = ocr.OxWpsize(an, wx)
+			evidence.OwSet(owords, ow, evidence.OwfStyle(), oil.OilWflags(an, ext, wx))
+			evidence.OwSet(owords, ow, evidence.OwfLang(), oil.OilWlang(an, ext, wx))
+			ps = oil.OilWpsize(an, ext, wx)
 			if ps > 1000000 {
 				ps = 1000000
 			}
 			if ps >= 0 {
 				evidence.OwSet(owords, ow, evidence.OwfPsize(), ps*100)
 			}
-			evidence.OwSet(owords, ow, evidence.OwfFlags(), ocr.OxWdflags(an, wx))
-			ns = ocr.OxNsym(an, wx)
+			evidence.OwSet(owords, ow, evidence.OwfFlags(), oil.OilWordFlags(an, ext, wx))
+			ns = oil.OilNsym(an, ext, wx)
 			evidence.OwSet(owords, ow, evidence.OwfSfirst(), evidence.OsCount(osyms))
 			evidence.OwSet(owords, ow, evidence.OwfScount(), ns)
-			sy = ocr.OxFirstSym(an, wx)
+			sy = oil.OilFirstSym(an, ext, wx)
 			j = 0
 			for j < ns {
 				ncp = port.CellsAt(an, sy+5)
@@ -723,7 +724,7 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 				evidence.OsSet(osyms, sym, evidence.OsfPw(), pw)
 				evidence.OsSet(osyms, sym, evidence.OsfPh(), ph)
 				a0 = evidence.OaCount(oalts)
-				a = ocr.OxSymAlts(an, sy)
+				a = oil.OilSymAlts(an, sy)
 				m = 0
 				for m < nalt {
 					acp = port.CellsAt(an, a)
@@ -736,17 +737,17 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 						}
 						evidence.OaAdd(oalts, sym, ts, acp, port.CellsAt(an, a+1))
 					}
-					a = ocr.OxAltNext(an, a)
+					a = oil.OilAltNext(an, a)
 					m += 1
 				}
 				evidence.OsSet(osyms, sym, evidence.OsfAfirst(), a0)
 				evidence.OsSet(osyms, sym, evidence.OsfAcount(), evidence.OaCount(oalts)-a0)
-				sy = ocr.OxSymNext(an, sy)
+				sy = oil.OilSymNext(an, sy)
 				j += 1
 			}
-			wx = ocr.OxWordNext(an, wx)
+			wx = oil.OilWordNext(an, ext, wx)
 		}
-		w = plan.AwNext(an, w)
+		w = oil.OilWordNext(an, at, w)
 		i += 1
 	}
 	return nw
@@ -756,7 +757,7 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 	// One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the
 	// stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request
 	// named (0 none: the run records no language, D038). Answers the run's row.
-	var ext int32 = ocr.OxFind(an, at)
+	var ext int32 = oil.OilFind(an, at)
 	var run int32 = evidence.OrNew(oruns, page, view)
 	var b0 int32 = evidence.ObCount(oblocks)
 	var l0 int32 = evidence.OlCount(olines)
@@ -767,11 +768,15 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 	var w int32 = 0
 	var rotmed int32 = 0
 	var ts int32 = 0
+	evidence.OrSet(oruns, run, evidence.OrfEngine(), oil.OilGet(an, at, oil.OhEngine()))
+	evidence.OrSet(oruns, run, evidence.OrfCaps(), oil.OilGet(an, at, oil.OhCaps()))
+	evidence.OrSet(oruns, run, evidence.OrfNative(), oil.OilGet(an, at, oil.OhNative()))
+	evidence.OrSet(oruns, run, evidence.OrfEix(), oil.OilGet(an, at, oil.OhEngine())-1)
 	evidence.OrSet(oruns, run, evidence.OrfRequest(), request)
 	evidence.OrSet(oruns, run, evidence.OrfRound(), 1)
 	evidence.OrSet(oruns, run, evidence.OrfPass(), 1)
 	evidence.OrSet(oruns, run, evidence.OrfPsm(), 3)
-	evidence.OrSet(oruns, run, evidence.OrfFlags(), ocr.OcfSymbols()+ocr.OcfOsd())
+	evidence.OrSet(oruns, run, evidence.OrfFlags(), (ocr.OcfSymbols()+ocr.OcfOsd())+((256*oil.OilGet(an, at, oil.OhLg()))+(65536*oil.OilGet(an, at, oil.OhCk()))))
 	if lang > 0 {
 		ts = evidence.EtxLen(etext)
 		evidence.EtxAppendCp(etext, lang/65536)
@@ -781,14 +786,14 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 		evidence.OrSet(oruns, run, evidence.OrfLanglen(), 3)
 	}
 	if ext >= 0 {
-		evidence.OrSet(oruns, run, evidence.OrfOrient(), ocr.OxOrient(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfWdir(), ocr.OxWdir(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfLorder(), ocr.OxTlorder(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfDeskew(), ocr.OxDeskew(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfOsd(), ocr.OxOsd(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfScript(), ocr.OxScript(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfSconf(), ocr.OxSconf(an, ext))
-		evidence.OrSet(oruns, run, evidence.OrfOconf(), ocr.OxOconf(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOrient(), oil.OilOrient(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfWdir(), oil.OilWdir(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfLorder(), oil.OilTlorder(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfDeskew(), oil.OilDeskew(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOsd(), oil.OilOsd(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfScript(), oil.OilScript(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfSconf(), oil.OilSconf(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOconf(), oil.OilOconf(an, ext))
 		nl = scEvLines(an, ext, view, run, page, views, oblocks, olines)
 	}
 	nw = scEvWords(an, at, ext, view, run, page, l0, views, etext, olines, owords, osyms, oalts)
@@ -1572,12 +1577,12 @@ func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int
 	var mh int32 = 0
 	var hh int32 = 0
 	var edge int32 = 0
-	if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraConf() {
+	if evidence.OwConfidence(owords, xw) < scXtraConf() {
 		return 0
 	}
 	var letters int32 = scCountClass(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen()), 0)
 	if letters > 0 {
-		if (letters < scXtraTextLetters()) || (evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraTextConf()) {
+		if (letters < scXtraTextLetters()) || (evidence.OwConfidence(owords, xw) < scXtraTextConf()) {
 			return 0
 		}
 	}
@@ -1609,7 +1614,7 @@ func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int
 		return 0
 	}
 	if (mh > 0) && ((2 * (evidence.OwGet(owords, xw, evidence.HdY1()) - evidence.OwGet(owords, xw, evidence.HdY0()))) < mh) {
-		if evidence.OwGet(owords, xw, evidence.HdConf()) < scXtraSmallConf() {
+		if evidence.OwConfidence(owords, xw) < scXtraSmallConf() {
 			return 0
 		}
 	}
@@ -1989,7 +1994,7 @@ func scDropFate(owords *port.Cells, etext *port.Cells, rules *port.Cells, page i
 	// (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
 	var ts int32 = evidence.OwGet(owords, w, evidence.HdTstart())
 	var n int32 = evidence.OwGet(owords, w, evidence.HdTlen())
-	var conf int32 = evidence.OwGet(owords, w, evidence.HdConf())
+	var conf int32 = evidence.OwConfidence(owords, w)
 	var f int32 = 0
 	var c int32 = 0
 	if ScAdmitWord(conf, floor) == 0 {
@@ -2054,7 +2059,7 @@ func ScKeptWords(owords *port.Cells, etext *port.Cells, rules *port.Cells, page 
 	}
 	for i < m {
 		w = port.CellsAt(scr, fb+i)
-		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		conf = evidence.OwConfidence(owords, w)
 		sum += conf
 		tch += evidence.OwGet(owords, w, evidence.HdTlen())
 		if conf > mx {
@@ -2119,7 +2124,7 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 	var changed int32 = 0
 	for i < m {
 		w = port.CellsAt(scr, fb+i)
-		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		conf = evidence.OwConfidence(owords, w)
 		sum += conf
 		tch += evidence.OwGet(owords, w, evidence.HdTlen())
 		if conf > mx {
@@ -2133,7 +2138,7 @@ func scFates(owords *port.Cells, etext *port.Cells, osyms *port.Cells, rules *po
 		w = port.CellsAt(scr, fb+i)
 		ts = evidence.OwGet(owords, w, evidence.HdTstart())
 		n = evidence.OwGet(owords, w, evidence.HdTlen())
-		conf = evidence.OwGet(owords, w, evidence.HdConf())
+		conf = evidence.OwConfidence(owords, w)
 		f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, port.CellsAt(scr, ScAdmitFloor()))
 		port.CellsSet(scr, fb+((2*fm)+i), -1)
 		port.CellsSet(scr, fb+((3*fm)+i), 0)
@@ -2391,7 +2396,7 @@ func scEmitCore(olines *port.Cells, owords *port.Cells, osyms *port.Cells, l0 in
 						gap = nx0 - ox1
 					}
 				}
-				r = evidence.WdNew(words, page, evidence.OwGet(owords, wi, evidence.HdX0()), evidence.OwGet(owords, wi, evidence.HdY0()), evidence.OwGet(owords, wi, evidence.HdX1()), evidence.OwGet(owords, wi, evidence.HdY1()), evidence.OwGet(owords, wi, evidence.HdBx0()), evidence.OwGet(owords, wi, evidence.HdBy0()), evidence.OwGet(owords, wi, evidence.HdBx1()), evidence.OwGet(owords, wi, evidence.HdBy1()), rot, dir, evidence.OwGet(owords, wi, evidence.HdTstart()), evidence.OwGet(owords, wi, evidence.HdTlen()), lnx, evidence.OwGet(owords, wi, evidence.HdConf()), -1)
+				r = evidence.WdNew(words, page, evidence.OwGet(owords, wi, evidence.HdX0()), evidence.OwGet(owords, wi, evidence.HdY0()), evidence.OwGet(owords, wi, evidence.HdX1()), evidence.OwGet(owords, wi, evidence.HdY1()), evidence.OwGet(owords, wi, evidence.HdBx0()), evidence.OwGet(owords, wi, evidence.HdBy0()), evidence.OwGet(owords, wi, evidence.HdBx1()), evidence.OwGet(owords, wi, evidence.HdBy1()), rot, dir, evidence.OwGet(owords, wi, evidence.HdTstart()), evidence.OwGet(owords, wi, evidence.HdTlen()), lnx, evidence.OwConfidence(owords, wi), -1)
 				evidence.WdSet(words, r, evidence.WfStyle(), evidence.OwGet(owords, wi, evidence.OwfStyle()))
 				evidence.WdSet(words, r, evidence.WfSize(), size)
 				evidence.WdSet(words, r, evidence.WfFont(), -1)
@@ -2610,7 +2615,7 @@ func ScEmitVetted(olines *port.Cells, owords *port.Cells, osyms *port.Cells, nse
 						gap = nx0 - ox1
 					}
 				}
-				r = evidence.WdNew(words, page, evidence.OwGet(owords, wi, evidence.HdX0()), evidence.OwGet(owords, wi, evidence.HdY0()), evidence.OwGet(owords, wi, evidence.HdX1()), evidence.OwGet(owords, wi, evidence.HdY1()), evidence.OwGet(owords, wi, evidence.HdBx0()), evidence.OwGet(owords, wi, evidence.HdBy0()), evidence.OwGet(owords, wi, evidence.HdBx1()), evidence.OwGet(owords, wi, evidence.HdBy1()), rot, dir, ts, tl, lnx, evidence.OwGet(owords, wi, evidence.HdConf()), -1)
+				r = evidence.WdNew(words, page, evidence.OwGet(owords, wi, evidence.HdX0()), evidence.OwGet(owords, wi, evidence.HdY0()), evidence.OwGet(owords, wi, evidence.HdX1()), evidence.OwGet(owords, wi, evidence.HdY1()), evidence.OwGet(owords, wi, evidence.HdBx0()), evidence.OwGet(owords, wi, evidence.HdBy0()), evidence.OwGet(owords, wi, evidence.HdBx1()), evidence.OwGet(owords, wi, evidence.HdBy1()), rot, dir, ts, tl, lnx, evidence.OwConfidence(owords, wi), -1)
 				evidence.WdSet(words, r, evidence.WfStyle(), evidence.OwGet(owords, wi, evidence.OwfStyle()))
 				evidence.WdSet(words, r, evidence.WfSize(), size)
 				evidence.WdSet(words, r, evidence.WfFont(), -1)
@@ -2728,12 +2733,14 @@ func ScPageEvidence(an *port.Cells, at int32, page int32, request int32, vdec in
 	// run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
 	var cropx int32 = evidence.VwGet(views, vdec, evidence.VwfCropx())
 	var cropy int32 = evidence.VwGet(views, vdec, evidence.VwfCropy())
+	var binaryWidth int32 = evidence.VwGet(views, vdec, evidence.VwfPxw())
+	var binaryHeight int32 = evidence.VwGet(views, vdec, evidence.VwfPxh())
 	var run int32 = ScAnswer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
-	var ext int32 = ocr.OxFind(an, at)
+	var ext int32 = oil.OilFind(an, at)
 	var vbin int32 = -1
 	if ext >= 0 {
-		if ocr.OxBinary(an, ext) == 1 {
-			vbin = evidence.VwNew(views, page, evidence.VkEngineBinary(), request, vdec, ocr.OxBw(an, ext), ocr.OxBh(an, ext), dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 1)
+		if oil.OilBinary(an, ext) == 1 {
+			vbin = evidence.VwNew(views, page, evidence.VkEngineBinary(), request, vdec, binaryWidth, binaryHeight, dpi100, plan.LayFull(), -1, 0, 0, cropx, cropy, 1)
 			evidence.OrSet(oruns, run, evidence.OrfBview(), vbin)
 		}
 	}
@@ -3102,7 +3109,7 @@ func scWordBase(owords *port.Cells, etext *port.Cells, w int32) int32 {
 	var ts int32 = evidence.OwGet(owords, w, evidence.HdTstart())
 	var n int32 = evidence.OwGet(owords, w, evidence.HdTlen())
 	var flags int32 = evidence.OwGet(owords, w, evidence.OwfFlags())
-	var score int32 = evidence.OwGet(owords, w, evidence.HdConf())
+	var score int32 = evidence.OwConfidence(owords, w)
 	var i int32 = 0
 	var latin int32 = 0
 	var rejected int32 = 0

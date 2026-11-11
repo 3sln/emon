@@ -302,7 +302,7 @@ func arFill(g int32, pageagree int32, cg *port.Cells, refs *port.Cells, ofw *por
 	for k < no {
 		row = arRef(refs, of+k, 1)
 		olen += arAlnum(owords, etext, row)
-		csum += evidence.OwGet(owords, row, evidence.HdConf())
+		csum += evidence.OwConfidence(owords, row)
 		f = evidence.OwGet(owords, row, evidence.HdFeat())
 		if f >= 0 {
 			v = evidence.FeGet(feats, f, evidence.XoImplausible())
@@ -670,7 +670,7 @@ func arEmitOcr(g int32, cg *port.Cells, refs *port.Cells, ofw *port.Cells, etext
 		r = player.FwCopyWord(nfw, ofw, tj, lrow)
 		port.CellsSet(nfw, (r*24)+11, evidence.OwGet(owords, orow, evidence.HdTstart()))
 		port.CellsSet(nfw, (r*24)+12, evidence.OwGet(owords, orow, evidence.HdTlen()))
-		port.CellsSet(nfw, (r*24)+14, evidence.OwGet(owords, orow, evidence.HdConf()))
+		port.CellsSet(nfw, (r*24)+14, evidence.OwConfidence(owords, orow))
 		port.CellsSet(nfw, (r*24)+15, -1)
 		// a visible word's replacement has no glyph run (no glyph says this word); a hidden word's keeps it, so the style stage still reads its fill (P7.6)
 		if nt > 0 {

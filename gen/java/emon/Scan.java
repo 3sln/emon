@@ -438,12 +438,11 @@ public final class Scan {
         // its paragraphs, a paragraph's lines are the rows that follow it. A block's box, orientation and writing direction
         // are the engine's own, from the extension's block table (version 2); a line's row attributes are mapped to
         // centipoints.
-        int nl = Ocr.oxNlines(an, ext);
-        int nb = Ocr.oxNblocks(an, ext);
-        int orient0 = Ocr.oxOrient(an, ext);
-        int wdir0 = Ocr.oxWdir(an, ext);
+        int nl = Oil.oilNlines(an, ext);
+        int nb = Oil.oilNblocks(an, ext);
+        int orient0 = Oil.oilOrient(an, ext);
+        int wdir0 = Oil.oilWdir(an, ext);
         int k = 0;
-        int l = 0;
         int px = 0;
         int py = 0;
         int pw = 0;
@@ -474,35 +473,34 @@ public final class Scan {
         int tx1 = 0;
         int ty1 = 0;
         while (k < nl) {
-            l = Ocr.oxLineAt(an, ext, k);
-            px = emon.Port.cellsAt(an, l);
-            py = emon.Port.cellsAt(an, l + 1);
-            pw = emon.Port.cellsAt(an, l + 2);
-            ph = emon.Port.cellsAt(an, l + 3);
+            px = Oil.oilLineField(an, ext, k, 0);
+            py = Oil.oilLineField(an, ext, k, 1);
+            pw = Oil.oilLineField(an, ext, k, 2);
+            ph = Oil.oilLineField(an, ext, k, 3);
             x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
             y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
             x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
             y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
-            bx0 = Evidence.vwPxToCpt(views, view, 0, emon.Port.cellsAt(an, l + 4), emon.Port.cellsAt(an, l + 5));
-            by0 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 4), emon.Port.cellsAt(an, l + 5));
-            bx1 = Evidence.vwPxToCpt(views, view, 0, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
-            by1 = Evidence.vwPxToCpt(views, view, 1, emon.Port.cellsAt(an, l + 6), emon.Port.cellsAt(an, l + 7));
-            if (((emon.Port.cellsAt(an, l + 4) == -1) && (emon.Port.cellsAt(an, l + 5) == -1)) && ((emon.Port.cellsAt(an, l + 6) == -1) && (emon.Port.cellsAt(an, l + 7) == -1))) {
+            bx0 = Evidence.vwPxToCpt(views, view, 0, Oil.oilLineField(an, ext, k, 4), Oil.oilLineField(an, ext, k, 5));
+            by0 = Evidence.vwPxToCpt(views, view, 1, Oil.oilLineField(an, ext, k, 4), Oil.oilLineField(an, ext, k, 5));
+            bx1 = Evidence.vwPxToCpt(views, view, 0, Oil.oilLineField(an, ext, k, 6), Oil.oilLineField(an, ext, k, 7));
+            by1 = Evidence.vwPxToCpt(views, view, 1, Oil.oilLineField(an, ext, k, 6), Oil.oilLineField(an, ext, k, 7));
+            if (((Oil.oilLineField(an, ext, k, 4) == -1) && (Oil.oilLineField(an, ext, k, 5) == -1)) && ((Oil.oilLineField(an, ext, k, 6) == -1) && (Oil.oilLineField(an, ext, k, 7) == -1))) {
                 bx0 = x0;
                 by0 = y1;
                 bx1 = x1;
                 by1 = y1;
             }
-            blk = emon.Port.cellsAt(an, l + 8);
-            par = emon.Port.cellsAt(an, l + 9);
-            bty = emon.Port.cellsAt(an, l + 10);
+            blk = Oil.oilLineField(an, ext, k, 8);
+            par = Oil.oilLineField(an, ext, k, 9);
+            bty = Oil.oilLineField(an, ext, k, 10);
             orient = orient0;
             wdir = wdir0;
             bl = -1;
             if ((blk >= 0) && (blk < nb)) {
-                bl = Ocr.oxBlockAt(an, ext, blk);
-                orient = emon.Port.cellsAt(an, bl + 4);
-                wdir = emon.Port.cellsAt(an, bl + 5);
+                bl = Oil.oilBlockAt(an, ext, blk);
+                orient = Oil.oilBlockField(an, ext, blk, 0);
+                wdir = Oil.oilBlockField(an, ext, blk, 1);
             }
             fresh = 0;
             if ((k == 0) || (blk != curblk)) {
@@ -548,9 +546,9 @@ public final class Scan {
             Evidence.olSet(olines, lrow, Evidence.olfPy(), py);
             Evidence.olSet(olines, lrow, Evidence.olfPw(), pw);
             Evidence.olSet(olines, lrow, Evidence.olfPh(), ph);
-            Evidence.olSet(olines, lrow, Evidence.olfXheight(), scCptLen(views, view, emon.Port.cellsAt(an, l + 11)));
-            Evidence.olSet(olines, lrow, Evidence.olfAsc(), scCptLen(views, view, emon.Port.cellsAt(an, l + 12)));
-            Evidence.olSet(olines, lrow, Evidence.olfDesc(), scCptLen(views, view, emon.Port.cellsAt(an, l + 13)));
+            Evidence.olSet(olines, lrow, Evidence.olfXheight(), scCptLen(views, view, Oil.oilLineField(an, ext, k, 11)));
+            Evidence.olSet(olines, lrow, Evidence.olfAsc(), scCptLen(views, view, Oil.oilLineField(an, ext, k, 12)));
+            Evidence.olSet(olines, lrow, Evidence.olfDesc(), scCptLen(views, view, Oil.oilLineField(an, ext, k, 13)));
             bcnt = Evidence.obGet(oblocks, prow, Evidence.obfCount());
             Evidence.obSet(oblocks, prow, Evidence.obfCount(), bcnt + 1);
             k += 1;
@@ -561,11 +559,11 @@ public final class Scan {
         // The words of the answer with their symbols and alternatives. A word's line is the extension's line index (an
         // olines row l0 + it); its baseline is that LINE's evaluated at the word's x0 and x1 (mapped first, interpolated
         // after: D096). The engine's point size is in centipoints, its dictionary and numeric flags are carried.
-        int nw = Plan.anOcrCount(an, at);
+        int nw = Oil.oilNwords(an, at);
         int nl = 0;
         int wdir = 0;
         int tlen = 0;
-        int w = Plan.anOcrFirst(an, at);
+        int w = Oil.oilFirstWord(an, at);
         int wx = -1;
         int i = 0;
         int px = 0;
@@ -604,20 +602,20 @@ public final class Scan {
         int sy = 0;
         int ps = 0;
         if (ext >= 0) {
-            wx = Ocr.oxFirstWord(an, ext);
-            nl = Ocr.oxNlines(an, ext);
-            wdir = Ocr.oxWdir(an, ext);
+            wx = Oil.oilFirstWord(an, ext);
+            nl = Oil.oilNlines(an, ext);
+            wdir = Oil.oilWdir(an, ext);
         }
         while (i < nw) {
-            px = Plan.awGet(an, w, Plan.awX());
-            py = Plan.awGet(an, w, Plan.awY());
-            pw = Plan.awGet(an, w, Plan.awW());
-            ph = Plan.awGet(an, w, Plan.awH());
+            px = emon.Port.cellsAt(an, w + 0);
+            py = emon.Port.cellsAt(an, w + 1);
+            pw = emon.Port.cellsAt(an, w + 2);
+            ph = emon.Port.cellsAt(an, w + 3);
             x0 = Evidence.vwBoxToCpt(views, view, 0, px, py, pw, ph);
             y0 = Evidence.vwBoxToCpt(views, view, 1, px, py, pw, ph);
             x1 = Evidence.vwBoxToCpt(views, view, 2, px, py, pw, ph);
             y1 = Evidence.vwBoxToCpt(views, view, 3, px, py, pw, ph);
-            ln = Plan.awGet(an, w, Plan.awLine());
+            ln = emon.Port.cellsAt(an, w + 4);
             lrow = -1;
             bx0 = x0;
             by0 = y1;
@@ -635,14 +633,15 @@ public final class Scan {
                 by1 = Evidence.evBaselineAt(lx0, ly0, lx1, ly1, bx1);
             }
             ts = Evidence.etxLen(etext);
-            nc = Plan.awGet(an, w, Plan.awLen());
+            nc = Oil.oilWlen(an, at, w);
             k = 0;
             while (k < nc) {
-                Evidence.etxAppendCp(etext, Plan.awCp(an, w, k));
+                Evidence.etxAppendCp(etext, Oil.oilWcp(an, at, w, k));
                 k += 1;
             }
-            ow = Evidence.owNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.evAngle(bx1 - bx0, by1 - by0), scLd(wdir), ts, nc, lrow, Plan.awGet(an, w, Plan.awConf()), -1);
+            ow = Evidence.owNew(owords, page, x0, y0, x1, y1, bx0, by0, bx1, by1, Evidence.evAngle(bx1 - bx0, by1 - by0), scLd(wdir), ts, nc, lrow, emon.Port.cellsAt(an, w + 5), -1);
             Evidence.owSet(owords, ow, Evidence.owfRun(), run);
+            Evidence.owSet(owords, ow, Evidence.owfPcal(), Ocalib.ocalWord(Oil.oilGet(an, at, Oil.ohEngine()), 0, emon.Port.cellsAt(an, w + 5)));
             Evidence.owSet(owords, ow, Evidence.owfPx(), px);
             Evidence.owSet(owords, ow, Evidence.owfPy(), py);
             Evidence.owSet(owords, ow, Evidence.owfPw(), pw);
@@ -655,20 +654,20 @@ public final class Scan {
                 Evidence.olSet(olines, lrow, Evidence.lhCount(), lcnt + 1);
             }
             if (wx >= 0) {
-                Evidence.owSet(owords, ow, Evidence.owfStyle(), Ocr.oxWflags(an, wx));
-                Evidence.owSet(owords, ow, Evidence.owfLang(), Ocr.oxWlang(an, wx));
-                ps = Ocr.oxWpsize(an, wx);
+                Evidence.owSet(owords, ow, Evidence.owfStyle(), Oil.oilWflags(an, ext, wx));
+                Evidence.owSet(owords, ow, Evidence.owfLang(), Oil.oilWlang(an, ext, wx));
+                ps = Oil.oilWpsize(an, ext, wx);
                 if (ps > 1000000) {
                     ps = 1000000;
                 }
                 if (ps >= 0) {
                     Evidence.owSet(owords, ow, Evidence.owfPsize(), ps * 100);
                 }
-                Evidence.owSet(owords, ow, Evidence.owfFlags(), Ocr.oxWdflags(an, wx));
-                ns = Ocr.oxNsym(an, wx);
+                Evidence.owSet(owords, ow, Evidence.owfFlags(), Oil.oilWordFlags(an, ext, wx));
+                ns = Oil.oilNsym(an, ext, wx);
                 Evidence.owSet(owords, ow, Evidence.owfSfirst(), Evidence.osCount(osyms));
                 Evidence.owSet(owords, ow, Evidence.owfScount(), ns);
-                sy = Ocr.oxFirstSym(an, wx);
+                sy = Oil.oilFirstSym(an, ext, wx);
                 j = 0;
                 while (j < ns) {
                     ncp = emon.Port.cellsAt(an, sy + 5);
@@ -701,7 +700,7 @@ public final class Scan {
                     Evidence.osSet(osyms, sym, Evidence.osfPw(), pw);
                     Evidence.osSet(osyms, sym, Evidence.osfPh(), ph);
                     a0 = Evidence.oaCount(oalts);
-                    a = Ocr.oxSymAlts(an, sy);
+                    a = Oil.oilSymAlts(an, sy);
                     m = 0;
                     while (m < nalt) {
                         acp = emon.Port.cellsAt(an, a);
@@ -714,17 +713,17 @@ public final class Scan {
                             }
                             Evidence.oaAdd(oalts, sym, ts, acp, emon.Port.cellsAt(an, a + 1));
                         }
-                        a = Ocr.oxAltNext(an, a);
+                        a = Oil.oilAltNext(an, a);
                         m += 1;
                     }
                     Evidence.osSet(osyms, sym, Evidence.osfAfirst(), a0);
                     Evidence.osSet(osyms, sym, Evidence.osfAcount(), Evidence.oaCount(oalts) - a0);
-                    sy = Ocr.oxSymNext(an, sy);
+                    sy = Oil.oilSymNext(an, sy);
                     j += 1;
                 }
-                wx = Ocr.oxWordNext(an, wx);
+                wx = Oil.oilWordNext(an, ext, wx);
             }
-            w = Plan.awNext(an, w);
+            w = Oil.oilWordNext(an, at, w);
             i += 1;
         }
         return nw;
@@ -733,7 +732,7 @@ public final class Scan {
         // One OCR answer as an OCR run with its blocks, paragraphs, lines, words, symbols and alternatives, and the
         // stage 1 features of every word. `view` is the `views` row of the raster that was read; `lang` the ISO 639-3 the request
         // named (0 none: the run records no language, D038). Answers the run's row.
-        int ext = Ocr.oxFind(an, at);
+        int ext = Oil.oilFind(an, at);
         int run = Evidence.orNew(oruns, page, view);
         int b0 = Evidence.obCount(oblocks);
         int l0 = Evidence.olCount(olines);
@@ -744,11 +743,15 @@ public final class Scan {
         int w = 0;
         int rotmed = 0;
         int ts = 0;
+        Evidence.orSet(oruns, run, Evidence.orfEngine(), Oil.oilGet(an, at, Oil.ohEngine()));
+        Evidence.orSet(oruns, run, Evidence.orfCaps(), Oil.oilGet(an, at, Oil.ohCaps()));
+        Evidence.orSet(oruns, run, Evidence.orfNative(), Oil.oilGet(an, at, Oil.ohNative()));
+        Evidence.orSet(oruns, run, Evidence.orfEix(), Oil.oilGet(an, at, Oil.ohEngine()) - 1);
         Evidence.orSet(oruns, run, Evidence.orfRequest(), request);
         Evidence.orSet(oruns, run, Evidence.orfRound(), 1);
         Evidence.orSet(oruns, run, Evidence.orfPass(), 1);
         Evidence.orSet(oruns, run, Evidence.orfPsm(), 3);
-        Evidence.orSet(oruns, run, Evidence.orfFlags(), Ocr.ocfSymbols() + Ocr.ocfOsd());
+        Evidence.orSet(oruns, run, Evidence.orfFlags(), (Ocr.ocfSymbols() + Ocr.ocfOsd()) + ((256 * Oil.oilGet(an, at, Oil.ohLg())) + (65536 * Oil.oilGet(an, at, Oil.ohCk()))));
         if (lang > 0) {
             ts = Evidence.etxLen(etext);
             Evidence.etxAppendCp(etext, lang / 65536);
@@ -758,14 +761,14 @@ public final class Scan {
             Evidence.orSet(oruns, run, Evidence.orfLanglen(), 3);
         }
         if (ext >= 0) {
-            Evidence.orSet(oruns, run, Evidence.orfOrient(), Ocr.oxOrient(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfWdir(), Ocr.oxWdir(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfLorder(), Ocr.oxTlorder(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfDeskew(), Ocr.oxDeskew(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfOsd(), Ocr.oxOsd(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfScript(), Ocr.oxScript(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfSconf(), Ocr.oxSconf(an, ext));
-            Evidence.orSet(oruns, run, Evidence.orfOconf(), Ocr.oxOconf(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOrient(), Oil.oilOrient(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfWdir(), Oil.oilWdir(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfLorder(), Oil.oilTlorder(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfDeskew(), Oil.oilDeskew(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOsd(), Oil.oilOsd(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfScript(), Oil.oilScript(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfSconf(), Oil.oilSconf(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOconf(), Oil.oilOconf(an, ext));
             nl = scEvLines(an, ext, view, run, page, views, oblocks, olines);
         }
         nw = scEvWords(an, at, ext, view, run, page, l0, views, etext, olines, owords, osyms, oalts);
@@ -1511,12 +1514,12 @@ public final class Scan {
         int mh = 0;
         int hh = 0;
         int edge = 0;
-        if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraConf()) {
+        if (Evidence.owConfidence(owords, xw) < scXtraConf()) {
             return 0;
         }
         int letters = scCountClass(etext, Evidence.owGet(owords, xw, Evidence.hdTstart()), Evidence.owGet(owords, xw, Evidence.hdTlen()), 0);
         if (letters > 0) {
-            if ((letters < scXtraTextLetters()) || (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraTextConf())) {
+            if ((letters < scXtraTextLetters()) || (Evidence.owConfidence(owords, xw) < scXtraTextConf())) {
                 return 0;
             }
         }
@@ -1548,7 +1551,7 @@ public final class Scan {
             return 0;
         }
         if ((mh > 0) && ((2 * (Evidence.owGet(owords, xw, Evidence.hdY1()) - Evidence.owGet(owords, xw, Evidence.hdY0()))) < mh)) {
-            if (Evidence.owGet(owords, xw, Evidence.hdConf()) < scXtraSmallConf()) {
+            if (Evidence.owConfidence(owords, xw) < scXtraSmallConf()) {
                 return 0;
             }
         }
@@ -1912,7 +1915,7 @@ public final class Scan {
         // (`sc-fates`' first four fates, which read nothing but the word, its line and the page's rules, and change nothing). D731 shares it with `sc-kept-words`.
         int ts = Evidence.owGet(owords, w, Evidence.hdTstart());
         int n = Evidence.owGet(owords, w, Evidence.hdTlen());
-        int conf = Evidence.owGet(owords, w, Evidence.hdConf());
+        int conf = Evidence.owConfidence(owords, w);
         int f = 0;
         int c = 0;
         if (scAdmitWord(conf, floor) == 0) {
@@ -1976,7 +1979,7 @@ public final class Scan {
         }
         while (i < m) {
             w = emon.Port.cellsAt(scr, fb + i);
-            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            conf = Evidence.owConfidence(owords, w);
             sum += conf;
             tch += Evidence.owGet(owords, w, Evidence.hdTlen());
             if (conf > mx) {
@@ -2040,7 +2043,7 @@ public final class Scan {
         int changed = 0;
         while (i < m) {
             w = emon.Port.cellsAt(scr, fb + i);
-            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            conf = Evidence.owConfidence(owords, w);
             sum += conf;
             tch += Evidence.owGet(owords, w, Evidence.hdTlen());
             if (conf > mx) {
@@ -2054,7 +2057,7 @@ public final class Scan {
             w = emon.Port.cellsAt(scr, fb + i);
             ts = Evidence.owGet(owords, w, Evidence.hdTstart());
             n = Evidence.owGet(owords, w, Evidence.hdTlen());
-            conf = Evidence.owGet(owords, w, Evidence.hdConf());
+            conf = Evidence.owConfidence(owords, w);
             f = scDropFate(owords, etext, rules, page, m, w, lmean, mx, tch, emon.Port.cellsAt(scr, scAdmitFloor()));
             emon.Port.cellsSet(scr, fb + ((2 * fm) + i), -1);
             emon.Port.cellsSet(scr, fb + ((3 * fm) + i), 0);
@@ -2311,7 +2314,7 @@ public final class Scan {
                             gap = nx0 - ox1;
                         }
                     }
-                    r = Evidence.wdNew(words, page, Evidence.owGet(owords, wi, Evidence.hdX0()), Evidence.owGet(owords, wi, Evidence.hdY0()), Evidence.owGet(owords, wi, Evidence.hdX1()), Evidence.owGet(owords, wi, Evidence.hdY1()), Evidence.owGet(owords, wi, Evidence.hdBx0()), Evidence.owGet(owords, wi, Evidence.hdBy0()), Evidence.owGet(owords, wi, Evidence.hdBx1()), Evidence.owGet(owords, wi, Evidence.hdBy1()), rot, dir, Evidence.owGet(owords, wi, Evidence.hdTstart()), Evidence.owGet(owords, wi, Evidence.hdTlen()), lnx, Evidence.owGet(owords, wi, Evidence.hdConf()), -1);
+                    r = Evidence.wdNew(words, page, Evidence.owGet(owords, wi, Evidence.hdX0()), Evidence.owGet(owords, wi, Evidence.hdY0()), Evidence.owGet(owords, wi, Evidence.hdX1()), Evidence.owGet(owords, wi, Evidence.hdY1()), Evidence.owGet(owords, wi, Evidence.hdBx0()), Evidence.owGet(owords, wi, Evidence.hdBy0()), Evidence.owGet(owords, wi, Evidence.hdBx1()), Evidence.owGet(owords, wi, Evidence.hdBy1()), rot, dir, Evidence.owGet(owords, wi, Evidence.hdTstart()), Evidence.owGet(owords, wi, Evidence.hdTlen()), lnx, Evidence.owConfidence(owords, wi), -1);
                     Evidence.wdSet(words, r, Evidence.wfStyle(), Evidence.owGet(owords, wi, Evidence.owfStyle()));
                     Evidence.wdSet(words, r, Evidence.wfSize(), size);
                     Evidence.wdSet(words, r, Evidence.wfFont(), -1);
@@ -2529,7 +2532,7 @@ public final class Scan {
                             gap = nx0 - ox1;
                         }
                     }
-                    r = Evidence.wdNew(words, page, Evidence.owGet(owords, wi, Evidence.hdX0()), Evidence.owGet(owords, wi, Evidence.hdY0()), Evidence.owGet(owords, wi, Evidence.hdX1()), Evidence.owGet(owords, wi, Evidence.hdY1()), Evidence.owGet(owords, wi, Evidence.hdBx0()), Evidence.owGet(owords, wi, Evidence.hdBy0()), Evidence.owGet(owords, wi, Evidence.hdBx1()), Evidence.owGet(owords, wi, Evidence.hdBy1()), rot, dir, ts, tl, lnx, Evidence.owGet(owords, wi, Evidence.hdConf()), -1);
+                    r = Evidence.wdNew(words, page, Evidence.owGet(owords, wi, Evidence.hdX0()), Evidence.owGet(owords, wi, Evidence.hdY0()), Evidence.owGet(owords, wi, Evidence.hdX1()), Evidence.owGet(owords, wi, Evidence.hdY1()), Evidence.owGet(owords, wi, Evidence.hdBx0()), Evidence.owGet(owords, wi, Evidence.hdBy0()), Evidence.owGet(owords, wi, Evidence.hdBx1()), Evidence.owGet(owords, wi, Evidence.hdBy1()), rot, dir, ts, tl, lnx, Evidence.owConfidence(owords, wi), -1);
                     Evidence.wdSet(words, r, Evidence.wfStyle(), Evidence.owGet(owords, wi, Evidence.owfStyle()));
                     Evidence.wdSet(words, r, Evidence.wfSize(), size);
                     Evidence.wdSet(words, r, Evidence.wfFont(), -1);
@@ -2640,12 +2643,14 @@ public final class Scan {
         // run's row. The pipeline's lines are `sc-emit-lines`' or `sc-emit-sel`'s.
         int cropx = Evidence.vwGet(views, vdec, Evidence.vwfCropx());
         int cropy = Evidence.vwGet(views, vdec, Evidence.vwfCropy());
+        int binaryWidth = Evidence.vwGet(views, vdec, Evidence.vwfPxw());
+        int binaryHeight = Evidence.vwGet(views, vdec, Evidence.vwfPxh());
         int run = scAnswer(an, at, page, vdec, request, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
-        int ext = Ocr.oxFind(an, at);
+        int ext = Oil.oilFind(an, at);
         int vbin = -1;
         if (ext >= 0) {
-            if (Ocr.oxBinary(an, ext) == 1) {
-                vbin = Evidence.vwNew(views, page, Evidence.vkEngineBinary(), request, vdec, Ocr.oxBw(an, ext), Ocr.oxBh(an, ext), dpi100, Plan.layFull(), -1, 0, 0, cropx, cropy, 1);
+            if (Oil.oilBinary(an, ext) == 1) {
+                vbin = Evidence.vwNew(views, page, Evidence.vkEngineBinary(), request, vdec, binaryWidth, binaryHeight, dpi100, Plan.layFull(), -1, 0, 0, cropx, cropy, 1);
                 Evidence.orSet(oruns, run, Evidence.orfBview(), vbin);
             }
         }
@@ -3001,7 +3006,7 @@ public final class Scan {
         int ts = Evidence.owGet(owords, w, Evidence.hdTstart());
         int n = Evidence.owGet(owords, w, Evidence.hdTlen());
         int flags = Evidence.owGet(owords, w, Evidence.owfFlags());
-        int score = Evidence.owGet(owords, w, Evidence.hdConf());
+        int score = Evidence.owConfidence(owords, w);
         int i = 0;
         int latin = 0;
         int rejected = 0;

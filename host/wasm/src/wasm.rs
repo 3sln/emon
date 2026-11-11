@@ -292,7 +292,7 @@ pub unsafe extern "C" fn emon_answer(h: i32, ptr: u32, ncells: u32) -> i32 {
 }
 
 // An `ocr` answer from the flat integer form the JS adapter makes of its engine's reading; the form and the record are kin's
-// (`ox-flat`, `emon.ocrport`, P10.7), so the layout is written once and a malformed form is refused by kin.
+// (`oil-flat`, `emon.ocrport`, P10.7), so the layout is written once and a malformed form is refused by kin.
 #[no_mangle]
 pub unsafe extern "C" fn emon_answer_ocr(h: i32, id: i32, ptr: u32, ncells: u32) -> i32 {
     guard(|| {

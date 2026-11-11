@@ -181,7 +181,7 @@ pub(crate) fn oc_word(owords: &mut crate::port::Cells, w: i32, et: &mut crate::p
     if missing == 0 {
         return 0;
     }
-    lr = ledger_add(ledger, dr_ocr_unrepresented(), ow_get(owords, w, hd_page()), ow_get(owords, w, hd_x0()), ow_get(owords, w, hd_y0()), ow_get(owords, w, hd_x1()), ow_get(owords, w, hd_y1()), ow_get(owords, w, hd_conf()), sr_ocr());
+    lr = ledger_add(ledger, dr_ocr_unrepresented(), ow_get(owords, w, hd_page()), ow_get(owords, w, hd_x0()), ow_get(owords, w, hd_y0()), ow_get(owords, w, hd_x1()), ow_get(owords, w, hd_y1()), ow_confidence(owords, w), sr_ocr());
     ts = crate::port::cells_len(text);
     i = 0;
     while i < crate::port::cells_len(norm) {

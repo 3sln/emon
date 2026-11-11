@@ -1227,7 +1227,7 @@ public final class Ofuse {
         while (i < n) {
             w = emon.Port.cellsAt(seq, i);
             emon.Port.cellsPush(refs, w);
-            sum += (long) Evidence.owGet(words, w, Evidence.hdConf());
+            sum += (long) Evidence.owConfidence(words, w);
             if ((Evidence.owGet(words, w, Evidence.owfFlags()) & Evidence.oeDictionary()) == 0) {
                 dictionary = 0;
             }
@@ -1344,7 +1344,7 @@ public final class Ofuse {
                 sum = (long) 0;
                 j = 0;
                 while (j < emon.Port.cellsLen(seq)) {
-                    sum += (long) Evidence.owGet(words, emon.Port.cellsAt(seq, j), Evidence.hdConf());
+                    sum += (long) Evidence.owConfidence(words, emon.Port.cellsAt(seq, j));
                     j += 1;
                 }
                 confidence = (int) (sum / ((long) emon.Port.cellsLen(seq)));
@@ -1420,7 +1420,7 @@ public final class Ofuse {
         int seen = 0;
         int covered = 0;
         while (i < (first + n)) {
-            if (Evidence.owGet(words, i, Evidence.hdConf()) < ofInsertConf()) {
+            if (Evidence.owConfidence(words, i) < ofInsertConf()) {
                 return 0;
             }
             if (ofEligible(words, text, i) == 0) {
@@ -1503,7 +1503,7 @@ public final class Ofuse {
                             v = emon.Port.cellsAt(sel, j);
                             run = Evidence.owGet(words, v, Evidence.owfRun());
                             if ((run >= 0) && (run < Evidence.orCount(runs))) {
-                                if (((Evidence.orGet(runs, run, Evidence.orfRequest()) % 256) != 23) && ((Evidence.owGet(words, w, Evidence.hdPage()) == Evidence.owGet(words, v, Evidence.hdPage())) && (Evidence.owGet(words, v, Evidence.hdConf()) >= ofInsertConf()))) {
+                                if (((Evidence.orGet(runs, run, Evidence.orfRequest()) % 256) != 23) && ((Evidence.owGet(words, w, Evidence.hdPage()) == Evidence.owGet(words, v, Evidence.hdPage())) && (Evidence.owConfidence(words, v) >= ofInsertConf()))) {
                                     if ((ofWordSame(words, text, w, v, 0) == 1) && (Evidence.evOverlapSmall(Evidence.owGet(words, w, Evidence.hdX0()), Evidence.owGet(words, w, Evidence.hdY0()), Evidence.owGet(words, w, Evidence.hdX1()), Evidence.owGet(words, w, Evidence.hdY1()), Evidence.owGet(words, v, Evidence.hdX0()), Evidence.owGet(words, v, Evidence.hdY0()), Evidence.owGet(words, v, Evidence.hdX1()), Evidence.owGet(words, v, Evidence.hdY1())) == 0)) {
                                         found = 1;
                                     }

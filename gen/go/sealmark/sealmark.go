@@ -1075,7 +1075,7 @@ func SmPxKeep(et *port.Cells, owords *port.Cells, row int32) int32 {
 	// and 150 (a long word the engine doubted is still a word; two letters it doubted are noise), or it is a lone separator the engine was sure of (a ring's bullet or dash: what the name is cut by).
 	var ts int32 = evidence.OwGet(owords, row, evidence.HdTstart())
 	var tl int32 = evidence.OwGet(owords, row, evidence.HdTlen())
-	var conf int32 = evidence.OwGet(owords, row, evidence.HdConf())
+	var conf int32 = evidence.OwConfidence(owords, row)
 	var k int32 = 0
 	var n int32 = 0
 	for k < tl {
