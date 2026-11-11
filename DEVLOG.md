@@ -14121,3 +14121,11 @@ The default suite passes drift, core, rederive check, accuracy, samples, four la
 Official `bb publish npm --dry-run` refuses the missing NPM_TOKEN; credential-free direct npm dry inspection passes for all three tarballs. `release-verify --tag v0.2.0 --dry-run` refuses the existing tag's different commit. Actual full archive collection refuses the missing foreign builds. Those preflights remain enforced; the coordinator must version a subsequent release after committing. Maven is unavailable, so Java consumes the Maven layout through javac/java without testing Maven resolution. Linux, Windows and macOS x64 remain CI-only. Nothing is committed, published, pushed, retagged or dispatched to CI.
 
 - [ ] **Signed off** (maintainer)
+
+### D881 — Publish npm by Trusted Publishing instead of NPM_TOKEN
+
+The 0.2.0 npm publish failed with E404 on an expired granular token. At the maintainer's request, the npm job now authenticates by npm Trusted Publishing ([docs](https://docs.npmjs.com/trusted-publishers)). The workflow's OIDC token (`id-token: write`, already granted for provenance) replaces the stored secret. The job installs Node 24 via a SHA-pinned `actions/setup-node` v7.1.0, plus npm 11.21.2; trusted publishing needs npm ≥ 11.5.1. `bb publish npm` no longer requires `NPM_TOKEN`, and its temporary npmrc carries only the registry. The publish arguments are unchanged (`--access public`, `--provenance` under Actions OIDC, `--tag next` for prereleases), so the self-test vectors still hold.
+
+The maintainer configures a Trusted Publisher on each of `@3sln/emon`, `@3sln/pdfium-wasm` and `@3sln/emon-ppocr`: GitHub Actions, `3sln/emon`, `publish.yml`, environment `release`. `@3sln/emon-ppocr` has never been published, and npm configures trusted publishers only on existing packages. Its first version therefore needs one manual publish. Until a package is configured, its publish fails and the other registries are unaffected, as the maintainer allowed for unconfigured targets. The `NPM_TOKEN` secret can be deleted once all three are configured.
+
+- [ ] **Signed off** (maintainer)

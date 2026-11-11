@@ -14,9 +14,9 @@
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
 # Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer; these secrets (repository level is fine, a job in the environment
-# inherits them): CARGO_REGISTRY_TOKEN, NPM_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
+# inherits them): CARGO_REGISTRY_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
 # a Trusted Publishing policy on nuget.org (owner 3sln, repo emon, workflow publish.yml, environment release) and the organization variable NUGET_USER (NuGet/login mints a
-# short-lived key per publish); Settings > Pages > Source = GitHub Actions.
+# short-lived key per publish); for npm no secret either: a Trusted Publisher on each @3sln package (GitHub Actions, 3sln/emon, publish.yml, environment release); Settings > Pages > Source = GitHub Actions.
 # Never run: needs the credentials, a draft release and Actions credits (D524).
 name: publish
 
@@ -146,11 +146,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      id-token: write # npm provenance (an attestation that this workflow built the tarball)
+      id-token: write # npm Trusted Publishing (OIDC, no stored token) and provenance
     outputs:
       outcome: ${{ steps.publish.outputs.outcome }}
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -191,6 +189,12 @@ jobs:
         env:
           EMON_PACKAGE_REQUIRE_NATIVE: "1"
         run: bb package --host js --host js-ppocr
+      # Trusted Publishing needs Node >= 22.14 and npm >= 11.5.1; the runner's default npm is older.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: npm 11.21.2 (Trusted Publishing)
+        run: npm install -g npm@11.21.2 && npm --version
       - id: publish
         name: bb publish npm
         run: bb publish npm ${DRY_FLAG}

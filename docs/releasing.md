@@ -58,8 +58,8 @@ and writes `SHA256SUMS` including every add-on. Then run `bb release-ops attach
 error, not a locally verified release. `bb release-ops --self-test` exercises
 this complete set with synthetic bytes; that is not a native smoke check.
 Run `bb publish npm --dry-run` only after building ordinary JS, pdfium wasm
-and optional JS tarballs. Its existing preflight requires `NPM_TOKEN` even
-for a dry run; without that secret it fails before invoking npm. For local,
+and optional JS tarballs. It needs no secret: in Actions npm authenticates by Trusted
+Publishing (OIDC); locally a dry run reaches npm without credentials. For local,
 credential-free tarball inspection use `npm publish TAR --dry-run
 --ignore-scripts --userconfig=/dev/null`. Neither command publishes anything.
 If the development version still names an existing release, `release-verify`
@@ -116,19 +116,25 @@ repository is public by the time of publishing (npm provenance, GitHub Pages on 
 
 ## 4. Settings: environment, secrets, Pages, rules
 
-**Secrets.** These exist already, as repository secrets: `CARGO_REGISTRY_TOKEN`, `NPM_TOKEN`, `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`. They work
+**Secrets.** These exist already, as repository secrets: `CARGO_REGISTRY_TOKEN`, `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`. They work
 where they are: a job in the `release` environment inherits repository secrets, so **leaving them at repository level is a supported setup and no release step.**
 **OPTIONAL hardening:** move them into the environment (Settings > Environments > `release` > *Environment secrets*), so only a publish job that you approved can read them.
-Optional: `MAVEN_GPG_PASSPHRASE` (leave it unset for a key without a passphrase). There is **no NuGet secret** (below). The corpus secrets of SPEC 15.3 (`EMON_S3_*`) stay
+Optional: `MAVEN_GPG_PASSPHRASE` (leave it unset for a key without a passphrase). There is **no NuGet secret** and **no npm secret** (below: both use Trusted Publishing). The corpus secrets of SPEC 15.3 (`EMON_S3_*`) stay
 repository secrets: `verify.yml` needs them without any approval.
 
 | Secret | How to get it |
 |---|---|
 | `CARGO_REGISTRY_TOKEN` | crates.io > Account Settings > API Tokens > New Token. Scopes `publish-new` and `publish-update`. (For the first publish the token cannot be restricted to a crate that does not exist yet; replace it with a crate-scoped one afterwards.) |
-| `NPM_TOKEN` | npmjs.com > Access Tokens > Generate New Token > *Granular access token*: permission *Read and write*, scope: packages under `@3sln`, "bypass two-factor" ON (it is for automation). |
 | `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD` | central.sonatype.com > your account menu > *View Account* > *Generate User Token*. It shows a **username/password pair**; use those two, not your login. |
 | `MAVEN_GPG_PRIVATE_KEY` | `gpg --armor --export-secret-keys KEYID` (the whole `-----BEGIN PGP PRIVATE KEY BLOCK-----` text; a base64 of it is accepted too). **Publish the public half** so Central can verify: `gpg --keyserver keyserver.ubuntu.com --send-keys KEYID` and upload to <https://keys.openpgp.org> (and confirm the email). |
 | `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase. |
+
+**npm: Trusted Publishing, no secret.** On npmjs.com, for each package (`@3sln/emon`, `@3sln/pdfium-wasm`, `@3sln/emon-ppocr`): the package's
+*Settings* > *Trusted Publisher* > *GitHub Actions*, with organization/user `3sln`, repository `emon`, workflow `publish.yml`, environment `release`.
+The `npm` job grants `id-token: write` and runs npm 11.21.2 on Node 24; it publishes with provenance and no stored token. A Trusted Publisher can only be
+configured on a package that exists, so a package's **first** version (here `@3sln/emon-ppocr`) must be published once by hand
+(`npm publish dist/js-ppocr/3sln-emon-ppocr-V.tgz --access public`, logged in as an owner of `@3sln`); every later version publishes from the workflow.
+After switching, delete the old `NPM_TOKEN` repository secret.
 
 **NuGet: Trusted Publishing, no stored key.** `publish.yml`'s `nuget` job (in the `release` environment, with `id-token: write`) runs `NuGet/login`, which exchanges the
 job's OIDC token for a short-lived API key (about an hour) and hands it to `bb publish nuget` as `NUGET_API_KEY`. Nothing long-lived exists. Set up once:

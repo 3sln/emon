@@ -11,7 +11,7 @@
 ;; Each prints the outcome as `outcome=...` and appends it to $GITHUB_OUTPUT. Credentials come from the environment only and are never printed.
 ;;
 ;;   crates  CARGO_REGISTRY_TOKEN             cargo publish --locked, from dist/stage/rust (the tree `cargo package` verified)
-;;   npm     NPM_TOKEN                        npm publish dist/js/3sln-pdfium-wasm-V.tgz and dist/js/3sln-emon-V.tgz (both, the peer first; each skipped when npm has it)
+;;   npm     (none: Trusted Publishing, OIDC) npm publish dist/js/3sln-pdfium-wasm-V.tgz and dist/js/3sln-emon-V.tgz (both, the peer first; each skipped when npm has it)
 ;;                                            --access public [--provenance in Actions]; prerelease versions get --tag next
 ;;   nuget   NUGET_API_KEY (short-lived, from NuGet/login via Trusted Publishing; real publish only, a dry run needs none)   dotnet nuget push dist/csharp/Emon.V.nupkg (and .snupkg) --skip-duplicate
 ;;   maven   MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE
@@ -35,7 +35,8 @@
 ;; ---------------------------------------------------------------------------------------------------- pure parts
 (def needs
   {"crates" ["CARGO_REGISTRY_TOKEN"]
-   "npm" ["NPM_TOKEN"]
+   ;; npm authenticates by Trusted Publishing: the workflow's OIDC token (id-token: write), no stored secret.
+   "npm" []
    ;; NUGET_API_KEY is a short-lived key (about an hour) that NuGet/login mints from nuget.org Trusted Publishing (OIDC) in the publish job; it is not a stored secret.
    "nuget" ["NUGET_API_KEY"]
    ;; MAVEN_GPG_PASSPHRASE is optional: the maintainer's signing key has no passphrase (2026-10-14).
@@ -179,7 +180,7 @@
     (if (npm-has? (:out view) v)
       (do (say pkg "@" v " is already on npm: skipped") "already-published")
       (let [rc (str (fs/path (fs/create-temp-dir {:prefix "emon-npm-"}) "npmrc"))
-            _ (spit rc "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\nregistry=https://registry.npmjs.org/\n")
+            _ (spit rc "registry=https://registry.npmjs.org/\n") ; no token: npm uses the OIDC Trusted Publisher in Actions
             prov? (and (= "true" (System/getenv "GITHUB_ACTIONS")) (not (str/blank? (System/getenv "ACTIONS_ID_TOKEN_REQUEST_URL"))))
             args (cond-> (npm-args tgz v prov? rc) dry? (conj "--dry-run"))]
         (say "npm " (str/join " " (map #(if (= % (str "--userconfig=" rc)) "--userconfig=<private npmrc>" %) args)) (when-not prov? "   (no OIDC token: published WITHOUT provenance)"))
