@@ -4,10 +4,10 @@ The maintainer's runbook (DEVLOG D524, D547, D550). The release flow needs **no 
 secrets**. Five workflows do the work and a person decides:
 
 ```
- every push to main          you run                you read, then publish             the maintainer approves
- ----------------------      -----------------      ------------------------------     ---------------------------------
+ every push to main          you run                you read, then publish             (no approval step, D882)
+ ----------------------      -----------------      ------------------------------     ------------------------
  verify.yml                  bump.yml               draft.yml                          publish.yml
-  fast core + the gates       commit "Release        a DRAFT release vX.Y.Z             verify -> approve (environment `release`)
+  fast core + the gates       commit "Release        a DRAFT release vX.Y.Z             verify -> publish
   the change since the        vX.Y.Z" to main,       targeting that commit              assets | crates | npm | nuget | maven | go
   last verified commit        then calls verify.yml  (no tag yet)                       summary (names any partial publish)
   calls for, in full;         and draft.yml for it
@@ -21,10 +21,10 @@ secrets**. Five workflows do the work and a person decides:
 * **`bump.yml`** (`workflow_dispatch`) bumps the version and commits `Release vX.Y.Z` straight to `main`.
 * **`draft.yml`** (push to `main` touching `version.edn`, `workflow_call`, `workflow_dispatch`) keeps a DRAFT release for the version in `version.edn`, pointed at a
   commit of `main` by its full sha. The tag `vX.Y.Z` does not exist yet: GitHub makes it at that commit when you publish the draft.
-* **`publish.yml`** (starts when you publish the draft) re-verifies everything itself, waits for your approval, then attaches the archives and publishes to every registry.
+* **`publish.yml`** (starts when you publish the draft) re-verifies everything itself, then attaches the archives and publishes to every registry.
 * `native.yml` (the five CLI targets) is called by verification; `pages.yml` deploys the website on push to `main`; `pr.yml` checks pull requests (`pr / verdict`).
 
-Nothing is published until you publish the draft **and** approve the `release` environment: two deliberate clicks.
+Nothing is published until you publish the draft: that one deliberate click is the decision (D882 removed the `release` environment and its approval).
 
 **Validation scope.** Local self-tests and dry runs check release-tool contracts.
 The experimental PP add-on has a local macOS arm64 smoke check; its other four
@@ -95,11 +95,10 @@ See [Experimental: PP-OCR engine](ppocr.md) for setup, measurements and limits.
 |---|------|------|-------|
 | 1 | **now** (it takes days) | Verify the Maven namespace `com.3sln` | section 3 |
 | 2 | now | Reserve the names `emon` (crates.io), `@3sln/emon` (npm), `Emon` (NuGet) | section 3 |
-| 3 | before the first publish | The environment `release` with @raystubbs as required reviewer | section 4 |
-| 4 | before the first publish | NuGet Trusted Publishing: the policy on nuget.org and the organization variable `NUGET_USER` | section 4 |
-| 5 | before the first publish | Pages source, tag rules, the bypass note for `main` | section 4 |
-| 6 | dry runs | `bb` dry runs, then the workflow dry runs | section 5 |
-| 7 | the release | The first release | section 6 |
+| 3 | before the first publish | NuGet Trusted Publishing: the policy on nuget.org and the organization variable `NUGET_USER` | section 4 |
+| 4 | before the first publish | Pages source, tag rules, the bypass note for `main` | section 4 |
+| 5 | dry runs | `bb` dry runs, then the workflow dry runs | section 5 |
+| 6 | the release | The first release | section 6 |
 
 Prerequisites: GitHub Actions credits (D524: the gates have run locally until now; a full run takes about two hours on a runner, `repeat` alone about 50 minutes); the
 repository is public by the time of publishing (npm provenance, GitHub Pages on a free plan and the Go proxy need it, P11.11); `gh` logged in as @raystubbs.
@@ -114,11 +113,10 @@ repository is public by the time of publishing (npm provenance, GitHub Pages on 
 3. **npm**: create the organization `3sln` (<https://www.npmjs.com/org/create>) so `@3sln` exists and is yours; the packages are claimed by their first publish. There are two: `@3sln/emon` and `@3sln/pdfium-wasm` (pdfium's WebAssembly build, D553); `bb publish npm` publishes both, the second first, with the same token.
 4. **NuGet**: sign in at nuget.org; optionally reserve the ID prefix `Emon` (*Account > Reserve ID prefix*, free for open-source). The package `Emon` is claimed by its first push.
 
-## 4. Settings: environment, secrets, Pages, rules
+## 4. Settings: secrets, Pages, rules
 
-**Secrets.** These exist already, as repository secrets: `CARGO_REGISTRY_TOKEN`, `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`. They work
-where they are: a job in the `release` environment inherits repository secrets, so **leaving them at repository level is a supported setup and no release step.**
-**OPTIONAL hardening:** move them into the environment (Settings > Environments > `release` > *Environment secrets*), so only a publish job that you approved can read them.
+**Secrets.** These exist already, as repository secrets: `CARGO_REGISTRY_TOKEN`, `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `MAVEN_GPG_PRIVATE_KEY`. The publish
+jobs read them at repository level; there is no deployment environment (D882).
 Optional: `MAVEN_GPG_PASSPHRASE` (leave it unset for a key without a passphrase). There is **no NuGet secret** and **no npm secret** (below: both use Trusted Publishing). The corpus secrets of SPEC 15.3 (`EMON_S3_*`) stay
 repository secrets: `verify.yml` needs them without any approval.
 
@@ -130,16 +128,16 @@ repository secrets: `verify.yml` needs them without any approval.
 | `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase. |
 
 **npm: Trusted Publishing, no secret.** On npmjs.com, for each package (`@3sln/emon`, `@3sln/pdfium-wasm`, `@3sln/emon-ppocr`): the package's
-*Settings* > *Trusted Publisher* > *GitHub Actions*, with organization/user `3sln`, repository `emon`, workflow `publish.yml`, environment `release`.
+*Settings* > *Trusted Publisher* > *GitHub Actions*, with organization/user `3sln`, repository `emon`, workflow `publish.yml`, environment left **blank**.
 The `npm` job grants `id-token: write` and runs npm 11.21.2 on Node 24; it publishes with provenance and no stored token. A Trusted Publisher can only be
 configured on a package that exists, so a package's **first** version (here `@3sln/emon-ppocr`) must be published once by hand
 (`npm publish dist/js-ppocr/3sln-emon-ppocr-V.tgz --access public`, logged in as an owner of `@3sln`); every later version publishes from the workflow.
 After switching, delete the old `NPM_TOKEN` repository secret.
 
-**NuGet: Trusted Publishing, no stored key.** `publish.yml`'s `nuget` job (in the `release` environment, with `id-token: write`) runs `NuGet/login`, which exchanges the
+**NuGet: Trusted Publishing, no stored key.** `publish.yml`'s `nuget` job (with `id-token: write`) runs `NuGet/login`, which exchanges the
 job's OIDC token for a short-lived API key (about an hour) and hands it to `bb publish nuget` as `NUGET_API_KEY`. Nothing long-lived exists. Set up once:
 
-1. nuget.org > your profile > *Trusted Publishing* > create a policy: repository owner `3sln`, repository `emon`, workflow file `publish.yml`, environment `release`.
+1. nuget.org > your profile > *Trusted Publishing* > create a policy: repository owner `3sln`, repository `emon`, workflow file `publish.yml`, environment left **blank**.
 2. An **organization** Actions variable `NUGET_USER` (Organization settings > Secrets and variables > Actions > Variables) holding your nuget.org **profile name** (not your
    email). **An organization variable must grant repository access to `emon`** (*Repository access*: all repositories, or selected, with `emon` in the list); otherwise
    `vars.NUGET_USER` is empty. Alternatively create a repository Actions variable `NUGET_USER`. The job checks this before building, including on dry runs, and explains how to fix access.
@@ -150,9 +148,6 @@ Nothing else is needed: the Go module, the draft, the statuses and the assets us
 
 **Environments** (Settings > Environments):
 
-* **`release`** (create it). *Required reviewers*: add **@raystubbs**. **Untick "Prevent self-review"**, otherwise a sole maintainer cannot approve their own release.
-  *Deployment branches and tags*: *Selected branches and tags*, add the branch rule `main` and the **tag rule `v*`** (a `release` event runs on the tag ref; without the tag
-  rule the publish jobs are refused).
 * **`github-pages`** (GitHub created it when Pages was first deployed, or create it). Allow the `main` branch; release tags need no access.
 
 **Pages.** D630 supersedes D547/D550: publish does not call Pages. Pushes to `main` deploy the current site independently, preventing an older release from reverting it and avoiding tag environment restrictions. The site documents the release version in its source. Settings > Pages > *Source*: **GitHub Actions**. The custom domain `emon.3sln.com` is set (a DNS CNAME to `3sln.github.io`; tick *Enforce HTTPS* once the
@@ -207,11 +202,10 @@ bb package                          # builds every artifact into dist/ (the pack
    `bb release-notes`. If `main` moves on and you want the new tip released instead, run it again: it updates the target and **replaces the notes** (edit them last). The commit must
    be verified: wait for its `emon/verified`.
 3. **Review the draft** (Releases > Drafts): edit the notes (they are generated from DEVLOG decisions and commits; the first release lists a capped sample); check the target is the
-   commit you mean and shows the green `emon/verified`. The archives are not on the draft: `publish.yml` attaches them from the verified run, after your approval.
+   commit you mean and shows the green `emon/verified`. The archives are not on the draft: `publish.yml` attaches them from the verified run.
 4. **Publish the release** (Edit draft > *Publish release*). GitHub creates the tag `v0.1.0` at the draft's target and `publish.yml` starts: `verify` runs, and then `assets` and every
-   registry job wait for your approval (Actions > the run > *Review deployments* > tick `release` > *Approve and deploy*; one click approves all waiting jobs). This is your last
-   chance to stop: *Reject*. (Until you approve, the public release page exists without assets. If you reject before any registry has the version, see "A release that must change
-   after it was published" below.)
+   registry job run at once; there is no approval step (D882), so publishing the draft is the last chance to stop. (To stop a run already started, cancel it in Actions
+   before the registry jobs finish; see "A release that must change after it was published" below.)
 5. Watch the **summary** job. All green: install each package from its registry in a scratch directory and convert a sample (`cargo add emon`, `npm i @3sln/emon`,
    `dotnet add package Emon`, a Maven dependency on `com.3sln:emon`, `go get github.com/3sln/emon/go@v0.1.0`). Maven Central shows the artifact within about
    30 minutes of `PUBLISHED`; NuGet within minutes; the Go proxy on first request; the website at <https://emon.3sln.com/> and the demo at <https://emon.3sln.com/demo/>.

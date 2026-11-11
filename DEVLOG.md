@@ -14129,3 +14129,9 @@ The 0.2.0 npm publish failed with E404 on an expired granular token. At the main
 The maintainer configures a Trusted Publisher on each of `@3sln/emon`, `@3sln/pdfium-wasm` and `@3sln/emon-ppocr`: GitHub Actions, `3sln/emon`, `publish.yml`, environment `release`. `@3sln/emon-ppocr` has never been published, and npm configures trusted publishers only on existing packages. Its first version therefore needs one manual publish. Until a package is configured, its publish fails and the other registries are unaffected, as the maintainer allowed for unconfigured targets. The `NPM_TOKEN` secret can be deleted once all three are configured.
 
 - [ ] **Signed off** (maintainer)
+
+### D882 — No `release` deployment environment in publish.yml
+
+At the maintainer's request, the publish jobs (`assets`, crates, npm, nuget, maven, go) no longer run in the `release` environment, so there is no required-reviewer approval. Publishing the draft release is now the single decision; `bb release-verify` still gates every job on `emon/verified`. Registry secrets are read at repository level, which already worked. Because the OIDC token no longer carries an environment claim, the Trusted Publishing policies on nuget.org and npm (D881) must leave the environment blank. The `release` environment can be deleted in the repository settings. `github-pages` stays: `pages.yml` deploys through it.
+
+- [ ] **Signed off** (maintainer)

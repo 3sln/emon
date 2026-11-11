@@ -6,17 +6,15 @@
 #           was not retargeted after draft.yml), and the commit status `emon/verified` there is green (verify.yml's). Nothing is published unless this passes. It outputs the
 #           verified COMMIT, and every job below checks out THAT commit, not the tag name, so a tag moved afterwards changes nothing.
 #   assets  the release archives (CLI x5, C x4, pod x4, SHA256SUMS): downloaded from the verify.yml run that `emon/archives` records for that commit, or for its nearest
-#           verified ancestor whose archives are still valid (same version, inside the artifact retention), and attached to the release. Same approval as the registries.
-#   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each in the `release` environment (required reviewer; the
-#           registry secrets live there), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
+#           verified ancestor whose archives are still valid (same version, inside the artifact retention), and attached to the release.
+#   crates npm nuget maven go   one job each, independent (one failing does not stop or undo the others), each = `bb package --host H` then `bb publish H`: it SKIPS a version the registry already has, so a re-run publishes only
 #           what is missing. All use GITHUB_TOKEN plus the registry's own secret; no other credential exists.
 #   Pages deploys independently on push to main (D630); a release must never roll back the site.
 #   summary one report of what happened, and the failing exit code if any registry did not succeed: a partial publish is named, not silent.
 #
-# Needs (docs/releasing.md has the order): the environment `release` with @raystubbs as required reviewer; these secrets (repository level is fine, a job in the environment
-# inherits them): CARGO_REGISTRY_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
-# a Trusted Publishing policy on nuget.org (owner 3sln, repo emon, workflow publish.yml, environment release) and the organization variable NUGET_USER (NuGet/login mints a
-# short-lived key per publish); for npm no secret either: a Trusted Publisher on each @3sln package (GitHub Actions, 3sln/emon, publish.yml, environment release); Settings > Pages > Source = GitHub Actions.
+# No deployment environment and no approval step (D882): publishing the draft release is the decision. Needs (docs/releasing.md has the order): these repository secrets: CARGO_REGISTRY_TOKEN, MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, and optionally MAVEN_GPG_PASSPHRASE; for NuGet no secret:
+# a Trusted Publishing policy on nuget.org (owner 3sln, repo emon, workflow publish.yml, no environment) and the organization variable NUGET_USER (NuGet/login mints a
+# short-lived key per publish); for npm no secret either: a Trusted Publisher on each @3sln package (GitHub Actions, 3sln/emon, publish.yml, no environment); Settings > Pages > Source = GitHub Actions.
 # Never run: needs the credentials, a draft release and Actions credits (D524).
 name: publish
 
@@ -81,7 +79,6 @@ jobs:
 
   assets:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -115,7 +112,6 @@ jobs:
 
   crates:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -141,7 +137,6 @@ jobs:
 
   npm:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -201,7 +196,6 @@ jobs:
 
   nuget:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -247,7 +241,6 @@ jobs:
 
   maven:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 90 # the Central Portal validates a bundle for up to ~40 minutes
     outputs:
@@ -280,7 +273,6 @@ jobs:
 
   go:
     needs: verify
-    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

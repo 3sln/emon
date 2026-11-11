@@ -132,7 +132,7 @@
         miss (missing-env names (System/getenv))]
     (doseq [n names] (say "  " (if (some #{n} miss) "MISSING" "set    ") " " n))
     (when (seq miss)
-      (rl/die 1 (str "bb publish " registry ": " (str/join ", " miss) " is not set. Create it as a secret of the `release` environment (docs/releasing.md)"
+      (rl/die 1 (str "bb publish " registry ": " (str/join ", " miss) " is not set. Create it as a repository secret (docs/releasing.md)"
                      (when dry? " -- the dry run fails on it so you find out before a release does"))))))
 
 (defn- http-get [url] (try (http/get url {:throw false :headers ua :timeout 30000}) (catch Exception e {:status nil :body (ex-message e)})))
