@@ -1,0 +1,114 @@
+;; D883: capabilities describe measured fields, never synthetic zero values.
+(ns emon.oiltest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-eq64 new-cells]]
+            [emon.port :refer [cells-at cells-len cells-push]]
+            [emon.oil :refer [oil-has oil-block-stride oil-line-stride oil-word-base
+                              oil-pm oil-native-check oc-orient
+                              oc-baseline oc-rowmetrics oc-blocks oc-btype oc-wdir
+                              oc-lconf oc-paras oc-quad oc-angle oc-wlang oc-style
+                              oc-psize oc-lexicon oc-walts oc-symbols oc-symconf oc-alts oen-tesseract oen-ppocr
+                              oil-begin oil-end oil-line oil-word oil-word-cp
+                              oil-sym oil-sym-cp oil-alt oil-alt-cp oil-first-word
+                              oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
+                              oil-walt oil-walt-cp]]
+            [kin.lang :refer [defn return let + -]]))
+
+(deftest test-capabilities-determine-the-physical-row-strides
+  (assert-eq (oil-block-stride 0) 5 "only the block base")
+  (assert-eq (oil-block-stride (+ (oc-btype) (oc-wdir))) 9 "kind and orientation group")
+  (assert-eq (oil-line-stride 0) 6 "line confidence is optional")
+  (assert-eq (oil-line-stride (+ (+ (oc-lconf) (oc-paras)) (oc-baseline))) 12
+             "confidence, paragraph and baseline")
+  (assert-eq (oil-line-stride (+ (+ (oc-rowmetrics) (oc-quad)) (oc-angle))) 18
+             "metrics, quad and signed angle")
+  (assert-eq (oil-word-base 0) 6 "word base only")
+  (assert-eq (oil-word-base (+ (+ (+ (+ (oc-wlang) (oc-style)) (oc-psize)) (oc-lexicon)) (oc-walts))) 11
+             "word groups include the word-alternative count"))
+
+(deftest test-native-must-be-a-subset-of-present-capabilities
+  (assert-eq (oil-native-check (+ (oc-blocks) (oc-baseline)) (oc-baseline)) 1 "native subset")
+  (assert-eq (oil-native-check (oc-blocks) (oc-baseline)) 0 "cannot claim an absent group as native"))
+
+(deftest test-confidence-rounding-is-symmetric
+  (assert-eq (oil-pm 12345 100) 123 "round down")
+  (assert-eq (oil-pm 12350 100) 124 "positive half away from zero")
+  (assert-eq (oil-pm -12350 100) -124 "negative half away from zero")
+  (assert-eq (oil-pm -12349 100) -123 "negative below half")
+  (assert-eq (oil-pm -2147483648 1) -2147483648 "minimum signed input does not overflow"))
+
+(deftest test-oil-words-carry-their-own-text-and-symbols
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 7 (oen-ppocr) 0 0 1 1 0 1)]
+    (oil-line c at 2 3 20 10 -1 2 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (let [^I32 w0 (oil-word c at 2 3 10 10 0 900 0 0 -1 0)]
+      (oil-word-cp c at w0 65)
+      (let [^I32 w1 (oil-word c at 12 3 10 10 0 800 0 0 -1 0)]
+        (oil-word-cp c at w1 66)
+        (oil-end c at)
+        (assert-eq (cells-at c at) (cells-len c) "length covers the whole answer")
+        (assert-eq (oil-get c at (oh-nwords)) 2 "word count")
+        (assert-eq (oil-line-at c at 0) 28 "the fixed header precedes lines")
+        (assert-eq (oil-first-word c at) w0 "six-cell minimal line")
+        (let [^I32 text (oil-word-text c at w0)]
+          (assert-eq (cells-at c (+ text 1)) 65 "first word text"))
+        (assert-eq (oil-word-next c at w0) w1 "variable word walk")
+        (assert-eq (oil-word-next c at w1) (cells-len c) "no extension after words")))))
+
+(deftest test-symbol-alternatives-remain-with-the-word
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 8 (oen-tesseract) (+ (+ (oc-symbols) (oc-symconf)) (oc-alts)) 0 1 1 0 0)
+        ^I32 w (oil-word c at 1 2 3 4 0 900 0 0 -1 0)]
+    (oil-word-cp c at w 65)
+    (let [^I32 s (oil-sym c at w 1 2 3 4 950)]
+      (oil-sym-cp c s 65)
+      (let [^I32 alt (oil-alt c at s 100)] (oil-alt-cp c alt 66)))
+    (oil-end c at)
+    (assert-eq (oil-word-next c at w) (cells-len c) "walk past symbol text and alternatives")))
+
+(deftest test-observed-identity-hashes-canonical-utf8
+  (let [^Cells cps (new-cells)]
+    (assert-eq64 (oil-obs-hash cps 0 0) -3750763034362895579 "FNV offset basis")
+    (cells-push cps 104) (cells-push cps 101) (cells-push cps 108)
+    (cells-push cps 108) (cells-push cps 111)
+    (assert-eq64 (oil-obs-hash cps 0 5) -6615550055289275125 "ASCII hello")
+    (cells-push cps 233) (cells-push cps 128512)
+    (assert-eq64 (oil-obs-hash cps 5 2) 5970206017523824492 "accent plus supplementary code point")))
+
+(deftest test-word-alternatives-do-not-displace-text-or-symbols
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 9 (oen-tesseract) (oc-walts) 0 1 1 0 0)
+        ^I32 w (oil-word c at 1 2 3 4 0 900 0 0 -1 0)]
+    (oil-word-cp c at w 65)
+    (let [^I32 a0 (oil-walt c at w 800)] (oil-walt-cp c a0 66) (oil-walt-cp c a0 67))
+    (let [^I32 a1 (oil-walt c at w 700)] (oil-walt-cp c a1 68))
+    (let [^I32 text (oil-word-text c at w)]
+      (assert-eq (cells-at c text) 1 "the original text length")
+      (assert-eq (cells-at c (+ text 1)) 65 "the original text"))
+    (assert-eq (oil-word-next c at w) (cells-len c) "walk alternatives then original text")))
+
+(deftest test-absent-symbol-capability-cannot-append-a-symbol
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 10 (oen-ppocr) 0 0 1 0 0 1)
+        ^I32 w (oil-word c at 1 2 3 4 0 900 0 0 -1 0)
+        ^I32 size (cells-len c)]
+    (assert-eq (cells-at c (+ w 5)) -1 "no confidence means unmeasured, not a score")
+    (assert-eq (oil-sym c at w 1 2 3 4 800) -1 "symbols absent")
+    (assert-eq (cells-len c) size "no hidden symbol cells")))
+
+(deftest test-signed-baselines-are-data-only-when-the-group-is-present
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-begin c 11 (oen-tesseract) (oc-baseline) (oc-baseline) 1 1 0 0)]
+    (oil-line c at 0 0 20 10 -1 0 -1 -1 -1 -2 20 -3 0 0 0 0 0 0 0 0 0 0 0 0)
+    (assert-eq (cells-len c) 38 "ten cells with a baseline")
+    (assert-eq (cells-at c 34) -1 "negative baseline coordinate is measured data")
+    (assert-eq (cells-at c 37) -3 "the signed endpoint survives")
+    (let [^I32 other (oil-begin c 12 (oen-ppocr) 0 0 1 1 0 1)]
+      (oil-line c other 0 0 20 10 9 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+      (assert-eq (- (cells-len c) other) 34 "six cells with no baseline")
+      (assert-eq (cells-at c (+ other 32)) -1 "no fabricated block when blocks are absent"))))
+
+(deftest test-invalid-native-mask-cannot-start-a-record
+  (let [^Cells c (new-cells)]
+    (assert-eq (oil-begin c 13 (oen-tesseract) 0 (oc-baseline) 1 1 0 0) -1 "native must be a subset")
+    (assert-eq (cells-len c) 0 "a rejected header did not change the answer stream")))

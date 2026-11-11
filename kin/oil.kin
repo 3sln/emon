@@ -1,0 +1,298 @@
+;; OIL v1 (D883): emon's OCR interchange. Coordinates are request pixels;
+;; confidence is raw per mille. The record envelope is [len 3 id status],
+;; followed by the 24-cell header, blocks, lines, variable words and sidecars.
+;; Optional groups occupy no cells when their capability is clear.
+(ns emon.oil
+  (:require [emon.lang :refer [I32 I64 Cells defenum i64 i32 mul64 shr64]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set]]
+            [kin.lang :refer [defn return let set while if do comment
+                              + - * quot rem < > <= >= == != and or bit-and bit-xor]]))
+
+(defenum ^:pub oen
+  [[oen-tesseract 1 "tesseract"] [oen-ppocr 2 "ppocr"]
+   [oen-apple-vision 3 "apple-vision"] [oen-mlkit-text 4 "mlkit-text"]
+   [oen-windows-media-ocr 5 "windows-media-ocr"]])
+(defenum ^:pub sg
+  [[sg-page-auto 1 "page-auto"] [sg-block 2 "block"]
+   [sg-single-line 3 "single-line"] [sg-sparse 4 "sparse"]
+   [sg-single-word 5 "single-word"]])
+(defenum ^:pub po
+  [[po-up 0 "up"] [po-right 1 "right"] [po-down 2 "down"] [po-left 3 "left"]])
+(defenum ^:pub oil-ld
+  [[oil-ld-ltr 0 "ltr"] [oil-ld-rtl 1 "rtl"] [oil-ld-ttb 2 "ttb"] [oil-ld-btt 3 "btt"]])
+(defenum ^:pub lo
+  [[lo-ttb 0 "ttb"] [lo-rtl 1 "rtl"] [lo-ltr 2 "ltr"]])
+(defenum ^:pub bk
+  [[bk-text 0 "text"] [bk-table 1 "table"] [bk-image 2 "image"]
+   [bk-rule 3 "rule"] [bk-other 4 "other"]])
+(defenum ^:pub lg
+  [[lg-layout 0 "layout"] [lg-segment 1 "segment"] [lg-recognizer 2 "recognizer"]])
+(defenum ^:pub oil-ck
+  [[oil-ck-none 0 "none"] [oil-ck-word 1 "word"]
+   [oil-ck-line 2 "line"] [oil-ck-quantized 3 "quantized"]])
+(defenum ^:pub ag
+  [[ag-solo 0 "solo"] [ag-agree 1 "agree"] [ag-box 2 "box"]
+   [ag-confidence 3 "confidence"] [ag-text 4 "text"]
+   [ag-segmentation 5 "segmentation"] [ag-absent 6 "contested-absent"]])
+
+(defenum ^:pub oc
+  [[oc-blocks 1 "blocks"] [oc-paras 2 "paras"] [oc-btype 4 "btype"]
+   [oc-baseline 8 "baseline"] [oc-rowmetrics 16 "rowmetrics"]
+   [oc-quad 32 "quad"] [oc-angle 64 "angle"] [oc-lconf 128 "lconf"]
+   [oc-wconf 256 "wconf"] [oc-orient 512 "orient"] [oc-deskew 1024 "deskew"]
+   [oc-script 2048 "script"] [oc-wdir 4096 "wdir"] [oc-wlang 8192 "wlang"]
+   [oc-lexicon 16384 "lexicon"] [oc-style 32768 "style"] [oc-psize 65536 "psize"]
+   [oc-symbols 131072 "symbols"] [oc-symconf 262144 "symconf"]
+   [oc-alts 524288 "alts"] [oc-walts 1048576 "walts"]
+   [oc-order 2097152 "order"] [oc-binary 4194304 "binary"]])
+
+(defn ^:pub ^I32 oil-version [] (return 1))
+(defn ^:pub ^I32 oil-header [] (return 24))
+(defn ^:pub ^I32 oil-has [^I32 caps ^I32 bit]
+  (if (!= (bit-and caps bit) 0) (return 1))
+  (return 0))
+(defn ^:pub ^I32 oil-native-check [^I32 caps ^I32 measured]
+  (if (== (bit-and caps measured) measured) (return 1))
+  (return 0))
+
+(defn ^:pub ^I32 oil-pm [^I32 numerator ^I32 denominator]
+  (comment "Round a rational raw per-mille value half away from zero. A positive denominator is required.")
+  (if (<= denominator 0) (return 0))
+  (let [^I64 n (i64 numerator) ^I64 d (i64 denominator)]
+    (if (< n 0) (return (i32 (- 0 (quot (+ (- 0 n) (quot d 2)) d)))))
+    (return (i32 (quot (+ n (quot d 2)) d)))))
+
+(defn ^:pub ^I32 oil-block-stride [^I32 caps]
+  (return (+ (+ 5 (* 3 (oil-has caps (oc-wdir)))) (oil-has caps (oc-btype)))))
+(defn ^:pub ^I32 oil-line-stride [^I32 caps]
+  (return (+ (+ (+ (+ (+ (+ 6 (oil-has caps (oc-lconf))) (oil-has caps (oc-paras)))
+                       (* 4 (oil-has caps (oc-baseline)))) (* 3 (oil-has caps (oc-rowmetrics))))
+                 (* 8 (oil-has caps (oc-quad)))) (oil-has caps (oc-angle)))))
+(defn ^:pub ^I32 oil-word-base [^I32 caps]
+  (return (+ (+ (+ (+ (+ 6 (oil-has caps (oc-wlang))) (oil-has caps (oc-style)))
+                    (oil-has caps (oc-psize))) (oil-has caps (oc-lexicon))) (oil-has caps (oc-walts)))))
+
+;; Header offsets are public so flat adapters and kin share the same layout.
+(defn ^:pub ^I32 oh-engine [] (return 1))
+(defn ^:pub ^I32 oh-obs-hi [] (return 2))
+(defn ^:pub ^I32 oh-obs-lo [] (return 3))
+(defn ^:pub ^I32 oh-caps [] (return 4))
+(defn ^:pub ^I32 oh-native [] (return 5))
+(defn ^:pub ^I32 oh-seg [] (return 6))
+(defn ^:pub ^I32 oh-ck [] (return 7))
+(defn ^:pub ^I32 oh-conf-max [] (return 8))
+(defn ^:pub ^I32 oh-orient [] (return 9))
+(defn ^:pub ^I32 oh-oconf [] (return 10))
+(defn ^:pub ^I32 oh-deskew [] (return 11))
+(defn ^:pub ^I32 oh-script [] (return 12))
+(defn ^:pub ^I32 oh-sconf [] (return 13))
+(defn ^:pub ^I32 oh-wdir [] (return 14))
+(defn ^:pub ^I32 oh-lorder [] (return 15))
+(defn ^:pub ^I32 oh-lang [] (return 16))
+(defn ^:pub ^I32 oh-lg [] (return 17))
+(defn ^:pub ^I32 oh-nblocks [] (return 18))
+(defn ^:pub ^I32 oh-nlines [] (return 19))
+(defn ^:pub ^I32 oh-nwords [] (return 20))
+(defn ^:pub ^I32 oh-nsc [] (return 21))
+(defn ^:pub ^I32 oh-binary [] (return 22))
+
+(defn ^:pub ^I32 oil-begin [^:mut ^Cells c ^I32 id ^I32 engine ^I32 caps ^I32 measured
+                            ^I32 seg ^I32 ck ^I32 lang ^I32 granularity]
+  (if (== (oil-native-check caps measured) 0) (return -1))
+  (let [^I32 at (cells-len c) ^:mut ^I32 k 0]
+    (cells-push c 28)
+    (cells-push c 3)
+    (cells-push c id)
+    (cells-push c 0)
+    (while (< k 24) (do (cells-push c 0) (set k (+ k 1))))
+    (cells-set c (+ at 4) (oil-version))
+    (cells-set c (+ at 5) engine)
+    (cells-set c (+ at 8) caps)
+    (cells-set c (+ at 9) measured)
+    (cells-set c (+ at 10) seg)
+    (cells-set c (+ at 11) ck)
+    (cells-set c (+ at 12) 1000)
+    (cells-set c (+ at 20) lang)
+    (cells-set c (+ at 21) granularity)
+    (return at)))
+
+(defn ^:pub ^I32 oil-get [^Cells c ^I32 at ^I32 k]
+  (return (cells-at c (+ (+ at 4) k))))
+(defn ^:pub ^I32 oil-set [^:mut ^Cells c ^I32 at ^I32 k ^I32 value]
+  (cells-set c (+ (+ at 4) k) value)
+  (return 0))
+(defn ^:pub ^I32 oil-end [^:mut ^Cells c ^I32 at]
+  (cells-set c at (- (cells-len c) at))
+  (return 0))
+(defn ^:pub ^I32 oil-block-at [^Cells c ^I32 at ^I32 index]
+  (return (+ (+ at 28) (* index (oil-block-stride (oil-get c at (oh-caps)))))))
+(defn ^:pub ^I32 oil-line-at [^Cells c ^I32 at ^I32 index]
+  (let [^I32 n (oil-get c at (oh-nblocks))
+        ^I32 caps (oil-get c at (oh-caps))]
+    (return (+ (oil-block-at c at n) (* index (oil-line-stride caps))))))
+(defn ^:pub ^I32 oil-first-word [^Cells c ^I32 at]
+  (let [^I32 n (oil-get c at (oh-nlines))]
+    (return (oil-line-at c at n))))
+
+;; Groups are always appended in schema order; these builders omit absent
+;; fields. Counts refer to rows, including empty layout lines.
+(defn ^:pub ^I32 oil-block [^:mut ^Cells c ^I32 at ^I32 x ^I32 y ^I32 w ^I32 h
+                            ^I32 conf ^I32 orient ^I32 wdir ^I32 order ^I32 kind]
+  (let [^I32 caps (oil-get c at (oh-caps))]
+    (if (== (oil-has caps (oc-blocks)) 0) (return -1))
+    (cells-push c x) (cells-push c y) (cells-push c w) (cells-push c h) (cells-push c conf)
+    (if (!= (oil-has caps (oc-wdir)) 0)
+      (do (cells-push c orient) (cells-push c wdir) (cells-push c order)))
+    (if (!= (oil-has caps (oc-btype)) 0) (cells-push c kind))
+    (let [^I32 n (oil-get c at (oh-nblocks))] (oil-set c at (oh-nblocks) (+ n 1))))
+  (return 0))
+
+(defn ^:pub ^I32 oil-line [^:mut ^Cells c ^I32 at ^I32 x ^I32 y ^I32 w ^I32 h
+                           ^I32 block ^I32 nwords ^I32 conf ^I32 par
+                           ^I32 bx0 ^I32 by0 ^I32 bx1 ^I32 by1
+                           ^I32 xh ^I32 asc ^I32 desc
+                           ^I32 qx0 ^I32 qy0 ^I32 qx1 ^I32 qy1
+                           ^I32 qx2 ^I32 qy2 ^I32 qx3 ^I32 qy3 ^I32 angle]
+  (let [^I32 caps (oil-get c at (oh-caps))]
+    (cells-push c x) (cells-push c y) (cells-push c w) (cells-push c h)
+    (if (== (oil-has caps (oc-blocks)) 0) (cells-push c -1) (cells-push c block))
+    (cells-push c nwords)
+    (if (!= (oil-has caps (oc-lconf)) 0) (cells-push c conf))
+    (if (!= (oil-has caps (oc-paras)) 0) (cells-push c par))
+    (if (!= (oil-has caps (oc-baseline)) 0)
+      (do (cells-push c bx0) (cells-push c by0) (cells-push c bx1) (cells-push c by1)))
+    (if (!= (oil-has caps (oc-rowmetrics)) 0)
+      (do (cells-push c xh) (cells-push c asc) (cells-push c desc)))
+    (if (!= (oil-has caps (oc-quad)) 0)
+      (do (cells-push c qx0) (cells-push c qy0) (cells-push c qx1) (cells-push c qy1)
+          (cells-push c qx2) (cells-push c qy2) (cells-push c qx3) (cells-push c qy3)))
+    (if (!= (oil-has caps (oc-angle)) 0) (cells-push c angle))
+    (let [^I32 n (oil-get c at (oh-nlines))] (oil-set c at (oh-nlines) (+ n 1))))
+  (return 0))
+
+(defn ^:pub ^I32 oil-word [^:mut ^Cells c ^I32 at ^I32 x ^I32 y ^I32 w ^I32 h
+                           ^I32 line ^I32 conf ^I32 lang ^I32 style ^I32 psize ^I32 lex]
+  (let [^I32 start (cells-len c) ^I32 caps (oil-get c at (oh-caps))]
+    (cells-push c x) (cells-push c y) (cells-push c w) (cells-push c h)
+    (cells-push c line)
+    (if (== (oil-get c at (oh-ck)) (oil-ck-none)) (cells-push c -1) (cells-push c conf))
+    (if (!= (oil-has caps (oc-wlang)) 0) (cells-push c lang))
+    (if (!= (oil-has caps (oc-style)) 0) (cells-push c style))
+    (if (!= (oil-has caps (oc-psize)) 0) (cells-push c psize))
+    (if (!= (oil-has caps (oc-lexicon)) 0) (cells-push c lex))
+    (if (!= (oil-has caps (oc-walts)) 0) (cells-push c 0))
+    (cells-push c 0) ;; symbol count
+    (cells-push c 0) ;; text length
+    (let [^I32 n (oil-get c at (oh-nwords))] (oil-set c at (oh-nwords) (+ n 1)))
+    (return start)))
+
+(defn ^:pub ^I32 oil-word-text [^Cells c ^I32 at ^I32 word]
+  (comment "Length cell, after optional word alternatives.")
+  (let [^I32 caps (oil-get c at (oh-caps))
+        ^:mut ^I32 p (+ word (oil-word-base caps))]
+    (if (!= (oil-has caps (oc-walts)) 0)
+      (let [^I32 count (cells-at c (- p 1)) ^:mut ^I32 i 0]
+        (while (< i count)
+          (do (set p (+ (+ p 2) (cells-at c (+ p 1)))) (set i (+ i 1))))))
+    (return (+ p 1))))
+
+(defn ^:pub ^I32 oil-word-cp [^:mut ^Cells c ^I32 at ^I32 word ^I32 cp]
+  (let [^I32 p (oil-word-text c at word)]
+    (cells-set c p (+ (cells-at c p) 1))
+    (cells-push c cp))
+  (return 0))
+
+(defn ^:pub ^I32 oil-sym [^:mut ^Cells c ^I32 at ^I32 word
+                          ^I32 x ^I32 y ^I32 w ^I32 h ^I32 conf]
+  (if (== (oil-has (oil-get c at (oh-caps)) (oc-symbols)) 0) (return -1))
+  (let [^I32 start (cells-len c) ^I32 p (- (oil-word-text c at word) 1)]
+    (cells-set c p (+ (cells-at c p) 1))
+    (cells-push c x) (cells-push c y) (cells-push c w) (cells-push c h)
+    (if (== (oil-has (oil-get c at (oh-caps)) (oc-symconf)) 0)
+      (cells-push c -1) (cells-push c conf))
+    (cells-push c 0) (cells-push c 0)
+    (return start)))
+
+(defn ^:pub ^I32 oil-sym-cp [^:mut ^Cells c ^I32 sym ^I32 cp]
+  (cells-set c (+ sym 5) (+ (cells-at c (+ sym 5)) 1))
+  (cells-push c cp)
+  (return 0))
+
+(defn ^:pub ^I32 oil-alt [^:mut ^Cells c ^I32 at ^I32 sym ^I32 conf]
+  (if (== (oil-has (oil-get c at (oh-caps)) (oc-alts)) 0) (return -1))
+  (let [^I32 start (cells-len c)]
+    (cells-set c (+ sym 6) (+ (cells-at c (+ sym 6)) 1))
+    (cells-push c 0) (cells-push c conf)
+    (return start)))
+
+(defn ^:pub ^I32 oil-alt-cp [^:mut ^Cells c ^I32 alt ^I32 cp]
+  (cells-set c alt (+ (cells-at c alt) 1))
+  (cells-push c cp)
+  (return 0))
+
+(defn ^:pub ^I32 oil-sym-next [^Cells c ^I32 sym]
+  (let [^:mut ^I32 p (+ (+ sym 7) (cells-at c (+ sym 5)))
+        ^I32 n (cells-at c (+ sym 6)) ^:mut ^I32 i 0]
+    (while (< i n)
+      (do (set p (+ (+ p 2) (cells-at c p))) (set i (+ i 1))))
+    (return p)))
+
+;; The observed identity hash is FNV-1a-64 over canonical UTF-8 bytes. Encoding
+;; code points here keeps non-ASCII model/OS names identical on every host.
+(defn ^I64 oil-hash-byte [^I64 hash ^I32 b]
+  (return (mul64 (bit-xor hash (i64 b)) 1099511628211)))
+
+(defn ^:pub ^I64 oil-obs-hash [^Cells cps ^I32 start ^I32 count]
+  (let [^:mut ^I64 hash -3750763034362895579 ^:mut ^I32 i 0]
+    (while (< i count)
+      (let [^:mut ^I32 cp (cells-at cps (+ start i))]
+        (if (or (< cp 0) (or (> cp 1114111) (and (>= cp 55296) (<= cp 57343))))
+          (set cp 65533))
+        (if (< cp 128)
+          (set hash (oil-hash-byte hash cp))
+          (let [^:mut ^I32 divisor 64 ^:mut ^I32 prefix 192]
+            (if (>= cp 2048) (do (set divisor 4096) (set prefix 224)))
+            (if (>= cp 65536) (do (set divisor 262144) (set prefix 240)))
+            (set hash (oil-hash-byte hash (+ prefix (quot cp divisor))))
+            (while (> divisor 1)
+              (do (set divisor (quot divisor 64))
+                  (set hash (oil-hash-byte hash (+ 128 (rem (quot cp divisor) 64))))))))
+        (set i (+ i 1))))
+    (return hash)))
+
+(defn ^:pub ^I32 oil-observed [^:mut ^Cells c ^I32 at ^Cells cps ^I32 start ^I32 count]
+  (let [^I64 hash (oil-obs-hash cps start count)]
+    (oil-set c at (oh-obs-hi) (i32 (shr64 hash 32)))
+    (oil-set c at (oh-obs-lo) (i32 hash)))
+  (return 0))
+
+(defn ^:pub ^I32 oil-word-next [^Cells c ^I32 at ^I32 word]
+  (let [^I32 text (oil-word-text c at word)
+        ^I32 count (cells-at c (- text 1))
+        ^:mut ^I32 p (+ (+ text 1) (cells-at c text)) ^:mut ^I32 i 0]
+    (while (< i count) (do (set p (oil-sym-next c p)) (set i (+ i 1))))
+    (return p)))
+
+(defn ^I32 oil-insert [^:mut ^Cells c ^I32 p ^I32 value]
+  (let [^:mut ^I32 i (cells-len c)]
+    (cells-push c 0)
+    (while (> i p) (do (cells-set c i (cells-at c (- i 1))) (set i (- i 1))))
+    (cells-set c p value))
+  (return 0))
+
+(defn ^:pub ^I32 oil-walt [^:mut ^Cells c ^I32 at ^I32 word ^I32 conf]
+  (comment "Append alternatives before symbols and before starting the next word; insertion shifts later cells.")
+  (let [^I32 caps (oil-get c at (oh-caps))]
+    (if (== (oil-has caps (oc-walts)) 0) (return -1))
+    (let [^I32 count (+ (+ word (oil-word-base caps)) -1)
+          ^I32 p (- (oil-word-text c at word) 1)]
+      (oil-insert c p conf)
+      (oil-insert c (+ p 1) 0)
+      (cells-set c count (+ (cells-at c count) 1))
+      (return p))))
+
+(defn ^:pub ^I32 oil-walt-cp [^:mut ^Cells c ^I32 alt ^I32 cp]
+  (let [^I32 n (cells-at c (+ alt 1))]
+    (oil-insert c (+ (+ alt 2) n) cp)
+    (cells-set c (+ alt 1) (+ n 1)))
+  (return 0))
