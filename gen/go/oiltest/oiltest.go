@@ -310,3 +310,114 @@ func TestTesseractLineOrderIsNormalizedBeforeItEntersTheWire(emonT *testing.T) {
 	port.AssertEq(emonT, oil.OilBlockField(c, at, 0, 2), 0, "block order uses the same neutral enum")
 	port.AssertEq(emonT, oil.OilTlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics")
 }
+
+func TestFlatTextMustContainUnicodeScalars(emonT *testing.T) {
+	var raw *port.Cells = port.NewCells()
+	var flat *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(raw, 1, oil.OenTesseract(), 0, 0, 1, 0, 0, 0)
+	var i int32 = 4
+	oil.OilLine(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var word int32 = oil.OilWord(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0)
+	oil.OilWordCp(raw, at, word, 65)
+	oil.OilEnd(raw, at)
+	for i < port.CellsLen(raw) {
+		port.CellsPush(flat, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.CellsPush(out, 123)
+	port.CellsSet(flat, word+4, 55296)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "a surrogate is not a Unicode scalar")
+	port.CellsSet(flat, word+4, 1114112)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "code points stop at U+10FFFF")
+	port.CellsSet(flat, word+4, -1)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "negative code point")
+	port.AssertEq(emonT, port.CellsLen(out), 1, "invalid text cannot append a partial answer")
+	port.CellsSet(flat, word+4, 128512)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), 0, "supplementary scalar is valid")
+}
+
+func TestFlatSymbolsAndAlternativesValidateTheirValues(emonT *testing.T) {
+	var raw *port.Cells = port.NewCells()
+	var flat *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var caps int32 = ((oil.OcSymbols() + oil.OcSymconf()) + oil.OcAlts()) + oil.OcWalts()
+	var at int32 = oil.OilBegin(raw, 1, oil.OenTesseract(), caps, caps, 1, 1, 0, 0)
+	var i int32 = 4
+	oil.OilLine(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var word int32 = oil.OilWord(raw, at, 0, 0, 20, 10, 0, 900, 0, 0, -1, 0)
+	oil.OilWordCp(raw, at, word, 65)
+	var wa int32 = oil.OilWalt(raw, at, word, 800)
+	oil.OilWaltCp(raw, wa, 66)
+	var sym int32 = oil.OilSym(raw, at, word, 0, 0, 20, 10, 900)
+	oil.OilSymCp(raw, sym, 65)
+	var alt int32 = oil.OilAlt(raw, at, sym, 700)
+	oil.OilAltCp(raw, alt, 67)
+	oil.OilEnd(raw, at)
+	for i < port.CellsLen(raw) {
+		port.CellsPush(flat, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.CellsSet(flat, wa-2, 55296)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "word alternative scalar")
+	port.CellsSet(flat, wa-2, 66)
+	port.CellsSet(flat, wa-4, 1001)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "word alternative confidence")
+	port.CellsSet(flat, wa-4, 800)
+	port.CellsSet(flat, sym+3, 55296)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "symbol scalar")
+	port.CellsSet(flat, sym+3, 65)
+	port.CellsSet(flat, sym-2, -1)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "negative symbol width")
+	port.CellsSet(flat, sym-2, 20)
+	port.CellsSet(flat, sym, 1001)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "symbol confidence")
+	port.CellsSet(flat, sym, 900)
+	port.CellsSet(flat, alt-2, 1114112)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "symbol alternative scalar")
+	port.CellsSet(flat, alt-2, 67)
+	port.CellsSet(flat, alt-3, 1001)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), -1, "symbol alternative confidence")
+	port.AssertEq(emonT, port.CellsLen(out), 0, "every malformed field is rejected before appending")
+	port.CellsSet(flat, alt-3, 700)
+	port.CellsSet(flat, sym-4, 1)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 20, 10, out), -1, "symbol box also belongs to the request bitmap")
+	port.AssertEq(emonT, port.CellsLen(out), 0, "symbol bounds refusal is atomic")
+	port.CellsSet(flat, sym-4, 0)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 20, 10, out), 0, "repaired form with both kinds of alternatives is valid")
+}
+
+func TestFlatBoxesAndQuadsAreRelativeToTheRequestBitmap(emonT *testing.T) {
+	var raw *port.Cells = port.NewCells()
+	var flat *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var caps int32 = (oil.OcBlocks() + oil.OcBaseline()) + oil.OcQuad()
+	var at int32 = oil.OilBegin(raw, 1, oil.OenTesseract(), caps, caps, 1, 0, 0, 0)
+	var i int32 = 4
+	oil.OilTessBlock(raw, at, 0, 0, 20, 10, -1, 0, 0, 2, 0)
+	oil.OilLine(raw, at, 0, 0, 20, 10, 0, 1, -1, -1, -1, -2, 21, -3, 0, 0, 0, 0, 0, 20, 0, 20, 10, 0, 10, 0)
+	var word int32 = oil.OilWord(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0)
+	oil.OilWordCp(raw, at, word, 65)
+	oil.OilEnd(raw, at)
+	for i < port.CellsLen(raw) {
+		port.CellsPush(flat, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.CellsPush(out, 123)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), -1, "block exceeds the bitmap")
+	port.CellsSet(flat, 26, 19)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), -1, "line exceeds the bitmap")
+	port.CellsSet(flat, 31, 19)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), -1, "quad exceeds the bitmap")
+	port.CellsSet(flat, 41, 19)
+	port.CellsSet(flat, 43, 19)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), -1, "word exceeds the bitmap")
+	port.CellsSet(flat, word-2, 19)
+	port.CellsSet(flat, word-4, -1)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), -1, "negative box origin")
+	port.CellsSet(flat, word-4, 2147483647)
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 2147483647, 10, out), -1, "box end cannot wrap")
+	port.CellsSet(flat, word-4, 0)
+	port.AssertEq(emonT, port.CellsLen(out), 1, "geometry refusals preserve earlier answers")
+	port.AssertEq(emonT, oil.OilFlatInBitmap(flat, 1, 19, 10, out), 0, "signed baseline endpoints remain valid outside bitmap bounds")
+}

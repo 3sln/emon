@@ -1240,6 +1240,18 @@ func OilTessBegin(c *port.Cells, id int32, psm int32, symbols int32, orient int3
 	return at
 }
 
+func oilFlatCpsValid(v *port.Cells, p int32, count int32) int32 {
+	var i int32 = 0
+	for i < count {
+		var cp int32 = port.CellsAt(v, p+i)
+		if (cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343))) {
+			return 0
+		}
+		i += 1
+	}
+	return 1
+}
+
 func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 	var n int32 = port.CellsLen(v)
 	var q int32 = p + 6
@@ -1267,6 +1279,12 @@ func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 			if port.CellsAt(v, q+1) > ((n - q) - 2) {
 				return -1
 			}
+			if (port.CellsAt(v, q) < -1) || (port.CellsAt(v, q) > 1000) {
+				return -1
+			}
+			if oilFlatCpsValid(v, q+2, port.CellsAt(v, q+1)) == 0 {
+				return -1
+			}
 			q = (q + 2) + port.CellsAt(v, q+1)
 			if q > n {
 				return -1
@@ -1290,6 +1308,9 @@ func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 	if port.CellsAt(v, q+1) > ((n - q) - 2) {
 		return -1
 	}
+	if oilFlatCpsValid(v, q+2, port.CellsAt(v, q+1)) == 0 {
+		return -1
+	}
 	q = (q + 2) + port.CellsAt(v, q+1)
 	i = 0
 	for i < count {
@@ -1300,6 +1321,15 @@ func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 			return -1
 		}
 		if port.CellsAt(v, q+5) > ((n - q) - 7) {
+			return -1
+		}
+		if (port.CellsAt(v, q+2) < 0) || (port.CellsAt(v, q+3) < 0) {
+			return -1
+		}
+		if (port.CellsAt(v, q+4) < -1) || (port.CellsAt(v, q+4) > 1000) {
+			return -1
+		}
+		if oilFlatCpsValid(v, q+7, port.CellsAt(v, q+5)) == 0 {
 			return -1
 		}
 		alts = port.CellsAt(v, q+6)
@@ -1319,6 +1349,12 @@ func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 				return -1
 			}
 			if port.CellsAt(v, q) > ((n - q) - 2) {
+				return -1
+			}
+			if (port.CellsAt(v, q+1) < -1) || (port.CellsAt(v, q+1) > 1000) {
+				return -1
+			}
+			if oilFlatCpsValid(v, q+2, port.CellsAt(v, q)) == 0 {
 				return -1
 			}
 			q = (q + 2) + port.CellsAt(v, q)
@@ -1850,10 +1886,9 @@ func oilFlatRowsValid(v *port.Cells, caps int32, nb int32, nl int32) int32 {
 	return 1
 }
 
-func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
-	// Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+func OilFlatCheck(v *port.Cells) int32 {
+	// Validate the complete flat form without mutating any answer arena.
 	var n int32 = port.CellsLen(v)
-	var outAt int32 = port.CellsLen(out)
 	var p int32 = 24
 	var i int32 = 0
 	var caps int32 = 0
@@ -1946,6 +1981,17 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 	if p != n {
 		return -1
 	}
+	return 0
+}
+
+func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
+	// Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+	if OilFlatCheck(v) != 0 {
+		return -1
+	}
+	var n int32 = port.CellsLen(v)
+	var outAt int32 = port.CellsLen(out)
+	var i int32 = 0
 	port.CellsPush(out, n+4)
 	port.CellsPush(out, 3)
 	port.CellsPush(out, id)
@@ -1956,6 +2002,102 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 		i += 1
 	}
 	return OilEnd(out, outAt)
+}
+
+func oilBitmapBoxValid(v *port.Cells, p int32, width int32, height int32) int32 {
+	var x int32 = port.CellsAt(v, p)
+	var y int32 = port.CellsAt(v, p+1)
+	var w int32 = port.CellsAt(v, p+2)
+	var h int32 = port.CellsAt(v, p+3)
+	if (x < 0) || ((y < 0) || ((x > width) || (y > height))) {
+		return 0
+	}
+	if (w > (width - x)) || (h > (height - y)) {
+		return 0
+	}
+	return 1
+}
+
+func OilFlatInBitmap(v *port.Cells, id int32, width int32, height int32, out *port.Cells) int32 {
+	// At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
+	if (width < 0) || (height < 0) {
+		return -1
+	}
+	if OilFlatCheck(v) != 0 {
+		return -1
+	}
+	var caps int32 = port.CellsAt(v, 4)
+	var nb int32 = port.CellsAt(v, 18)
+	var nl int32 = port.CellsAt(v, 19)
+	var nw int32 = port.CellsAt(v, 20)
+	var p int32 = 24
+	var q int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var k int32 = 0
+	var count int32 = 0
+	for i < nb {
+		if oilBitmapBoxValid(v, p, width, height) == 0 {
+			return -1
+		}
+		p += OilBlockStride(caps)
+		i += 1
+	}
+	i = 0
+	for i < nl {
+		if oilBitmapBoxValid(v, p, width, height) == 0 {
+			return -1
+		}
+		if OilHas(caps, OcQuad()) != 0 {
+			q = (((p + 6) + OilHas(caps, OcLconf())) + OilHas(caps, OcParas())) + ((4 * OilHas(caps, OcBaseline())) + (3 * OilHas(caps, OcRowmetrics())))
+			j = 0
+			for j < 4 {
+				if (port.CellsAt(v, q) < 0) || (port.CellsAt(v, q) > width) {
+					return -1
+				}
+				if (port.CellsAt(v, q+1) < 0) || (port.CellsAt(v, q+1) > height) {
+					return -1
+				}
+				q += 2
+				j += 1
+			}
+		}
+		p += OilLineStride(caps)
+		i += 1
+	}
+	i = 0
+	for i < nw {
+		if oilBitmapBoxValid(v, p, width, height) == 0 {
+			return -1
+		}
+		q = p + OilWordBase(caps)
+		if OilHas(caps, OcWalts()) != 0 {
+			count = port.CellsAt(v, q-1)
+			j = 0
+			for j < count {
+				q = (q + 2) + port.CellsAt(v, q+1)
+				j += 1
+			}
+		}
+		count = port.CellsAt(v, q)
+		q = (q + 2) + port.CellsAt(v, q+1)
+		j = 0
+		for j < count {
+			if oilBitmapBoxValid(v, q, width, height) == 0 {
+				return -1
+			}
+			k = port.CellsAt(v, q+6)
+			q = (q + 7) + port.CellsAt(v, q+5)
+			for k > 0 {
+				q = (q + 2) + port.CellsAt(v, q)
+				k -= 1
+			}
+			j += 1
+		}
+		p = q
+		i += 1
+	}
+	return OilFlat(v, id, out)
 }
 
 func OilPolicyConf(c *port.Cells, at int32, word int32) int32 {

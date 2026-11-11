@@ -292,9 +292,14 @@ impl Session {
     // An `ocr` answer from the flat integer form a caller makes of its engine's reading; the form and the record are kin's (`oil-flat`,
     // `emon.ocrport`), so the layout is written once and a malformed form is refused by kin.
     pub fn answer_ocr(&mut self, id: i32, flat: &[i32]) -> Result<(), Fault> {
+        let run = self.run.as_ref().ok_or_else(|| Fault::Usage("no requests are owed".to_string()))?;
+        let req = run.requests().iter().find(|r| r.id() == id && r.kind() == plan::KIND_OCR)
+            .ok_or_else(|| Fault::Usage(format!("request {} is not owed an ocr answer", id)))?;
+        let bitmap = run.bitmap(req.arg(0))
+            .ok_or_else(|| Fault::Usage("the ocr request's bitmap is absent".to_string()))?;
         let mut flat = cells_of(flat);
         let mut out = Cells::new();
-        if emon::oil::oil_flat(&mut flat, id, &mut out) != 0 {
+        if emon::oil::oil_flat_in_bitmap(&mut flat, id, bitmap.width(), bitmap.height(), &mut out) != 0 {
             return Err(Fault::Usage("the ocr form is malformed".to_string()));
         }
         self.answer(cells_vec(&out))

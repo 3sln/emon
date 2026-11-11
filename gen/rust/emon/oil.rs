@@ -1137,6 +1137,17 @@ pub fn oil_tess_begin(mut c: &mut crate::port::Cells, id: i32, psm: i32, symbols
     oil_set(c, at, oh_binary(), binary);
     return at;
 }
+pub(crate) fn oil_flat_cps_valid(v: &mut crate::port::Cells, p: i32, count: i32) -> i32 {
+    let mut i: i32 = 0;
+    while i < count {
+        let cp: i32 = crate::port::cells_at(v, p + i);
+        if (cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343))) {
+            return 0;
+        }
+        i += 1;
+    }
+    return 1;
+}
 pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -> i32 {
     let n: i32 = crate::port::cells_len(v);
     let mut q: i32 = p + 6;
@@ -1164,6 +1175,12 @@ pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -
             if crate::port::cells_at(v, q + 1) > ((n - q) - 2) {
                 return -1;
             }
+            if (crate::port::cells_at(v, q) < -1) || (crate::port::cells_at(v, q) > 1000) {
+                return -1;
+            }
+            if oil_flat_cps_valid(v, q + 2, crate::port::cells_at(v, q + 1)) == 0 {
+                return -1;
+            }
             q = (q + 2) + crate::port::cells_at(v, q + 1);
             if q > n {
                 return -1;
@@ -1187,6 +1204,9 @@ pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -
     if crate::port::cells_at(v, q + 1) > ((n - q) - 2) {
         return -1;
     }
+    if oil_flat_cps_valid(v, q + 2, crate::port::cells_at(v, q + 1)) == 0 {
+        return -1;
+    }
     q = (q + 2) + crate::port::cells_at(v, q + 1);
     i = 0;
     while i < count {
@@ -1197,6 +1217,15 @@ pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -
             return -1;
         }
         if crate::port::cells_at(v, q + 5) > ((n - q) - 7) {
+            return -1;
+        }
+        if (crate::port::cells_at(v, q + 2) < 0) || (crate::port::cells_at(v, q + 3) < 0) {
+            return -1;
+        }
+        if (crate::port::cells_at(v, q + 4) < -1) || (crate::port::cells_at(v, q + 4) > 1000) {
+            return -1;
+        }
+        if oil_flat_cps_valid(v, q + 7, crate::port::cells_at(v, q + 5)) == 0 {
             return -1;
         }
         alts = crate::port::cells_at(v, q + 6);
@@ -1216,6 +1245,12 @@ pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -
                 return -1;
             }
             if crate::port::cells_at(v, q) > ((n - q) - 2) {
+                return -1;
+            }
+            if (crate::port::cells_at(v, q + 1) < -1) || (crate::port::cells_at(v, q + 1) > 1000) {
+                return -1;
+            }
+            if oil_flat_cps_valid(v, q + 2, crate::port::cells_at(v, q)) == 0 {
                 return -1;
             }
             q = (q + 2) + crate::port::cells_at(v, q);
@@ -1735,10 +1770,9 @@ pub(crate) fn oil_flat_rows_valid(v: &mut crate::port::Cells, caps: i32, nb: i32
     }
     return 1;
 }
-pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::Cells) -> i32 {
-    // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+pub fn oil_flat_check(v: &mut crate::port::Cells) -> i32 {
+    // Validate the complete flat form without mutating any answer arena.
     let n: i32 = crate::port::cells_len(v);
-    let out_at: i32 = crate::port::cells_len(out);
     let mut p: i32 = 24;
     let mut i: i32 = 0;
     let mut caps: i32 = 0;
@@ -1831,6 +1865,16 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
     if p != n {
         return -1;
     }
+    return 0;
+}
+pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::Cells) -> i32 {
+    // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+    if oil_flat_check(v) != 0 {
+        return -1;
+    }
+    let n: i32 = crate::port::cells_len(v);
+    let out_at: i32 = crate::port::cells_len(out);
+    let mut i: i32 = 0;
     crate::port::cells_push(out, n + 4);
     crate::port::cells_push(out, 3);
     crate::port::cells_push(out, id);
@@ -1841,6 +1885,100 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
         i += 1;
     }
     return oil_end(out, out_at);
+}
+pub(crate) fn oil_bitmap_box_valid(v: &mut crate::port::Cells, p: i32, width: i32, height: i32) -> i32 {
+    let x: i32 = crate::port::cells_at(v, p);
+    let y: i32 = crate::port::cells_at(v, p + 1);
+    let w: i32 = crate::port::cells_at(v, p + 2);
+    let h: i32 = crate::port::cells_at(v, p + 3);
+    if (x < 0) || ((y < 0) || ((x > width) || (y > height))) {
+        return 0;
+    }
+    if (w > (width - x)) || (h > (height - y)) {
+        return 0;
+    }
+    return 1;
+}
+pub fn oil_flat_in_bitmap(v: &mut crate::port::Cells, id: i32, width: i32, height: i32, mut out: &mut crate::port::Cells) -> i32 {
+    // At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
+    if (width < 0) || (height < 0) {
+        return -1;
+    }
+    if oil_flat_check(v) != 0 {
+        return -1;
+    }
+    let caps: i32 = crate::port::cells_at(v, 4);
+    let nb: i32 = crate::port::cells_at(v, 18);
+    let nl: i32 = crate::port::cells_at(v, 19);
+    let nw: i32 = crate::port::cells_at(v, 20);
+    let mut p: i32 = 24;
+    let mut q: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut k: i32 = 0;
+    let mut count: i32 = 0;
+    while i < nb {
+        if oil_bitmap_box_valid(v, p, width, height) == 0 {
+            return -1;
+        }
+        p += oil_block_stride(caps);
+        i += 1;
+    }
+    i = 0;
+    while i < nl {
+        if oil_bitmap_box_valid(v, p, width, height) == 0 {
+            return -1;
+        }
+        if oil_has(caps, oc_quad()) != 0 {
+            q = (((p + 6) + oil_has(caps, oc_lconf())) + oil_has(caps, oc_paras())) + ((4 * oil_has(caps, oc_baseline())) + (3 * oil_has(caps, oc_rowmetrics())));
+            j = 0;
+            while j < 4 {
+                if (crate::port::cells_at(v, q) < 0) || (crate::port::cells_at(v, q) > width) {
+                    return -1;
+                }
+                if (crate::port::cells_at(v, q + 1) < 0) || (crate::port::cells_at(v, q + 1) > height) {
+                    return -1;
+                }
+                q += 2;
+                j += 1;
+            }
+        }
+        p += oil_line_stride(caps);
+        i += 1;
+    }
+    i = 0;
+    while i < nw {
+        if oil_bitmap_box_valid(v, p, width, height) == 0 {
+            return -1;
+        }
+        q = p + oil_word_base(caps);
+        if oil_has(caps, oc_walts()) != 0 {
+            count = crate::port::cells_at(v, q - 1);
+            j = 0;
+            while j < count {
+                q = (q + 2) + crate::port::cells_at(v, q + 1);
+                j += 1;
+            }
+        }
+        count = crate::port::cells_at(v, q);
+        q = (q + 2) + crate::port::cells_at(v, q + 1);
+        j = 0;
+        while j < count {
+            if oil_bitmap_box_valid(v, q, width, height) == 0 {
+                return -1;
+            }
+            k = crate::port::cells_at(v, q + 6);
+            q = (q + 7) + crate::port::cells_at(v, q + 5);
+            while k > 0 {
+                q = (q + 2) + crate::port::cells_at(v, q);
+                k -= 1;
+            }
+            j += 1;
+        }
+        p = q;
+        i += 1;
+    }
+    return oil_flat(v, id, out);
 }
 pub fn oil_policy_conf(c: &mut crate::port::Cells, at: i32, word: i32) -> i32 {
     return ocal_word(oil_get(c, at, oh_engine()), 0, crate::port::cells_at(c, word + 5));

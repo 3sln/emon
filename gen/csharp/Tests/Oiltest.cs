@@ -306,4 +306,115 @@ public static class Oiltest {
         emon.Testport.AssertEq(Oil.OilBlockField(c, at, 0, 2), 0, "block order uses the same neutral enum");
         emon.Testport.AssertEq(Oil.OilTlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics");
     }
+    [Xunit.Fact]
+    public static void TestFlatTextMustContainUnicodeScalars() {
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells flat = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int at = Oil.OilBegin(raw, 1, Oil.OenTesseract(), 0, 0, 1, 0, 0, 0);
+        int i = 4;
+        Oil.OilLine(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.OilWord(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0);
+        Oil.OilWordCp(raw, at, word, 65);
+        Oil.OilEnd(raw, at);
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Port.CellsPush(@out, 123);
+        emon.Port.CellsSet(flat, word + 4, 55296);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "a surrogate is not a Unicode scalar");
+        emon.Port.CellsSet(flat, word + 4, 1114112);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "code points stop at U+10FFFF");
+        emon.Port.CellsSet(flat, word + 4, -1);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "negative code point");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 1, "invalid text cannot append a partial answer");
+        emon.Port.CellsSet(flat, word + 4, 128512);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), 0, "supplementary scalar is valid");
+    }
+    [Xunit.Fact]
+    public static void TestFlatSymbolsAndAlternativesValidateTheirValues() {
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells flat = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int caps = ((Oil.OcSymbols() + Oil.OcSymconf()) + Oil.OcAlts()) + Oil.OcWalts();
+        int at = Oil.OilBegin(raw, 1, Oil.OenTesseract(), caps, caps, 1, 1, 0, 0);
+        int i = 4;
+        Oil.OilLine(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.OilWord(raw, at, 0, 0, 20, 10, 0, 900, 0, 0, -1, 0);
+        Oil.OilWordCp(raw, at, word, 65);
+        int wa = Oil.OilWalt(raw, at, word, 800);
+        Oil.OilWaltCp(raw, wa, 66);
+        int sym = Oil.OilSym(raw, at, word, 0, 0, 20, 10, 900);
+        Oil.OilSymCp(raw, sym, 65);
+        int alt = Oil.OilAlt(raw, at, sym, 700);
+        Oil.OilAltCp(raw, alt, 67);
+        Oil.OilEnd(raw, at);
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Port.CellsSet(flat, wa - 2, 55296);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "word alternative scalar");
+        emon.Port.CellsSet(flat, wa - 2, 66);
+        emon.Port.CellsSet(flat, wa - 4, 1001);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "word alternative confidence");
+        emon.Port.CellsSet(flat, wa - 4, 800);
+        emon.Port.CellsSet(flat, sym + 3, 55296);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "symbol scalar");
+        emon.Port.CellsSet(flat, sym + 3, 65);
+        emon.Port.CellsSet(flat, sym - 2, -1);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "negative symbol width");
+        emon.Port.CellsSet(flat, sym - 2, 20);
+        emon.Port.CellsSet(flat, sym, 1001);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "symbol confidence");
+        emon.Port.CellsSet(flat, sym, 900);
+        emon.Port.CellsSet(flat, alt - 2, 1114112);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "symbol alternative scalar");
+        emon.Port.CellsSet(flat, alt - 2, 67);
+        emon.Port.CellsSet(flat, alt - 3, 1001);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), -1, "symbol alternative confidence");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 0, "every malformed field is rejected before appending");
+        emon.Port.CellsSet(flat, alt - 3, 700);
+        emon.Port.CellsSet(flat, sym - 4, 1);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 20, 10, @out), -1, "symbol box also belongs to the request bitmap");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 0, "symbol bounds refusal is atomic");
+        emon.Port.CellsSet(flat, sym - 4, 0);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 20, 10, @out), 0, "repaired form with both kinds of alternatives is valid");
+    }
+    [Xunit.Fact]
+    public static void TestFlatBoxesAndQuadsAreRelativeToTheRequestBitmap() {
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells flat = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int caps = (Oil.OcBlocks() + Oil.OcBaseline()) + Oil.OcQuad();
+        int at = Oil.OilBegin(raw, 1, Oil.OenTesseract(), caps, caps, 1, 0, 0, 0);
+        int i = 4;
+        Oil.OilTessBlock(raw, at, 0, 0, 20, 10, -1, 0, 0, 2, 0);
+        Oil.OilLine(raw, at, 0, 0, 20, 10, 0, 1, -1, -1, -1, -2, 21, -3, 0, 0, 0, 0, 0, 20, 0, 20, 10, 0, 10, 0);
+        int word = Oil.OilWord(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0);
+        Oil.OilWordCp(raw, at, word, 65);
+        Oil.OilEnd(raw, at);
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Port.CellsPush(@out, 123);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), -1, "block exceeds the bitmap");
+        emon.Port.CellsSet(flat, 26, 19);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), -1, "line exceeds the bitmap");
+        emon.Port.CellsSet(flat, 31, 19);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), -1, "quad exceeds the bitmap");
+        emon.Port.CellsSet(flat, 41, 19);
+        emon.Port.CellsSet(flat, 43, 19);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), -1, "word exceeds the bitmap");
+        emon.Port.CellsSet(flat, word - 2, 19);
+        emon.Port.CellsSet(flat, word - 4, -1);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), -1, "negative box origin");
+        emon.Port.CellsSet(flat, word - 4, 2147483647);
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 2147483647, 10, @out), -1, "box end cannot wrap");
+        emon.Port.CellsSet(flat, word - 4, 0);
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 1, "geometry refusals preserve earlier answers");
+        emon.Testport.AssertEq(Oil.OilFlatInBitmap(flat, 1, 19, 10, @out), 0, "signed baseline endpoints remain valid outside bitmap bounds");
+    }
 }

@@ -11,7 +11,7 @@
                               oil-begin oil-end oil-line oil-word oil-word-cp
                               oil-sym oil-sym-cp oil-alt oil-alt-cp oil-first-word
                               oil-tess-begin oil-tess-block oil-block-field oil-tlorder oh-lorder oil-sc-put oil-seal oil-set oh-nsc oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
-                              oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat]]
+                              oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat oil-flat-in-bitmap]]
             [kin.lang :refer [defn return let set while if do + - <]]))
 
 (deftest test-capabilities-determine-the-physical-row-strides
@@ -253,3 +253,98 @@
     (assert-eq (oil-get c at (oh-lorder)) 0 "Tesseract top-to-bottom 2 is OIL top-to-bottom 0")
     (assert-eq (oil-block-field c at 0 2) 0 "block order uses the same neutral enum")
     (assert-eq (oil-tlorder c at) 2 "the evidence direction enum retains top-to-bottom semantics")))
+
+(deftest test-flat-text-must-contain-unicode-scalars
+  (let [^Cells raw (new-cells) ^Cells flat (new-cells) ^Cells out (new-cells)
+        ^I32 at (oil-begin raw 1 (oen-tesseract) 0 0 1 0 0 0)
+        ^:mut ^I32 i 4]
+    (oil-line raw at 0 0 20 10 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (let [^I32 word (oil-word raw at 0 0 20 10 0 -1 0 0 -1 0)]
+      (oil-word-cp raw at word 65)
+      (oil-end raw at)
+      (while (< i (cells-len raw))
+        (do (cells-push flat (cells-at raw i)) (set i (+ i 1))))
+      (cells-push out 123)
+      (cells-set flat (+ word 4) 55296)
+      (assert-eq (oil-flat flat 1 out) -1 "a surrogate is not a Unicode scalar")
+      (cells-set flat (+ word 4) 1114112)
+      (assert-eq (oil-flat flat 1 out) -1 "code points stop at U+10FFFF")
+      (cells-set flat (+ word 4) -1)
+      (assert-eq (oil-flat flat 1 out) -1 "negative code point")
+      (assert-eq (cells-len out) 1 "invalid text cannot append a partial answer")
+      (cells-set flat (+ word 4) 128512)
+      (assert-eq (oil-flat flat 1 out) 0 "supplementary scalar is valid"))))
+
+(deftest test-flat-symbols-and-alternatives-validate-their-values
+  (let [^Cells raw (new-cells) ^Cells flat (new-cells) ^Cells out (new-cells)
+        ^I32 caps (+ (+ (+ (oc-symbols) (oc-symconf)) (oc-alts)) (oc-walts))
+        ^I32 at (oil-begin raw 1 (oen-tesseract) caps caps 1 1 0 0)
+        ^:mut ^I32 i 4]
+    (oil-line raw at 0 0 20 10 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (let [^I32 word (oil-word raw at 0 0 20 10 0 900 0 0 -1 0)]
+      (oil-word-cp raw at word 65)
+      (let [^I32 wa (oil-walt raw at word 800)]
+        (oil-walt-cp raw wa 66)
+        (let [^I32 sym (oil-sym raw at word 0 0 20 10 900)]
+          (oil-sym-cp raw sym 65)
+          (let [^I32 alt (oil-alt raw at sym 700)]
+            (oil-alt-cp raw alt 67)
+            (oil-end raw at)
+            (while (< i (cells-len raw))
+              (do (cells-push flat (cells-at raw i)) (set i (+ i 1))))
+            (cells-set flat (- wa 2) 55296)
+            (assert-eq (oil-flat flat 1 out) -1 "word alternative scalar")
+            (cells-set flat (- wa 2) 66)
+            (cells-set flat (- wa 4) 1001)
+            (assert-eq (oil-flat flat 1 out) -1 "word alternative confidence")
+            (cells-set flat (- wa 4) 800)
+            (cells-set flat (+ sym 3) 55296)
+            (assert-eq (oil-flat flat 1 out) -1 "symbol scalar")
+            (cells-set flat (+ sym 3) 65)
+            (cells-set flat (- sym 2) -1)
+            (assert-eq (oil-flat flat 1 out) -1 "negative symbol width")
+            (cells-set flat (- sym 2) 20)
+            (cells-set flat sym 1001)
+            (assert-eq (oil-flat flat 1 out) -1 "symbol confidence")
+            (cells-set flat sym 900)
+            (cells-set flat (- alt 2) 1114112)
+            (assert-eq (oil-flat flat 1 out) -1 "symbol alternative scalar")
+            (cells-set flat (- alt 2) 67)
+            (cells-set flat (- alt 3) 1001)
+            (assert-eq (oil-flat flat 1 out) -1 "symbol alternative confidence")
+            (assert-eq (cells-len out) 0 "every malformed field is rejected before appending")
+            (cells-set flat (- alt 3) 700)
+            (cells-set flat (- sym 4) 1)
+            (assert-eq (oil-flat-in-bitmap flat 1 20 10 out) -1 "symbol box also belongs to the request bitmap")
+            (assert-eq (cells-len out) 0 "symbol bounds refusal is atomic")
+            (cells-set flat (- sym 4) 0)
+            (assert-eq (oil-flat-in-bitmap flat 1 20 10 out) 0 "repaired form with both kinds of alternatives is valid")))))))
+
+(deftest test-flat-boxes-and-quads-are-relative-to-the-request-bitmap
+  (let [^Cells raw (new-cells) ^Cells flat (new-cells) ^Cells out (new-cells)
+        ^I32 caps (+ (+ (oc-blocks) (oc-baseline)) (oc-quad))
+        ^I32 at (oil-begin raw 1 (oen-tesseract) caps caps 1 0 0 0)
+        ^:mut ^I32 i 4]
+    (oil-tess-block raw at 0 0 20 10 -1 0 0 2 0)
+    (oil-line raw at 0 0 20 10 0 1 -1 -1 -1 -2 21 -3 0 0 0 0 0 20 0 20 10 0 10 0)
+    (let [^I32 word (oil-word raw at 0 0 20 10 0 -1 0 0 -1 0)]
+      (oil-word-cp raw at word 65)
+      (oil-end raw at)
+      (while (< i (cells-len raw))
+        (do (cells-push flat (cells-at raw i)) (set i (+ i 1))))
+      (cells-push out 123)
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) -1 "block exceeds the bitmap")
+      (cells-set flat 26 19)
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) -1 "line exceeds the bitmap")
+      (cells-set flat 31 19)
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) -1 "quad exceeds the bitmap")
+      (cells-set flat 41 19) (cells-set flat 43 19)
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) -1 "word exceeds the bitmap")
+      (cells-set flat (- word 2) 19)
+      (cells-set flat (- word 4) -1)
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) -1 "negative box origin")
+      (cells-set flat (- word 4) 2147483647)
+      (assert-eq (oil-flat-in-bitmap flat 1 2147483647 10 out) -1 "box end cannot wrap")
+      (cells-set flat (- word 4) 0)
+      (assert-eq (cells-len out) 1 "geometry refusals preserve earlier answers")
+      (assert-eq (oil-flat-in-bitmap flat 1 19 10 out) 0 "signed baseline endpoints remain valid outside bitmap bounds"))))

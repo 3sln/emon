@@ -1137,6 +1137,17 @@ public final class Oil {
         oilSet(c, at, ohBinary(), binary);
         return at;
     }
+    public static int oilFlatCpsValid(emon.Port.Cells v, int p, int count) {
+        int i = 0;
+        while (i < count) {
+            int cp = emon.Port.cellsAt(v, p + i);
+            if ((cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343)))) {
+                return 0;
+            }
+            i += 1;
+        }
+        return 1;
+    }
     public static int oilFlatWordEnd(emon.Port.Cells v, int p, int caps) {
         int n = emon.Port.cellsLen(v);
         int q = p + 6;
@@ -1164,6 +1175,12 @@ public final class Oil {
                 if (emon.Port.cellsAt(v, q + 1) > ((n - q) - 2)) {
                     return -1;
                 }
+                if ((emon.Port.cellsAt(v, q) < -1) || (emon.Port.cellsAt(v, q) > 1000)) {
+                    return -1;
+                }
+                if (oilFlatCpsValid(v, q + 2, emon.Port.cellsAt(v, q + 1)) == 0) {
+                    return -1;
+                }
                 q = (q + 2) + emon.Port.cellsAt(v, q + 1);
                 if (q > n) {
                     return -1;
@@ -1187,6 +1204,9 @@ public final class Oil {
         if (emon.Port.cellsAt(v, q + 1) > ((n - q) - 2)) {
             return -1;
         }
+        if (oilFlatCpsValid(v, q + 2, emon.Port.cellsAt(v, q + 1)) == 0) {
+            return -1;
+        }
         q = (q + 2) + emon.Port.cellsAt(v, q + 1);
         i = 0;
         while (i < count) {
@@ -1197,6 +1217,15 @@ public final class Oil {
                 return -1;
             }
             if (emon.Port.cellsAt(v, q + 5) > ((n - q) - 7)) {
+                return -1;
+            }
+            if ((emon.Port.cellsAt(v, q + 2) < 0) || (emon.Port.cellsAt(v, q + 3) < 0)) {
+                return -1;
+            }
+            if ((emon.Port.cellsAt(v, q + 4) < -1) || (emon.Port.cellsAt(v, q + 4) > 1000)) {
+                return -1;
+            }
+            if (oilFlatCpsValid(v, q + 7, emon.Port.cellsAt(v, q + 5)) == 0) {
                 return -1;
             }
             alts = emon.Port.cellsAt(v, q + 6);
@@ -1216,6 +1245,12 @@ public final class Oil {
                     return -1;
                 }
                 if (emon.Port.cellsAt(v, q) > ((n - q) - 2)) {
+                    return -1;
+                }
+                if ((emon.Port.cellsAt(v, q + 1) < -1) || (emon.Port.cellsAt(v, q + 1) > 1000)) {
+                    return -1;
+                }
+                if (oilFlatCpsValid(v, q + 2, emon.Port.cellsAt(v, q)) == 0) {
                     return -1;
                 }
                 q = (q + 2) + emon.Port.cellsAt(v, q);
@@ -1735,10 +1770,9 @@ public final class Oil {
         }
         return 1;
     }
-    public static int oilFlat(emon.Port.Cells v, int id, emon.Port.Cells out) {
-        // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+    public static int oilFlatCheck(emon.Port.Cells v) {
+        // Validate the complete flat form without mutating any answer arena.
         int n = emon.Port.cellsLen(v);
-        int outAt = emon.Port.cellsLen(out);
         int p = 24;
         int i = 0;
         int caps = 0;
@@ -1831,6 +1865,16 @@ public final class Oil {
         if (p != n) {
             return -1;
         }
+        return 0;
+    }
+    public static int oilFlat(emon.Port.Cells v, int id, emon.Port.Cells out) {
+        // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
+        if (oilFlatCheck(v) != 0) {
+            return -1;
+        }
+        int n = emon.Port.cellsLen(v);
+        int outAt = emon.Port.cellsLen(out);
+        int i = 0;
         emon.Port.cellsPush(out, n + 4);
         emon.Port.cellsPush(out, 3);
         emon.Port.cellsPush(out, id);
@@ -1841,6 +1885,100 @@ public final class Oil {
             i += 1;
         }
         return oilEnd(out, outAt);
+    }
+    public static int oilBitmapBoxValid(emon.Port.Cells v, int p, int width, int height) {
+        int x = emon.Port.cellsAt(v, p);
+        int y = emon.Port.cellsAt(v, p + 1);
+        int w = emon.Port.cellsAt(v, p + 2);
+        int h = emon.Port.cellsAt(v, p + 3);
+        if ((x < 0) || ((y < 0) || ((x > width) || (y > height)))) {
+            return 0;
+        }
+        if ((w > (width - x)) || (h > (height - y))) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int oilFlatInBitmap(emon.Port.Cells v, int id, int width, int height, emon.Port.Cells out) {
+        // At an adapter boundary the bitmap supplies the bounds absent from the wire header. Signed baselines are not boxes and may extend outside it.
+        if ((width < 0) || (height < 0)) {
+            return -1;
+        }
+        if (oilFlatCheck(v) != 0) {
+            return -1;
+        }
+        int caps = emon.Port.cellsAt(v, 4);
+        int nb = emon.Port.cellsAt(v, 18);
+        int nl = emon.Port.cellsAt(v, 19);
+        int nw = emon.Port.cellsAt(v, 20);
+        int p = 24;
+        int q = 0;
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        int count = 0;
+        while (i < nb) {
+            if (oilBitmapBoxValid(v, p, width, height) == 0) {
+                return -1;
+            }
+            p += oilBlockStride(caps);
+            i += 1;
+        }
+        i = 0;
+        while (i < nl) {
+            if (oilBitmapBoxValid(v, p, width, height) == 0) {
+                return -1;
+            }
+            if (oilHas(caps, ocQuad()) != 0) {
+                q = (((p + 6) + oilHas(caps, ocLconf())) + oilHas(caps, ocParas())) + ((4 * oilHas(caps, ocBaseline())) + (3 * oilHas(caps, ocRowmetrics())));
+                j = 0;
+                while (j < 4) {
+                    if ((emon.Port.cellsAt(v, q) < 0) || (emon.Port.cellsAt(v, q) > width)) {
+                        return -1;
+                    }
+                    if ((emon.Port.cellsAt(v, q + 1) < 0) || (emon.Port.cellsAt(v, q + 1) > height)) {
+                        return -1;
+                    }
+                    q += 2;
+                    j += 1;
+                }
+            }
+            p += oilLineStride(caps);
+            i += 1;
+        }
+        i = 0;
+        while (i < nw) {
+            if (oilBitmapBoxValid(v, p, width, height) == 0) {
+                return -1;
+            }
+            q = p + oilWordBase(caps);
+            if (oilHas(caps, ocWalts()) != 0) {
+                count = emon.Port.cellsAt(v, q - 1);
+                j = 0;
+                while (j < count) {
+                    q = (q + 2) + emon.Port.cellsAt(v, q + 1);
+                    j += 1;
+                }
+            }
+            count = emon.Port.cellsAt(v, q);
+            q = (q + 2) + emon.Port.cellsAt(v, q + 1);
+            j = 0;
+            while (j < count) {
+                if (oilBitmapBoxValid(v, q, width, height) == 0) {
+                    return -1;
+                }
+                k = emon.Port.cellsAt(v, q + 6);
+                q = (q + 7) + emon.Port.cellsAt(v, q + 5);
+                while (k > 0) {
+                    q = (q + 2) + emon.Port.cellsAt(v, q);
+                    k -= 1;
+                }
+                j += 1;
+            }
+            p = q;
+            i += 1;
+        }
+        return oilFlat(v, id, out);
     }
     public static int oilPolicyConf(emon.Port.Cells c, int at, int word) {
         return Ocalib.ocalWord(oilGet(c, at, ohEngine()), 0, emon.Port.cellsAt(c, word + 5));

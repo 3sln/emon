@@ -304,3 +304,114 @@ fn test_tesseract_line_order_is_normalized_before_it_enters_the_wire() {
     crate::testport::assert_eq(oil_block_field(c, at, 0, 2), 0, "block order uses the same neutral enum");
     crate::testport::assert_eq(oil_tlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics");
 }
+#[test]
+fn test_flat_text_must_contain_unicode_scalars() {
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(raw, 1, oen_tesseract(), 0, 0, 1, 0, 0, 0);
+    let mut i: i32 = 4;
+    oil_line(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let word: i32 = oil_word(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0);
+    oil_word_cp(raw, at, word, 65);
+    oil_end(raw, at);
+    while i < crate::port::cells_len(raw) {
+        crate::port::cells_push(flat, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::port::cells_push(out, 123);
+    crate::port::cells_set(flat, word + 4, 55296);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "a surrogate is not a Unicode scalar");
+    crate::port::cells_set(flat, word + 4, 1114112);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "code points stop at U+10FFFF");
+    crate::port::cells_set(flat, word + 4, -1);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "negative code point");
+    crate::testport::assert_eq(crate::port::cells_len(out), 1, "invalid text cannot append a partial answer");
+    crate::port::cells_set(flat, word + 4, 128512);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), 0, "supplementary scalar is valid");
+}
+#[test]
+fn test_flat_symbols_and_alternatives_validate_their_values() {
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let caps: i32 = ((oc_symbols() + oc_symconf()) + oc_alts()) + oc_walts();
+    let at: i32 = oil_begin(raw, 1, oen_tesseract(), caps, caps, 1, 1, 0, 0);
+    let mut i: i32 = 4;
+    oil_line(raw, at, 0, 0, 20, 10, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let word: i32 = oil_word(raw, at, 0, 0, 20, 10, 0, 900, 0, 0, -1, 0);
+    oil_word_cp(raw, at, word, 65);
+    let wa: i32 = oil_walt(raw, at, word, 800);
+    oil_walt_cp(raw, wa, 66);
+    let sym: i32 = oil_sym(raw, at, word, 0, 0, 20, 10, 900);
+    oil_sym_cp(raw, sym, 65);
+    let alt: i32 = oil_alt(raw, at, sym, 700);
+    oil_alt_cp(raw, alt, 67);
+    oil_end(raw, at);
+    while i < crate::port::cells_len(raw) {
+        crate::port::cells_push(flat, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::port::cells_set(flat, wa - 2, 55296);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "word alternative scalar");
+    crate::port::cells_set(flat, wa - 2, 66);
+    crate::port::cells_set(flat, wa - 4, 1001);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "word alternative confidence");
+    crate::port::cells_set(flat, wa - 4, 800);
+    crate::port::cells_set(flat, sym + 3, 55296);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "symbol scalar");
+    crate::port::cells_set(flat, sym + 3, 65);
+    crate::port::cells_set(flat, sym - 2, -1);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "negative symbol width");
+    crate::port::cells_set(flat, sym - 2, 20);
+    crate::port::cells_set(flat, sym, 1001);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "symbol confidence");
+    crate::port::cells_set(flat, sym, 900);
+    crate::port::cells_set(flat, alt - 2, 1114112);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "symbol alternative scalar");
+    crate::port::cells_set(flat, alt - 2, 67);
+    crate::port::cells_set(flat, alt - 3, 1001);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), -1, "symbol alternative confidence");
+    crate::testport::assert_eq(crate::port::cells_len(out), 0, "every malformed field is rejected before appending");
+    crate::port::cells_set(flat, alt - 3, 700);
+    crate::port::cells_set(flat, sym - 4, 1);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 20, 10, out), -1, "symbol box also belongs to the request bitmap");
+    crate::testport::assert_eq(crate::port::cells_len(out), 0, "symbol bounds refusal is atomic");
+    crate::port::cells_set(flat, sym - 4, 0);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 20, 10, out), 0, "repaired form with both kinds of alternatives is valid");
+}
+#[test]
+fn test_flat_boxes_and_quads_are_relative_to_the_request_bitmap() {
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let caps: i32 = (oc_blocks() + oc_baseline()) + oc_quad();
+    let at: i32 = oil_begin(raw, 1, oen_tesseract(), caps, caps, 1, 0, 0, 0);
+    let mut i: i32 = 4;
+    oil_tess_block(raw, at, 0, 0, 20, 10, -1, 0, 0, 2, 0);
+    oil_line(raw, at, 0, 0, 20, 10, 0, 1, -1, -1, -1, -2, 21, -3, 0, 0, 0, 0, 0, 20, 0, 20, 10, 0, 10, 0);
+    let word: i32 = oil_word(raw, at, 0, 0, 20, 10, 0, -1, 0, 0, -1, 0);
+    oil_word_cp(raw, at, word, 65);
+    oil_end(raw, at);
+    while i < crate::port::cells_len(raw) {
+        crate::port::cells_push(flat, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::port::cells_push(out, 123);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), -1, "block exceeds the bitmap");
+    crate::port::cells_set(flat, 26, 19);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), -1, "line exceeds the bitmap");
+    crate::port::cells_set(flat, 31, 19);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), -1, "quad exceeds the bitmap");
+    crate::port::cells_set(flat, 41, 19);
+    crate::port::cells_set(flat, 43, 19);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), -1, "word exceeds the bitmap");
+    crate::port::cells_set(flat, word - 2, 19);
+    crate::port::cells_set(flat, word - 4, -1);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), -1, "negative box origin");
+    crate::port::cells_set(flat, word - 4, 2147483647);
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 2147483647, 10, out), -1, "box end cannot wrap");
+    crate::port::cells_set(flat, word - 4, 0);
+    crate::testport::assert_eq(crate::port::cells_len(out), 1, "geometry refusals preserve earlier answers");
+    crate::testport::assert_eq(oil_flat_in_bitmap(flat, 1, 19, 10, out), 0, "signed baseline endpoints remain valid outside bitmap bounds");
+}
