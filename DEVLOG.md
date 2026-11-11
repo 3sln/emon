@@ -4121,7 +4121,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [ ] P13.14 — K1 kin: engine table recorded first in transcripts, pack resolution, roles; `release/packs/packs.edn` → `bb packs --emit` → `kin/packdata.kin` + `packs.json`; turnkey defaults table. After P13.2.
 - [ ] P13.15 — K2 native adapter ABI (`emon_adapter.h`), `libemon_ocr_tesseract`, core `libemon` without Tesseract, `emon_engines_*` registry and step-loop self-fulfilment.
 - [ ] P13.16 — K3 host registries: Go (cgo adapters), Java, C#, Rust, JS, pod, CLI; delete the per-host Tesseract twins.
-- [ ] P13.17 — K4 packs infrastructure: append-only `packs` GitHub release + R2 mirror `packs.emon.3sln.com` (public read; CI-only scoped write token), `bb packs build|verify|bundle|list`, licence allowlist.
+- [ ] P13.17 — K4 packs infrastructure: append-only `packs` GitHub release + R2 mirror `emon-packs.3sln.com` (public read; CI-only scoped write token), `bb packs build|verify|bundle|list`, licence allowlist.
 - [ ] P13.18 — K5 packaging + release: `bb package` per piece, core/adapters/turnkey layering check, native bundle per triple, `release.yml` per-package jobs and `only` retry.
 - [ ] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8).
 - [ ] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing needs a maintainer-provided tag-push credential).
@@ -14306,7 +14306,7 @@ Plan: K0-K9 of `.claude/coord/pkg1-report.md`. This replaces dart1's two libemon
 - **PP-OCR ships for every target:** crates feature, Go, Maven, NuGet, npm, pub and the native bundle. The earlier "native + npm only" proposal is withdrawn.
 - **Go adapters keep cgo.** No purego. The core Go module stays pure Go.
 - **Packs:**
-  - The `packs` GitHub release is the canonical store, and an R2 mirror at `packs.emon.3sln.com` serves CORS reads.
+  - The `packs` GitHub release is the canonical store, and an R2 mirror at `emon-packs.3sln.com` serves CORS reads. The host is a first-level subdomain, because Cloudflare's universal certificate does not cover `packs.emon.3sln.com`.
   - Reads are public and anonymous; SDKs carry no credentials.
   - Only CI holds a write token scoped to that bucket.
   - Integrity rests on the catalogue SHA-256s, not on the host.
