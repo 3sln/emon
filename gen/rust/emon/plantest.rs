@@ -2,6 +2,7 @@
 // source: emon.plantest
 
 use crate::emon::evidence::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 use crate::emon::planprobe::*;
 
@@ -192,23 +193,23 @@ fn test_answers_carry_the_id_and_a_status() {
 #[test]
 fn test_an_ocr_answer_holds_words_with_their_text() {
     let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let at: i32 = an_ocr(c, 3);
-    let w0: i32 = an_ocr_word(c, at, 10, 20, 300, 40, 912, 0, 1);
-    an_ocr_cp(c, w0, 72);
-    an_ocr_cp(c, w0, 105);
-    let w1: i32 = an_ocr_word(c, at, 400, 20, 50, 40, 870, 0, 1);
-    an_ocr_cp(c, w1, 128512);
-    an_ocr_end(c, at);
-    crate::testport::assert_eq(an_ocr_count(c, at), 2, "two words");
-    crate::testport::assert_eq(an_ocr_first(c, at), 5, "the first word follows the count");
-    crate::testport::assert_eq(an_ocr_first(c, at), w0, "and is w0");
-    crate::testport::assert_eq(aw_get(c, w0, aw_x()), 10, "x");
-    crate::testport::assert_eq(aw_get(c, w0, aw_conf()), 912, "confidence x10");
-    crate::testport::assert_eq(aw_get(c, w0, aw_len()), 2, "two code points");
-    crate::testport::assert_eq(aw_cp(c, w0, 1), 105, "i");
-    crate::testport::assert_eq(aw_next(c, w0), w1, "the next word");
-    crate::testport::assert_eq(aw_cp(c, w1, 0), 128512, "a code point outside the BMP is one cell");
-    crate::testport::assert_eq(aw_next(c, w1), crate::port::cells_len(c), "and the last ends the record");
+    let at: i32 = oil_begin(c, 3, 1, 256, 256, 1, 1, 0, 0);
+    let w0: i32 = oil_word(c, at, 10, 20, 300, 40, -1, 912, 0, 0, -1, 0);
+    oil_word_cp(c, at, w0, 72);
+    oil_word_cp(c, at, w0, 105);
+    let w1: i32 = oil_word(c, at, 400, 20, 50, 40, -1, 870, 0, 0, -1, 0);
+    oil_word_cp(c, at, w1, 128512);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_nwords(c, at), 2, "two words");
+    crate::testport::assert_eq(oil_first_word(c, at), 28, "the first word follows the OIL header");
+    crate::testport::assert_eq(oil_first_word(c, at), w0, "and is w0");
+    crate::testport::assert_eq(crate::port::cells_at(c, w0), 10, "x");
+    crate::testport::assert_eq(crate::port::cells_at(c, w0 + 5), 912, "confidence x10");
+    crate::testport::assert_eq(oil_wlen(c, at, w0), 2, "two code points");
+    crate::testport::assert_eq(oil_wcp(c, at, w0, 1), 105, "i");
+    crate::testport::assert_eq(oil_word_next(c, at, w0), w1, "the next word");
+    crate::testport::assert_eq(oil_wcp(c, at, w1, 0), 128512, "a code point outside the BMP is one cell");
+    crate::testport::assert_eq(oil_word_next(c, at, w1), crate::port::cells_len(c), "and the last ends the record");
     crate::testport::assert_eq(rec_len(c, at), crate::port::cells_len(c), "the record's length covers them");
 }
 #[test]
@@ -301,11 +302,11 @@ fn test_the_probe_asks_in_two_rounds_and_then_writes_evidence() {
     let second4: i32 = rec_next(rq, 0);
     crate::testport::assert_eq(rec_id(rq, second4), 4, "id 4");
     crate::testport::assert_eq(rq_arg(rq, second4, 0), 2, "of the decode's bitmap");
-    let o3: i32 = an_ocr(an, 3);
-    let w: i32 = an_ocr_word(an, o3, 6, 3, 40, 9, 911, 0, 0);
-    an_ocr_cp(an, w, 72);
-    an_ocr_cp(an, w, 105);
-    an_ocr_end(an, o3);
+    let o3: i32 = oil_begin(an, 3, 1, 256, 256, 1, 1, 0, 0);
+    let w: i32 = oil_word(an, o3, 6, 3, 40, 9, -1, 911, 0, 0, -1, 0);
+    oil_word_cp(an, o3, w, 72);
+    oil_word_cp(an, o3, w, 105);
+    oil_end(an, o3);
     an_fail(an, 3, 4, 1);
     crate::port::cells_drop(rq, 0);
     crate::testport::assert_eq(pt_unit(s, an, rq, et, t), 0, "round 2 is done");

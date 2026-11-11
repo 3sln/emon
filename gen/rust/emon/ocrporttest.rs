@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrport::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 
 pub(crate) fn t_sep(mut c: &mut crate::port::Cells) -> i32 {
@@ -366,54 +367,121 @@ pub(crate) fn t_p4(mut c: &mut crate::port::Cells, a: i32, b: i32, d: i32, e: i3
     return 0;
 }
 pub(crate) fn t_flat(mut v: &mut crate::port::Cells) -> i32 {
-    t_p4(v, 0, 0, 2, -85);
-    t_p4(v, 90, sc_latn(), 17, 187);
-    t_p4(v, 1, 1, 2, 1);
-    t_p2(v, 640, 480);
-    t_p4(v, 10, 18, 70, 44);
-    t_p4(v, 10, 60, 80, 62);
-    t_p4(v, 0, 0, 0, -1);
-    t_p2(v, -1, -1);
-    t_p4(v, 5, 15, 80, 50);
-    t_p4(v, 0, 0, 2, 10);
-    t_p4(v, 20, 30, 40, 900);
-    t_p4(v, 0, 0, 65, 1701734144);
-    t_p4(v, 11, 3, 2, 72);
-    t_p4(v, 105, 2, 10, 20);
-    t_p4(v, 15, 40, 950, 1);
-    t_p4(v, 72, 2, 120, 1);
-    t_p4(v, 75, 80, 2, 78);
-    t_p4(v, 77, 25, 20, 15);
-    t_p4(v, 40, 900, 1, 105);
-    t_p4(v, 0, 50, 20, 30);
-    t_p4(v, 40, 800, 0, 0);
-    t_p4(v, 0, 0, -1, 0);
-    t_p2(v, 1, 33);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 1);
     crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 7339791);
+    crate::port::cells_push(v, 7339791);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 1000);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 187);
+    crate::port::cells_push(v, -85);
+    crate::port::cells_push(v, 1281455214);
+    crate::port::cells_push(v, 17);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 5);
+    crate::port::cells_push(v, 15);
+    crate::port::cells_push(v, 80);
+    crate::port::cells_push(v, 50);
+    crate::port::cells_push(v, -1);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 10);
+    crate::port::cells_push(v, 18);
+    crate::port::cells_push(v, 70);
+    crate::port::cells_push(v, 44);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 10);
+    crate::port::cells_push(v, 60);
+    crate::port::cells_push(v, 80);
+    crate::port::cells_push(v, 62);
+    crate::port::cells_push(v, 10);
+    crate::port::cells_push(v, 20);
+    crate::port::cells_push(v, 30);
+    crate::port::cells_push(v, 40);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 900);
+    crate::port::cells_push(v, 1701734144);
+    crate::port::cells_push(v, 65);
+    crate::port::cells_push(v, 11);
+    crate::port::cells_push(v, 3);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 72);
+    crate::port::cells_push(v, 105);
+    crate::port::cells_push(v, 10);
+    crate::port::cells_push(v, 20);
+    crate::port::cells_push(v, 15);
+    crate::port::cells_push(v, 40);
+    crate::port::cells_push(v, 950);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 72);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 120);
+    crate::port::cells_push(v, 75);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 80);
+    crate::port::cells_push(v, 78);
+    crate::port::cells_push(v, 77);
+    crate::port::cells_push(v, 25);
+    crate::port::cells_push(v, 20);
+    crate::port::cells_push(v, 15);
+    crate::port::cells_push(v, 40);
+    crate::port::cells_push(v, 900);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 105);
+    crate::port::cells_push(v, 50);
+    crate::port::cells_push(v, 20);
+    crate::port::cells_push(v, 30);
+    crate::port::cells_push(v, 40);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 800);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, -1);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 33);
     return 0;
 }
 pub(crate) fn t_built(mut c: &mut crate::port::Cells) -> i32 {
-    let at: i32 = an_ocr(c, 9);
-    let w0: i32 = an_ocr_word(c, at, 10, 20, 30, 40, 900, 0, 0);
-    an_ocr_cp(c, w0, 72);
-    an_ocr_cp(c, w0, 105);
-    let w1: i32 = an_ocr_word(c, at, 50, 20, 30, 40, 800, 0, 0);
-    an_ocr_cp(c, w1, 33);
-    ox_begin(c, 0, 0, 2, -85, 90, sc_latn(), 17, 187, 1, 1, 1, 640, 480);
-    ox_line(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 0, -1, -1, -1);
-    ox_block(c, 5, 15, 80, 50, 0, 0, 2);
-    let x0: i32 = ox_word(c, 65, 1701734144, 11, 3);
-    let s0: i32 = ox_sym(c, x0, 10, 20, 15, 40, 950);
-    ox_sym_cp(c, s0, 72);
-    let a0: i32 = ox_alt(c, s0, 120);
-    ox_alt_cp(c, a0, 75);
-    let a1: i32 = ox_alt(c, s0, 80);
-    ox_alt_cp(c, a1, 78);
-    ox_alt_cp(c, a1, 77);
-    let s1: i32 = ox_sym(c, x0, 25, 20, 15, 40, 900);
-    ox_sym_cp(c, s1, 105);
-    ox_word(c, 0, 0, -1, 0);
-    an_ocr_end(c, at);
+    let at: i32 = oil_tess_begin(c, 9, 3, 1, 0, 0, 2, -85, 90, sc_latn(), 17, 187, 1);
+    oil_tess_block(c, at, 5, 15, 80, 50, -1, 0, 0, 2, 0);
+    oil_line(c, at, 10, 18, 70, 44, 0, 2, -1, 0, 10, 60, 80, 62, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let w0: i32 = oil_word(c, at, 10, 20, 30, 40, 0, 900, 1701734144, 65, 11, 3);
+    oil_word_cp(c, at, w0, 72);
+    oil_word_cp(c, at, w0, 105);
+    let s0: i32 = oil_sym(c, at, w0, 10, 20, 15, 40, 950);
+    oil_sym_cp(c, s0, 72);
+    let a0: i32 = oil_alt(c, at, s0, 120);
+    oil_alt_cp(c, a0, 75);
+    let a1: i32 = oil_alt(c, at, s0, 80);
+    oil_alt_cp(c, a1, 78);
+    oil_alt_cp(c, a1, 77);
+    let s1: i32 = oil_sym(c, at, w0, 25, 20, 15, 40, 900);
+    oil_sym_cp(c, s1, 105);
+    let w1: i32 = oil_word(c, at, 50, 20, 30, 40, 0, 800, 0, 0, -1, 1);
+    oil_word_cp(c, at, w1, 33);
+    oil_end(c, at);
     return 0;
 }
 pub(crate) fn t_same(emon_t: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells) -> i32 {
@@ -441,7 +509,7 @@ fn test_the_flat_form_is_the_record_the_builders_write() {
     let want: &mut crate::port::Cells = &mut crate::port::Cells::new();
     t_flat(v);
     t_built(want);
-    crate::testport::assert_eq(ox_flat(v, 9, got), 0, "accepted");
+    crate::testport::assert_eq(oil_flat(v, 9, got), 0, "accepted");
     t_same(0, got, want);
 }
 pub(crate) fn t_refuse(emon_t: i32, drop: i32, at: i32, val: i32, msg: &str) -> i32 {
@@ -455,23 +523,23 @@ pub(crate) fn t_refuse(emon_t: i32, drop: i32, at: i32, val: i32, msg: &str) -> 
     if at >= 0 {
         crate::port::cells_set(v, at, val);
     }
-    crate::testport::assert_eq(ox_flat(v, 9, got), -1, msg);
+    crate::testport::assert_eq(oil_flat(v, 9, got), -1, msg);
     crate::testport::assert_eq(crate::port::cells_len(got), 0, msg);
     return 0;
 }
 #[test]
 fn test_a_flat_form_whose_counts_run_past_it_is_refused_and_writes_nothing() {
     t_refuse(0, 1, -1, 0, "the last word's symbol count is gone");
-    t_refuse(0, 0, 10, -1, "a negative count of words");
-    t_refuse(0, 0, 8, 100000, "more lines than cells");
-    t_refuse(0, 0, 46, 2000000000, "a text longer than the form, without overflowing");
+    t_refuse(0, 0, 20, -1, "a negative count of words");
+    t_refuse(0, 0, 19, 100000, "more lines than cells");
+    t_refuse(0, 0, 55, 2000000000, "a text longer than the form, without overflowing");
 }
 #[test]
 fn test_a_flat_form_with_a_header_cut_short_is_refused() {
     let v: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let got: &mut crate::port::Cells = &mut crate::port::Cells::new();
     t_p4(v, 0, 0, 2, 0);
-    crate::testport::assert_eq(ox_flat(v, 9, got), -1, "a header cut short");
+    crate::testport::assert_eq(oil_flat(v, 9, got), -1, "a header cut short");
     crate::testport::assert_eq(crate::port::cells_len(got), 0, "and nothing is written");
 }
 #[test]

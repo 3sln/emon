@@ -2,7 +2,7 @@
 ;; walkers and their refusals; and the probe unit driven by hand through its two
 ;; rounds (the hosts drive it for real, `bb plan`).
 (ns emon.plantest
-  (:require [emon.lang :refer [I32 Blob Src Cells Text]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-nwords oil-first-word oil-wlen oil-wcp oil-word-next]] [emon.lang :refer [I32 Blob Src Cells Text]]
             [emon.test :refer [deftest assert-eq assert-that assert-text text-blob
                                new-cells new-text]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop src-of-blob]]
@@ -18,9 +18,9 @@
                                rq-arg rq-nargs rq-render rq-decode rq-ocr rq-ocr-lang
                                rq-ocr-end rq-bytes
                                an-status an-arg an-find an-ok an-fail an-render
-                               an-decode an-decode-img an-ocr an-ocr-word an-ocr-cp an-ocr-end
-                               an-bytes an-ocr-count an-ocr-first aw-get aw-cp aw-next
-                               aw-x aw-conf aw-len]]
+                               an-decode an-decode-img
+                               an-bytes
+                                 ]]
             [emon.planprobe :refer [pp-unit]]
             [emon.evidence :refer [ev-emit ow-count im-count]]
             [kin.lang :refer [defn return let set while if do comment
@@ -201,23 +201,23 @@
 
 (deftest test-an-ocr-answer-holds-words-with-their-text
   (let [^Cells c (new-cells)
-        ^I32 at (an-ocr c 3)
-        ^I32 w0 (an-ocr-word c at 10 20 300 40 912 0 1)]
-    (an-ocr-cp c w0 72)
-    (an-ocr-cp c w0 105)
-    (let [^I32 w1 (an-ocr-word c at 400 20 50 40 870 0 1)]
-      (an-ocr-cp c w1 128512)
-      (an-ocr-end c at)
-      (assert-eq (an-ocr-count c at) 2 "two words")
-      (assert-eq (an-ocr-first c at) 5 "the first word follows the count")
-      (assert-eq (an-ocr-first c at) w0 "and is w0")
-      (assert-eq (aw-get c w0 (aw-x)) 10 "x")
-      (assert-eq (aw-get c w0 (aw-conf)) 912 "confidence x10")
-      (assert-eq (aw-get c w0 (aw-len)) 2 "two code points")
-      (assert-eq (aw-cp c w0 1) 105 "i")
-      (assert-eq (aw-next c w0) w1 "the next word")
-      (assert-eq (aw-cp c w1 0) 128512 "a code point outside the BMP is one cell")
-      (assert-eq (aw-next c w1) (cells-len c) "and the last ends the record")
+        ^I32 at (oil-begin c 3 1 256 256 1 1 0 0)
+        ^I32 w0 (oil-word c at 10 20 300 40 -1 912 0 0 -1 0)]
+    (oil-word-cp c at w0 72)
+    (oil-word-cp c at w0 105)
+    (let [^I32 w1 (oil-word c at 400 20 50 40 -1 870 0 0 -1 0)]
+      (oil-word-cp c at w1 128512)
+      (oil-end c at)
+      (assert-eq (oil-nwords c at) 2 "two words")
+      (assert-eq (oil-first-word c at) 28 "the first word follows the OIL header")
+      (assert-eq (oil-first-word c at) w0 "and is w0")
+      (assert-eq (cells-at c w0) 10 "x")
+      (assert-eq (cells-at c (+ w0 5)) 912 "confidence x10")
+      (assert-eq (oil-wlen c at w0) 2 "two code points")
+      (assert-eq (oil-wcp c at w0 1) 105 "i")
+      (assert-eq (oil-word-next c at w0) w1 "the next word")
+      (assert-eq (oil-wcp c at w1 0) 128512 "a code point outside the BMP is one cell")
+      (assert-eq (oil-word-next c at w1) (cells-len c) "and the last ends the record")
       (assert-eq (rec-len c at) (cells-len c) "the record's length covers them"))))
 
 (deftest test-a-record-walk-refuses-what-is-malformed
@@ -310,11 +310,11 @@
     (let [^I32 second4 (rec-next rq 0)]
       (assert-eq (rec-id rq second4) 4 "id 4")
       (assert-eq (rq-arg rq second4 0) 2 "of the decode's bitmap"))
-    (let [^I32 o3 (an-ocr an 3)]
-      (let [^I32 w (an-ocr-word an o3 6 3 40 9 911 0 0)]
-        (an-ocr-cp an w 72)
-        (an-ocr-cp an w 105))
-      (an-ocr-end an o3))
+    (let [^I32 o3 (oil-begin an 3 1 256 256 1 1 0 0)]
+      (let [^I32 w (oil-word an o3 6 3 40 9 -1 911 0 0 -1 0)]
+        (oil-word-cp an o3 w 72)
+        (oil-word-cp an o3 w 105))
+      (oil-end an o3))
     (an-fail an 3 4 1)
     (cells-drop rq 0)
     (assert-eq (pt-unit s an rq et t) 0 "round 2 is done")

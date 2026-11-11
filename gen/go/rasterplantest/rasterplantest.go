@@ -217,7 +217,7 @@ func rptReading(oruns *port.Cells, owords *port.Cells, request int32, t0 int32, 
 	evidence.OwNew(owords, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, t0, 5, 0, 900, -1)
 	evidence.OwNew(owords, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, t1, 5, 0, 900, -1)
 	evidence.OrSet(oruns, run, evidence.OrfRequest(), request)
-	evidence.OrSet(oruns, run, evidence.OrfWfirst(), w0/28)
+	evidence.OrSet(oruns, run, evidence.OrfWfirst(), w0/32)
 	evidence.OrSet(oruns, run, evidence.OrfWcount(), 2)
 	return run
 }

@@ -5679,16 +5679,16 @@ pub fn ev_peek(ea: i32, row: i32, f: i32, mut epages: &mut crate::port::Cells, m
         return crate::port::cells_at(images, (row * 20) + f);
     }
     if ea == 14 {
-        return crate::port::cells_at(oruns, (row * 28) + f);
+        return crate::port::cells_at(oruns, (row * 32) + f);
     }
     if ea == 15 {
         return crate::port::cells_at(oblocks, (row * 16) + f);
     }
     if ea == 16 {
-        return crate::port::cells_at(olines, (row * 24) + f);
+        return crate::port::cells_at(olines, (row * 28) + f);
     }
     if ea == 17 {
-        return crate::port::cells_at(owords, (row * 28) + f);
+        return crate::port::cells_at(owords, (row * 32) + f);
     }
     if ea == 18 {
         return crate::port::cells_at(osyms, (row * 20) + f);
@@ -5768,7 +5768,7 @@ pub fn ev_poke(ea: i32, row: i32, f: i32, v: i32, mut epages: &mut crate::port::
         return 0;
     }
     if ea == 14 {
-        crate::port::cells_set(oruns, (row * 28) + f, v);
+        crate::port::cells_set(oruns, (row * 32) + f, v);
         return 0;
     }
     if ea == 15 {
@@ -5776,11 +5776,11 @@ pub fn ev_poke(ea: i32, row: i32, f: i32, v: i32, mut epages: &mut crate::port::
         return 0;
     }
     if ea == 16 {
-        crate::port::cells_set(olines, (row * 24) + f, v);
+        crate::port::cells_set(olines, (row * 28) + f, v);
         return 0;
     }
     if ea == 17 {
-        crate::port::cells_set(owords, (row * 28) + f, v);
+        crate::port::cells_set(owords, (row * 32) + f, v);
         return 0;
     }
     if ea == 18 {

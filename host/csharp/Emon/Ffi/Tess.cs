@@ -544,7 +544,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             Block ob = blocks[bi];
             int kind = 0;
             foreach (Line l in lines) { if (l.Block == bi) { kind = l.Btype; break; } }
-            emon.Oil.OilBlock(c, at, ob.Bx[0], ob.Bx[1], ob.Bx[2], ob.Bx[3], -1, ob.Orient, ob.Wdir, ob.Tlo, kind);
+            emon.Oil.OilTessBlock(c, at, ob.Bx[0], ob.Bx[1], ob.Bx[2], ob.Bx[3], -1, ob.Orient, ob.Wdir, ob.Tlo, kind);
         }
         for (int li = 0; li < lines.Count; li++) {
             Line l = lines[li];

@@ -106,30 +106,6 @@ public static class Plan {
     public static int OcrSymbols() {
         return 1;
     }
-    public static int AwX() {
-        return 0;
-    }
-    public static int AwY() {
-        return 1;
-    }
-    public static int AwW() {
-        return 2;
-    }
-    public static int AwH() {
-        return 3;
-    }
-    public static int AwConf() {
-        return 4;
-    }
-    public static int AwLine() {
-        return 5;
-    }
-    public static int AwBlock() {
-        return 6;
-    }
-    public static int AwLen() {
-        return 7;
-    }
     public static int RecLen(emon.Port.Cells c, int at) {
         return emon.Port.CellsAt(c, at);
     }
@@ -536,40 +512,6 @@ public static class Plan {
         RecEnd(c, at);
         return at;
     }
-    public static int AnOcr(emon.Port.Cells c, int id) {
-        // Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
-        // and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.
-        int at = RecBegin(c, PkOcr(), id);
-        emon.Port.CellsPush(c, PsOk());
-        emon.Port.CellsPush(c, 0);
-        return at;
-    }
-    public static int AnOcrWord(emon.Port.Cells c, int at, int x, int y, int w, int h, int conf, int line, int block) {
-        // Begin a word of the OCR answer at `at`; answers the word's start.
-        // Its code points follow, through `an-ocr-cp` (the LAST word only).
-        int word = emon.Port.CellsLen(c);
-        int nwords = emon.Port.CellsAt(c, at + 4);
-        emon.Port.CellsSet(c, at + 4, nwords + 1);
-        emon.Port.CellsPush(c, x);
-        emon.Port.CellsPush(c, y);
-        emon.Port.CellsPush(c, w);
-        emon.Port.CellsPush(c, h);
-        emon.Port.CellsPush(c, conf);
-        emon.Port.CellsPush(c, line);
-        emon.Port.CellsPush(c, block);
-        emon.Port.CellsPush(c, 0);
-        return word;
-    }
-    public static int AnOcrCp(emon.Port.Cells c, int word, int cp) {
-        // Append a code point to the last word, which began at `word`.
-        int n = emon.Port.CellsAt(c, word + 7);
-        emon.Port.CellsSet(c, word + 7, n + 1);
-        emon.Port.CellsPush(c, cp);
-        return 0;
-    }
-    public static int AnOcrEnd(emon.Port.Cells c, int at) {
-        return RecEnd(c, at);
-    }
     public static int AnBytes(emon.Port.Cells c, int id, int offset, int length) {
         int at = RecBegin(c, PkBytes(), id);
         emon.Port.CellsPush(c, PsOk());
@@ -577,20 +519,5 @@ public static class Plan {
         emon.Port.CellsPush(c, length);
         RecEnd(c, at);
         return at;
-    }
-    public static int AnOcrCount(emon.Port.Cells c, int at) {
-        return emon.Port.CellsAt(c, at + 4);
-    }
-    public static int AnOcrFirst(emon.Port.Cells c, int at) {
-        return at + 5;
-    }
-    public static int AwGet(emon.Port.Cells c, int word, int f) {
-        return emon.Port.CellsAt(c, word + f);
-    }
-    public static int AwCp(emon.Port.Cells c, int word, int k) {
-        return emon.Port.CellsAt(c, (word + 8) + k);
-    }
-    public static int AwNext(emon.Port.Cells c, int word) {
-        return (word + 8) + emon.Port.CellsAt(c, word + 7);
     }
 }

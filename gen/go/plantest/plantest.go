@@ -5,6 +5,7 @@ package plantest
 
 import (
 	"emon/evidence"
+	"emon/oil"
 	"emon/plan"
 	"emon/planprobe"
 	"emon/port"
@@ -198,23 +199,23 @@ func TestAnswersCarryTheIdAndAStatus(emonT *testing.T) {
 
 func TestAnOcrAnswerHoldsWordsWithTheirText(emonT *testing.T) {
 	var c *port.Cells = port.NewCells()
-	var at int32 = plan.AnOcr(c, 3)
-	var w0 int32 = plan.AnOcrWord(c, at, 10, 20, 300, 40, 912, 0, 1)
-	plan.AnOcrCp(c, w0, 72)
-	plan.AnOcrCp(c, w0, 105)
-	var w1 int32 = plan.AnOcrWord(c, at, 400, 20, 50, 40, 870, 0, 1)
-	plan.AnOcrCp(c, w1, 128512)
-	plan.AnOcrEnd(c, at)
-	port.AssertEq(emonT, plan.AnOcrCount(c, at), 2, "two words")
-	port.AssertEq(emonT, plan.AnOcrFirst(c, at), 5, "the first word follows the count")
-	port.AssertEq(emonT, plan.AnOcrFirst(c, at), w0, "and is w0")
-	port.AssertEq(emonT, plan.AwGet(c, w0, plan.AwX()), 10, "x")
-	port.AssertEq(emonT, plan.AwGet(c, w0, plan.AwConf()), 912, "confidence x10")
-	port.AssertEq(emonT, plan.AwGet(c, w0, plan.AwLen()), 2, "two code points")
-	port.AssertEq(emonT, plan.AwCp(c, w0, 1), 105, "i")
-	port.AssertEq(emonT, plan.AwNext(c, w0), w1, "the next word")
-	port.AssertEq(emonT, plan.AwCp(c, w1, 0), 128512, "a code point outside the BMP is one cell")
-	port.AssertEq(emonT, plan.AwNext(c, w1), port.CellsLen(c), "and the last ends the record")
+	var at int32 = oil.OilBegin(c, 3, 1, 256, 256, 1, 1, 0, 0)
+	var w0 int32 = oil.OilWord(c, at, 10, 20, 300, 40, -1, 912, 0, 0, -1, 0)
+	oil.OilWordCp(c, at, w0, 72)
+	oil.OilWordCp(c, at, w0, 105)
+	var w1 int32 = oil.OilWord(c, at, 400, 20, 50, 40, -1, 870, 0, 0, -1, 0)
+	oil.OilWordCp(c, at, w1, 128512)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilNwords(c, at), 2, "two words")
+	port.AssertEq(emonT, oil.OilFirstWord(c, at), 28, "the first word follows the OIL header")
+	port.AssertEq(emonT, oil.OilFirstWord(c, at), w0, "and is w0")
+	port.AssertEq(emonT, port.CellsAt(c, w0), 10, "x")
+	port.AssertEq(emonT, port.CellsAt(c, w0+5), 912, "confidence x10")
+	port.AssertEq(emonT, oil.OilWlen(c, at, w0), 2, "two code points")
+	port.AssertEq(emonT, oil.OilWcp(c, at, w0, 1), 105, "i")
+	port.AssertEq(emonT, oil.OilWordNext(c, at, w0), w1, "the next word")
+	port.AssertEq(emonT, oil.OilWcp(c, at, w1, 0), 128512, "a code point outside the BMP is one cell")
+	port.AssertEq(emonT, oil.OilWordNext(c, at, w1), port.CellsLen(c), "and the last ends the record")
 	port.AssertEq(emonT, plan.RecLen(c, at), port.CellsLen(c), "the record's length covers them")
 }
 
@@ -308,11 +309,11 @@ func TestTheProbeAsksInTwoRoundsAndThenWritesEvidence(emonT *testing.T) {
 	var second4 int32 = plan.RecNext(rq, 0)
 	port.AssertEq(emonT, plan.RecId(rq, second4), 4, "id 4")
 	port.AssertEq(emonT, plan.RqArg(rq, second4, 0), 2, "of the decode's bitmap")
-	var o3 int32 = plan.AnOcr(an, 3)
-	var w int32 = plan.AnOcrWord(an, o3, 6, 3, 40, 9, 911, 0, 0)
-	plan.AnOcrCp(an, w, 72)
-	plan.AnOcrCp(an, w, 105)
-	plan.AnOcrEnd(an, o3)
+	var o3 int32 = oil.OilBegin(an, 3, 1, 256, 256, 1, 1, 0, 0)
+	var w int32 = oil.OilWord(an, o3, 6, 3, 40, 9, -1, 911, 0, 0, -1, 0)
+	oil.OilWordCp(an, o3, w, 72)
+	oil.OilWordCp(an, o3, w, 105)
+	oil.OilEnd(an, o3)
 	plan.AnFail(an, 3, 4, 1)
 	port.CellsDrop(rq, 0)
 	port.AssertEq(emonT, ptUnit(s, an, rq, et, t), 0, "round 2 is done")

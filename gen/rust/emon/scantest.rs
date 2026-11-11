@@ -5,6 +5,7 @@ use crate::emon::calib::*;
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::oil::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
 use crate::emon::scan::*;
@@ -92,30 +93,47 @@ fn test_the_request_carries_the_resolution_and_the_language() {
     crate::testport::assert_eq(rq_arg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
 }
 pub(crate) fn three_lines(an: &mut crate::port::Cells, id: i32) -> i32 {
-    // An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope
-    // (6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.
-    let at: i32 = an_ocr(an, id);
-    let w0: i32 = an_ocr_word(an, at, 10, 20, 300, 40, 900, 0, 0);
-    an_ocr_cp(an, w0, 65);
-    let w1: i32 = an_ocr_word(an, at, 10, 100, 300, 40, 800, 1, 0);
-    an_ocr_cp(an, w1, 66);
-    let w2: i32 = an_ocr_word(an, at, 10, 180, 300, 40, 0, 2, 0);
-    an_ocr_cp(an, w2, 67);
-    ox_begin(an, 1, 0, 0, -115, 90, 1231, 17, 187, 3, 1, 1, 640, 480);
-    ox_line(an, 10, 20, 300, 46, 10, 55, 310, 61, 0, 0, 0, 20, 14, 6);
-    ox_line(an, 10, 100, 300, 46, 10, 135, 310, 141, 0, 0, 0, 20, 14, 6);
-    ox_line(an, 10, 180, 300, 40, 10, 215, 310, 215, 0, 0, 0, 20, 14, 6);
-    ox_block(an, 10, 20, 300, 200, 1, 2, 0);
-    let x0: i32 = ox_word(an, 0, 6647399, 11, 3);
-    let s0: i32 = ox_sym(an, x0, 10, 20, 20, 40, 900);
-    ox_sym_cp(an, s0, 65);
-    let x1: i32 = ox_word(an, 0, 6647399, -1, 0);
-    let s1: i32 = ox_sym(an, x1, 10, 100, 20, 40, 800);
-    ox_sym_cp(an, s1, 66);
-    let x2: i32 = ox_word(an, 0, 6647399, -1, 1);
-    let s2: i32 = ox_sym(an, x2, 10, 180, 20, 40, 0);
-    ox_sym_cp(an, s2, 67);
-    an_ocr_end(an, at);
+    let at: i32 = oil_tess_begin(an, id, 3, 1, 1, 0, 0, -115, 90, 1231, 17, 187, 1);
+    let mut k: i32 = 0;
+    let mut y: i32 = 20;
+    let mut height: i32 = 46;
+    let mut delta: i32 = 6;
+    let mut conf: i32 = 900;
+    let mut lex: i32 = 3;
+    let mut psize: i32 = 11;
+    let mask: i32 = oil_get(an, at, oh_caps());
+    oil_set(an, at, oh_caps(), mask + oc_rowmetrics());
+    let measured_mask: i32 = oil_get(an, at, oh_native());
+    oil_set(an, at, oh_native(), measured_mask + oc_rowmetrics());
+    oil_tess_block(an, at, 10, 20, 300, 200, -1, 1, 2, 0, 0);
+    while k < 3 {
+        y = 20 + (k * 80);
+        if k == 2 {
+            height = 40;
+            delta = 0;
+        }
+        oil_line(an, at, 10, y, 300, height, 0, 1, -1, 0, 10, y + 35, 310, (y + 35) + delta, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        k += 1;
+    }
+    k = 0;
+    while k < 3 {
+        y = 20 + (k * 80);
+        if k == 1 {
+            conf = 800;
+            lex = 1;
+            psize = -1;
+        }
+        if k == 2 {
+            conf = 0;
+            lex = 3;
+        }
+        let word: i32 = oil_word(an, at, 10, y, 300, 40, k, conf, 6647399, 0, psize, lex);
+        oil_word_cp(an, at, word, 65 + k);
+        let sym: i32 = oil_sym(an, at, word, 10, y, 20, 40, conf);
+        oil_sym_cp(an, sym, 65 + k);
+        k += 1;
+    }
+    oil_end(an, at);
     return at;
 }
 pub(crate) fn page_of(an: &mut crate::port::Cells, at: i32, epages: &mut crate::port::Cells, views: &mut crate::port::Cells, etext: &mut crate::port::Cells, feats: &mut crate::port::Cells, images: &mut crate::port::Cells, oruns: &mut crate::port::Cells, oblocks: &mut crate::port::Cells, olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells) -> i32 {
@@ -144,7 +162,7 @@ fn test_an_answers_evidence_keeps_the_engines_numbers() {
     crate::testport::assert_eq(ow_count(owords), 3, "three words");
     crate::testport::assert_eq(ow_get(owords, 0, owf_psize()), 1100, "the engine's point size is in centipoints");
     crate::testport::assert_eq(ow_get(owords, 1, owf_psize()), -1, "unknown stays -1");
-    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()), 3, "dictionary and numeric");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_flags()), 1, "dictionary membership remains; alphabetic text is not numeric");
     crate::testport::assert_eq(ow_get(owords, 2, hd_conf()), 0, "a confidence of 0 is carried as it is (D130)");
     crate::testport::assert_eq(ol_get(olines, 0, olf_xheight()), 480, "x-height 20 px is 480 cpt");
     crate::testport::assert_eq(ol_get(olines, 0, olf_asc()), 336, "ascenders 14 px");
@@ -299,44 +317,40 @@ fn test_with_no_page_read_nothing_is_tagged() {
     crate::testport::assert_eq(node_src(nodes, p1), sr_text(), "untouched");
     crate::testport::assert_eq(node_attr(nodes, attrs, 0, fk_ocr()), -1, "and no `settings.ocr`");
 }
-pub(crate) fn sym1(an: &mut crate::port::Cells, wx: i32, x: i32, y: i32, h: i32, cp: i32) -> i32 {
+pub(crate) fn sym1(an: &mut crate::port::Cells, at: i32, wx: i32, x: i32, y: i32, h: i32, cp: i32) -> i32 {
     // A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.
-    let s: i32 = ox_sym(an, wx, x, y, 15, h, 900);
-    ox_sym_cp(an, s, cp);
+    let s: i32 = oil_sym(an, at, wx, x, y, 15, h, 900);
+    oil_sym_cp(an, s, cp);
     return 0;
 }
 pub(crate) fn no_row_attributes(an: &mut crate::port::Cells, id: i32, withasc: i32) -> i32 {
-    // An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height
-    // letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).
-    let at: i32 = an_ocr(an, id);
-    let w0: i32 = an_ocr_word(an, at, 10, 80, 70, 20, 900, 0, 0);
-    an_ocr_cp(an, w0, 110);
+    let at: i32 = oil_tess_begin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+    let mut count: i32 = 1;
     if withasc == 1 {
-        let w1: i32 = an_ocr_word(an, at, 90, 66, 70, 34, 900, 0, 0);
-        an_ocr_cp(an, w1, 98);
-        let w2: i32 = an_ocr_word(an, at, 170, 80, 50, 26, 900, 0, 0);
-        an_ocr_cp(an, w2, 103);
+        count = 3;
     }
-    ox_begin(an, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-    ox_line(an, 10, 66, 210, 46, 10, 100, 220, 100, 0, 0, 0, -1, -1, -1);
-    ox_block(an, 10, 66, 210, 46, 0, 0, 0);
-    let x0: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x0, 10, 80, 20, 110);
-    sym1(an, x0, 25, 80, 20, 111);
-    sym1(an, x0, 40, 80, 20, 110);
-    sym1(an, x0, 55, 80, 20, 101);
+    oil_tess_block(an, at, 10, 66, 210, 46, -1, 0, 0, 0, 0);
+    oil_line(an, at, 10, 66, 210, 46, 0, count, -1, 0, 10, 100, 220, 100, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let x0: i32 = oil_word(an, at, 10, 80, 70, 20, 0, 900, 0, 0, -1, 1);
+    oil_word_cp(an, at, x0, 110);
+    sym1(an, at, x0, 10, 80, 20, 110);
+    sym1(an, at, x0, 25, 80, 20, 111);
+    sym1(an, at, x0, 40, 80, 20, 110);
+    sym1(an, at, x0, 55, 80, 20, 101);
     if withasc == 1 {
-        let x1: i32 = ox_word(an, 0, 0, -1, 0);
-        sym1(an, x1, 90, 66, 34, 98);
-        sym1(an, x1, 105, 66, 34, 108);
-        sym1(an, x1, 120, 66, 34, 100);
-        sym1(an, x1, 135, 66, 34, 104);
-        let x2: i32 = ox_word(an, 0, 0, -1, 0);
-        sym1(an, x2, 170, 80, 26, 103);
-        sym1(an, x2, 185, 80, 26, 121);
-        sym1(an, x2, 200, 80, 26, 112);
+        let x1: i32 = oil_word(an, at, 90, 66, 70, 34, 0, 900, 0, 0, -1, 1);
+        oil_word_cp(an, at, x1, 98);
+        sym1(an, at, x1, 90, 66, 34, 98);
+        sym1(an, at, x1, 105, 66, 34, 108);
+        sym1(an, at, x1, 120, 66, 34, 100);
+        sym1(an, at, x1, 135, 66, 34, 104);
+        let x2: i32 = oil_word(an, at, 170, 80, 50, 26, 0, 900, 0, 0, -1, 1);
+        oil_word_cp(an, at, x2, 103);
+        sym1(an, at, x2, 170, 80, 26, 103);
+        sym1(an, at, x2, 185, 80, 26, 121);
+        sym1(an, at, x2, 200, 80, 26, 112);
     }
-    an_ocr_end(an, at);
+    oil_end(an, at);
     return at;
 }
 #[test]
@@ -375,37 +389,61 @@ fn test_with_no_tall_letters_the_ascender_line_is_the_x_height_times_1_5() {
     crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), 2400 + 194, "and its bottom: 0.27 of the ascender line");
 }
 pub(crate) fn sized_lines(an: &mut crate::port::Cells, id: i32) -> i32 {
-    // Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
-    // 30+22 (a heading, 1.5 times as tall) and 20+14 again.
-    let at: i32 = an_ocr(an, id);
-    let w0: i32 = an_ocr_word(an, at, 10, 20, 100, 40, 900, 0, 0);
-    an_ocr_cp(an, w0, 65);
-    let w1: i32 = an_ocr_word(an, at, 10, 100, 100, 40, 900, 1, 0);
-    an_ocr_cp(an, w1, 66);
-    let w2: i32 = an_ocr_word(an, at, 10, 180, 100, 40, 900, 2, 0);
-    an_ocr_cp(an, w2, 67);
-    let w3: i32 = an_ocr_word(an, at, 10, 260, 100, 60, 900, 3, 0);
-    an_ocr_cp(an, w3, 68);
-    let w4: i32 = an_ocr_word(an, at, 10, 360, 100, 40, 900, 4, 0);
-    an_ocr_cp(an, w4, 69);
-    ox_begin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0);
-    ox_line(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6);
-    ox_line(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6);
-    ox_line(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6);
-    ox_line(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8);
-    ox_line(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6);
-    ox_block(an, 10, 20, 100, 380, 0, 0, 0);
-    let x0: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x0, 10, 20, 20, 65);
-    let x1: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x1, 10, 100, 20, 66);
-    let x2: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x2, 10, 180, 20, 67);
-    let x3: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x3, 10, 260, 20, 68);
-    let x4: i32 = ox_word(an, 0, 0, -1, 0);
-    sym1(an, x4, 10, 360, 20, 69);
-    an_ocr_end(an, at);
+    let at: i32 = oil_tess_begin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+    let mut k: i32 = 0;
+    let mut y: i32 = 20;
+    let mut height: i32 = 40;
+    let mut xh: i32 = 20;
+    let mut asc: i32 = 14;
+    let mut desc: i32 = 6;
+    let mut base: i32 = 55;
+    let mask: i32 = oil_get(an, at, oh_caps());
+    oil_set(an, at, oh_caps(), mask + oc_rowmetrics());
+    let measured_mask: i32 = oil_get(an, at, oh_native());
+    oil_set(an, at, oh_native(), measured_mask + oc_rowmetrics());
+    oil_tess_block(an, at, 10, 20, 100, 380, -1, 0, 0, 0, 0);
+    while k < 5 {
+        y = 20 + (k * 80);
+        height = 40;
+        xh = 20;
+        asc = 14;
+        desc = 6;
+        if k == 1 {
+            asc = 15;
+        }
+        if k == 3 {
+            height = 60;
+            xh = 30;
+            asc = 22;
+            desc = 8;
+        }
+        if k == 4 {
+            y = 360;
+        }
+        base = y + 35;
+        if k == 3 {
+            base = 305;
+        }
+        oil_line(an, at, 10, y, 100, height, 0, 1, -1, 0, 10, base, 110, base, xh, asc, desc, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        k += 1;
+    }
+    k = 0;
+    while k < 5 {
+        y = 20 + (k * 80);
+        height = 40;
+        if k == 3 {
+            height = 60;
+        }
+        if k == 4 {
+            y = 360;
+        }
+        let word: i32 = oil_word(an, at, 10, y, 100, height, k, 900, 0, 0, -1, 1);
+        oil_word_cp(an, at, word, 65 + k);
+        let sym: i32 = oil_sym(an, at, word, 10, y, 15, 20, 900);
+        oil_sym_cp(an, sym, 65 + k);
+        k += 1;
+    }
+    oil_end(an, at);
     return at;
 }
 #[test]
@@ -1003,8 +1041,8 @@ pub(crate) fn sct_direct_dct(file: &str) -> i32 {
     return sc_dct_span(src, ar, dc, a, b, st, 5, sp);
 }
 #[test]
-fn test_a_scan_jpeg_outside_the_shared_native_subset_is_rendered_rather_than_decoded_directly() {
-    crate::testport::assert_eq(sct_direct_dct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+fn test_a_scan_jpeg_outside_the_shared_nativeword_subset_is_rendered_rather_than_decoded_directly() {
+    crate::testport::assert_eq(sct_direct_dct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent nativeword decode");
     crate::testport::assert_eq(sct_direct_dct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
     crate::testport::assert_eq(sct_direct_dct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
     crate::testport::assert_eq(sct_direct_dct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
@@ -1231,40 +1269,41 @@ pub(crate) fn sc_multilingual_owners(emon_t: i32, lang: i32, script: i32, c0: i3
     let owords: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let wd: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let ln: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let at: i32 = an_ocr(an, 2);
-    let wnative: i32 = an_ocr_word(an, at, 10, 20, 60, 40, 900, 0, 0);
-    an_ocr_cp(an, wnative, c0);
-    an_ocr_cp(an, wnative, c1);
-    an_ocr_cp(an, wnative, c2);
-    let identifier: i32 = an_ocr_word(an, at, 90, 20, 60, 40, 900, 0, 0);
-    an_ocr_cp(an, identifier, 65);
-    an_ocr_cp(an, identifier, 55);
-    ox_begin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
-    ox_line(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
-    ox_block(an, 10, 20, 140, 40, 0, 0, 0);
-    ox_word(an, 0, lang, -1, 1);
-    ox_word(an, 0, 1701734144, -1, 1);
-    an_ocr_end(an, at);
+    let at: i32 = oil_tess_begin(an, 2, 3, 0, 0, 0, 0, 0, 0, script, 629, 500, 0);
+    let mask: i32 = oil_get(an, at, oh_caps());
+    oil_set(an, at, oh_caps(), mask + oc_rowmetrics());
+    let measured_mask: i32 = oil_get(an, at, oh_native());
+    oil_set(an, at, oh_native(), measured_mask + oc_rowmetrics());
+    oil_tess_block(an, at, 10, 20, 140, 40, -1, 0, 0, 0, 0);
+    oil_line(an, at, 10, 20, 140, 40, 0, 2, -1, 0, 10, 55, 150, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let nativeword: i32 = oil_word(an, at, 10, 20, 60, 40, 0, 900, lang, 0, -1, 3);
+    oil_word_cp(an, at, nativeword, c0);
+    oil_word_cp(an, at, nativeword, c1);
+    oil_word_cp(an, at, nativeword, c2);
+    let identifier: i32 = oil_word(an, at, 90, 20, 60, 40, 0, 900, 1701734144, 0, -1, 3);
+    oil_word_cp(an, at, identifier, 65);
+    oil_word_cp(an, at, identifier, 55);
+    oil_end(an, at);
     sc_page(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), olines, owords, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), wd, ln, &mut crate::port::Cells::new());
     crate::testport::assert_eq(or_get(runs, 0, orf_request()), 2, "reading belongs to its actual OCR request");
     crate::testport::assert_eq(or_get(runs, 0, orf_langlen()), 3, "request language is recorded independently of word models");
     crate::testport::assert_eq(crate::port::cells_at(et, or_get(runs, 0, orf_lang())), lang / 16777216, "request language first letter");
     crate::testport::assert_eq(ow_count(owords), 2, "both recorded words remain evidence");
-    crate::testport::assert_eq(wd_count(wd), 2, "native text and Latin identifier remain selected");
-    crate::testport::assert_eq(ow_get(owords, 0, owf_run()), 0, "native word belongs to this run");
+    crate::testport::assert_eq(wd_count(wd), 2, "nativeword text and Latin identifier remain selected");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_run()), 0, "nativeword word belongs to this run");
     crate::testport::assert_eq(ow_get(owords, 1, owf_run()), 0, "Latin identifier belongs to the same run");
-    crate::testport::assert_eq(ow_get(owords, 0, owf_lang()), lang, "native word keeps its engine model");
+    crate::testport::assert_eq(ow_get(owords, 0, owf_lang()), lang, "nativeword word keeps its engine model");
     crate::testport::assert_eq(ow_get(owords, 1, owf_lang()), 1701734144, "identifier keeps its English model");
     crate::testport::assert_eq(ln_count(ln), 1, "one selected source row");
-    crate::testport::assert_eq(ow_get(owords, 0, hd_line()), 0, "native evidence word belongs to the recorded row");
+    crate::testport::assert_eq(ow_get(owords, 0, hd_line()), 0, "nativeword evidence word belongs to the recorded row");
     crate::testport::assert_eq(ow_get(owords, 1, hd_line()), 0, "identifier evidence word belongs to the recorded row");
-    crate::testport::assert_eq(wd_get(wd, 0, hd_line()), 0, "source row zero owns the native value");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_line()), 0, "source row zero owns the nativeword value");
     crate::testport::assert_eq(wd_get(wd, 1, hd_line()), 0, "source row zero owns the identifier value");
-    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "complete native span");
+    crate::testport::assert_eq(wd_get(wd, 0, hd_tlen()), 3, "complete nativeword span");
     crate::testport::assert_eq(wd_get(wd, 1, hd_tlen()), 2, "complete identifier span");
-    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart())), c0, "first native scalar");
-    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 1), c1, "native diacritic or script scalar");
-    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 2), c2, "last native scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart())), c0, "first nativeword scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 1), c1, "nativeword diacritic or script scalar");
+    crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 0, hd_tstart()) + 2), c2, "last nativeword scalar");
     crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 1, hd_tstart())), 65, "identifier A stays exact");
     crate::testport::assert_eq(crate::port::cells_at(et, wd_get(wd, 1, hd_tstart()) + 1), 55, "identifier value 7 stays exact");
     return 0;
@@ -1274,7 +1313,7 @@ fn test_german_umlaut_and_latin_identifier_keep_their_reading_and_row() {
     sc_multilingual_owners(0, 1684370688, 1281455214, 102, 252, 114);
 }
 #[test]
-fn test_urdu_native_values_do_not_authorize_deleting_latin_identifiers() {
+fn test_urdu_nativeword_values_do_not_authorize_deleting_latin_identifiers() {
     sc_multilingual_owners(0, 1970430976, 1098015074, 1593, 1575, 1605);
 }
 #[test]
@@ -1333,25 +1372,43 @@ fn test_selected_rerotated_lines_use_the_selected_runs_upright_frame() {
 }
 #[test]
 fn test_unknown_ocr_baseline_uses_box_bottom_without_rewriting_the_answer() {
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let an: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let at: i32 = three_lines(an, 2);
-    let ext: i32 = ox_find(an, at);
-    let l: i32 = ox_line_at(an, ext, 0);
-    crate::port::cells_set(an, l + 4, -1);
-    crate::port::cells_set(an, l + 5, -1);
-    crate::port::cells_set(an, l + 6, -1);
-    crate::port::cells_set(an, l + 7, -1);
-    crate::port::cells_set(an, l + 11, -1);
-    crate::port::cells_set(an, l + 12, -1);
-    crate::port::cells_set(an, l + 13, -1);
-    page_of(an, at, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), lines, words, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
-    crate::testport::assert_eq(crate::port::cells_at(an, l + 4), -1, "raw answer still records absence");
-    crate::testport::assert_eq(crate::port::cells_at(an, l + 5), -1, "no measured baseline is invented in the transcript");
-    crate::testport::assert_eq(ol_get(lines, 0, lh_by0()), 66 * 24, "layout fallback is the measured line box bottom");
-    crate::testport::assert_eq(ow_get(words, 0, hd_by0()), 66 * 24, "word layout does not interpolate minus one pixels");
+    let original: i32 = three_lines(raw, 2);
+    let first: i32 = oil_line_at(raw, original, 0);
+    let end: i32 = first + 42;
+    let mut i: i32 = 4;
+    while i < crate::port::cells_len(raw) {
+        if (i < first) || ((i >= end) || (((i - first) % 14) < 7)) {
+            if (i == 8) || (i == 9) {
+                crate::port::cells_push(flat, crate::port::cells_at(raw, i) - 24);
+            } else {
+                crate::port::cells_push(flat, crate::port::cells_at(raw, i));
+            }
+        }
+        i += 1;
+    }
+    crate::testport::assert_eq(oil_flat(flat, 2, an), 0, "a baseline-free OIL answer is valid");
+    let size: i32 = crate::port::cells_len(an);
+    page_of(an, 0, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), lines, words, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_eq(crate::port::cells_len(an), size, "ingestion does not add invented baseline cells");
+    crate::testport::assert_eq(oil_line_field(an, 0, 0, 4), -1, "the raw baseline remains absent");
+    crate::testport::assert_eq(ol_get(lines, 0, lh_by0()), 66 * 24, "layout fallback uses the measured line box bottom");
+    crate::testport::assert_eq(ow_get(words, 0, hd_by0()), 66 * 24, "word layout does not interpolate absent measurements");
     crate::testport::assert_eq(ow_get(words, 0, hd_by1()), 66 * 24, "both ends use the same fallback");
+}
+#[test]
+fn test_layout_orientation_and_osd_remain_independent_measurements() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = three_lines(ans, 2);
+    oil_set(ans, at, oh_orient(), 2);
+    page_of(ans, at, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), runs, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_eq(or_get(runs, 0, orf_orient()), 1, "layout orientation comes from the measured block");
+    crate::testport::assert_eq(or_get(runs, 0, orf_osd()), 180, "OSD orientation remains the independent header measurement");
 }

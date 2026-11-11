@@ -6,7 +6,8 @@ package scriptchecktest
 import (
 	"emon/evidence"
 	"emon/model"
-	"emon/ocr"
+	"emon/oil"
+	"emon/oilfixturetest"
 	"emon/plan"
 	"emon/port"
 	"emon/scriptcheck"
@@ -14,35 +15,7 @@ import (
 )
 
 func skAnswer(ans *port.Cells, id int32, n int32, script int32, sconf int32, lang int32, lang0 int32, dflags int32) int32 {
-	// An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
-	// `dflags` 1 says the engine's dictionary knows the words, 0 not.
-	var at int32 = plan.AnOcr(ans, id)
-	var k int32 = 0
-	var word int32 = 0
-	for k < n {
-		word = plan.AnOcrWord(ans, at, 10, 20+(k*60), 60, 40, 760, k, 0)
-		plan.AnOcrCp(ans, word, 72)
-		plan.AnOcrCp(ans, word, 105)
-		k += 1
-	}
-	ocr.OxBegin(ans, 0, 0, 0, 0, 0, script, sconf, 500, n, 1, 0, 0, 0)
-	k = 0
-	for k < n {
-		ocr.OxLine(ans, 10, 20+(k*60), 60, 40, 10, 55+(k*60), 70, 55+(k*60), 0, 0, 0, 20, 14, 6)
-		k += 1
-	}
-	ocr.OxBlock(ans, 10, 20, 60, n*60, 0, 0, 0)
-	k = 0
-	for k < n {
-		if k == 0 {
-			ocr.OxWord(ans, 0, lang0, -1, dflags)
-		} else {
-			ocr.OxWord(ans, 0, lang, -1, dflags)
-		}
-		k += 1
-	}
-	plan.AnOcrEnd(ans, at)
-	return at
+	return oilfixturetest.OfxLines(ans, id, n, 20, 60, 1, 760, 0, script, sconf, 500, lang, lang0, dflags)
 }
 
 func unreadOfD(n int32, script int32, sconf int32, lang int32, lang0 int32, dflags int32) int32 {
@@ -86,10 +59,10 @@ func TestAPageTheEngineCanReadOrOsdIsUnsureOfIsNotFlagged(emonT *testing.T) {
 
 func TestAnAnswerWithNoExtensionIsNotFlagged(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
-	var at int32 = plan.AnOcr(ans, 272)
-	var w int32 = plan.AnOcrWord(ans, at, 10, 20, 60, 40, 760, 0, 0)
-	plan.AnOcrCp(ans, w, 72)
-	plan.AnOcrEnd(ans, at)
+	var at int32 = oil.OilBegin(ans, 272, 1, 256, 256, 1, 1, 0, 0)
+	var w int32 = oil.OilWord(ans, at, 10, 20, 60, 40, -1, 760, 0, 0, -1, 0)
+	oil.OilWordCp(ans, at, w, 72)
+	oil.OilEnd(ans, at)
 	port.AssertEq(emonT, scriptcheck.SkUnread(ans, at, port.NewCells()), 0, "an engine that says nothing of the script")
 }
 

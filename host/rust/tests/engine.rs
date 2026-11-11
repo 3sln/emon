@@ -400,18 +400,16 @@ fn an_image_records_its_pixels_and_replays_without_a_codec() {
 struct FakeOcr;
 impl Ocr for FakeOcr {
     fn fulfil(&self, req: &emon::plan::Request, _bm: &emon::plan::Bitmaps, _keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
-        use emon::emon::{ocr, plan};
+        use emon::emon::oil;
         let mut c = emon::port::Cells::new();
-        let at = plan::an_ocr(&mut c, req.id());
-        let w = plan::an_ocr_word(&mut c, at, 10, 10, 100, 30, 900, 0, 0);
+        let at = oil::oil_tess_begin(&mut c, req.id(), 3, 0, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        oil::oil_tess_block(&mut c, at, 10, 10, 100, 30, -1, 0, 0, 0, 0);
+        oil::oil_line(&mut c, at, 10, 10, 100, 30, 0, 1, -1, 0, 10, 35, 110, 35, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        let w = oil::oil_word(&mut c, at, 10, 10, 100, 30, 0, 900, 0, 0, -1, 1);
         for ch in "Hello".chars() {
-            plan::an_ocr_cp(&mut c, w, ch as i32);
+            oil::oil_word_cp(&mut c, at, w, ch as i32);
         }
-        ocr::ox_begin(&mut c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        ocr::ox_line(&mut c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
-        ocr::ox_block(&mut c, 10, 10, 100, 30, 0, 0, 0);
-        let _ = ocr::ox_word(&mut c, 0, 0, -1, 0);
-        plan::an_ocr_end(&mut c, at);
+        oil::oil_end(&mut c, at);
         let rec = (0..emon::port::cells_len(&c)).map(|i| emon::port::cells_at(&c, i)).collect();
         Ok(emon::plan::Answer { rec, bitmap: None })
     }
@@ -1284,14 +1282,12 @@ fn unknown_ocr_baseline_reaches_represented_html_and_replays() {
         fn fulfil(&self, req: &emon::plan::Request, _: &emon::plan::Bitmaps, _: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
             use emon::port::{Cells, cells_at, cells_len};
             let mut out = Cells::new();
-            let at = emon::emon::plan::an_ocr(&mut out, req.id());
-            let word = emon::emon::plan::an_ocr_word(&mut out, at, 5, 5, 30, 12, 950, 0, 0);
-            for cp in "BASELINE".chars() { emon::emon::plan::an_ocr_cp(&mut out, word, cp as i32); }
-            emon::emon::ocr::ox_begin(&mut out, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-            emon::emon::ocr::ox_line(&mut out, 5, 5, 30, 12, -1, -1, -1, -1, 0, 0, 0, -1, -1, -1);
-            emon::emon::ocr::ox_block(&mut out, 5, 5, 30, 12, 0, 0, 0);
-            emon::emon::ocr::ox_word(&mut out, 0, 1701734144, -1, 1);
-            emon::emon::plan::an_ocr_end(&mut out, at);
+            use emon::emon::oil;
+            let at = oil::oil_begin(&mut out, req.id(), 1, 8192 + 16384 + 256, 8192 + 16384 + 256, 1, 1, 0, 0);
+            oil::oil_line(&mut out, at, 5, 5, 30, 12, -1, 1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            let word = oil::oil_word(&mut out, at, 5, 5, 30, 12, 0, 950, 1701734144, 0, -1, 3);
+            for cp in "BASELINE".chars() { oil::oil_word_cp(&mut out, at, word, cp as i32); }
+            oil::oil_end(&mut out, at);
             Ok(emon::plan::Answer { rec: (0..cells_len(&out)).map(|i| cells_at(&out, i)).collect(), bitmap: None })
         }
     }

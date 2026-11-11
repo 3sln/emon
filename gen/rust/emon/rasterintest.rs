@@ -4,6 +4,8 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::oil::*;
+use crate::emon::oilfixturetest::*;
 use crate::emon::plan::*;
 use crate::emon::rasterin::*;
 use crate::emon::retarget::*;
@@ -132,20 +134,21 @@ fn test_a_failed_frame_decode_is_the_units_failure() {
     crate::testport::assert_eq(page_pol(0, a2, &mut crate::port::Cells::new(), 0, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), rs_unsupported(), "not read, whatever the policy");
 }
 pub(crate) fn fake_ocr(ans: &mut crate::port::Cells, id: i32) -> i32 {
-    // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
-    let at: i32 = an_ocr(ans, id);
-    let w: i32 = an_ocr_word(ans, at, 10, 20, 30, 40, 900, 0, 0);
-    an_ocr_cp(ans, w, 72);
-    an_ocr_cp(ans, w, 105);
-    ox_begin(ans, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-    ox_line(ans, 10, 20, 30, 40, 10, 55, 40, 55, 0, 0, 0, 20, 14, 6);
-    ox_block(ans, 10, 20, 30, 40, 0, 0, 0);
-    let x: i32 = ox_word(ans, 0, 0, -1, 0);
-    let s0: i32 = ox_sym(ans, x, 10, 20, 15, 40, 900);
-    ox_sym_cp(ans, s0, 72);
-    let s1: i32 = ox_sym(ans, x, 25, 20, 15, 40, 900);
-    ox_sym_cp(ans, s1, 105);
-    an_ocr_end(ans, at);
+    let at: i32 = oil_tess_begin(ans, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+    let mask: i32 = oil_get(ans, at, oh_caps());
+    oil_set(ans, at, oh_caps(), mask + oc_rowmetrics());
+    let measured_mask: i32 = oil_get(ans, at, oh_native());
+    oil_set(ans, at, oh_native(), measured_mask + oc_rowmetrics());
+    oil_tess_block(ans, at, 10, 20, 30, 40, -1, 0, 0, 0, 0);
+    oil_line(ans, at, 10, 20, 30, 40, 0, 1, -1, 0, 10, 55, 40, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    let word: i32 = oil_word(ans, at, 10, 20, 30, 40, 0, 900, 0, 0, -1, 1);
+    oil_word_cp(ans, at, word, 72);
+    oil_word_cp(ans, at, word, 105);
+    let s0: i32 = oil_sym(ans, at, word, 10, 20, 15, 40, 900);
+    oil_sym_cp(ans, s0, 72);
+    let s1: i32 = oil_sym(ans, at, word, 25, 20, 15, 40, 900);
+    oil_sym_cp(ans, s1, 105);
+    oil_end(ans, at);
     return at;
 }
 #[test]
@@ -221,31 +224,7 @@ fn test_an_ocr_answer_becomes_evidence_and_the_pipelines_lines() {
     crate::testport::assert_eq(ln_get(ln, 0, lh_y1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
 }
 pub(crate) fn fake_lines(mut ans: &mut crate::port::Cells, id: i32, nlines: i32, scale: i32, xh: i32, osd: i32, oconf: i32) -> i32 {
-    // An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
-    // that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
-    let at: i32 = an_ocr(ans, id);
-    let mut k: i32 = 0;
-    let mut word: i32 = 0;
-    while k < nlines {
-        word = an_ocr_word(ans, at, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 900, k, 0);
-        an_ocr_cp(ans, word, 72);
-        an_ocr_cp(ans, word, 105);
-        k += 1;
-    }
-    ox_begin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
-    k = 0;
-    while k < nlines {
-        ox_line(ans, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 10 * scale, (55 + (k * 60)) * scale, 70 * scale, (55 + (k * 60)) * scale, 0, 0, 0, xh * scale, 14, 6);
-        k += 1;
-    }
-    ox_block(ans, 10 * scale, 20 * scale, 60 * scale, (nlines * 60) * scale, 0, 0, 0);
-    k = 0;
-    while k < nlines {
-        ox_word(ans, 0, 0, -1, 0);
-        k += 1;
-    }
-    an_ocr_end(ans, at);
-    return at;
+    return ofx_lines(ans, id, nlines, xh, 60, scale, 900, osd, 1281455214, 100, oconf, 0, 0, 0);
 }
 pub(crate) fn white_frame(bms: &crate::port::BitmapSet, id: i32, w: i32, h: i32) -> i32 {
     // A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.

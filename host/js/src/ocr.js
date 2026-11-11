@@ -74,7 +74,7 @@ export function ocrRequest(rec, bitmap, w) {
   };
 }
 
-/** The integer form `emon_answer_ocr` reads (its layout is `ox-flat` in `kin/ocrport.kin`); `c` is the module's `ocrWord` constants. */
+/** The integer form `emon_answer_ocr` reads (its layout is `oil-flat` in `kin/oil.kin`); `c` is the module's `ocrWord` constants. */
 export function encodeOcr(r, c) {
   const o = r.orientation;
   const osd = r.osd;

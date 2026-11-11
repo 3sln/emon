@@ -88,30 +88,47 @@ public static class Scantest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
     }
     internal static int ThreeLines(emon.Port.Cells an, int id) {
-        // An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope
-        // (6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.
-        int at = Plan.AnOcr(an, id);
-        int w0 = Plan.AnOcrWord(an, at, 10, 20, 300, 40, 900, 0, 0);
-        Plan.AnOcrCp(an, w0, 65);
-        int w1 = Plan.AnOcrWord(an, at, 10, 100, 300, 40, 800, 1, 0);
-        Plan.AnOcrCp(an, w1, 66);
-        int w2 = Plan.AnOcrWord(an, at, 10, 180, 300, 40, 0, 2, 0);
-        Plan.AnOcrCp(an, w2, 67);
-        Ocr.OxBegin(an, 1, 0, 0, -115, 90, 1231, 17, 187, 3, 1, 1, 640, 480);
-        Ocr.OxLine(an, 10, 20, 300, 46, 10, 55, 310, 61, 0, 0, 0, 20, 14, 6);
-        Ocr.OxLine(an, 10, 100, 300, 46, 10, 135, 310, 141, 0, 0, 0, 20, 14, 6);
-        Ocr.OxLine(an, 10, 180, 300, 40, 10, 215, 310, 215, 0, 0, 0, 20, 14, 6);
-        Ocr.OxBlock(an, 10, 20, 300, 200, 1, 2, 0);
-        int x0 = Ocr.OxWord(an, 0, 6647399, 11, 3);
-        int s0 = Ocr.OxSym(an, x0, 10, 20, 20, 40, 900);
-        Ocr.OxSymCp(an, s0, 65);
-        int x1 = Ocr.OxWord(an, 0, 6647399, -1, 0);
-        int s1 = Ocr.OxSym(an, x1, 10, 100, 20, 40, 800);
-        Ocr.OxSymCp(an, s1, 66);
-        int x2 = Ocr.OxWord(an, 0, 6647399, -1, 1);
-        int s2 = Ocr.OxSym(an, x2, 10, 180, 20, 40, 0);
-        Ocr.OxSymCp(an, s2, 67);
-        Plan.AnOcrEnd(an, at);
+        int at = Oil.OilTessBegin(an, id, 3, 1, 1, 0, 0, -115, 90, 1231, 17, 187, 1);
+        int k = 0;
+        int y = 20;
+        int height = 46;
+        int delta = 6;
+        int conf = 900;
+        int lex = 3;
+        int psize = 11;
+        int mask = Oil.OilGet(an, at, Oil.OhCaps());
+        Oil.OilSet(an, at, Oil.OhCaps(), mask + Oil.OcRowmetrics());
+        int measuredMask = Oil.OilGet(an, at, Oil.OhNative());
+        Oil.OilSet(an, at, Oil.OhNative(), measuredMask + Oil.OcRowmetrics());
+        Oil.OilTessBlock(an, at, 10, 20, 300, 200, -1, 1, 2, 0, 0);
+        while (k < 3) {
+            y = 20 + (k * 80);
+            if (k == 2) {
+                height = 40;
+                delta = 0;
+            }
+            Oil.OilLine(an, at, 10, y, 300, height, 0, 1, -1, 0, 10, y + 35, 310, (y + 35) + delta, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 3) {
+            y = 20 + (k * 80);
+            if (k == 1) {
+                conf = 800;
+                lex = 1;
+                psize = -1;
+            }
+            if (k == 2) {
+                conf = 0;
+                lex = 3;
+            }
+            int word = Oil.OilWord(an, at, 10, y, 300, 40, k, conf, 6647399, 0, psize, lex);
+            Oil.OilWordCp(an, at, word, 65 + k);
+            int sym = Oil.OilSym(an, at, word, 10, y, 20, 40, conf);
+            Oil.OilSymCp(an, sym, 65 + k);
+            k += 1;
+        }
+        Oil.OilEnd(an, at);
         return at;
     }
     internal static int PageOf(emon.Port.Cells an, int at, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells wd, emon.Port.Cells ln) {
@@ -140,7 +157,7 @@ public static class Scantest {
         emon.Testport.AssertEq(Evidence.OwCount(owords), 3, "three words");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfPsize()), 1100, "the engine's point size is in centipoints");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.OwfPsize()), -1, "unknown stays -1");
-        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfFlags()), 3, "dictionary and numeric");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfFlags()), 1, "dictionary membership remains; alphabetic text is not numeric");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 2, Evidence.HdConf()), 0, "a confidence of 0 is carried as it is (D130)");
         emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfXheight()), 480, "x-height 20 px is 480 cpt");
         emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfAsc()), 336, "ascenders 14 px");
@@ -295,44 +312,40 @@ public static class Scantest {
         emon.Testport.AssertEq(Model.NodeSrc(nodes, p1), Model.SrText(), "untouched");
         emon.Testport.AssertEq(Model.NodeAttr(nodes, attrs, 0, Model.FkOcr()), -1, "and no `settings.ocr`");
     }
-    internal static int Sym1(emon.Port.Cells an, int wx, int x, int y, int h, int cp) {
+    internal static int Sym1(emon.Port.Cells an, int at, int wx, int x, int y, int h, int cp) {
         // A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.
-        int s = Ocr.OxSym(an, wx, x, y, 15, h, 900);
-        Ocr.OxSymCp(an, s, cp);
+        int s = Oil.OilSym(an, at, wx, x, y, 15, h, 900);
+        Oil.OilSymCp(an, s, cp);
         return 0;
     }
     internal static int NoRowAttributes(emon.Port.Cells an, int id, int withasc) {
-        // An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height
-        // letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).
-        int at = Plan.AnOcr(an, id);
-        int w0 = Plan.AnOcrWord(an, at, 10, 80, 70, 20, 900, 0, 0);
-        Plan.AnOcrCp(an, w0, 110);
+        int at = Oil.OilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int count = 1;
         if (withasc == 1) {
-            int w1 = Plan.AnOcrWord(an, at, 90, 66, 70, 34, 900, 0, 0);
-            Plan.AnOcrCp(an, w1, 98);
-            int w2 = Plan.AnOcrWord(an, at, 170, 80, 50, 26, 900, 0, 0);
-            Plan.AnOcrCp(an, w2, 103);
+            count = 3;
         }
-        Ocr.OxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        Ocr.OxLine(an, 10, 66, 210, 46, 10, 100, 220, 100, 0, 0, 0, -1, -1, -1);
-        Ocr.OxBlock(an, 10, 66, 210, 46, 0, 0, 0);
-        int x0 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x0, 10, 80, 20, 110);
-        Sym1(an, x0, 25, 80, 20, 111);
-        Sym1(an, x0, 40, 80, 20, 110);
-        Sym1(an, x0, 55, 80, 20, 101);
+        Oil.OilTessBlock(an, at, 10, 66, 210, 46, -1, 0, 0, 0, 0);
+        Oil.OilLine(an, at, 10, 66, 210, 46, 0, count, -1, 0, 10, 100, 220, 100, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int x0 = Oil.OilWord(an, at, 10, 80, 70, 20, 0, 900, 0, 0, -1, 1);
+        Oil.OilWordCp(an, at, x0, 110);
+        Sym1(an, at, x0, 10, 80, 20, 110);
+        Sym1(an, at, x0, 25, 80, 20, 111);
+        Sym1(an, at, x0, 40, 80, 20, 110);
+        Sym1(an, at, x0, 55, 80, 20, 101);
         if (withasc == 1) {
-            int x1 = Ocr.OxWord(an, 0, 0, -1, 0);
-            Sym1(an, x1, 90, 66, 34, 98);
-            Sym1(an, x1, 105, 66, 34, 108);
-            Sym1(an, x1, 120, 66, 34, 100);
-            Sym1(an, x1, 135, 66, 34, 104);
-            int x2 = Ocr.OxWord(an, 0, 0, -1, 0);
-            Sym1(an, x2, 170, 80, 26, 103);
-            Sym1(an, x2, 185, 80, 26, 121);
-            Sym1(an, x2, 200, 80, 26, 112);
+            int x1 = Oil.OilWord(an, at, 90, 66, 70, 34, 0, 900, 0, 0, -1, 1);
+            Oil.OilWordCp(an, at, x1, 98);
+            Sym1(an, at, x1, 90, 66, 34, 98);
+            Sym1(an, at, x1, 105, 66, 34, 108);
+            Sym1(an, at, x1, 120, 66, 34, 100);
+            Sym1(an, at, x1, 135, 66, 34, 104);
+            int x2 = Oil.OilWord(an, at, 170, 80, 50, 26, 0, 900, 0, 0, -1, 1);
+            Oil.OilWordCp(an, at, x2, 103);
+            Sym1(an, at, x2, 170, 80, 26, 103);
+            Sym1(an, at, x2, 185, 80, 26, 121);
+            Sym1(an, at, x2, 200, 80, 26, 112);
         }
-        Plan.AnOcrEnd(an, at);
+        Oil.OilEnd(an, at);
         return at;
     }
     [Xunit.Fact]
@@ -371,37 +384,61 @@ public static class Scantest {
         emon.Testport.AssertEq(Evidence.LnGet(ln, 0, Evidence.LhY1()), 2400 + 194, "and its bottom: 0.27 of the ascender line");
     }
     internal static int SizedLines(emon.Port.Cells an, int id) {
-        // Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
-        // 30+22 (a heading, 1.5 times as tall) and 20+14 again.
-        int at = Plan.AnOcr(an, id);
-        int w0 = Plan.AnOcrWord(an, at, 10, 20, 100, 40, 900, 0, 0);
-        Plan.AnOcrCp(an, w0, 65);
-        int w1 = Plan.AnOcrWord(an, at, 10, 100, 100, 40, 900, 1, 0);
-        Plan.AnOcrCp(an, w1, 66);
-        int w2 = Plan.AnOcrWord(an, at, 10, 180, 100, 40, 900, 2, 0);
-        Plan.AnOcrCp(an, w2, 67);
-        int w3 = Plan.AnOcrWord(an, at, 10, 260, 100, 60, 900, 3, 0);
-        Plan.AnOcrCp(an, w3, 68);
-        int w4 = Plan.AnOcrWord(an, at, 10, 360, 100, 40, 900, 4, 0);
-        Plan.AnOcrCp(an, w4, 69);
-        Ocr.OxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0);
-        Ocr.OxLine(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.OxLine(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6);
-        Ocr.OxLine(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6);
-        Ocr.OxLine(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8);
-        Ocr.OxLine(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6);
-        Ocr.OxBlock(an, 10, 20, 100, 380, 0, 0, 0);
-        int x0 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x0, 10, 20, 20, 65);
-        int x1 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x1, 10, 100, 20, 66);
-        int x2 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x2, 10, 180, 20, 67);
-        int x3 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x3, 10, 260, 20, 68);
-        int x4 = Ocr.OxWord(an, 0, 0, -1, 0);
-        Sym1(an, x4, 10, 360, 20, 69);
-        Plan.AnOcrEnd(an, at);
+        int at = Oil.OilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int k = 0;
+        int y = 20;
+        int height = 40;
+        int xh = 20;
+        int asc = 14;
+        int desc = 6;
+        int @base = 55;
+        int mask = Oil.OilGet(an, at, Oil.OhCaps());
+        Oil.OilSet(an, at, Oil.OhCaps(), mask + Oil.OcRowmetrics());
+        int measuredMask = Oil.OilGet(an, at, Oil.OhNative());
+        Oil.OilSet(an, at, Oil.OhNative(), measuredMask + Oil.OcRowmetrics());
+        Oil.OilTessBlock(an, at, 10, 20, 100, 380, -1, 0, 0, 0, 0);
+        while (k < 5) {
+            y = 20 + (k * 80);
+            height = 40;
+            xh = 20;
+            asc = 14;
+            desc = 6;
+            if (k == 1) {
+                asc = 15;
+            }
+            if (k == 3) {
+                height = 60;
+                xh = 30;
+                asc = 22;
+                desc = 8;
+            }
+            if (k == 4) {
+                y = 360;
+            }
+            @base = y + 35;
+            if (k == 3) {
+                @base = 305;
+            }
+            Oil.OilLine(an, at, 10, y, 100, height, 0, 1, -1, 0, 10, @base, 110, @base, xh, asc, desc, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 5) {
+            y = 20 + (k * 80);
+            height = 40;
+            if (k == 3) {
+                height = 60;
+            }
+            if (k == 4) {
+                y = 360;
+            }
+            int word = Oil.OilWord(an, at, 10, y, 100, height, k, 900, 0, 0, -1, 1);
+            Oil.OilWordCp(an, at, word, 65 + k);
+            int sym = Oil.OilSym(an, at, word, 10, y, 15, 20, 900);
+            Oil.OilSymCp(an, sym, 65 + k);
+            k += 1;
+        }
+        Oil.OilEnd(an, at);
         return at;
     }
     [Xunit.Fact]
@@ -999,8 +1036,8 @@ public static class Scantest {
         return Scan.ScDctSpan(src, ar, dc, a, b, st, 5, sp);
     }
     [Xunit.Fact]
-    public static void TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly() {
-        emon.Testport.AssertEq(SctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+    public static void TestAScanJpegOutsideTheSharedNativewordSubsetIsRenderedRatherThanDecodedDirectly() {
+        emon.Testport.AssertEq(SctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent nativeword decode");
         emon.Testport.AssertEq(SctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
         emon.Testport.AssertEq(SctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
         emon.Testport.AssertEq(SctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
@@ -1227,40 +1264,41 @@ public static class Scantest {
         emon.Port.Cells owords = emon.Port.NewCells();
         emon.Port.Cells wd = emon.Port.NewCells();
         emon.Port.Cells ln = emon.Port.NewCells();
-        int at = Plan.AnOcr(an, 2);
-        int wnative = Plan.AnOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0);
-        Plan.AnOcrCp(an, wnative, c0);
-        Plan.AnOcrCp(an, wnative, c1);
-        Plan.AnOcrCp(an, wnative, c2);
-        int identifier = Plan.AnOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0);
-        Plan.AnOcrCp(an, identifier, 65);
-        Plan.AnOcrCp(an, identifier, 55);
-        Ocr.OxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
-        Ocr.OxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.OxBlock(an, 10, 20, 140, 40, 0, 0, 0);
-        Ocr.OxWord(an, 0, lang, -1, 1);
-        Ocr.OxWord(an, 0, 1701734144, -1, 1);
-        Plan.AnOcrEnd(an, at);
+        int at = Oil.OilTessBegin(an, 2, 3, 0, 0, 0, 0, 0, 0, script, 629, 500, 0);
+        int mask = Oil.OilGet(an, at, Oil.OhCaps());
+        Oil.OilSet(an, at, Oil.OhCaps(), mask + Oil.OcRowmetrics());
+        int measuredMask = Oil.OilGet(an, at, Oil.OhNative());
+        Oil.OilSet(an, at, Oil.OhNative(), measuredMask + Oil.OcRowmetrics());
+        Oil.OilTessBlock(an, at, 10, 20, 140, 40, -1, 0, 0, 0, 0);
+        Oil.OilLine(an, at, 10, 20, 140, 40, 0, 2, -1, 0, 10, 55, 150, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int nativeword = Oil.OilWord(an, at, 10, 20, 60, 40, 0, 900, lang, 0, -1, 3);
+        Oil.OilWordCp(an, at, nativeword, c0);
+        Oil.OilWordCp(an, at, nativeword, c1);
+        Oil.OilWordCp(an, at, nativeword, c2);
+        int identifier = Oil.OilWord(an, at, 90, 20, 60, 40, 0, 900, 1701734144, 0, -1, 3);
+        Oil.OilWordCp(an, at, identifier, 65);
+        Oil.OilWordCp(an, at, identifier, 55);
+        Oil.OilEnd(an, at);
         Scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells());
         emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfRequest()), 2, "reading belongs to its actual OCR request");
         emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfLanglen()), 3, "request language is recorded independently of word models");
         emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.OrGet(runs, 0, Evidence.OrfLang())), lang / 16777216, "request language first letter");
         emon.Testport.AssertEq(Evidence.OwCount(owords), 2, "both recorded words remain evidence");
-        emon.Testport.AssertEq(Evidence.WdCount(wd), 2, "native text and Latin identifier remain selected");
-        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfRun()), 0, "native word belongs to this run");
+        emon.Testport.AssertEq(Evidence.WdCount(wd), 2, "nativeword text and Latin identifier remain selected");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfRun()), 0, "nativeword word belongs to this run");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.OwfRun()), 0, "Latin identifier belongs to the same run");
-        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfLang()), lang, "native word keeps its engine model");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfLang()), lang, "nativeword word keeps its engine model");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.OwfLang()), 1701734144, "identifier keeps its English model");
         emon.Testport.AssertEq(Evidence.LnCount(ln), 1, "one selected source row");
-        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdLine()), 0, "native evidence word belongs to the recorded row");
+        emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdLine()), 0, "nativeword evidence word belongs to the recorded row");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 1, Evidence.HdLine()), 0, "identifier evidence word belongs to the recorded row");
-        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdLine()), 0, "source row zero owns the native value");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdLine()), 0, "source row zero owns the nativeword value");
         emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdLine()), 0, "source row zero owns the identifier value");
-        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "complete native span");
+        emon.Testport.AssertEq(Evidence.WdGet(wd, 0, Evidence.HdTlen()), 3, "complete nativeword span");
         emon.Testport.AssertEq(Evidence.WdGet(wd, 1, Evidence.HdTlen()), 2, "complete identifier span");
-        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart())), c0, "first native scalar");
-        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 1), c1, "native diacritic or script scalar");
-        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 2), c2, "last native scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart())), c0, "first nativeword scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 1), c1, "nativeword diacritic or script scalar");
+        emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 0, Evidence.HdTstart()) + 2), c2, "last nativeword scalar");
         emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 1, Evidence.HdTstart())), 65, "identifier A stays exact");
         emon.Testport.AssertEq(emon.Port.CellsAt(et, Evidence.WdGet(wd, 1, Evidence.HdTstart()) + 1), 55, "identifier value 7 stays exact");
         return 0;
@@ -1270,7 +1308,7 @@ public static class Scantest {
         ScMultilingualOwners(0, 1684370688, 1281455214, 102, 252, 114);
     }
     [Xunit.Fact]
-    public static void TestUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers() {
+    public static void TestUrduNativewordValuesDoNotAuthorizeDeletingLatinIdentifiers() {
         ScMultilingualOwners(0, 1970430976, 1098015074, 1593, 1575, 1605);
     }
     [Xunit.Fact]
@@ -1329,26 +1367,44 @@ public static class Scantest {
     }
     [Xunit.Fact]
     public static void TestUnknownOcrBaselineUsesBoxBottomWithoutRewritingTheAnswer() {
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells flat = emon.Port.NewCells();
         emon.Port.Cells an = emon.Port.NewCells();
         emon.Port.Cells et = emon.Port.NewCells();
         emon.Port.Cells runs = emon.Port.NewCells();
         emon.Port.Cells lines = emon.Port.NewCells();
         emon.Port.Cells words = emon.Port.NewCells();
-        int at = ThreeLines(an, 2);
-        int ext = Ocr.OxFind(an, at);
-        int l = Ocr.OxLineAt(an, ext, 0);
-        emon.Port.CellsSet(an, l + 4, -1);
-        emon.Port.CellsSet(an, l + 5, -1);
-        emon.Port.CellsSet(an, l + 6, -1);
-        emon.Port.CellsSet(an, l + 7, -1);
-        emon.Port.CellsSet(an, l + 11, -1);
-        emon.Port.CellsSet(an, l + 12, -1);
-        emon.Port.CellsSet(an, l + 13, -1);
-        PageOf(an, at, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), lines, words, emon.Port.NewCells(), emon.Port.NewCells());
-        emon.Testport.AssertEq(emon.Port.CellsAt(an, l + 4), -1, "raw answer still records absence");
-        emon.Testport.AssertEq(emon.Port.CellsAt(an, l + 5), -1, "no measured baseline is invented in the transcript");
-        emon.Testport.AssertEq(Evidence.OlGet(lines, 0, Evidence.LhBy0()), 66 * 24, "layout fallback is the measured line box bottom");
-        emon.Testport.AssertEq(Evidence.OwGet(words, 0, Evidence.HdBy0()), 66 * 24, "word layout does not interpolate minus one pixels");
+        int original = ThreeLines(raw, 2);
+        int first = Oil.OilLineAt(raw, original, 0);
+        int end = first + 42;
+        int i = 4;
+        while (i < emon.Port.CellsLen(raw)) {
+            if ((i < first) || ((i >= end) || (((i - first) % 14) < 7))) {
+                if ((i == 8) || (i == 9)) {
+                    emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i) - 24);
+                } else {
+                    emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i));
+                }
+            }
+            i += 1;
+        }
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 2, an), 0, "a baseline-free OIL answer is valid");
+        int size = emon.Port.CellsLen(an);
+        PageOf(an, 0, emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), lines, words, emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertEq(emon.Port.CellsLen(an), size, "ingestion does not add invented baseline cells");
+        emon.Testport.AssertEq(Oil.OilLineField(an, 0, 0, 4), -1, "the raw baseline remains absent");
+        emon.Testport.AssertEq(Evidence.OlGet(lines, 0, Evidence.LhBy0()), 66 * 24, "layout fallback uses the measured line box bottom");
+        emon.Testport.AssertEq(Evidence.OwGet(words, 0, Evidence.HdBy0()), 66 * 24, "word layout does not interpolate absent measurements");
         emon.Testport.AssertEq(Evidence.OwGet(words, 0, Evidence.HdBy1()), 66 * 24, "both ends use the same fallback");
+    }
+    [Xunit.Fact]
+    public static void TestLayoutOrientationAndOsdRemainIndependentMeasurements() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        int at = ThreeLines(ans, 2);
+        Oil.OilSet(ans, at, Oil.OhOrient(), 2);
+        PageOf(ans, at, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), runs, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfOrient()), 1, "layout orientation comes from the measured block");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, 0, Evidence.OrfOsd()), 180, "OSD orientation remains the independent header measurement");
     }
 }

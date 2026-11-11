@@ -1,38 +1,16 @@
 ;; Laws for `emon.upscale` (D564; SPEC 3.4, 8.3; D211, D215): the effective resolution estimated from the text's x-height, the factor a raster is read
 ;; again by (and when it is not: large enough text, a page turned, a raster too big), the weights of the cubic, and the enlarged raster itself.
 (ns emon.upscaletest
-  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
             [emon.port :refer [cells-len cells-at bms-put bms-get bms-has bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
-            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
-            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-find]]
+
             [emon.upscale :refer [up-receipt-score up-eff-dpi100 up-xheight up-score up-factor up-weights up-make up-max up-xh-trigger]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
 
 (defn ^I32 ut-answer [^:mut ^Cells ans ^I32 id ^I32 nlines ^I32 xh ^I32 w ^I32 osd ^I32 oconf]
-  (comment "An OCR answer of `nlines` lines, each of one word \"Hi\" 40 pixels high and `w` wide, whose row x-height is `xh` (0: the engine says none); OSD says `osd` degrees")
-  (comment "at the confidence `oconf` (x10; -1 for no OSD). Answers where it is.")
-  (let [^I32 at (an-ocr ans id)
-        ^:mut ^I32 k 0
-        ^:mut ^I32 word 0]
-    (while (< k nlines)
-      (do (set word (an-ocr-word ans at 10 (+ 20 (* k 60)) w 40 900 k 0))
-          (an-ocr-cp ans word 72)
-          (an-ocr-cp ans word 105)
-          (set k (+ k 1))))
-    (ox-begin ans 0 0 0 0 osd 1281455214 100 oconf nlines 1 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-line ans 10 (+ 20 (* k 60)) w 40 10 (+ 55 (* k 60)) (+ 10 w) (+ 55 (* k 60)) 0 0 0 xh 14 6)
-          (set k (+ k 1))))
-    (ox-block ans 10 20 w (* nlines 60) 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-word ans 0 0 -1 0)
-          (set k (+ k 1))))
-    (an-ocr-end ans at)
-    (return at)))
+    (return (ofx-lines ans id nlines xh w 1 900 osd 1281455214 100 oconf 0 0 0)))
 
 (defn ^I32 ut-factor [^I32 nlines ^I32 xh ^I32 pxw ^I32 pxh ^I32 osd ^I32 oconf]
   (let [^Cells ans (new-cells)
@@ -40,28 +18,8 @@
     (return (up-factor ans at pxw pxh (new-cells)))))
 
 (defn ^I32 ut-factor-c [^I32 nlines ^I32 xh ^I32 conf]
-  (comment "`up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.")
-  (let [^Cells ans (new-cells)
-        ^I32 at (an-ocr ans 272)
-        ^:mut ^I32 k 0
-        ^:mut ^I32 word 0]
-    (while (< k nlines)
-      (do (set word (an-ocr-word ans at 10 (+ 20 (* k 60)) 200 40 conf k 0))
-          (an-ocr-cp ans word 72)
-          (an-ocr-cp ans word 105)
-          (set k (+ k 1))))
-    (ox-begin ans 0 0 0 0 -1 1281455214 100 -1 nlines 1 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-line ans 10 (+ 20 (* k 60)) 200 40 10 (+ 55 (* k 60)) 210 (+ 55 (* k 60)) 0 0 0 xh 14 6)
-          (set k (+ k 1))))
-    (ox-block ans 10 20 200 (* nlines 60) 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-word ans 0 0 -1 0)
-          (set k (+ k 1))))
-    (an-ocr-end ans at)
-    (return (up-factor ans at 765 990 (new-cells)))))
+    (let [^Cells ans (new-cells) ^I32 at (ofx-lines ans 272 nlines xh 200 1 conf -1 1281455214 100 -1 0 0 0)]
+      (return (up-factor ans at 765 990 (new-cells)))))
 
 (deftest test-text-a-little-over-the-trigger-that-the-engine-read-badly-is-read-again-enlarged
   (comment "P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was")
@@ -83,12 +41,12 @@
   (let [^Cells ans (new-cells)
         ^Cells hist (new-cells)
         ^I32 at (ut-answer ans 272 5 6 300 -1 -1)
-        ^I32 ext (ox-find ans at)]
+        ^I32 ext (oil-find ans at)]
     (assert-eq (up-xheight ans ext hist) 6 "five lines of 6 pixels")
     (assert-eq (cells-len hist) 101 "the histogram is made")
     (let [^Cells ans2 (new-cells)
           ^I32 at2 (ut-answer ans2 272 3 0 300 -1 -1)
-          ^I32 ext2 (ox-find ans2 at2)]
+          ^I32 ext2 (oil-find ans2 at2)]
       (assert-eq (up-xheight ans2 ext2 hist) 18 "the engine says none: 45 per cent of the 40 pixel box"))))
 
 (deftest test-small-text-is-read-again-enlarged-to-an-x-height-of-twenty
@@ -175,13 +133,13 @@
       (assert-eq (bitmap-u8 big 11 0 0) 255 "white at the right"))))
 
 (deftest test-receipt-quality-uses-confident-alphanumeric-bearing-token-length
-  (let [^Cells ans (new-cells) ^I32 at (an-ocr ans 31)
-        ^I32 low (an-ocr-word ans at 0 0 10 10 499 0 0)]
-    (an-ocr-cp ans low 65)
-    (let [^I32 edge (an-ocr-word ans at 10 0 10 10 500 0 0)] (an-ocr-cp ans edge 57))
-    (let [^I32 dots (an-ocr-word ans at 20 0 10 10 999 0 0)]
-      (an-ocr-cp ans dots 46) (an-ocr-cp ans dots 46) (an-ocr-cp ans dots 46))
-    (let [^I32 token (an-ocr-word ans at 30 0 10 10 800 0 0)]
-      (an-ocr-cp ans token 36) (an-ocr-cp ans token 65))
-    (an-ocr-end ans at)
+  (let [^Cells ans (new-cells) ^I32 at (oil-begin ans 31 1 256 256 1 1 0 0)
+        ^I32 low (oil-word ans at 0 0 10 10 -1 499 0 0 -1 0)]
+    (oil-word-cp ans at low 65)
+    (let [^I32 edge (oil-word ans at 10 0 10 10 -1 500 0 0 -1 0)] (oil-word-cp ans at edge 57))
+    (let [^I32 dots (oil-word ans at 20 0 10 10 -1 999 0 0 -1 0)]
+      (oil-word-cp ans at dots 46) (oil-word-cp ans at dots 46) (oil-word-cp ans at dots 46))
+    (let [^I32 token (oil-word ans at 30 0 10 10 -1 800 0 0 -1 0)]
+      (oil-word-cp ans at token 36) (oil-word-cp ans at token 65))
+    (oil-end ans at)
     (assert-eq (up-receipt-score ans at) 131 "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes")))

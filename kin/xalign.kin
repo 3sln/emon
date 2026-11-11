@@ -1065,7 +1065,7 @@
       (do (set r (+ o0 i))
           (xa-load-head scr (+ nt i) owords 32 r)
           (xa-hbs scr (+ nt i) 9 3)
-          (set f (cells-at owords (+ (* r 28) (owf-run))))
+          (set f (cells-at owords (+ (* r 32) (owf-run))))
           (xa-hbs scr (+ nt i) 11 f)
           (if (!= f prun)
             (do (set rk (+ rk 1))

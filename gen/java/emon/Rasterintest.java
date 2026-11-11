@@ -120,20 +120,21 @@ public final class Rasterintest {
         emon.Testport.assertEq(pagePol(0, a2, emon.Port.newCells(), 0, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), Rasterin.rsUnsupported(), "not read, whatever the policy");
     }
     public static int fakeOcr(emon.Port.Cells ans, int id) {
-        // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
-        int at = Plan.anOcr(ans, id);
-        int w = Plan.anOcrWord(ans, at, 10, 20, 30, 40, 900, 0, 0);
-        Plan.anOcrCp(ans, w, 72);
-        Plan.anOcrCp(ans, w, 105);
-        Ocr.oxBegin(ans, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        Ocr.oxLine(ans, 10, 20, 30, 40, 10, 55, 40, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.oxBlock(ans, 10, 20, 30, 40, 0, 0, 0);
-        int x = Ocr.oxWord(ans, 0, 0, -1, 0);
-        int s0 = Ocr.oxSym(ans, x, 10, 20, 15, 40, 900);
-        Ocr.oxSymCp(ans, s0, 72);
-        int s1 = Ocr.oxSym(ans, x, 25, 20, 15, 40, 900);
-        Ocr.oxSymCp(ans, s1, 105);
-        Plan.anOcrEnd(ans, at);
+        int at = Oil.oilTessBegin(ans, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int mask = Oil.oilGet(ans, at, Oil.ohCaps());
+        Oil.oilSet(ans, at, Oil.ohCaps(), mask + Oil.ocRowmetrics());
+        int measuredMask = Oil.oilGet(ans, at, Oil.ohNative());
+        Oil.oilSet(ans, at, Oil.ohNative(), measuredMask + Oil.ocRowmetrics());
+        Oil.oilTessBlock(ans, at, 10, 20, 30, 40, -1, 0, 0, 0, 0);
+        Oil.oilLine(ans, at, 10, 20, 30, 40, 0, 1, -1, 0, 10, 55, 40, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.oilWord(ans, at, 10, 20, 30, 40, 0, 900, 0, 0, -1, 1);
+        Oil.oilWordCp(ans, at, word, 72);
+        Oil.oilWordCp(ans, at, word, 105);
+        int s0 = Oil.oilSym(ans, at, word, 10, 20, 15, 40, 900);
+        Oil.oilSymCp(ans, s0, 72);
+        int s1 = Oil.oilSym(ans, at, word, 25, 20, 15, 40, 900);
+        Oil.oilSymCp(ans, s1, 105);
+        Oil.oilEnd(ans, at);
         return at;
     }
     public static void testWithThePolicyTheFramesSecondRoundAsksForOcrOfItsBitmap() {
@@ -205,31 +206,7 @@ public final class Rasterintest {
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
     }
     public static int fakeLines(emon.Port.Cells ans, int id, int nlines, int scale, int xh, int osd, int oconf) {
-        // An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
-        // that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
-        int at = Plan.anOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.anOcrWord(ans, at, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 900, k, 0);
-            Plan.anOcrCp(ans, word, 72);
-            Plan.anOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.oxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxLine(ans, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 10 * scale, (55 + (k * 60)) * scale, 70 * scale, (55 + (k * 60)) * scale, 0, 0, 0, xh * scale, 14, 6);
-            k += 1;
-        }
-        Ocr.oxBlock(ans, 10 * scale, 20 * scale, 60 * scale, (nlines * 60) * scale, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.anOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.ofxLines(ans, id, nlines, xh, 60, scale, 900, osd, 1281455214, 100, oconf, 0, 0, 0);
     }
     public static int whiteFrame(emon.Port.BitmapSet bms, int id, int w, int h) {
         // A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.

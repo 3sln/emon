@@ -1,12 +1,12 @@
 ;; Laws for `emon.scan` (P6.5, P6.5a; D211-D215): the language a locale hint names, the OCR request it builds, an answer's evidence
 ;; and the pipeline's lines made from it (size, box and rotation of a line, D213), and the provenance of OCR text in the Model.
 (ns emon.scantest
-  (:require [emon.lang :refer [I32 Cells Src]]
+  (:require [emon.oil :refer [oil-tess-begin oil-begin oil-get oil-set oh-caps oh-native oh-orient oc-rowmetrics oil-tess-block oil-line oil-word oil-word-cp oil-sym oil-sym-cp oil-end oil-find oil-line-at oil-line-field oil-flat]] [emon.lang :refer [I32 Cells Src]]
             [emon.test :refer [deftest assert-eq assert-that new-cells test-file Str test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-push cells-set src-of-blob]]
             [emon.pdfdoc :refer [pd-open]]
-            [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs an-ocr an-ocr-word an-ocr-cp an-ocr-end pk-ocr]]
-            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi ox-find ox-line-at]]
+            [emon.plan :refer [rec-kind rec-id rq-arg rq-nargs     pk-ocr]]
+            [emon.ocr :refer [      ocf-dpi  ]]
             [emon.evidence :refer [or-new or-set orf-wcount orf-pass op-re-rotated ol-set ol-new ow-new ow-set os-new rl-new rl-set rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick olf-retry-gap olf-run ls-frame owf-sfirst owf-scount
                                    co-new co-set cf-conf cf-ink ik-new ik-set ikf-role ir-body im-new
                                    oe-garbage oe-rule-ghost oe-corrected
@@ -15,7 +15,7 @@
                                    lh-first lh-count lh-rot lh-dir lh-x0 lh-x1 lh-y0 lh-y1 lh-by0 lh-by1
                                    wf-size wf-style wf-gap wf-wbreak wf-src wf-font lf-src lf-order hd-tstart hd-tlen hd-line
                                    hd-x0 hd-x1 hd-y0 hd-y1 hd-by0 hd-by1 hd-conf owf-run olf-xheight olf-asc olf-desc owf-psize owf-flags
-                                   orf-request owf-lang orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
+                                   orf-orient orf-request owf-lang orf-bview orf-lang orf-langlen orf-osd orf-script orf-view
                                    obf-orient obf-wdir obf-btype vwf-kind vk-engine-binary wb-space wb-line-end
                                    epf-page epf-flags eg-raster ep-count]]
             [emon.scan :refer [sc-write-rejected-ocr sc-admit-floor sc-admit-word sc-write-empty-ocr sc-trust sc-write-empty-regions sc-on-vrule sc-clean-text sc-word-agreement sc-format-control sc-unspaced sc-word-trust sc-lang sc-request sc-page sc-tag sc-tag-unread sc-mask-unread sc-unread-conf sc-eligible sc-write-bare sc-dct-span
@@ -92,31 +92,29 @@
 ;; ------------------------------------------------------------------------- an answer as evidence and as lines
 
 (defn ^I32 three-lines [^Cells an ^I32 id]
-  (comment "An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope")
-  (comment "(6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.")
-  (let [^I32 at (an-ocr an id)
-        ^I32 w0 (an-ocr-word an at 10 20 300 40 900 0 0)]
-    (an-ocr-cp an w0 65)
-    (let [^I32 w1 (an-ocr-word an at 10 100 300 40 800 1 0)]
-      (an-ocr-cp an w1 66)
-      (let [^I32 w2 (an-ocr-word an at 10 180 300 40 0 2 0)]
-        (an-ocr-cp an w2 67)
-        (ox-begin an 1 0 0 -115 90 1231 17 187 3 1 1 640 480)
-        (ox-line an 10 20 300 46 10 55 310 61 0 0 0 20 14 6)
-        (ox-line an 10 100 300 46 10 135 310 141 0 0 0 20 14 6)
-        (ox-line an 10 180 300 40 10 215 310 215 0 0 0 20 14 6)
-        (ox-block an 10 20 300 200 1 2 0)
-        (let [^I32 x0 (ox-word an 0 6647399 11 3)
-              ^I32 s0 (ox-sym an x0 10 20 20 40 900)]
-          (ox-sym-cp an s0 65))
-        (let [^I32 x1 (ox-word an 0 6647399 -1 0)
-              ^I32 s1 (ox-sym an x1 10 100 20 40 800)]
-          (ox-sym-cp an s1 66))
-        (let [^I32 x2 (ox-word an 0 6647399 -1 1)
-              ^I32 s2 (ox-sym an x2 10 180 20 40 0)]
-          (ox-sym-cp an s2 67))
-        (an-ocr-end an at)
-        (return at)))))
+  (let [^I32 at (oil-tess-begin an id 3 1 1 0 0 -115 90 1231 17 187 1)
+        ^:mut ^I32 k 0 ^:mut ^I32 y 20 ^:mut ^I32 height 46 ^:mut ^I32 delta 6
+        ^:mut ^I32 conf 900 ^:mut ^I32 lex 3 ^:mut ^I32 psize 11]
+    (let [^I32 mask (oil-get an at (oh-caps))] (oil-set an at (oh-caps) (+ mask (oc-rowmetrics))))
+    (let [^I32 measured-mask (oil-get an at (oh-native))] (oil-set an at (oh-native) (+ measured-mask (oc-rowmetrics))))
+    (oil-tess-block an at 10 20 300 200 -1 1 2 0 0)
+    (while (< k 3)
+      (do (set y (+ 20 (* k 80)))
+          (if (== k 2) (do (set height 40) (set delta 0)))
+          (oil-line an at 10 y 300 height 0 1 -1 0 10 (+ y 35) 310 (+ (+ y 35) delta)
+                    20 14 6 0 0 0 0 0 0 0 0 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k 3)
+      (do (set y (+ 20 (* k 80)))
+          (if (== k 1) (do (set conf 800) (set lex 1) (set psize -1)))
+          (if (== k 2) (do (set conf 0) (set lex 3)))
+          (let [^I32 word (oil-word an at 10 y 300 40 k conf 6647399 0 psize lex)]
+            (oil-word-cp an at word (+ 65 k))
+            (let [^I32 sym (oil-sym an at word 10 y 20 40 conf)] (oil-sym-cp an sym (+ 65 k))))
+          (set k (+ k 1))))
+    (oil-end an at)
+    (return at)))
 
 (defn ^I32 page-of [^Cells an ^I32 at ^Cells epages ^Cells views ^Cells etext ^Cells feats ^Cells images ^Cells oruns
                     ^Cells oblocks ^Cells olines ^Cells owords ^Cells wd ^Cells ln]
@@ -145,7 +143,7 @@
     (assert-eq (ow-count owords) 3 "three words")
     (assert-eq (ow-get owords 0 (owf-psize)) 1100 "the engine's point size is in centipoints")
     (assert-eq (ow-get owords 1 (owf-psize)) -1 "unknown stays -1")
-    (assert-eq (ow-get owords 0 (owf-flags)) 3 "dictionary and numeric")
+    (assert-eq (ow-get owords 0 (owf-flags)) 1 "dictionary membership remains; alphabetic text is not numeric")
     (assert-eq (ow-get owords 2 (hd-conf)) 0 "a confidence of 0 is carried as it is (D130)")
     (assert-eq (ol-get olines 0 (olf-xheight)) 480 "x-height 20 px is 480 cpt")
     (assert-eq (ol-get olines 0 (olf-asc)) 336 "ascenders 14 px")
@@ -300,42 +298,31 @@
 
 ;; --------------------------------------------------------------- metrics measured from the symbols (D213)
 
-(defn ^I32 sym1 [^Cells an ^I32 wx ^I32 x ^I32 y ^I32 h ^I32 cp]
+(defn ^I32 sym1 [^Cells an ^I32 at ^I32 wx ^I32 x ^I32 y ^I32 h ^I32 cp]
   (comment "A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.")
-  (let [^I32 s (ox-sym an wx x y 15 h 900)]
-    (ox-sym-cp an s cp)
+  (let [^I32 s (oil-sym an at wx x y 15 h 900)]
+    (oil-sym-cp an s cp)
     (return 0)))
 
 (defn ^I32 no-row-attributes [^Cells an ^I32 id ^I32 withasc]
-  (comment "An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height")
-  (comment "letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).")
-  (let [^I32 at (an-ocr an id)
-        ^I32 w0 (an-ocr-word an at 10 80 70 20 900 0 0)]
-    (an-ocr-cp an w0 110)
+  (let [^I32 at (oil-tess-begin an id 3 1 0 0 0 0 -1 0 -1 -1 0)
+        ^:mut ^I32 count 1]
+    (if (== withasc 1) (set count 3))
+    (oil-tess-block an at 10 66 210 46 -1 0 0 0 0)
+    (oil-line an at 10 66 210 46 0 count -1 0 10 100 220 100 -1 -1 -1 0 0 0 0 0 0 0 0 0)
+    (let [^I32 x0 (oil-word an at 10 80 70 20 0 900 0 0 -1 1)]
+      (oil-word-cp an at x0 110)
+      (sym1 an at x0 10 80 20 110) (sym1 an at x0 25 80 20 111)
+      (sym1 an at x0 40 80 20 110) (sym1 an at x0 55 80 20 101))
     (if (== withasc 1)
-      (let [^I32 w1 (an-ocr-word an at 90 66 70 34 900 0 0)]
-        (an-ocr-cp an w1 98)
-        (let [^I32 w2 (an-ocr-word an at 170 80 50 26 900 0 0)]
-          (an-ocr-cp an w2 103))))
-    (ox-begin an 0 0 0 0 -1 0 -1 -1 1 1 0 0 0)
-    (ox-line an 10 66 210 46 10 100 220 100 0 0 0 -1 -1 -1)
-    (ox-block an 10 66 210 46 0 0 0)
-    (let [^I32 x0 (ox-word an 0 0 -1 0)]
-      (sym1 an x0 10 80 20 110)
-      (sym1 an x0 25 80 20 111)
-      (sym1 an x0 40 80 20 110)
-      (sym1 an x0 55 80 20 101))
-    (if (== withasc 1)
-      (do (let [^I32 x1 (ox-word an 0 0 -1 0)]
-            (sym1 an x1 90 66 34 98)
-            (sym1 an x1 105 66 34 108)
-            (sym1 an x1 120 66 34 100)
-            (sym1 an x1 135 66 34 104))
-          (let [^I32 x2 (ox-word an 0 0 -1 0)]
-            (sym1 an x2 170 80 26 103)
-            (sym1 an x2 185 80 26 121)
-            (sym1 an x2 200 80 26 112))))
-    (an-ocr-end an at)
+      (do (let [^I32 x1 (oil-word an at 90 66 70 34 0 900 0 0 -1 1)]
+            (oil-word-cp an at x1 98)
+            (sym1 an at x1 90 66 34 98) (sym1 an at x1 105 66 34 108)
+            (sym1 an at x1 120 66 34 100) (sym1 an at x1 135 66 34 104))
+          (let [^I32 x2 (oil-word an at 170 80 50 26 0 900 0 0 -1 1)]
+            (oil-word-cp an at x2 103)
+            (sym1 an at x2 170 80 26 103) (sym1 an at x2 185 80 26 121) (sym1 an at x2 200 80 26 112))))
+    (oil-end an at)
     (return at)))
 
 (deftest test-a-line-is-measured-from-its-symbols-when-the-engine-gives-no-row-attributes
@@ -376,38 +363,30 @@
 ;; ------------------------------------------------------------------ sizes are a page's, not a line's
 
 (defn ^I32 sized-lines [^Cells an ^I32 id]
-  (comment "Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,")
-  (comment "30+22 (a heading, 1.5 times as tall) and 20+14 again.")
-  (let [^I32 at (an-ocr an id)
-        ^I32 w0 (an-ocr-word an at 10 20 100 40 900 0 0)]
-    (an-ocr-cp an w0 65)
-    (let [^I32 w1 (an-ocr-word an at 10 100 100 40 900 1 0)]
-      (an-ocr-cp an w1 66)
-      (let [^I32 w2 (an-ocr-word an at 10 180 100 40 900 2 0)]
-        (an-ocr-cp an w2 67)
-        (let [^I32 w3 (an-ocr-word an at 10 260 100 60 900 3 0)]
-          (an-ocr-cp an w3 68)
-          (let [^I32 w4 (an-ocr-word an at 10 360 100 40 900 4 0)]
-            (an-ocr-cp an w4 69)
-            (ox-begin an 0 0 0 0 -1 0 -1 -1 5 1 0 0 0)
-            (ox-line an 10 20 100 40 10 55 110 55 0 0 0 20 14 6)
-            (ox-line an 10 100 100 40 10 135 110 135 0 0 0 20 15 6)
-            (ox-line an 10 180 100 40 10 215 110 215 0 0 0 20 14 6)
-            (ox-line an 10 260 100 60 10 305 110 305 0 0 0 30 22 8)
-            (ox-line an 10 360 100 40 10 395 110 395 0 0 0 20 14 6)
-            (ox-block an 10 20 100 380 0 0 0)
-            (let [^I32 x0 (ox-word an 0 0 -1 0)]
-              (sym1 an x0 10 20 20 65))
-            (let [^I32 x1 (ox-word an 0 0 -1 0)]
-              (sym1 an x1 10 100 20 66))
-            (let [^I32 x2 (ox-word an 0 0 -1 0)]
-              (sym1 an x2 10 180 20 67))
-            (let [^I32 x3 (ox-word an 0 0 -1 0)]
-              (sym1 an x3 10 260 20 68))
-            (let [^I32 x4 (ox-word an 0 0 -1 0)]
-              (sym1 an x4 10 360 20 69))
-            (an-ocr-end an at)
-            (return at)))))))
+  (let [^I32 at (oil-tess-begin an id 3 1 0 0 0 0 -1 0 -1 -1 0)
+        ^:mut ^I32 k 0 ^:mut ^I32 y 20 ^:mut ^I32 height 40
+        ^:mut ^I32 xh 20 ^:mut ^I32 asc 14 ^:mut ^I32 desc 6 ^:mut ^I32 base 55]
+    (let [^I32 mask (oil-get an at (oh-caps))] (oil-set an at (oh-caps) (+ mask (oc-rowmetrics))))
+    (let [^I32 measured-mask (oil-get an at (oh-native))] (oil-set an at (oh-native) (+ measured-mask (oc-rowmetrics))))
+    (oil-tess-block an at 10 20 100 380 -1 0 0 0 0)
+    (while (< k 5)
+      (do (set y (+ 20 (* k 80))) (set height 40) (set xh 20) (set asc 14) (set desc 6)
+          (if (== k 1) (set asc 15))
+          (if (== k 3) (do (set height 60) (set xh 30) (set asc 22) (set desc 8)))
+          (if (== k 4) (set y 360))
+          (set base (+ y 35)) (if (== k 3) (set base 305))
+          (oil-line an at 10 y 100 height 0 1 -1 0 10 base 110 base xh asc desc 0 0 0 0 0 0 0 0 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k 5)
+      (do (set y (+ 20 (* k 80))) (set height 40)
+          (if (== k 3) (set height 60)) (if (== k 4) (set y 360))
+          (let [^I32 word (oil-word an at 10 y 100 height k 900 0 0 -1 1)]
+            (oil-word-cp an at word (+ 65 k))
+            (let [^I32 sym (oil-sym an at word 10 y 15 20 900)] (oil-sym-cp an sym (+ 65 k))))
+          (set k (+ k 1))))
+    (oil-end an at)
+    (return at)))
 
 (deftest test-a-pages-lines-of-one-size-measured-a-pixel-apart-get-one-size
   (let [^Cells an (new-cells)
@@ -948,8 +927,8 @@
     (if (!= (pd-open src ar dc a b st) 0) (return -1))
     (return (sc-dct-span src ar dc a b st 5 sp))))
 
-(deftest test-a-scan-jpeg-outside-the-shared-native-subset-is-rendered-rather-than-decoded-directly
-  (assert-eq (sct-direct-dct "assets/dct-arith.pdf") 0 "arithmetic JPEG needs page rendering, not a host-dependent native decode")
+(deftest test-a-scan-jpeg-outside-the-shared-nativeword-subset-is-rendered-rather-than-decoded-directly
+  (assert-eq (sct-direct-dct "assets/dct-arith.pdf") 0 "arithmetic JPEG needs page rendering, not a host-dependent nativeword decode")
   (assert-eq (sct-direct-dct "assets/dct-cmyk.pdf") 0 "CMYK also needs rendering for scan OCR")
   (assert-eq (sct-direct-dct "assets/dct-decode.pdf") 1 "ordinary 8-bit three-component JPEG stays on the direct path")
   (assert-eq (sct-direct-dct "assets/dct-a85-decode.pdf") 0 "a filter chain still needs rendering"))
@@ -1095,47 +1074,43 @@
     (assert-eq (bit-and (ow-get ow 0 (owf-flags)) (oe-garbage)) (oe-garbage) "the refused occurrence has a ledger fate")))
 
 ;; D802: multilingual selection must preserve recorded owners and values.
-;; These guards deliberately include a Latin identifier beside native text:
+;; These guards deliberately include a Latin identifier beside nativeword text:
 ;; deleting every English-model word is not a source-backed replacement.
 (defn ^I32 sc-multilingual-owners [^TestT emon-t ^I32 lang ^I32 script ^I32 c0 ^I32 c1 ^I32 c2]
   (let [^Cells an (new-cells) ^Cells et (new-cells) ^Cells runs (new-cells)
         ^Cells olines (new-cells) ^Cells owords (new-cells)
         ^Cells wd (new-cells) ^Cells ln (new-cells)
-        ^I32 at (an-ocr an 2)
-        ^I32 wnative (an-ocr-word an at 10 20 60 40 900 0 0)]
-    (an-ocr-cp an wnative c0)
-    (an-ocr-cp an wnative c1)
-    (an-ocr-cp an wnative c2)
-    (let [^I32 identifier (an-ocr-word an at 90 20 60 40 900 0 0)]
-      (an-ocr-cp an identifier 65)
-      (an-ocr-cp an identifier 55))
-    (ox-begin an 0 0 0 0 0 script 629 500 1 1 0 0 0)
-    (ox-line an 10 20 140 40 10 55 150 55 0 0 0 20 14 6)
-    (ox-block an 10 20 140 40 0 0 0)
-    (ox-word an 0 lang -1 1)
-    (ox-word an 0 1701734144 -1 1)
-    (an-ocr-end an at)
+        ^I32 at (oil-tess-begin an 2 3 0 0 0 0 0 0 script 629 500 0)]
+    (let [^I32 mask (oil-get an at (oh-caps))] (oil-set an at (oh-caps) (+ mask (oc-rowmetrics))))
+    (let [^I32 measured-mask (oil-get an at (oh-native))] (oil-set an at (oh-native) (+ measured-mask (oc-rowmetrics))))
+    (oil-tess-block an at 10 20 140 40 -1 0 0 0 0)
+    (oil-line an at 10 20 140 40 0 2 -1 0 10 55 150 55 20 14 6 0 0 0 0 0 0 0 0 0)
+    (let [^I32 nativeword (oil-word an at 10 20 60 40 0 900 lang 0 -1 3)]
+      (oil-word-cp an at nativeword c0) (oil-word-cp an at nativeword c1) (oil-word-cp an at nativeword c2))
+    (let [^I32 identifier (oil-word an at 90 20 60 40 0 900 1701734144 0 -1 3)]
+      (oil-word-cp an at identifier 65) (oil-word-cp an at identifier 55))
+    (oil-end an at)
     (sc-page an at 1 2 1 17712 22848 738 952 30000 0 0 0 0 0 17712 22848 (quot lang 256)
              (new-cells) (new-cells) et (new-cells) (new-cells) runs (new-cells) olines owords (new-cells) (new-cells) wd ln (new-cells))
     (assert-eq (or-get runs 0 (orf-request)) 2 "reading belongs to its actual OCR request")
     (assert-eq (or-get runs 0 (orf-langlen)) 3 "request language is recorded independently of word models")
     (assert-eq (cells-at et (or-get runs 0 (orf-lang))) (quot lang 16777216) "request language first letter")
     (assert-eq (ow-count owords) 2 "both recorded words remain evidence")
-    (assert-eq (wd-count wd) 2 "native text and Latin identifier remain selected")
-    (assert-eq (ow-get owords 0 (owf-run)) 0 "native word belongs to this run")
+    (assert-eq (wd-count wd) 2 "nativeword text and Latin identifier remain selected")
+    (assert-eq (ow-get owords 0 (owf-run)) 0 "nativeword word belongs to this run")
     (assert-eq (ow-get owords 1 (owf-run)) 0 "Latin identifier belongs to the same run")
-    (assert-eq (ow-get owords 0 (owf-lang)) lang "native word keeps its engine model")
+    (assert-eq (ow-get owords 0 (owf-lang)) lang "nativeword word keeps its engine model")
     (assert-eq (ow-get owords 1 (owf-lang)) 1701734144 "identifier keeps its English model")
     (assert-eq (ln-count ln) 1 "one selected source row")
-    (assert-eq (ow-get owords 0 (hd-line)) 0 "native evidence word belongs to the recorded row")
+    (assert-eq (ow-get owords 0 (hd-line)) 0 "nativeword evidence word belongs to the recorded row")
     (assert-eq (ow-get owords 1 (hd-line)) 0 "identifier evidence word belongs to the recorded row")
-    (assert-eq (wd-get wd 0 (hd-line)) 0 "source row zero owns the native value")
+    (assert-eq (wd-get wd 0 (hd-line)) 0 "source row zero owns the nativeword value")
     (assert-eq (wd-get wd 1 (hd-line)) 0 "source row zero owns the identifier value")
-    (assert-eq (wd-get wd 0 (hd-tlen)) 3 "complete native span")
+    (assert-eq (wd-get wd 0 (hd-tlen)) 3 "complete nativeword span")
     (assert-eq (wd-get wd 1 (hd-tlen)) 2 "complete identifier span")
-    (assert-eq (cells-at et (wd-get wd 0 (hd-tstart))) c0 "first native scalar")
-    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 1)) c1 "native diacritic or script scalar")
-    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 2)) c2 "last native scalar")
+    (assert-eq (cells-at et (wd-get wd 0 (hd-tstart))) c0 "first nativeword scalar")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 1)) c1 "nativeword diacritic or script scalar")
+    (assert-eq (cells-at et (+ (wd-get wd 0 (hd-tstart)) 2)) c2 "last nativeword scalar")
     (assert-eq (cells-at et (wd-get wd 1 (hd-tstart))) 65 "identifier A stays exact")
     (assert-eq (cells-at et (+ (wd-get wd 1 (hd-tstart)) 1)) 55 "identifier value 7 stays exact")
     (return 0)))
@@ -1143,7 +1118,7 @@
 (deftest test-german-umlaut-and-latin-identifier-keep-their-reading-and-row
   (sc-multilingual-owners (test-t) 1684370688 1281455214 102 252 114))
 
-(deftest test-urdu-native-values-do-not-authorize-deleting-latin-identifiers
+(deftest test-urdu-nativeword-values-do-not-authorize-deleting-latin-identifiers
   (sc-multilingual-owners (test-t) 1970430976 1098015074 1593 1575 1605))
 
 (deftest test-japanese-mixed-reading-retains-source-backed-latin-identifiers
@@ -1190,15 +1165,34 @@
 
 ;; OP1b: absence is metadata, never a negative physical page coordinate.
 (deftest test-unknown-ocr-baseline-uses-box-bottom-without-rewriting-the-answer
-  (let [^Cells an (new-cells) ^Cells et (new-cells) ^Cells runs (new-cells)
-        ^Cells lines (new-cells) ^Cells words (new-cells)
-        ^I32 at (three-lines an 2) ^I32 ext (ox-find an at) ^I32 l (ox-line-at an ext 0)]
-    (cells-set an (+ l 4) -1) (cells-set an (+ l 5) -1)
-    (cells-set an (+ l 6) -1) (cells-set an (+ l 7) -1)
-    (cells-set an (+ l 11) -1) (cells-set an (+ l 12) -1) (cells-set an (+ l 13) -1)
-    (page-of an at (new-cells) (new-cells) et (new-cells) (new-cells) runs (new-cells) lines words (new-cells) (new-cells))
-    (assert-eq (cells-at an (+ l 4)) -1 "raw answer still records absence")
-    (assert-eq (cells-at an (+ l 5)) -1 "no measured baseline is invented in the transcript")
-    (assert-eq (ol-get lines 0 (lh-by0)) (* 66 24) "layout fallback is the measured line box bottom")
-    (assert-eq (ow-get words 0 (hd-by0)) (* 66 24) "word layout does not interpolate minus one pixels")
-    (assert-eq (ow-get words 0 (hd-by1)) (* 66 24) "both ends use the same fallback")))
+  (let [^Cells raw (new-cells) ^Cells flat (new-cells) ^Cells an (new-cells)
+        ^Cells et (new-cells) ^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells words (new-cells)
+        ^I32 original (three-lines raw 2) ^I32 first (oil-line-at raw original 0)
+        ^I32 end (+ first 42) ^:mut ^I32 i 4]
+    ;; Clear the capabilities and physically omit all three lines' baseline
+    ;; and metric groups. The block table and word payloads are unchanged.
+    (while (< i (cells-len raw))
+      (do (if (or (< i first) (or (>= i end) (< (rem (- i first) 14) 7)))
+            (if (or (== i 8) (== i 9))
+              (cells-push flat (- (cells-at raw i) 24))
+              (cells-push flat (cells-at raw i))))
+          (set i (+ i 1))))
+    (assert-eq (oil-flat flat 2 an) 0 "a baseline-free OIL answer is valid")
+    (let [^I32 size (cells-len an)]
+      (page-of an 0 (new-cells) (new-cells) et (new-cells) (new-cells) runs (new-cells) lines words (new-cells) (new-cells))
+      (assert-eq (cells-len an) size "ingestion does not add invented baseline cells")
+      (assert-eq (oil-line-field an 0 0 4) -1 "the raw baseline remains absent")
+      (assert-eq (ol-get lines 0 (lh-by0)) (* 66 24) "layout fallback uses the measured line box bottom")
+      (assert-eq (ow-get words 0 (hd-by0)) (* 66 24) "word layout does not interpolate absent measurements")
+      (assert-eq (ow-get words 0 (hd-by1)) (* 66 24) "both ends use the same fallback"))))
+
+(deftest test-layout-orientation-and-osd-remain-independent-measurements
+  (let [^Cells ans (new-cells) ^Cells runs (new-cells)
+        ^I32 at (three-lines ans 2)]
+    ;; The first layout block is right-facing; OSD independently asks for
+    ;; a half turn. Neither measurement may overwrite the other.
+    (oil-set ans at (oh-orient) 2)
+    (page-of ans at (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+             runs (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+    (assert-eq (or-get runs 0 (orf-orient)) 1 "layout orientation comes from the measured block")
+    (assert-eq (or-get runs 0 (orf-osd)) 180 "OSD orientation remains the independent header measurement")))

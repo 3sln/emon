@@ -5,7 +5,7 @@
 //
 // It fulfils one `ocr` request (`emon.plan`, D089): a `Bitmap` named by the request, a page-segmentation mode, flags
 // (`emon.ocr`: symbols and alternatives, OSD, and above the low byte the resolution in dpi), an optional region and
-// languages. It answers the words (`an-ocr-word`) and the extension (`emon.ocr` version 2: lines, baselines, blocks with
+// languages. It answers OIL (`emon.oil`: words, lines, baselines, blocks with
 // their own orientation, symbols, alternatives, a word's dictionary and numeric flags and point size, orientation,
 // script, and the thresholded image the engine read), all in integers, through the kin builders so that the layout is
 // written once.
@@ -540,7 +540,7 @@ impl Tess {
         let observed_len = cells_len(&observed);
         emon::oil::oil_observed(&mut c, at, &mut observed, 0, observed_len);
         for b in &blocks {
-            emon::oil::oil_block(&mut c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, lines.iter().find(|l| l.block == blocks.iter().position(|v| std::ptr::eq(v, b)).unwrap() as i32).map(|l| l.btype).unwrap_or(0));
+            emon::oil::oil_tess_block(&mut c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, lines.iter().find(|l| l.block == blocks.iter().position(|v| std::ptr::eq(v, b)).unwrap() as i32).map(|l| l.btype).unwrap_or(0));
         }
         for l in &lines {
             emon::oil::oil_line(&mut c, at, l.bx[0], l.bx[1], l.bx[2], l.bx[3], l.block, words.iter().filter(|w| w.line == lines.iter().position(|v| std::ptr::eq(v, l)).unwrap() as i32).count() as i32, -1, l.par, l.base[0], l.base[1], l.base[2], l.base[3], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);

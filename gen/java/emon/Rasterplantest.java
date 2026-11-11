@@ -199,7 +199,7 @@ public final class Rasterplantest {
         Evidence.owNew(owords, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, t0, 5, 0, 900, -1);
         Evidence.owNew(owords, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, t1, 5, 0, 900, -1);
         Evidence.orSet(oruns, run, Evidence.orfRequest(), request);
-        Evidence.orSet(oruns, run, Evidence.orfWfirst(), w0 / 28);
+        Evidence.orSet(oruns, run, Evidence.orfWfirst(), w0 / 32);
         Evidence.orSet(oruns, run, Evidence.orfWcount(), 2);
         return run;
     }

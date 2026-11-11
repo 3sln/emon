@@ -143,38 +143,6 @@ func OcrSymbols() int32 {
 	return 1
 }
 
-func AwX() int32 {
-	return 0
-}
-
-func AwY() int32 {
-	return 1
-}
-
-func AwW() int32 {
-	return 2
-}
-
-func AwH() int32 {
-	return 3
-}
-
-func AwConf() int32 {
-	return 4
-}
-
-func AwLine() int32 {
-	return 5
-}
-
-func AwBlock() int32 {
-	return 6
-}
-
-func AwLen() int32 {
-	return 7
-}
-
 func RecLen(c *port.Cells, at int32) int32 {
 	return port.CellsAt(c, at)
 }
@@ -650,44 +618,6 @@ func AnDecodeImg(c *port.Cells, id int32, w int32, h int32, channels int32, bile
 	return at
 }
 
-func AnOcr(c *port.Cells, id int32) int32 {
-	// Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
-	// and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.
-	var at int32 = RecBegin(c, PkOcr(), id)
-	port.CellsPush(c, PsOk())
-	port.CellsPush(c, 0)
-	return at
-}
-
-func AnOcrWord(c *port.Cells, at int32, x int32, y int32, w int32, h int32, conf int32, line int32, block int32) int32 {
-	// Begin a word of the OCR answer at `at`; answers the word's start.
-	// Its code points follow, through `an-ocr-cp` (the LAST word only).
-	var word int32 = port.CellsLen(c)
-	var nwords int32 = port.CellsAt(c, at+4)
-	port.CellsSet(c, at+4, nwords+1)
-	port.CellsPush(c, x)
-	port.CellsPush(c, y)
-	port.CellsPush(c, w)
-	port.CellsPush(c, h)
-	port.CellsPush(c, conf)
-	port.CellsPush(c, line)
-	port.CellsPush(c, block)
-	port.CellsPush(c, 0)
-	return word
-}
-
-func AnOcrCp(c *port.Cells, word int32, cp int32) int32 {
-	// Append a code point to the last word, which began at `word`.
-	var n int32 = port.CellsAt(c, word+7)
-	port.CellsSet(c, word+7, n+1)
-	port.CellsPush(c, cp)
-	return 0
-}
-
-func AnOcrEnd(c *port.Cells, at int32) int32 {
-	return RecEnd(c, at)
-}
-
 func AnBytes(c *port.Cells, id int32, offset int32, length int32) int32 {
 	var at int32 = RecBegin(c, PkBytes(), id)
 	port.CellsPush(c, PsOk())
@@ -695,24 +625,4 @@ func AnBytes(c *port.Cells, id int32, offset int32, length int32) int32 {
 	port.CellsPush(c, length)
 	RecEnd(c, at)
 	return at
-}
-
-func AnOcrCount(c *port.Cells, at int32) int32 {
-	return port.CellsAt(c, at+4)
-}
-
-func AnOcrFirst(c *port.Cells, at int32) int32 {
-	return at + 5
-}
-
-func AwGet(c *port.Cells, word int32, f int32) int32 {
-	return port.CellsAt(c, word+f)
-}
-
-func AwCp(c *port.Cells, word int32, k int32) int32 {
-	return port.CellsAt(c, (word+8)+k)
-}
-
-func AwNext(c *port.Cells, word int32) int32 {
-	return (word + 8) + port.CellsAt(c, word+7)
 }

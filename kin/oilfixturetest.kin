@@ -1,0 +1,35 @@
+;; Shared literal fixture for OIL consumer laws, not an engine adapter. Tests
+;; intentionally supply row metrics to exercise both capability branches.
+(ns emon.oilfixturetest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.oil :refer [oil-tess-begin oil-set oil-get oh-caps oh-native oc-rowmetrics
+                              oil-tess-block oil-line oil-word oil-word-cp oil-end]]
+            [kin.lang :refer [defn return let set while if do + * < > == bit-and]]))
+
+(defn ^:pub ^I32 ofx-lines [^:mut ^Cells ans ^I32 id ^I32 n ^I32 xh ^I32 width ^I32 scale
+                            ^I32 conf ^I32 osd ^I32 script ^I32 sconf ^I32 oconf
+                            ^I32 lang ^I32 lang0 ^I32 dflags]
+  (let [^I32 at (oil-tess-begin ans id 3 0 0 0 0 0 osd script sconf oconf 0)
+        ^:mut ^I32 k 0 ^:mut ^I32 lex 1]
+    (if (> xh 0)
+      (do (let [^I32 mask (oil-get ans at (oh-caps))] (oil-set ans at (oh-caps) (+ mask (oc-rowmetrics))))
+          (let [^I32 measured-mask (oil-get ans at (oh-native))] (oil-set ans at (oh-native) (+ measured-mask (oc-rowmetrics))))))
+    (if (> (bit-and dflags 1) 0) (set lex 3))
+    (oil-tess-block ans at (* 10 scale) (* 20 scale) (* width scale) (* (* n 60) scale) -1 0 0 0 0)
+    (while (< k n)
+      (do (oil-line ans at (* 10 scale) (* (+ 20 (* k 60)) scale) (* width scale) (* 40 scale)
+                    0 1 -1 0 (* 10 scale) (* (+ 55 (* k 60)) scale)
+                    (* (+ 10 width) scale) (* (+ 55 (* k 60)) scale)
+                    (* xh scale) 14 6 0 0 0 0 0 0 0 0 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k n)
+      (let [^:mut ^I32 language lang]
+        (if (== k 0) (set language lang0))
+        (let [^I32 word (oil-word ans at (* 10 scale) (* (+ 20 (* k 60)) scale)
+                                  (* width scale) (* 40 scale) k conf language 0 -1 lex)]
+          (oil-word-cp ans at word 72)
+          (oil-word-cp ans at word 105))
+        (set k (+ k 1))))
+    (oil-end ans at)
+    (return at)))

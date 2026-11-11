@@ -64,16 +64,14 @@ public static class Program {
     sealed class FakeOcr : IOcr {
         public emon.Planrun.Answer Fulfil(emon.Planrun.Request req, Dictionary<int, emon.Port.Bitmap> bm, bool keep) {
             emon.Port.Cells c = emon.Port.NewCells();
-            int at = emon.Plan.AnOcr(c, req.Id());
-            int w = emon.Plan.AnOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0);
-            foreach (Rune cp in "Hello".EnumerateRunes()) {
-                emon.Plan.AnOcrCp(c, w, cp.Value);
+            int at = emon.Oil.OilTessBegin(c, req.Id(), 3, 0, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+            emon.Oil.OilTessBlock(c, at, 10, 10, 100, 30, -1, 0, 0, 0, 0);
+            emon.Oil.OilLine(c, at, 10, 10, 100, 30, 0, 1, -1, 0, 10, 35, 110, 35, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            int w = emon.Oil.OilWord(c, at, 10, 10, 100, 30, 0, 900, 0, 0, -1, 1);
+            foreach (System.Text.Rune cp in "Hello".EnumerateRunes()) {
+                emon.Oil.OilWordCp(c, at, w, cp.Value);
             }
-            emon.Ocr.OxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-            emon.Ocr.OxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
-            emon.Ocr.OxBlock(c, 10, 10, 100, 30, 0, 0, 0);
-            emon.Ocr.OxWord(c, 0, 0, -1, 0);
-            emon.Plan.AnOcrEnd(c, at);
+            emon.Oil.OilEnd(c, at);
             return new emon.Planrun.Answer(emon.Port.CellsVec(c));
         }
 

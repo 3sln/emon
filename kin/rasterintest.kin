@@ -2,14 +2,14 @@
 ;; then every other frame, ids `f + 1`), the header-only form, the page table it builds from the answers (pixels to
 ;; centipoints at the stated resolution, 300 dpi and a flag when there is none), and its failure statuses.
 (ns emon.rasterintest
-  (:require [emon.lang :refer [I32 Cells Src Bitmap BitmapSet]]
+  (:require [emon.oil :refer [oil-tess-begin oil-begin oil-get oil-set oh-caps oh-native oc-rowmetrics oil-tess-block oil-line oil-word oil-word-cp oil-sym oil-sym-cp oil-end oil-find oil-line-at oil-line-field oil-flat]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells Src Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set hex-blob]]
             [emon.port :refer [cells-len cells-at cells-push src-of-blob bms-put bms-get bitmap-w bitmap-h bitmap-set-u8]]
-            [emon.ocr :refer [ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ocf-dpi]]
+            [emon.ocr :refer [      ocf-dpi]]
             [emon.evidence :refer [wd-count wd-get ln-count ln-get ol-count ow-count or-count or-get ep-new wf-size hd-tstart hd-tlen
                                    lh-first lh-count lh-rot lh-y0 lh-y1 orf-pass op-upscaled op-re-rotated]]
             [emon.plan :refer [pu-id pu-view-id pi-decode pi-ocr rec-id rec-kind rec-find rq-arg rq-nargs an-decode an-fail ps-failed ps-unsupported
-                               us-requests us-done pk-decode pk-ocr flt-none an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+                               us-requests us-done pk-decode pk-ocr flt-none    ]]
             [emon.retarget :refer [ri-rotated rv-rotated ri-opposite]]
             [emon.upscale :refer [ri-upscale rv-upscaled]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
@@ -144,20 +144,16 @@
 ;; ------------------------------------------------------------------------------------------------ OCR (P6.5, D211)
 
 (defn ^I32 fake-ocr [^Cells ans ^I32 id]
-  (comment "An OCR answer for one line holding the word \"Hi\": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.")
-  (let [^I32 at (an-ocr ans id)
-        ^I32 w (an-ocr-word ans at 10 20 30 40 900 0 0)]
-    (an-ocr-cp ans w 72)
-    (an-ocr-cp ans w 105)
-    (ox-begin ans 0 0 0 0 -1 0 -1 -1 1 1 0 0 0)
-    (ox-line ans 10 20 30 40 10 55 40 55 0 0 0 20 14 6)
-    (ox-block ans 10 20 30 40 0 0 0)
-    (let [^I32 x (ox-word ans 0 0 -1 0)
-          ^I32 s0 (ox-sym ans x 10 20 15 40 900)]
-      (ox-sym-cp ans s0 72)
-      (let [^I32 s1 (ox-sym ans x 25 20 15 40 900)]
-        (ox-sym-cp ans s1 105)))
-    (an-ocr-end ans at)
+  (let [^I32 at (oil-tess-begin ans id 3 1 0 0 0 0 -1 0 -1 -1 0)]
+    (let [^I32 mask (oil-get ans at (oh-caps))] (oil-set ans at (oh-caps) (+ mask (oc-rowmetrics))))
+    (let [^I32 measured-mask (oil-get ans at (oh-native))] (oil-set ans at (oh-native) (+ measured-mask (oc-rowmetrics))))
+    (oil-tess-block ans at 10 20 30 40 -1 0 0 0 0)
+    (oil-line ans at 10 20 30 40 0 1 -1 0 10 55 40 55 20 14 6 0 0 0 0 0 0 0 0 0)
+    (let [^I32 word (oil-word ans at 10 20 30 40 0 900 0 0 -1 1)]
+      (oil-word-cp ans at word 72) (oil-word-cp ans at word 105)
+      (let [^I32 s0 (oil-sym ans at word 10 20 15 40 900)] (oil-sym-cp ans s0 72))
+      (let [^I32 s1 (oil-sym ans at word 25 20 15 40 900)] (oil-sym-cp ans s1 105)))
+    (oil-end ans at)
     (return at)))
 
 (deftest test-with-the-policy-the-frames-second-round-asks-for-ocr-of-its-bitmap
@@ -231,29 +227,7 @@
 ;; ------------------------------------------------------------------------------------------------ the scan unit's passes for an image (D564)
 
 (defn ^I32 fake-lines [^:mut ^Cells ans ^I32 id ^I32 nlines ^I32 scale ^I32 xh ^I32 osd ^I32 oconf]
-  (comment "An OCR answer of `nlines` lines, each of one word \"Hi\" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)")
-  (comment "that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).")
-  (let [^I32 at (an-ocr ans id)
-        ^:mut ^I32 k 0
-        ^:mut ^I32 word 0]
-    (while (< k nlines)
-      (do (set word (an-ocr-word ans at (* 10 scale) (* (+ 20 (* k 60)) scale) (* 60 scale) (* 40 scale) 900 k 0))
-          (an-ocr-cp ans word 72)
-          (an-ocr-cp ans word 105)
-          (set k (+ k 1))))
-    (ox-begin ans 0 0 0 0 osd 1281455214 100 oconf nlines 1 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-line ans (* 10 scale) (* (+ 20 (* k 60)) scale) (* 60 scale) (* 40 scale)
-                   (* 10 scale) (* (+ 55 (* k 60)) scale) (* 70 scale) (* (+ 55 (* k 60)) scale) 0 0 0 (* xh scale) 14 6)
-          (set k (+ k 1))))
-    (ox-block ans (* 10 scale) (* 20 scale) (* 60 scale) (* (* nlines 60) scale) 0 0 0)
-    (set k 0)
-    (while (< k nlines)
-      (do (ox-word ans 0 0 -1 0)
-          (set k (+ k 1))))
-    (an-ocr-end ans at)
-    (return at)))
+    (return (ofx-lines ans id nlines xh 60 scale 900 osd 1281455214 100 oconf 0 0 0)))
 
 (defn ^I32 white-frame [^BitmapSet bms ^I32 id ^I32 w ^I32 h]
   (comment "A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.")

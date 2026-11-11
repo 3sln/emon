@@ -4,39 +4,15 @@
 package upscaletest
 
 import (
-	"emon/ocr"
-	"emon/plan"
+	"emon/oil"
+	"emon/oilfixturetest"
 	"emon/port"
 	"emon/upscale"
 	"testing"
 )
 
 func utAnswer(ans *port.Cells, id int32, nlines int32, xh int32, w int32, osd int32, oconf int32) int32 {
-	// An OCR answer of `nlines` lines, each of one word "Hi" 40 pixels high and `w` wide, whose row x-height is `xh` (0: the engine says none); OSD says `osd` degrees
-	// at the confidence `oconf` (x10; -1 for no OSD). Answers where it is.
-	var at int32 = plan.AnOcr(ans, id)
-	var k int32 = 0
-	var word int32 = 0
-	for k < nlines {
-		word = plan.AnOcrWord(ans, at, 10, 20+(k*60), w, 40, 900, k, 0)
-		plan.AnOcrCp(ans, word, 72)
-		plan.AnOcrCp(ans, word, 105)
-		k += 1
-	}
-	ocr.OxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxLine(ans, 10, 20+(k*60), w, 40, 10, 55+(k*60), 10+w, 55+(k*60), 0, 0, 0, xh, 14, 6)
-		k += 1
-	}
-	ocr.OxBlock(ans, 10, 20, w, nlines*60, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxWord(ans, 0, 0, -1, 0)
-		k += 1
-	}
-	plan.AnOcrEnd(ans, at)
-	return at
+	return oilfixturetest.OfxLines(ans, id, nlines, xh, w, 1, 900, osd, 1281455214, 100, oconf, 0, 0, 0)
 }
 
 func utFactor(nlines int32, xh int32, pxw int32, pxh int32, osd int32, oconf int32) int32 {
@@ -46,30 +22,8 @@ func utFactor(nlines int32, xh int32, pxw int32, pxh int32, osd int32, oconf int
 }
 
 func utFactorC(nlines int32, xh int32, conf int32) int32 {
-	// `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
 	var ans *port.Cells = port.NewCells()
-	var at int32 = plan.AnOcr(ans, 272)
-	var k int32 = 0
-	var word int32 = 0
-	for k < nlines {
-		word = plan.AnOcrWord(ans, at, 10, 20+(k*60), 200, 40, conf, k, 0)
-		plan.AnOcrCp(ans, word, 72)
-		plan.AnOcrCp(ans, word, 105)
-		k += 1
-	}
-	ocr.OxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxLine(ans, 10, 20+(k*60), 200, 40, 10, 55+(k*60), 210, 55+(k*60), 0, 0, 0, xh, 14, 6)
-		k += 1
-	}
-	ocr.OxBlock(ans, 10, 20, 200, nlines*60, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxWord(ans, 0, 0, -1, 0)
-		k += 1
-	}
-	plan.AnOcrEnd(ans, at)
+	var at int32 = oilfixturetest.OfxLines(ans, 272, nlines, xh, 200, 1, conf, -1, 1281455214, 100, -1, 0, 0, 0)
 	return upscale.UpFactor(ans, at, 765, 990, port.NewCells())
 }
 
@@ -95,12 +49,12 @@ func TestTheTypicalXHeightIsTheMedianWeightedByWidth(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
 	var hist *port.Cells = port.NewCells()
 	var at int32 = utAnswer(ans, 272, 5, 6, 300, -1, -1)
-	var ext int32 = ocr.OxFind(ans, at)
+	var ext int32 = oil.OilFind(ans, at)
 	port.AssertEq(emonT, upscale.UpXheight(ans, ext, hist), 6, "five lines of 6 pixels")
 	port.AssertEq(emonT, port.CellsLen(hist), 101, "the histogram is made")
 	var ans2 *port.Cells = port.NewCells()
 	var at2 int32 = utAnswer(ans2, 272, 3, 0, 300, -1, -1)
-	var ext2 int32 = ocr.OxFind(ans2, at2)
+	var ext2 int32 = oil.OilFind(ans2, at2)
 	port.AssertEq(emonT, upscale.UpXheight(ans2, ext2, hist), 18, "the engine says none: 45 per cent of the 40 pixel box")
 }
 
@@ -206,18 +160,18 @@ func TestAnEnlargedRasterKeepsFlatInkAndEdges(emonT *testing.T) {
 
 func TestReceiptQualityUsesConfidentAlphanumericBearingTokenLength(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
-	var at int32 = plan.AnOcr(ans, 31)
-	var low int32 = plan.AnOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0)
-	plan.AnOcrCp(ans, low, 65)
-	var edge int32 = plan.AnOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0)
-	plan.AnOcrCp(ans, edge, 57)
-	var dots int32 = plan.AnOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0)
-	plan.AnOcrCp(ans, dots, 46)
-	plan.AnOcrCp(ans, dots, 46)
-	plan.AnOcrCp(ans, dots, 46)
-	var token int32 = plan.AnOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0)
-	plan.AnOcrCp(ans, token, 36)
-	plan.AnOcrCp(ans, token, 65)
-	plan.AnOcrEnd(ans, at)
+	var at int32 = oil.OilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0)
+	var low int32 = oil.OilWord(ans, at, 0, 0, 10, 10, -1, 499, 0, 0, -1, 0)
+	oil.OilWordCp(ans, at, low, 65)
+	var edge int32 = oil.OilWord(ans, at, 10, 0, 10, 10, -1, 500, 0, 0, -1, 0)
+	oil.OilWordCp(ans, at, edge, 57)
+	var dots int32 = oil.OilWord(ans, at, 20, 0, 10, 10, -1, 999, 0, 0, -1, 0)
+	oil.OilWordCp(ans, at, dots, 46)
+	oil.OilWordCp(ans, at, dots, 46)
+	oil.OilWordCp(ans, at, dots, 46)
+	var token int32 = oil.OilWord(ans, at, 30, 0, 10, 10, -1, 800, 0, 0, -1, 0)
+	oil.OilWordCp(ans, at, token, 36)
+	oil.OilWordCp(ans, at, token, 65)
+	oil.OilEnd(ans, at)
 	port.AssertEq(emonT, upscale.UpReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes")
 }

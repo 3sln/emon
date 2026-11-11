@@ -154,4 +154,136 @@ public final class Oiltest {
         emon.Testport.assertEq(Oil.oilFlat(flat, 77, bad), -1, "text count cannot overflow cursor");
         emon.Testport.assertEq(emon.Port.cellsLen(bad), 0, "malformed form writes nothing");
     }
+    public static int tFlatHeader(emon.Port.Cells v) {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenTesseract(), 0, 0, 1, 0, 0, 0);
+        int i = 4;
+        Oil.oilEnd(c, at);
+        while (i < emon.Port.cellsLen(c)) {
+            emon.Port.cellsPush(v, emon.Port.cellsAt(c, i));
+            i += 1;
+        }
+        return 0;
+    }
+    public static void testFlatHeaderEnumsAndReservedCellsAreValidated() {
+        emon.Port.Cells v = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        tFlatHeader(v);
+        emon.Port.cellsPush(out, 123);
+        emon.Port.cellsSet(v, 6, 0);
+        emon.Testport.assertEq(Oil.oilFlat(v, 1, out), -1, "undefined segmentation");
+        emon.Port.cellsSet(v, 6, 1);
+        emon.Port.cellsSet(v, 17, 3);
+        emon.Testport.assertEq(Oil.oilFlat(v, 1, out), -1, "undefined granularity");
+        emon.Port.cellsSet(v, 17, 0);
+        emon.Port.cellsSet(v, 23, 1);
+        emon.Testport.assertEq(Oil.oilFlat(v, 1, out), -1, "reserved header is zero");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 1, "all refusals preserve existing answers");
+    }
+    public static void testFlatSidecarsMustBelongToTheSourceEngineAndRegistry() {
+        emon.Port.Cells v = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        tFlatHeader(v);
+        emon.Port.cellsSet(v, 21, 1);
+        emon.Port.cellsPush(v, 8);
+        emon.Port.cellsPush(v, 2);
+        emon.Port.cellsPush(v, 3);
+        emon.Port.cellsPush(v, 2);
+        emon.Port.cellsPush(v, 0);
+        emon.Port.cellsPush(v, 1);
+        emon.Port.cellsPush(v, 0);
+        emon.Port.cellsPush(v, 1);
+        emon.Testport.assertEq(Oil.oilFlat(v, 1, out), -1, "namespace cannot cross engines");
+        emon.Port.cellsSet(v, 25, 1);
+        emon.Port.cellsSet(v, 26, 999);
+        emon.Testport.assertEq(Oil.oilFlat(v, 1, out), -1, "unknown key is rejected");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 0, "invalid sidecars write nothing");
+    }
+    public static void testSourceSealingPrunesImpliedAndUnmeasuredValues() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells scalar = emon.Port.newCells();
+        emon.Port.Cells cls = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 1, 0, 1);
+        Oil.oilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.cellsPush(scalar, -1);
+        Oil.oilScPut(c, at, 1, 2, 0, scalar, 0, 1);
+        emon.Port.cellsSet(scalar, 0, 0);
+        Oil.oilScPut(c, at, 3, 2, 0, scalar, 0, 1);
+        emon.Port.cellsPush(cls, 0);
+        emon.Port.cellsPush(cls, 400);
+        Oil.oilScPut(c, at, 2, 2, 0, cls, 0, 2);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohNsc()), 0, "all three source values are uninformative");
+        emon.Testport.assertEq(emon.Port.cellsLen(c), 34, "empty entries are physically removed");
+    }
+    public static void testSourceSealingKeepsInformationAndIsIdempotent() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells value = emon.Port.newCells();
+        emon.Port.Cells want = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 1, 0, 1);
+        int i = 0;
+        Oil.oilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.cellsPush(value, 850);
+        Oil.oilScPut(c, at, 1, 2, 0, value, 0, 1);
+        emon.Port.cellsSet(value, 0, 1);
+        Oil.oilScPut(c, at, 3, 2, 0, value, 0, 1);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohNsc()), 2, "measured score and quarter turn remain");
+        while (i < emon.Port.cellsLen(c)) {
+            emon.Port.cellsPush(want, emon.Port.cellsAt(c, i));
+            i += 1;
+        }
+        emon.Testport.assertEq(Oil.oilSeal(c, at, 0), 0, "seal twice");
+        emon.Testport.assertEq(emon.Port.cellsLen(c), emon.Port.cellsLen(want), "sealing cannot grow an already sealed answer");
+        i = 0;
+        while (i < emon.Port.cellsLen(c)) {
+            emon.Testport.assertEq(emon.Port.cellsAt(c, i), emon.Port.cellsAt(want, i), "every sealed cell is stable");
+            i += 1;
+        }
+    }
+    public static void testDenseSourcePruningDoesNotOverwriteUnreadValues() {
+        emon.Port.Cells flat = emon.Port.newCells();
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        int at = Oil.oilBegin(raw, 1, Oil.oenPpocr(), 0, 0, 1, 1, 0, 1);
+        int i = 0;
+        while (i < 3) {
+            Oil.oilLine(raw, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            i += 1;
+        }
+        Oil.oilEnd(raw, at);
+        i = 4;
+        while (i < emon.Port.cellsLen(raw)) {
+            emon.Port.cellsPush(flat, emon.Port.cellsAt(raw, i));
+            i += 1;
+        }
+        emon.Port.cellsSet(flat, 21, 1);
+        emon.Port.cellsPush(flat, 9);
+        emon.Port.cellsPush(flat, 2);
+        emon.Port.cellsPush(flat, 1);
+        emon.Port.cellsPush(flat, 2);
+        emon.Port.cellsPush(flat, 1);
+        emon.Port.cellsPush(flat, 3);
+        emon.Port.cellsPush(flat, 800);
+        emon.Port.cellsPush(flat, -1);
+        emon.Port.cellsPush(flat, 900);
+        emon.Testport.assertEq(Oil.oilFlat(flat, 1, out), 0, "a registered dense source group");
+        emon.Testport.assertEq(emon.Port.cellsLen(out), 56, "sparse output can be larger than dense input");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 46), 10, "canonical sparse entry length");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 50), 0, "sparse output");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 51), 2, "unmeasured middle value removed");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 52), 0, "first source row");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 53), 800, "first measurement survives");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 54), 2, "last source row");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 55), 900, "last measurement survives expansion");
+    }
+    public static void testTesseractLineOrderIsNormalizedBeforeItEntersTheWire() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilTessBegin(c, 1, 3, 0, 0, 0, 2, 0, -1, 0, -1, -1, 0);
+        Oil.oilTessBlock(c, at, 0, 0, 20, 10, -1, 0, 0, 2, 0);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohLorder()), 0, "Tesseract top-to-bottom 2 is OIL top-to-bottom 0");
+        emon.Testport.assertEq(Oil.oilBlockField(c, at, 0, 2), 0, "block order uses the same neutral enum");
+        emon.Testport.assertEq(Oil.oilTlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics");
+    }
 }

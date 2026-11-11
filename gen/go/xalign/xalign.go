@@ -1363,7 +1363,7 @@ func XaPage(page int32, epages *port.Cells, words *port.Cells, owords *port.Cell
 		r = o0 + i
 		xaLoadHead(scr, nt+i, owords, 32, r)
 		xaHbs(scr, nt+i, 9, 3)
-		f = port.CellsAt(owords, (r*28)+evidence.OwfRun())
+		f = port.CellsAt(owords, (r*32)+evidence.OwfRun())
 		xaHbs(scr, nt+i, 11, f)
 		if f != prun {
 			rk += 1

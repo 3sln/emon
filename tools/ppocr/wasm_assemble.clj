@@ -1,6 +1,32 @@
 #!/usr/bin/env bb
 ;; Mechanical suspension points only: keep the qualified native policy bytes frozen.
 (require '[babashka.fs :as fs] '[clojure.string :as str] '[babashka.process :refer [process]])
+(defn answer-body [source]
+  (let [start (str/index-of source "        let mut out = Cells::new();")
+        end (when start (str/index-of source "        Ok(Answer {" start))
+        lock "        let mut lexicon = self.lexicon.lock().map_err(|_| fail(\"PP lexicon lock poisoned\"))?;\n"]
+    (assert (and start end) "native PP answer builder anchors")
+    (let [native (subs source start end)
+          body (-> native
+                   (str/replace "req.id()" "id")
+                   (str/replace "image.width" "width")
+                   (str/replace "image.height" "height")
+                   (str/replace lock "")
+                   (str/replace "lexicon.valid_english_word(&word.text)" "dictionary(&word.text).await"))
+          restored (-> body
+                       (str/replace "(&mut out, id," "(&mut out, req.id(),")
+                       (str/replace "width as f64" "image.width as f64")
+                       (str/replace "height as f64" "image.height as f64")
+                       (str/replace "dictionary(&word.text).await" "lexicon.valid_english_word(&word.text)")
+                       (str/replace "        for word in &reading.words {" (str lock "        for word in &reading.words {")))]
+      (assert (= native restored) "wasm OIL answer must differ only in argument bindings and dictionary suspension")
+      (assert (not (re-find #"\b(self|req|image)\." body)) "wasm answer has no unbound native host state")
+      body)))
+
+(when (= "--check-answer" (first *command-line-args*))
+  (answer-body (slurp "host/rust/src/ppocr.rs"))
+  (println "  ok   wasm OIL answer is the native answer with only argument bindings and dictionary suspension")
+  (System/exit 0))
 (def root (first *command-line-args*))
 (assert root "usage: wasm_assemble.clj CRATE")
 (assert (zero? (:exit @(process ["bb" "tools/ppocr/wasm_link.clj"] {:inherit true :shutdown nil}))) "wasm dictionary linker")
@@ -9,7 +35,7 @@
       from "if c.oengine != 0 && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST"]
   (assert (str/includes? s from) "optional wasm engine selector anchor")
   (spit p (str/replace s from (str from " && !cfg!(ppocr_web)"))))
-(doseq [name ["ppocr_image" "ppocr_ctc" "ppocr_calibration"]]
+(doseq [name ["ppocr_image" "ppocr_ctc"]]
   (fs/copy (str "host/rust/src/" name ".rs") (str root "/src/" name ".rs") {:replace-existing true}))
 (fs/copy "tools/ppocr/en-dictionary.txt" (str root "/src/ppocr_dictionary.txt") {:replace-existing true})
 (let [source (slurp "host/rust/src/ppocr_pipeline.rs")
@@ -26,17 +52,8 @@
 (spit (str root "/src/lib.rs") "\nmod ppocr_image;\nmod ppocr_ctc;\nmod ppocr_pipeline;\nmod ppocr_runtime;\n" :append true)
 ;; Use precisely the reference's answer construction, including unknown geometry
 ;; fields. The lexicon call is the only additional suspension point.
-(let [source (slurp "host/rust/src/ppocr.rs")
-      body (subs source (str/index-of source "        let mut out = Cells::new();\n        let at =")
-                 (str/index-of source "        Ok(Answer {"))
-      body (-> body
-               (str/replace "self\n                .calibration" "calibration")
-               (str/replace "req.id()" "id")
-               (str/replace ".map_err(PlanError::Fulfil)?" "?")
-               (str/replace "        let mut lexicon = self.lexicon.lock().map_err(|_| fail(\"PP lexicon lock poisoned\"))?;\n" "")
-               (str/replace "lexicon.valid_english_word(&word.text)" "dictionary(&word.text).await"))]
+(let [body (answer-body (slurp "host/rust/src/ppocr.rs"))]
   (spit (str root "/src/ppocr_answer.rs")
-        (str "async fn answer(reading: crate::ppocr_pipeline::Reading, id: i32, dx: i32, dy: i32) -> Result<Vec<i32>, String> {\n"
+        (str "async fn answer(reading: crate::ppocr_pipeline::Reading, id: i32, dx: i32, dy: i32, width: usize, height: usize) -> Result<Vec<i32>, String> {\n"
              "use crate::port::{Cells, cells_len, cells_at};\n"
-             "let calibration = crate::ppocr_ctc::Calibration::new(include!(\"ppocr_calibration.rs\"))?;\n"
              body "Ok((0..cells_len(&out)).map(|i| cells_at(&out, i)).collect())\n}\n")))

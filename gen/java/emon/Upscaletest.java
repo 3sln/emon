@@ -6,31 +6,7 @@ package emon;
 
 public final class Upscaletest {
     public static int utAnswer(emon.Port.Cells ans, int id, int nlines, int xh, int w, int osd, int oconf) {
-        // An OCR answer of `nlines` lines, each of one word "Hi" 40 pixels high and `w` wide, whose row x-height is `xh` (0: the engine says none); OSD says `osd` degrees
-        // at the confidence `oconf` (x10; -1 for no OSD). Answers where it is.
-        int at = Plan.anOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.anOcrWord(ans, at, 10, 20 + (k * 60), w, 40, 900, k, 0);
-            Plan.anOcrCp(ans, word, 72);
-            Plan.anOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.oxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxLine(ans, 10, 20 + (k * 60), w, 40, 10, 55 + (k * 60), 10 + w, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
-            k += 1;
-        }
-        Ocr.oxBlock(ans, 10, 20, w, nlines * 60, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.anOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.ofxLines(ans, id, nlines, xh, w, 1, 900, osd, 1281455214, 100, oconf, 0, 0, 0);
     }
     public static int utFactor(int nlines, int xh, int pxw, int pxh, int osd, int oconf) {
         emon.Port.Cells ans = emon.Port.newCells();
@@ -38,30 +14,8 @@ public final class Upscaletest {
         return Upscale.upFactor(ans, at, pxw, pxh, emon.Port.newCells());
     }
     public static int utFactorC(int nlines, int xh, int conf) {
-        // `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
         emon.Port.Cells ans = emon.Port.newCells();
-        int at = Plan.anOcr(ans, 272);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.anOcrWord(ans, at, 10, 20 + (k * 60), 200, 40, conf, k, 0);
-            Plan.anOcrCp(ans, word, 72);
-            Plan.anOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.oxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxLine(ans, 10, 20 + (k * 60), 200, 40, 10, 55 + (k * 60), 210, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
-            k += 1;
-        }
-        Ocr.oxBlock(ans, 10, 20, 200, nlines * 60, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.oxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.anOcrEnd(ans, at);
+        int at = Oilfixturetest.ofxLines(ans, 272, nlines, xh, 200, 1, conf, -1, 1281455214, 100, -1, 0, 0, 0);
         return Upscale.upFactor(ans, at, 765, 990, emon.Port.newCells());
     }
     public static void testTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged() {
@@ -84,12 +38,12 @@ public final class Upscaletest {
         emon.Port.Cells ans = emon.Port.newCells();
         emon.Port.Cells hist = emon.Port.newCells();
         int at = utAnswer(ans, 272, 5, 6, 300, -1, -1);
-        int ext = Ocr.oxFind(ans, at);
+        int ext = Oil.oilFind(ans, at);
         emon.Testport.assertEq(Upscale.upXheight(ans, ext, hist), 6, "five lines of 6 pixels");
         emon.Testport.assertEq(emon.Port.cellsLen(hist), 101, "the histogram is made");
         emon.Port.Cells ans2 = emon.Port.newCells();
         int at2 = utAnswer(ans2, 272, 3, 0, 300, -1, -1);
-        int ext2 = Ocr.oxFind(ans2, at2);
+        int ext2 = Oil.oilFind(ans2, at2);
         emon.Testport.assertEq(Upscale.upXheight(ans2, ext2, hist), 18, "the engine says none: 45 per cent of the 40 pixel box");
     }
     public static void testSmallTextIsReadAgainEnlargedToAnXHeightOfTwenty() {
@@ -187,19 +141,19 @@ public final class Upscaletest {
     }
     public static void testReceiptQualityUsesConfidentAlphanumericBearingTokenLength() {
         emon.Port.Cells ans = emon.Port.newCells();
-        int at = Plan.anOcr(ans, 31);
-        int low = Plan.anOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0);
-        Plan.anOcrCp(ans, low, 65);
-        int edge = Plan.anOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0);
-        Plan.anOcrCp(ans, edge, 57);
-        int dots = Plan.anOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0);
-        Plan.anOcrCp(ans, dots, 46);
-        Plan.anOcrCp(ans, dots, 46);
-        Plan.anOcrCp(ans, dots, 46);
-        int token = Plan.anOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0);
-        Plan.anOcrCp(ans, token, 36);
-        Plan.anOcrCp(ans, token, 65);
-        Plan.anOcrEnd(ans, at);
+        int at = Oil.oilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0);
+        int low = Oil.oilWord(ans, at, 0, 0, 10, 10, -1, 499, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, at, low, 65);
+        int edge = Oil.oilWord(ans, at, 10, 0, 10, 10, -1, 500, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, at, edge, 57);
+        int dots = Oil.oilWord(ans, at, 20, 0, 10, 10, -1, 999, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, at, dots, 46);
+        Oil.oilWordCp(ans, at, dots, 46);
+        Oil.oilWordCp(ans, at, dots, 46);
+        int token = Oil.oilWord(ans, at, 30, 0, 10, 10, -1, 800, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, at, token, 36);
+        Oil.oilWordCp(ans, at, token, 65);
+        Oil.oilEnd(ans, at);
         emon.Testport.assertEq(Upscale.upReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes");
     }
 }

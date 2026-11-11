@@ -399,10 +399,10 @@ func TestEveryArenaHasTheStrideTheSpecGives(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.EvStrides[10], 16, "fonts")
 	port.AssertEq(emonT, evidence.EvStrides[11], 24, "paths")
 	port.AssertEq(emonT, evidence.EvStrides[12], 20, "images")
-	port.AssertEq(emonT, evidence.EvStrides[13], 28, "oruns")
+	port.AssertEq(emonT, evidence.EvStrides[13], 32, "oruns")
 	port.AssertEq(emonT, evidence.EvStrides[14], 16, "oblocks")
-	port.AssertEq(emonT, evidence.EvStrides[15], 24, "olines")
-	port.AssertEq(emonT, evidence.EvStrides[16], 28, "owords")
+	port.AssertEq(emonT, evidence.EvStrides[15], 28, "olines")
+	port.AssertEq(emonT, evidence.EvStrides[16], 32, "owords")
 	port.AssertEq(emonT, evidence.EvStrides[17], 20, "osyms")
 	port.AssertEq(emonT, evidence.EvStrides[18], 4, "oalts")
 	port.AssertEq(emonT, evidence.EvStrides[19], 12, "inks")
@@ -603,7 +603,7 @@ func TestBuildersSetTheLayoutAndItsDefaults(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfZ()), -1, "no paint number")
 	port.AssertEq(emonT, evidence.ImGet(images, 0, evidence.MfVby()), -1, "no occluder")
 	port.AssertEq(emonT, evidence.OrNew(oruns, 3, 0), 0, "first run")
-	port.AssertEq(emonT, port.CellsLen(oruns), 28, "28 cells")
+	port.AssertEq(emonT, port.CellsLen(oruns), 32, "32 cells")
 	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfBview()), -1, "no binarised view")
 	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfRequest()), -1, "no request")
 	port.AssertEq(emonT, evidence.OrGet(oruns, 0, evidence.OrfLang()), -1, "no languages")
@@ -613,11 +613,11 @@ func TestBuildersSetTheLayoutAndItsDefaults(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsLen(oblocks), 16, "16 cells")
 	port.AssertEq(emonT, evidence.ObGet(oblocks, 0, evidence.ObfConf()), -1, "no confidence")
 	port.AssertEq(emonT, evidence.OlNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line")
-	port.AssertEq(emonT, port.CellsLen(olines), 24, "24 cells")
+	port.AssertEq(emonT, port.CellsLen(olines), 28, "28 cells")
 	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfPar()), -1, "in no paragraph")
 	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfXheight()), -1, "x-height unknown")
 	port.AssertEq(emonT, evidence.OwNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word")
-	port.AssertEq(emonT, port.CellsLen(owords), 28, "28 cells")
+	port.AssertEq(emonT, port.CellsLen(owords), 32, "32 cells")
 	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdConf()), 850, "confidence")
 	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfPsize()), -1, "point size unknown")
 	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfSfirst()), -1, "no symbols")
@@ -1239,7 +1239,7 @@ func TestEveryCellOfEveryStrideIsPrintedOrSpare(emonT *testing.T) {
 			port.AssertEq(emonT, cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)")
 		}
 		if ea == 14 {
-			port.AssertEq(emonT, cells, 28, "oruns: every cell")
+			port.AssertEq(emonT, cells, 32, "oruns: every cell")
 		}
 		if ea == 15 {
 			port.AssertEq(emonT, evidence.EvStrides[14]-cells, 2, "oblocks: two spare")
@@ -1248,7 +1248,7 @@ func TestEveryCellOfEveryStrideIsPrintedOrSpare(emonT *testing.T) {
 			port.AssertEq(emonT, evidence.EvStrides[15]-cells, 1, "olines: one spare")
 		}
 		if ea == 17 {
-			port.AssertEq(emonT, cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)")
+			port.AssertEq(emonT, cells, 32, "owords: every cell (D731 printed a fused copy's source, `from`)")
 		}
 		if ea == 18 {
 			port.AssertEq(emonT, evidence.EvStrides[17]-cells, 3, "osyms: three spare")

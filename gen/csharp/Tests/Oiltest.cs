@@ -168,4 +168,142 @@ public static class Oiltest {
         emon.Testport.AssertEq(Oil.OilFlat(flat, 77, bad), -1, "text count cannot overflow cursor");
         emon.Testport.AssertEq(emon.Port.CellsLen(bad), 0, "malformed form writes nothing");
     }
+    internal static int TFlatHeader(emon.Port.Cells v) {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenTesseract(), 0, 0, 1, 0, 0, 0);
+        int i = 4;
+        Oil.OilEnd(c, at);
+        while (i < emon.Port.CellsLen(c)) {
+            emon.Port.CellsPush(v, emon.Port.CellsAt(c, i));
+            i += 1;
+        }
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestFlatHeaderEnumsAndReservedCellsAreValidated() {
+        emon.Port.Cells v = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        TFlatHeader(v);
+        emon.Port.CellsPush(@out, 123);
+        emon.Port.CellsSet(v, 6, 0);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 1, @out), -1, "undefined segmentation");
+        emon.Port.CellsSet(v, 6, 1);
+        emon.Port.CellsSet(v, 17, 3);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 1, @out), -1, "undefined granularity");
+        emon.Port.CellsSet(v, 17, 0);
+        emon.Port.CellsSet(v, 23, 1);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 1, @out), -1, "reserved header is zero");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 1, "all refusals preserve existing answers");
+    }
+    [Xunit.Fact]
+    public static void TestFlatSidecarsMustBelongToTheSourceEngineAndRegistry() {
+        emon.Port.Cells v = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        TFlatHeader(v);
+        emon.Port.CellsSet(v, 21, 1);
+        emon.Port.CellsPush(v, 8);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 3);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 1);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 1, @out), -1, "namespace cannot cross engines");
+        emon.Port.CellsSet(v, 25, 1);
+        emon.Port.CellsSet(v, 26, 999);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 1, @out), -1, "unknown key is rejected");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 0, "invalid sidecars write nothing");
+    }
+    [Xunit.Fact]
+    public static void TestSourceSealingPrunesImpliedAndUnmeasuredValues() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells scalar = emon.Port.NewCells();
+        emon.Port.Cells cls = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 1, 0, 1);
+        Oil.OilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.CellsPush(scalar, -1);
+        Oil.OilScPut(c, at, 1, 2, 0, scalar, 0, 1);
+        emon.Port.CellsSet(scalar, 0, 0);
+        Oil.OilScPut(c, at, 3, 2, 0, scalar, 0, 1);
+        emon.Port.CellsPush(cls, 0);
+        emon.Port.CellsPush(cls, 400);
+        Oil.OilScPut(c, at, 2, 2, 0, cls, 0, 2);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhNsc()), 0, "all three source values are uninformative");
+        emon.Testport.AssertEq(emon.Port.CellsLen(c), 34, "empty entries are physically removed");
+    }
+    [Xunit.Fact]
+    public static void TestSourceSealingKeepsInformationAndIsIdempotent() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells value = emon.Port.NewCells();
+        emon.Port.Cells want = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 1, 0, 1);
+        int i = 0;
+        Oil.OilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.CellsPush(value, 850);
+        Oil.OilScPut(c, at, 1, 2, 0, value, 0, 1);
+        emon.Port.CellsSet(value, 0, 1);
+        Oil.OilScPut(c, at, 3, 2, 0, value, 0, 1);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhNsc()), 2, "measured score and quarter turn remain");
+        while (i < emon.Port.CellsLen(c)) {
+            emon.Port.CellsPush(want, emon.Port.CellsAt(c, i));
+            i += 1;
+        }
+        emon.Testport.AssertEq(Oil.OilSeal(c, at, 0), 0, "seal twice");
+        emon.Testport.AssertEq(emon.Port.CellsLen(c), emon.Port.CellsLen(want), "sealing cannot grow an already sealed answer");
+        i = 0;
+        while (i < emon.Port.CellsLen(c)) {
+            emon.Testport.AssertEq(emon.Port.CellsAt(c, i), emon.Port.CellsAt(want, i), "every sealed cell is stable");
+            i += 1;
+        }
+    }
+    [Xunit.Fact]
+    public static void TestDenseSourcePruningDoesNotOverwriteUnreadValues() {
+        emon.Port.Cells flat = emon.Port.NewCells();
+        emon.Port.Cells raw = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        int at = Oil.OilBegin(raw, 1, Oil.OenPpocr(), 0, 0, 1, 1, 0, 1);
+        int i = 0;
+        while (i < 3) {
+            Oil.OilLine(raw, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            i += 1;
+        }
+        Oil.OilEnd(raw, at);
+        i = 4;
+        while (i < emon.Port.CellsLen(raw)) {
+            emon.Port.CellsPush(flat, emon.Port.CellsAt(raw, i));
+            i += 1;
+        }
+        emon.Port.CellsSet(flat, 21, 1);
+        emon.Port.CellsPush(flat, 9);
+        emon.Port.CellsPush(flat, 2);
+        emon.Port.CellsPush(flat, 1);
+        emon.Port.CellsPush(flat, 2);
+        emon.Port.CellsPush(flat, 1);
+        emon.Port.CellsPush(flat, 3);
+        emon.Port.CellsPush(flat, 800);
+        emon.Port.CellsPush(flat, -1);
+        emon.Port.CellsPush(flat, 900);
+        emon.Testport.AssertEq(Oil.OilFlat(flat, 1, @out), 0, "a registered dense source group");
+        emon.Testport.AssertEq(emon.Port.CellsLen(@out), 56, "sparse output can be larger than dense input");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 46), 10, "canonical sparse entry length");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 50), 0, "sparse output");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 51), 2, "unmeasured middle value removed");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 52), 0, "first source row");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 53), 800, "first measurement survives");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 54), 2, "last source row");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 55), 900, "last measurement survives expansion");
+    }
+    [Xunit.Fact]
+    public static void TestTesseractLineOrderIsNormalizedBeforeItEntersTheWire() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilTessBegin(c, 1, 3, 0, 0, 0, 2, 0, -1, 0, -1, -1, 0);
+        Oil.OilTessBlock(c, at, 0, 0, 20, 10, -1, 0, 0, 2, 0);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhLorder()), 0, "Tesseract top-to-bottom 2 is OIL top-to-bottom 0");
+        emon.Testport.AssertEq(Oil.OilBlockField(c, at, 0, 2), 0, "block order uses the same neutral enum");
+        emon.Testport.AssertEq(Oil.OilTlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics");
+    }
 }

@@ -14,8 +14,7 @@
 ;;              discovery model (English when installed, otherwise the first model; D672). Installed models arrive as code-point Cells separated by 0 (tessdata names exceed
 ;;              pack4's four chars) and are answered as indices into that list.
 ;;   ANSWER.    `op-word-lang` (the language the engine read a word in, as a request names it), `op-osd-script` (the OSD's script
-;;              name as ISO 15924), `op-block-type` (the engine's block type as the line's `bt`), and `ox-flat`, the flat integer
-;;              form a host that cannot call the builders (the browser's JS) writes, turned into the answer record.
+;;              name as ISO 15924), `op-block-type` (the engine's block type as the line's `bt`), while `emon.oil/oil-flat` reads the flat answer supplied by external adapters.
 ;;
 ;; A host reads a request's cells through `op-lang-first` and the like, never by literal offset (D396 item 5).
 ;;
@@ -26,9 +25,8 @@
 (ns emon.ocrport
   (:require [emon.lang :refer [I32 Cells Text defenum]]
             [emon.port :refer [cells-len cells-at cells-push]]
-            [emon.plan :refer [view-base rq-arg an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
-            [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
-                              ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
+            [emon.plan :refer [view-base rq-arg]]
+            [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other]]
             [kin.lang :refer [defn defdata return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -499,161 +497,6 @@
   (if (== poly (pb-vert-line)) (return (bt-line)))
   (return (bt-other)))
 
-;; ---------------------------------------------------------------- the flat form
-;;
-;; What a host with no access to the builders writes (the browser's JS adapter, through `emon_answer_ocr`): all cells.
-;;   header  orient wdir tlo deskew osd script sconf oconf nlines nblocks nwords has_binary bw bh      (14)
-;;   lines   x y w h  bx1 by1 bx2 by2  block par btype  rowa rowb rowc                                 (14, nlines times)
-;;   blocks  x y w h  orient wdir tlo                                                                   (7, nblocks times)
-;;   words   x y w h conf line block flags lang psize dflags  ntext cp...  nsyms  syms...               (nwords times)
-;;   sym     x y w h conf  ncp cp...  nalts  (conf ncp cp...)...
-;; `ox-flat` answers 0 and the record in `c`, or -1 for a form whose counts run past its cells or are negative.
-
-(defn ^:pub ^I32 ox-flat-word-end [^Cells v ^I32 at]
-  (comment "The start of the word after the flat-form word at `at`, or -1 when its counts run past the form.")
-  (let [^I32 total (cells-len v)
-        ^:mut ^I32 p at
-        ^:mut ^I32 n 0
-        ^:mut ^I32 m 0
-        ^:mut ^I32 i 0
-        ^:mut ^I32 j 0]
-    (if (> (+ p 12) total) (return -1))
-    (set n (cells-at v (+ p 11)))
-    (if (< n 0) (return -1))
-    (if (> n (- total (+ p 12))) (return -1))
-    (set p (+ (+ p 12) n))
-    (if (>= p total) (return -1))
-    (set n (cells-at v p))
-    (set p (+ p 1))
-    (if (< n 0) (return -1))
-    (while (< i n)
-      (do (if (> (+ p 6) total) (return -1))
-          (set m (cells-at v (+ p 5)))
-          (if (< m 0) (return -1))
-          (if (> m (- total (+ p 6))) (return -1))
-          (set p (+ (+ p 6) m))
-          (if (>= p total) (return -1))
-          (set m (cells-at v p))
-          (set p (+ p 1))
-          (if (< m 0) (return -1))
-          (set j 0)
-          (while (< j m)
-            (do (if (> (+ p 2) total) (return -1))
-                (if (< (cells-at v (+ p 1)) 0) (return -1))
-                (if (> (cells-at v (+ p 1)) (- total (+ p 2))) (return -1))
-                (set p (+ (+ p 2) (cells-at v (+ p 1))))
-                (set j (+ j 1))))
-          (set i (+ i 1))))
-    (return p)))
-
-(defn ^I32 ox-flat-put-sym [^:mut ^Cells c ^I32 wx ^Cells v ^I32 q]
-  (comment "One validated flat-form symbol at `q` into the word `wx`; answers where the next one starts.")
-  (let [^I32 sx (ox-sym c wx (cells-at v q) (cells-at v (+ q 1)) (cells-at v (+ q 2)) (cells-at v (+ q 3)) (cells-at v (+ q 4)))
-        ^I32 ncp (cells-at v (+ q 5))
-        ^:mut ^I32 k 0
-        ^:mut ^I32 r (+ (+ q 6) ncp)
-        ^:mut ^I32 na 0
-        ^:mut ^I32 a 0
-        ^:mut ^I32 ax 0
-        ^:mut ^I32 nac 0]
-    (while (< k ncp)
-      (do (ox-sym-cp c sx (cells-at v (+ (+ q 6) k)))
-          (set k (+ k 1))))
-    (set na (cells-at v r))
-    (set r (+ r 1))
-    (while (< a na)
-      (do (set ax (ox-alt c sx (cells-at v r)))
-          (set nac (cells-at v (+ r 1)))
-          (set k 0)
-          (while (< k nac)
-            (do (ox-alt-cp c ax (cells-at v (+ (+ r 2) k)))
-                (set k (+ k 1))))
-          (set r (+ (+ r 2) nac))
-          (set a (+ a 1))))
-    (return r)))
-
-(defn ^I32 ox-flat-put-ext [^:mut ^Cells c ^Cells v ^I32 p]
-  (comment "The extension of one validated flat-form word at `p`: its flags, language, size, and its symbols.")
-  (let [^I32 wx (ox-word c (cells-at v (+ p 7)) (cells-at v (+ p 8)) (cells-at v (+ p 9)) (cells-at v (+ p 10)))
-        ^:mut ^I32 q (+ (+ p 12) (cells-at v (+ p 11)))
-        ^I32 ns (cells-at v q)
-        ^:mut ^I32 i 0]
-    (set q (+ q 1))
-    (while (< i ns)
-      (do (set q (ox-flat-put-sym c wx v q))
-          (set i (+ i 1))))
-    (return 0)))
-
-(defn ^I32 ox-flat-put-word [^:mut ^Cells c ^I32 at ^Cells v ^I32 p]
-  (comment "One validated flat-form word at `p`: its box, confidence and text, into the answer begun at `at`.")
-  (let [^I32 wd (an-ocr-word c at (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
-                             (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)))
-        ^I32 nt (cells-at v (+ p 11))
-        ^:mut ^I32 k 0]
-    (while (< k nt)
-      (do (an-ocr-cp c wd (cells-at v (+ (+ p 12) k)))
-          (set k (+ k 1))))
-    (return 0)))
-
-(defn ^:pub ^I32 ox-flat [^Cells v ^I32 id ^:mut ^Cells c]
-  (comment "The OCR answer record for request `id`, written into `c`, from the flat form `v`: the words, then the extension through")
-  (comment "the builders, so the layout is written once. 0 for success, -1 for a malformed form (nothing is written then).")
-  (let [^I32 total (cells-len v)
-        ^:mut ^I32 nlines 0
-        ^:mut ^I32 nblocks 0
-        ^:mut ^I32 nwords 0
-        ^:mut ^I32 w0 0
-        ^:mut ^I32 p 0
-        ^:mut ^I32 i 0
-        ^:mut ^I32 at 0]
-    (if (< total 14) (return -1))
-    (set nlines (cells-at v 8))
-    (set nblocks (cells-at v 9))
-    (set nwords (cells-at v 10))
-    (if (< nlines 0) (return -1))
-    (if (< nblocks 0) (return -1))
-    (if (< nwords 0) (return -1))
-    (if (> nlines (quot total 14)) (return -1))
-    (if (> nblocks (quot total 7)) (return -1))
-    (if (> nwords total) (return -1))
-    (set w0 (+ (+ 14 (* nlines 14)) (* nblocks 7)))
-    (if (> w0 total) (return -1))
-    (set p w0)
-    (while (< i nwords)
-      (do (set p (ox-flat-word-end v p))
-          (if (< p 0) (return -1))
-          (set i (+ i 1))))
-    (set at (an-ocr c id))
-    (set p w0)
-    (set i 0)
-    (while (< i nwords)
-      (do (ox-flat-put-word c at v p)
-          (set p (ox-flat-word-end v p))
-          (set i (+ i 1))))
-    (ox-begin c (cells-at v 0) (cells-at v 1) (cells-at v 2) (cells-at v 3) (cells-at v 4) (cells-at v 5) (cells-at v 6) (cells-at v 7)
-              nlines nblocks (cells-at v 11) (cells-at v 12) (cells-at v 13))
-    (set p 14)
-    (set i 0)
-    (while (< i nlines)
-      (do (ox-line c (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
-                   (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)) (cells-at v (+ p 7))
-                   (cells-at v (+ p 8)) (cells-at v (+ p 9)) (cells-at v (+ p 10)) (cells-at v (+ p 11))
-                   (cells-at v (+ p 12)) (cells-at v (+ p 13)))
-          (set p (+ p 14))
-          (set i (+ i 1))))
-    (set i 0)
-    (while (< i nblocks)
-      (do (ox-block c (cells-at v p) (cells-at v (+ p 1)) (cells-at v (+ p 2)) (cells-at v (+ p 3))
-                    (cells-at v (+ p 4)) (cells-at v (+ p 5)) (cells-at v (+ p 6)))
-          (set p (+ p 7))
-          (set i (+ i 1))))
-    (set i 0)
-    (while (< i nwords)
-      (do (ox-flat-put-ext c v p)
-          (set p (ox-flat-word-end v p))
-          (set i (+ i 1))))
-    (an-ocr-end c at)
-    (return 0)))
 
 (defn ^:pub ^I32 op-models-configured [^Cells req ^Cells inst ^I32 configured ^:mut ^Cells out]
   (comment "D678: an explicit provider model set is authoritative when the request has no language hint. An unfiltered inventory uses discovery; a named request still wins.")

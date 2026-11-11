@@ -166,3 +166,141 @@ fn test_flat_oil_roundtrips_and_rejects_overflowing_text_before_writing() {
     crate::testport::assert_eq(oil_flat(flat, 77, bad), -1, "text count cannot overflow cursor");
     crate::testport::assert_eq(crate::port::cells_len(bad), 0, "malformed form writes nothing");
 }
+pub(crate) fn t_flat_header(mut v: &mut crate::port::Cells) -> i32 {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_tesseract(), 0, 0, 1, 0, 0, 0);
+    let mut i: i32 = 4;
+    oil_end(c, at);
+    while i < crate::port::cells_len(c) {
+        crate::port::cells_push(v, crate::port::cells_at(c, i));
+        i += 1;
+    }
+    return 0;
+}
+#[test]
+fn test_flat_header_enums_and_reserved_cells_are_validated() {
+    let v: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_flat_header(v);
+    crate::port::cells_push(out, 123);
+    crate::port::cells_set(v, 6, 0);
+    crate::testport::assert_eq(oil_flat(v, 1, out), -1, "undefined segmentation");
+    crate::port::cells_set(v, 6, 1);
+    crate::port::cells_set(v, 17, 3);
+    crate::testport::assert_eq(oil_flat(v, 1, out), -1, "undefined granularity");
+    crate::port::cells_set(v, 17, 0);
+    crate::port::cells_set(v, 23, 1);
+    crate::testport::assert_eq(oil_flat(v, 1, out), -1, "reserved header is zero");
+    crate::testport::assert_eq(crate::port::cells_len(out), 1, "all refusals preserve existing answers");
+}
+#[test]
+fn test_flat_sidecars_must_belong_to_the_source_engine_and_registry() {
+    let v: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    t_flat_header(v);
+    crate::port::cells_set(v, 21, 1);
+    crate::port::cells_push(v, 8);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 3);
+    crate::port::cells_push(v, 2);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 1);
+    crate::port::cells_push(v, 0);
+    crate::port::cells_push(v, 1);
+    crate::testport::assert_eq(oil_flat(v, 1, out), -1, "namespace cannot cross engines");
+    crate::port::cells_set(v, 25, 1);
+    crate::port::cells_set(v, 26, 999);
+    crate::testport::assert_eq(oil_flat(v, 1, out), -1, "unknown key is rejected");
+    crate::testport::assert_eq(crate::port::cells_len(out), 0, "invalid sidecars write nothing");
+}
+#[test]
+fn test_source_sealing_prunes_implied_and_unmeasured_values() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scalar: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 1, 0, 1);
+    oil_line(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    crate::port::cells_push(scalar, -1);
+    oil_sc_put(c, at, 1, 2, 0, scalar, 0, 1);
+    crate::port::cells_set(scalar, 0, 0);
+    oil_sc_put(c, at, 3, 2, 0, scalar, 0, 1);
+    crate::port::cells_push(cls, 0);
+    crate::port::cells_push(cls, 400);
+    oil_sc_put(c, at, 2, 2, 0, cls, 0, 2);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_get(c, at, oh_nsc()), 0, "all three source values are uninformative");
+    crate::testport::assert_eq(crate::port::cells_len(c), 34, "empty entries are physically removed");
+}
+#[test]
+fn test_source_sealing_keeps_information_and_is_idempotent() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let value: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let want: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 1, 0, 1);
+    let mut i: i32 = 0;
+    oil_line(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    crate::port::cells_push(value, 850);
+    oil_sc_put(c, at, 1, 2, 0, value, 0, 1);
+    crate::port::cells_set(value, 0, 1);
+    oil_sc_put(c, at, 3, 2, 0, value, 0, 1);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_get(c, at, oh_nsc()), 2, "measured score and quarter turn remain");
+    while i < crate::port::cells_len(c) {
+        crate::port::cells_push(want, crate::port::cells_at(c, i));
+        i += 1;
+    }
+    crate::testport::assert_eq(oil_seal(c, at, 0), 0, "seal twice");
+    crate::testport::assert_eq(crate::port::cells_len(c), crate::port::cells_len(want), "sealing cannot grow an already sealed answer");
+    i = 0;
+    while i < crate::port::cells_len(c) {
+        crate::testport::assert_eq(crate::port::cells_at(c, i), crate::port::cells_at(want, i), "every sealed cell is stable");
+        i += 1;
+    }
+}
+#[test]
+fn test_dense_source_pruning_does_not_overwrite_unread_values() {
+    let flat: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let raw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(raw, 1, oen_ppocr(), 0, 0, 1, 1, 0, 1);
+    let mut i: i32 = 0;
+    while i < 3 {
+        oil_line(raw, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        i += 1;
+    }
+    oil_end(raw, at);
+    i = 4;
+    while i < crate::port::cells_len(raw) {
+        crate::port::cells_push(flat, crate::port::cells_at(raw, i));
+        i += 1;
+    }
+    crate::port::cells_set(flat, 21, 1);
+    crate::port::cells_push(flat, 9);
+    crate::port::cells_push(flat, 2);
+    crate::port::cells_push(flat, 1);
+    crate::port::cells_push(flat, 2);
+    crate::port::cells_push(flat, 1);
+    crate::port::cells_push(flat, 3);
+    crate::port::cells_push(flat, 800);
+    crate::port::cells_push(flat, -1);
+    crate::port::cells_push(flat, 900);
+    crate::testport::assert_eq(oil_flat(flat, 1, out), 0, "a registered dense source group");
+    crate::testport::assert_eq(crate::port::cells_len(out), 56, "sparse output can be larger than dense input");
+    crate::testport::assert_eq(crate::port::cells_at(out, 46), 10, "canonical sparse entry length");
+    crate::testport::assert_eq(crate::port::cells_at(out, 50), 0, "sparse output");
+    crate::testport::assert_eq(crate::port::cells_at(out, 51), 2, "unmeasured middle value removed");
+    crate::testport::assert_eq(crate::port::cells_at(out, 52), 0, "first source row");
+    crate::testport::assert_eq(crate::port::cells_at(out, 53), 800, "first measurement survives");
+    crate::testport::assert_eq(crate::port::cells_at(out, 54), 2, "last source row");
+    crate::testport::assert_eq(crate::port::cells_at(out, 55), 900, "last measurement survives expansion");
+}
+#[test]
+fn test_tesseract_line_order_is_normalized_before_it_enters_the_wire() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_tess_begin(c, 1, 3, 0, 0, 0, 2, 0, -1, 0, -1, -1, 0);
+    oil_tess_block(c, at, 0, 0, 20, 10, -1, 0, 0, 2, 0);
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_get(c, at, oh_lorder()), 0, "Tesseract top-to-bottom 2 is OIL top-to-bottom 0");
+    crate::testport::assert_eq(oil_block_field(c, at, 0, 2), 0, "block order uses the same neutral enum");
+    crate::testport::assert_eq(oil_tlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics");
+}

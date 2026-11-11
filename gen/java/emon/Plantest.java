@@ -182,23 +182,23 @@ public final class Plantest {
     }
     public static void testAnOcrAnswerHoldsWordsWithTheirText() {
         emon.Port.Cells c = emon.Port.newCells();
-        int at = Plan.anOcr(c, 3);
-        int w0 = Plan.anOcrWord(c, at, 10, 20, 300, 40, 912, 0, 1);
-        Plan.anOcrCp(c, w0, 72);
-        Plan.anOcrCp(c, w0, 105);
-        int w1 = Plan.anOcrWord(c, at, 400, 20, 50, 40, 870, 0, 1);
-        Plan.anOcrCp(c, w1, 128512);
-        Plan.anOcrEnd(c, at);
-        emon.Testport.assertEq(Plan.anOcrCount(c, at), 2, "two words");
-        emon.Testport.assertEq(Plan.anOcrFirst(c, at), 5, "the first word follows the count");
-        emon.Testport.assertEq(Plan.anOcrFirst(c, at), w0, "and is w0");
-        emon.Testport.assertEq(Plan.awGet(c, w0, Plan.awX()), 10, "x");
-        emon.Testport.assertEq(Plan.awGet(c, w0, Plan.awConf()), 912, "confidence x10");
-        emon.Testport.assertEq(Plan.awGet(c, w0, Plan.awLen()), 2, "two code points");
-        emon.Testport.assertEq(Plan.awCp(c, w0, 1), 105, "i");
-        emon.Testport.assertEq(Plan.awNext(c, w0), w1, "the next word");
-        emon.Testport.assertEq(Plan.awCp(c, w1, 0), 128512, "a code point outside the BMP is one cell");
-        emon.Testport.assertEq(Plan.awNext(c, w1), emon.Port.cellsLen(c), "and the last ends the record");
+        int at = Oil.oilBegin(c, 3, 1, 256, 256, 1, 1, 0, 0);
+        int w0 = Oil.oilWord(c, at, 10, 20, 300, 40, -1, 912, 0, 0, -1, 0);
+        Oil.oilWordCp(c, at, w0, 72);
+        Oil.oilWordCp(c, at, w0, 105);
+        int w1 = Oil.oilWord(c, at, 400, 20, 50, 40, -1, 870, 0, 0, -1, 0);
+        Oil.oilWordCp(c, at, w1, 128512);
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilNwords(c, at), 2, "two words");
+        emon.Testport.assertEq(Oil.oilFirstWord(c, at), 28, "the first word follows the OIL header");
+        emon.Testport.assertEq(Oil.oilFirstWord(c, at), w0, "and is w0");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, w0), 10, "x");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, w0 + 5), 912, "confidence x10");
+        emon.Testport.assertEq(Oil.oilWlen(c, at, w0), 2, "two code points");
+        emon.Testport.assertEq(Oil.oilWcp(c, at, w0, 1), 105, "i");
+        emon.Testport.assertEq(Oil.oilWordNext(c, at, w0), w1, "the next word");
+        emon.Testport.assertEq(Oil.oilWcp(c, at, w1, 0), 128512, "a code point outside the BMP is one cell");
+        emon.Testport.assertEq(Oil.oilWordNext(c, at, w1), emon.Port.cellsLen(c), "and the last ends the record");
         emon.Testport.assertEq(Plan.recLen(c, at), emon.Port.cellsLen(c), "the record's length covers them");
     }
     public static void testARecordWalkRefusesWhatIsMalformed() {
@@ -288,11 +288,11 @@ public final class Plantest {
         int second4 = Plan.recNext(rq, 0);
         emon.Testport.assertEq(Plan.recId(rq, second4), 4, "id 4");
         emon.Testport.assertEq(Plan.rqArg(rq, second4, 0), 2, "of the decode's bitmap");
-        int o3 = Plan.anOcr(an, 3);
-        int w = Plan.anOcrWord(an, o3, 6, 3, 40, 9, 911, 0, 0);
-        Plan.anOcrCp(an, w, 72);
-        Plan.anOcrCp(an, w, 105);
-        Plan.anOcrEnd(an, o3);
+        int o3 = Oil.oilBegin(an, 3, 1, 256, 256, 1, 1, 0, 0);
+        int w = Oil.oilWord(an, o3, 6, 3, 40, 9, -1, 911, 0, 0, -1, 0);
+        Oil.oilWordCp(an, o3, w, 72);
+        Oil.oilWordCp(an, o3, w, 105);
+        Oil.oilEnd(an, o3);
         Plan.anFail(an, 3, 4, 1);
         emon.Port.cellsDrop(rq, 0);
         emon.Testport.assertEq(ptUnit(s, an, rq, et, t), 0, "round 2 is done");

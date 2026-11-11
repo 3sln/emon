@@ -84,30 +84,47 @@ public final class Scantest {
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
     }
     public static int threeLines(emon.Port.Cells an, int id) {
-        // An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope
-        // (6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.
-        int at = Plan.anOcr(an, id);
-        int w0 = Plan.anOcrWord(an, at, 10, 20, 300, 40, 900, 0, 0);
-        Plan.anOcrCp(an, w0, 65);
-        int w1 = Plan.anOcrWord(an, at, 10, 100, 300, 40, 800, 1, 0);
-        Plan.anOcrCp(an, w1, 66);
-        int w2 = Plan.anOcrWord(an, at, 10, 180, 300, 40, 0, 2, 0);
-        Plan.anOcrCp(an, w2, 67);
-        Ocr.oxBegin(an, 1, 0, 0, -115, 90, 1231, 17, 187, 3, 1, 1, 640, 480);
-        Ocr.oxLine(an, 10, 20, 300, 46, 10, 55, 310, 61, 0, 0, 0, 20, 14, 6);
-        Ocr.oxLine(an, 10, 100, 300, 46, 10, 135, 310, 141, 0, 0, 0, 20, 14, 6);
-        Ocr.oxLine(an, 10, 180, 300, 40, 10, 215, 310, 215, 0, 0, 0, 20, 14, 6);
-        Ocr.oxBlock(an, 10, 20, 300, 200, 1, 2, 0);
-        int x0 = Ocr.oxWord(an, 0, 6647399, 11, 3);
-        int s0 = Ocr.oxSym(an, x0, 10, 20, 20, 40, 900);
-        Ocr.oxSymCp(an, s0, 65);
-        int x1 = Ocr.oxWord(an, 0, 6647399, -1, 0);
-        int s1 = Ocr.oxSym(an, x1, 10, 100, 20, 40, 800);
-        Ocr.oxSymCp(an, s1, 66);
-        int x2 = Ocr.oxWord(an, 0, 6647399, -1, 1);
-        int s2 = Ocr.oxSym(an, x2, 10, 180, 20, 40, 0);
-        Ocr.oxSymCp(an, s2, 67);
-        Plan.anOcrEnd(an, at);
+        int at = Oil.oilTessBegin(an, id, 3, 1, 1, 0, 0, -115, 90, 1231, 17, 187, 1);
+        int k = 0;
+        int y = 20;
+        int height = 46;
+        int delta = 6;
+        int conf = 900;
+        int lex = 3;
+        int psize = 11;
+        int mask = Oil.oilGet(an, at, Oil.ohCaps());
+        Oil.oilSet(an, at, Oil.ohCaps(), mask + Oil.ocRowmetrics());
+        int measuredMask = Oil.oilGet(an, at, Oil.ohNative());
+        Oil.oilSet(an, at, Oil.ohNative(), measuredMask + Oil.ocRowmetrics());
+        Oil.oilTessBlock(an, at, 10, 20, 300, 200, -1, 1, 2, 0, 0);
+        while (k < 3) {
+            y = 20 + (k * 80);
+            if (k == 2) {
+                height = 40;
+                delta = 0;
+            }
+            Oil.oilLine(an, at, 10, y, 300, height, 0, 1, -1, 0, 10, y + 35, 310, (y + 35) + delta, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 3) {
+            y = 20 + (k * 80);
+            if (k == 1) {
+                conf = 800;
+                lex = 1;
+                psize = -1;
+            }
+            if (k == 2) {
+                conf = 0;
+                lex = 3;
+            }
+            int word = Oil.oilWord(an, at, 10, y, 300, 40, k, conf, 6647399, 0, psize, lex);
+            Oil.oilWordCp(an, at, word, 65 + k);
+            int sym = Oil.oilSym(an, at, word, 10, y, 20, 40, conf);
+            Oil.oilSymCp(an, sym, 65 + k);
+            k += 1;
+        }
+        Oil.oilEnd(an, at);
         return at;
     }
     public static int pageOf(emon.Port.Cells an, int at, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells wd, emon.Port.Cells ln) {
@@ -135,7 +152,7 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.owCount(owords), 3, "three words");
         emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfPsize()), 1100, "the engine's point size is in centipoints");
         emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfPsize()), -1, "unknown stays -1");
-        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()), 3, "dictionary and numeric");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfFlags()), 1, "dictionary membership remains; alphabetic text is not numeric");
         emon.Testport.assertEq(Evidence.owGet(owords, 2, Evidence.hdConf()), 0, "a confidence of 0 is carried as it is (D130)");
         emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfXheight()), 480, "x-height 20 px is 480 cpt");
         emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfAsc()), 336, "ascenders 14 px");
@@ -286,44 +303,40 @@ public final class Scantest {
         emon.Testport.assertEq(Model.nodeSrc(nodes, p1), Model.srText(), "untouched");
         emon.Testport.assertEq(Model.nodeAttr(nodes, attrs, 0, Model.fkOcr()), -1, "and no `settings.ocr`");
     }
-    public static int sym1(emon.Port.Cells an, int wx, int x, int y, int h, int cp) {
+    public static int sym1(emon.Port.Cells an, int at, int wx, int x, int y, int h, int cp) {
         // A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.
-        int s = Ocr.oxSym(an, wx, x, y, 15, h, 900);
-        Ocr.oxSymCp(an, s, cp);
+        int s = Oil.oilSym(an, at, wx, x, y, 15, h, 900);
+        Oil.oilSymCp(an, s, cp);
         return 0;
     }
     public static int noRowAttributes(emon.Port.Cells an, int id, int withasc) {
-        // An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height
-        // letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).
-        int at = Plan.anOcr(an, id);
-        int w0 = Plan.anOcrWord(an, at, 10, 80, 70, 20, 900, 0, 0);
-        Plan.anOcrCp(an, w0, 110);
+        int at = Oil.oilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int count = 1;
         if (withasc == 1) {
-            int w1 = Plan.anOcrWord(an, at, 90, 66, 70, 34, 900, 0, 0);
-            Plan.anOcrCp(an, w1, 98);
-            int w2 = Plan.anOcrWord(an, at, 170, 80, 50, 26, 900, 0, 0);
-            Plan.anOcrCp(an, w2, 103);
+            count = 3;
         }
-        Ocr.oxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        Ocr.oxLine(an, 10, 66, 210, 46, 10, 100, 220, 100, 0, 0, 0, -1, -1, -1);
-        Ocr.oxBlock(an, 10, 66, 210, 46, 0, 0, 0);
-        int x0 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x0, 10, 80, 20, 110);
-        sym1(an, x0, 25, 80, 20, 111);
-        sym1(an, x0, 40, 80, 20, 110);
-        sym1(an, x0, 55, 80, 20, 101);
+        Oil.oilTessBlock(an, at, 10, 66, 210, 46, -1, 0, 0, 0, 0);
+        Oil.oilLine(an, at, 10, 66, 210, 46, 0, count, -1, 0, 10, 100, 220, 100, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int x0 = Oil.oilWord(an, at, 10, 80, 70, 20, 0, 900, 0, 0, -1, 1);
+        Oil.oilWordCp(an, at, x0, 110);
+        sym1(an, at, x0, 10, 80, 20, 110);
+        sym1(an, at, x0, 25, 80, 20, 111);
+        sym1(an, at, x0, 40, 80, 20, 110);
+        sym1(an, at, x0, 55, 80, 20, 101);
         if (withasc == 1) {
-            int x1 = Ocr.oxWord(an, 0, 0, -1, 0);
-            sym1(an, x1, 90, 66, 34, 98);
-            sym1(an, x1, 105, 66, 34, 108);
-            sym1(an, x1, 120, 66, 34, 100);
-            sym1(an, x1, 135, 66, 34, 104);
-            int x2 = Ocr.oxWord(an, 0, 0, -1, 0);
-            sym1(an, x2, 170, 80, 26, 103);
-            sym1(an, x2, 185, 80, 26, 121);
-            sym1(an, x2, 200, 80, 26, 112);
+            int x1 = Oil.oilWord(an, at, 90, 66, 70, 34, 0, 900, 0, 0, -1, 1);
+            Oil.oilWordCp(an, at, x1, 98);
+            sym1(an, at, x1, 90, 66, 34, 98);
+            sym1(an, at, x1, 105, 66, 34, 108);
+            sym1(an, at, x1, 120, 66, 34, 100);
+            sym1(an, at, x1, 135, 66, 34, 104);
+            int x2 = Oil.oilWord(an, at, 170, 80, 50, 26, 0, 900, 0, 0, -1, 1);
+            Oil.oilWordCp(an, at, x2, 103);
+            sym1(an, at, x2, 170, 80, 26, 103);
+            sym1(an, at, x2, 185, 80, 26, 121);
+            sym1(an, at, x2, 200, 80, 26, 112);
         }
-        Plan.anOcrEnd(an, at);
+        Oil.oilEnd(an, at);
         return at;
     }
     public static void testALineIsMeasuredFromItsSymbolsWhenTheEngineGivesNoRowAttributes() {
@@ -360,37 +373,61 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.lnGet(ln, 0, Evidence.lhY1()), 2400 + 194, "and its bottom: 0.27 of the ascender line");
     }
     public static int sizedLines(emon.Port.Cells an, int id) {
-        // Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
-        // 30+22 (a heading, 1.5 times as tall) and 20+14 again.
-        int at = Plan.anOcr(an, id);
-        int w0 = Plan.anOcrWord(an, at, 10, 20, 100, 40, 900, 0, 0);
-        Plan.anOcrCp(an, w0, 65);
-        int w1 = Plan.anOcrWord(an, at, 10, 100, 100, 40, 900, 1, 0);
-        Plan.anOcrCp(an, w1, 66);
-        int w2 = Plan.anOcrWord(an, at, 10, 180, 100, 40, 900, 2, 0);
-        Plan.anOcrCp(an, w2, 67);
-        int w3 = Plan.anOcrWord(an, at, 10, 260, 100, 60, 900, 3, 0);
-        Plan.anOcrCp(an, w3, 68);
-        int w4 = Plan.anOcrWord(an, at, 10, 360, 100, 40, 900, 4, 0);
-        Plan.anOcrCp(an, w4, 69);
-        Ocr.oxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0);
-        Ocr.oxLine(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.oxLine(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6);
-        Ocr.oxLine(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6);
-        Ocr.oxLine(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8);
-        Ocr.oxLine(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6);
-        Ocr.oxBlock(an, 10, 20, 100, 380, 0, 0, 0);
-        int x0 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x0, 10, 20, 20, 65);
-        int x1 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x1, 10, 100, 20, 66);
-        int x2 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x2, 10, 180, 20, 67);
-        int x3 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x3, 10, 260, 20, 68);
-        int x4 = Ocr.oxWord(an, 0, 0, -1, 0);
-        sym1(an, x4, 10, 360, 20, 69);
-        Plan.anOcrEnd(an, at);
+        int at = Oil.oilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int k = 0;
+        int y = 20;
+        int height = 40;
+        int xh = 20;
+        int asc = 14;
+        int desc = 6;
+        int base = 55;
+        int mask = Oil.oilGet(an, at, Oil.ohCaps());
+        Oil.oilSet(an, at, Oil.ohCaps(), mask + Oil.ocRowmetrics());
+        int measuredMask = Oil.oilGet(an, at, Oil.ohNative());
+        Oil.oilSet(an, at, Oil.ohNative(), measuredMask + Oil.ocRowmetrics());
+        Oil.oilTessBlock(an, at, 10, 20, 100, 380, -1, 0, 0, 0, 0);
+        while (k < 5) {
+            y = 20 + (k * 80);
+            height = 40;
+            xh = 20;
+            asc = 14;
+            desc = 6;
+            if (k == 1) {
+                asc = 15;
+            }
+            if (k == 3) {
+                height = 60;
+                xh = 30;
+                asc = 22;
+                desc = 8;
+            }
+            if (k == 4) {
+                y = 360;
+            }
+            base = y + 35;
+            if (k == 3) {
+                base = 305;
+            }
+            Oil.oilLine(an, at, 10, y, 100, height, 0, 1, -1, 0, 10, base, 110, base, xh, asc, desc, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            k += 1;
+        }
+        k = 0;
+        while (k < 5) {
+            y = 20 + (k * 80);
+            height = 40;
+            if (k == 3) {
+                height = 60;
+            }
+            if (k == 4) {
+                y = 360;
+            }
+            int word = Oil.oilWord(an, at, 10, y, 100, height, k, 900, 0, 0, -1, 1);
+            Oil.oilWordCp(an, at, word, 65 + k);
+            int sym = Oil.oilSym(an, at, word, 10, y, 15, 20, 900);
+            Oil.oilSymCp(an, sym, 65 + k);
+            k += 1;
+        }
+        Oil.oilEnd(an, at);
         return at;
     }
     public static void testAPagesLinesOfOneSizeMeasuredAPixelApartGetOneSize() {
@@ -962,8 +999,8 @@ public final class Scantest {
         }
         return Scan.scDctSpan(src, ar, dc, a, b, st, 5, sp);
     }
-    public static void testAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly() {
-        emon.Testport.assertEq(sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode");
+    public static void testAScanJpegOutsideTheSharedNativewordSubsetIsRenderedRatherThanDecodedDirectly() {
+        emon.Testport.assertEq(sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent nativeword decode");
         emon.Testport.assertEq(sctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR");
         emon.Testport.assertEq(sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path");
         emon.Testport.assertEq(sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering");
@@ -1178,40 +1215,41 @@ public final class Scantest {
         emon.Port.Cells owords = emon.Port.newCells();
         emon.Port.Cells wd = emon.Port.newCells();
         emon.Port.Cells ln = emon.Port.newCells();
-        int at = Plan.anOcr(an, 2);
-        int wnative = Plan.anOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0);
-        Plan.anOcrCp(an, wnative, c0);
-        Plan.anOcrCp(an, wnative, c1);
-        Plan.anOcrCp(an, wnative, c2);
-        int identifier = Plan.anOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0);
-        Plan.anOcrCp(an, identifier, 65);
-        Plan.anOcrCp(an, identifier, 55);
-        Ocr.oxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0);
-        Ocr.oxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.oxBlock(an, 10, 20, 140, 40, 0, 0, 0);
-        Ocr.oxWord(an, 0, lang, -1, 1);
-        Ocr.oxWord(an, 0, 1701734144, -1, 1);
-        Plan.anOcrEnd(an, at);
+        int at = Oil.oilTessBegin(an, 2, 3, 0, 0, 0, 0, 0, 0, script, 629, 500, 0);
+        int mask = Oil.oilGet(an, at, Oil.ohCaps());
+        Oil.oilSet(an, at, Oil.ohCaps(), mask + Oil.ocRowmetrics());
+        int measuredMask = Oil.oilGet(an, at, Oil.ohNative());
+        Oil.oilSet(an, at, Oil.ohNative(), measuredMask + Oil.ocRowmetrics());
+        Oil.oilTessBlock(an, at, 10, 20, 140, 40, -1, 0, 0, 0, 0);
+        Oil.oilLine(an, at, 10, 20, 140, 40, 0, 2, -1, 0, 10, 55, 150, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int nativeword = Oil.oilWord(an, at, 10, 20, 60, 40, 0, 900, lang, 0, -1, 3);
+        Oil.oilWordCp(an, at, nativeword, c0);
+        Oil.oilWordCp(an, at, nativeword, c1);
+        Oil.oilWordCp(an, at, nativeword, c2);
+        int identifier = Oil.oilWord(an, at, 90, 20, 60, 40, 0, 900, 1701734144, 0, -1, 3);
+        Oil.oilWordCp(an, at, identifier, 65);
+        Oil.oilWordCp(an, at, identifier, 55);
+        Oil.oilEnd(an, at);
         Scan.scPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang / 256, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), olines, owords, emon.Port.newCells(), emon.Port.newCells(), wd, ln, emon.Port.newCells());
         emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfRequest()), 2, "reading belongs to its actual OCR request");
         emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfLanglen()), 3, "request language is recorded independently of word models");
         emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.orGet(runs, 0, Evidence.orfLang())), lang / 16777216, "request language first letter");
         emon.Testport.assertEq(Evidence.owCount(owords), 2, "both recorded words remain evidence");
-        emon.Testport.assertEq(Evidence.wdCount(wd), 2, "native text and Latin identifier remain selected");
-        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfRun()), 0, "native word belongs to this run");
+        emon.Testport.assertEq(Evidence.wdCount(wd), 2, "nativeword text and Latin identifier remain selected");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfRun()), 0, "nativeword word belongs to this run");
         emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfRun()), 0, "Latin identifier belongs to the same run");
-        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfLang()), lang, "native word keeps its engine model");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfLang()), lang, "nativeword word keeps its engine model");
         emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.owfLang()), 1701734144, "identifier keeps its English model");
         emon.Testport.assertEq(Evidence.lnCount(ln), 1, "one selected source row");
-        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdLine()), 0, "native evidence word belongs to the recorded row");
+        emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdLine()), 0, "nativeword evidence word belongs to the recorded row");
         emon.Testport.assertEq(Evidence.owGet(owords, 1, Evidence.hdLine()), 0, "identifier evidence word belongs to the recorded row");
-        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdLine()), 0, "source row zero owns the native value");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdLine()), 0, "source row zero owns the nativeword value");
         emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdLine()), 0, "source row zero owns the identifier value");
-        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdTlen()), 3, "complete native span");
+        emon.Testport.assertEq(Evidence.wdGet(wd, 0, Evidence.hdTlen()), 3, "complete nativeword span");
         emon.Testport.assertEq(Evidence.wdGet(wd, 1, Evidence.hdTlen()), 2, "complete identifier span");
-        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart())), c0, "first native scalar");
-        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 1), c1, "native diacritic or script scalar");
-        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 2), c2, "last native scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart())), c0, "first nativeword scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 1), c1, "nativeword diacritic or script scalar");
+        emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 0, Evidence.hdTstart()) + 2), c2, "last nativeword scalar");
         emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 1, Evidence.hdTstart())), 65, "identifier A stays exact");
         emon.Testport.assertEq(emon.Port.cellsAt(et, Evidence.wdGet(wd, 1, Evidence.hdTstart()) + 1), 55, "identifier value 7 stays exact");
         return 0;
@@ -1219,7 +1257,7 @@ public final class Scantest {
     public static void testGermanUmlautAndLatinIdentifierKeepTheirReadingAndRow() {
         scMultilingualOwners(0, 1684370688, 1281455214, 102, 252, 114);
     }
-    public static void testUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers() {
+    public static void testUrduNativewordValuesDoNotAuthorizeDeletingLatinIdentifiers() {
         scMultilingualOwners(0, 1970430976, 1098015074, 1593, 1575, 1605);
     }
     public static void testJapaneseMixedReadingRetainsSourceBackedLatinIdentifiers() {
@@ -1275,26 +1313,43 @@ public final class Scantest {
         emon.Testport.assertEq(Evidence.lnGet(lines, 72, Evidence.lfSrc()) & Evidence.lsFrame(), 0, "empty rows cannot activate recovery");
     }
     public static void testUnknownOcrBaselineUsesBoxBottomWithoutRewritingTheAnswer() {
+        emon.Port.Cells raw = emon.Port.newCells();
+        emon.Port.Cells flat = emon.Port.newCells();
         emon.Port.Cells an = emon.Port.newCells();
         emon.Port.Cells et = emon.Port.newCells();
         emon.Port.Cells runs = emon.Port.newCells();
         emon.Port.Cells lines = emon.Port.newCells();
         emon.Port.Cells words = emon.Port.newCells();
-        int at = threeLines(an, 2);
-        int ext = Ocr.oxFind(an, at);
-        int l = Ocr.oxLineAt(an, ext, 0);
-        emon.Port.cellsSet(an, l + 4, -1);
-        emon.Port.cellsSet(an, l + 5, -1);
-        emon.Port.cellsSet(an, l + 6, -1);
-        emon.Port.cellsSet(an, l + 7, -1);
-        emon.Port.cellsSet(an, l + 11, -1);
-        emon.Port.cellsSet(an, l + 12, -1);
-        emon.Port.cellsSet(an, l + 13, -1);
-        pageOf(an, at, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), lines, words, emon.Port.newCells(), emon.Port.newCells());
-        emon.Testport.assertEq(emon.Port.cellsAt(an, l + 4), -1, "raw answer still records absence");
-        emon.Testport.assertEq(emon.Port.cellsAt(an, l + 5), -1, "no measured baseline is invented in the transcript");
-        emon.Testport.assertEq(Evidence.olGet(lines, 0, Evidence.lhBy0()), 66 * 24, "layout fallback is the measured line box bottom");
-        emon.Testport.assertEq(Evidence.owGet(words, 0, Evidence.hdBy0()), 66 * 24, "word layout does not interpolate minus one pixels");
+        int original = threeLines(raw, 2);
+        int first = Oil.oilLineAt(raw, original, 0);
+        int end = first + 42;
+        int i = 4;
+        while (i < emon.Port.cellsLen(raw)) {
+            if ((i < first) || ((i >= end) || (((i - first) % 14) < 7))) {
+                if ((i == 8) || (i == 9)) {
+                    emon.Port.cellsPush(flat, emon.Port.cellsAt(raw, i) - 24);
+                } else {
+                    emon.Port.cellsPush(flat, emon.Port.cellsAt(raw, i));
+                }
+            }
+            i += 1;
+        }
+        emon.Testport.assertEq(Oil.oilFlat(flat, 2, an), 0, "a baseline-free OIL answer is valid");
+        int size = emon.Port.cellsLen(an);
+        pageOf(an, 0, emon.Port.newCells(), emon.Port.newCells(), et, emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), lines, words, emon.Port.newCells(), emon.Port.newCells());
+        emon.Testport.assertEq(emon.Port.cellsLen(an), size, "ingestion does not add invented baseline cells");
+        emon.Testport.assertEq(Oil.oilLineField(an, 0, 0, 4), -1, "the raw baseline remains absent");
+        emon.Testport.assertEq(Evidence.olGet(lines, 0, Evidence.lhBy0()), 66 * 24, "layout fallback uses the measured line box bottom");
+        emon.Testport.assertEq(Evidence.owGet(words, 0, Evidence.hdBy0()), 66 * 24, "word layout does not interpolate absent measurements");
         emon.Testport.assertEq(Evidence.owGet(words, 0, Evidence.hdBy1()), 66 * 24, "both ends use the same fallback");
+    }
+    public static void testLayoutOrientationAndOsdRemainIndependentMeasurements() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        int at = threeLines(ans, 2);
+        Oil.oilSet(ans, at, Oil.ohOrient(), 2);
+        pageOf(ans, at, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), runs, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfOrient()), 1, "layout orientation comes from the measured block");
+        emon.Testport.assertEq(Evidence.orGet(runs, 0, Evidence.orfOsd()), 180, "OSD orientation remains the independent header measurement");
     }
 }

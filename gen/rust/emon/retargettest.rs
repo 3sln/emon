@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::norm::*;
+use crate::emon::oil::*;
 use crate::emon::plan::*;
 use crate::emon::retarget::*;
 use crate::emon::scan::*;
@@ -485,18 +486,18 @@ fn test_traced_ink_with_no_ocr_word_gets_a_cropped_retry() {
 #[test]
 fn test_orientation_votes_use_text_area_rather_than_a_confident_margin_number() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let a: i32 = an_ocr(ans, 1);
-    let wa: i32 = an_ocr_word(ans, a, 0, 0, 10, 500, 990, 0, 0);
-    an_ocr_cp(ans, wa, 49);
-    an_ocr_cp(ans, wa, 50);
-    an_ocr_end(ans, a);
-    let b: i32 = an_ocr(ans, 2);
-    let wb: i32 = an_ocr_word(ans, b, 50, 50, 500, 40, 900, 0, 0);
-    an_ocr_cp(ans, wb, 84);
-    an_ocr_cp(ans, wb, 101);
-    an_ocr_cp(ans, wb, 120);
-    an_ocr_cp(ans, wb, 116);
-    an_ocr_end(ans, b);
+    let a: i32 = oil_begin(ans, 1, 1, 256, 256, 1, 1, 0, 0);
+    let wa: i32 = oil_word(ans, a, 0, 0, 10, 500, -1, 990, 0, 0, -1, 0);
+    oil_word_cp(ans, a, wa, 49);
+    oil_word_cp(ans, a, wa, 50);
+    oil_end(ans, a);
+    let b: i32 = oil_begin(ans, 2, 1, 256, 256, 1, 1, 0, 0);
+    let wb: i32 = oil_word(ans, b, 50, 50, 500, 40, -1, 900, 0, 0, -1, 0);
+    oil_word_cp(ans, b, wb, 84);
+    oil_word_cp(ans, b, wb, 101);
+    oil_word_cp(ans, b, wb, 120);
+    oil_word_cp(ans, b, wb, 116);
+    oil_end(ans, b);
     crate::testport::assert_that(rt_answer_score(ans, b) > rt_answer_score(ans, a), "body text beats a narrow Bates strip");
 }
 #[test]
@@ -644,16 +645,16 @@ fn test_faint_view_is_black_ink_on_white_paper() {
 #[test]
 fn test_empty_receipt_rescue_waits_for_the_view_and_does_not_reread_success() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let empty: i32 = an_ocr(ans, 31);
-    an_ocr_end(ans, empty);
+    let empty: i32 = oil_begin(ans, 31, 1, 256, 256, 1, 1, 0, 0);
+    oil_end(ans, empty);
     crate::testport::assert_eq(rt_empty_receipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
     crate::testport::assert_eq(rt_empty_receipt(1, ans, empty), 1, "an empty view permits the rescue");
     crate::testport::assert_eq(rt_empty_receipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
-    let full: i32 = an_ocr(ans, 32);
-    let word: i32 = an_ocr_word(ans, full, 0, 0, 10, 10, 900, 0, 0);
-    an_ocr_cp(ans, word, 72);
-    an_ocr_cp(ans, word, 105);
-    an_ocr_end(ans, full);
+    let full: i32 = oil_begin(ans, 32, 1, 256, 256, 1, 1, 0, 0);
+    let word: i32 = oil_word(ans, full, 0, 0, 10, 10, -1, 900, 0, 0, -1, 0);
+    oil_word_cp(ans, full, word, 72);
+    oil_word_cp(ans, full, word, 105);
+    oil_end(ans, full);
     crate::testport::assert_eq(rt_empty_receipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
     crate::testport::assert_eq(rt_empty_receipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
 }

@@ -142,19 +142,19 @@ fn fake(req: &Request, bm: &Bitmaps) -> Result<Answer, PlanError> {
                     return ok_answer(c, None);
                 }
             };
-            let at = emon::plan::an_ocr(&mut c, id);
+            let at = emon::oil::oil_begin(&mut c, id, 1, 256, 256, 1, 1, 0, 0);
             let words: [(i32, i32, i32, i32, i32, i32, &[i32]); 3] = [
                 (4, 2, b.width() / 2, 10, 900 + (b.to_bytes()[0] as i32 % 50), 0, &[72, 101, 108, 108, 111]),
                 (b.width() / 2 + 6, 2, 20, 10, 871, 0, &[119, 246, 114, 108, 100]),
                 (4, 16, 6, 10, 640, 1, &[8364, 128512]),
             ];
-            for (x, y, w, h, conf, line, text) in words.iter() {
-                let wd = emon::plan::an_ocr_word(&mut c, at, *x, *y, *w, *h, *conf, *line, 0);
+            for (x, y, w, h, conf, _line, text) in words.iter() {
+                let wd = emon::oil::oil_word(&mut c, at, *x, *y, *w, *h, -1, *conf, 0, 0, -1, 0);
                 for cp in text.iter() {
-                    emon::plan::an_ocr_cp(&mut c, wd, *cp);
+                    emon::oil::oil_word_cp(&mut c, at, wd, *cp);
                 }
             }
-            emon::plan::an_ocr_end(&mut c, at);
+            emon::oil::oil_end(&mut c, at);
             ok_answer(c, None)
         }
         k => Err(PlanError::Fulfil(format!("the fake has no kind {}", k))),

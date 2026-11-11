@@ -116,7 +116,7 @@
   ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
   {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
    :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
-  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest,ocrengine,ocrenginetest}.kin"
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest,ocrengine,ocrenginetest,oil,oiltest,oilregistry,oilfixturetest,ocalib,ocalibtest}.kin"
    :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
   {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
   {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]

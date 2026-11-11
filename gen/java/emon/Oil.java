@@ -506,6 +506,20 @@ public final class Oil {
         }
         return (int) ((n + (d / 2)) / d);
     }
+    public static int oilOrderDir(int order) {
+        // Wire lo is ttb=0 rtl=1 ltr=2; the evidence direction enum is ltr=0 rtl=1 ttb=2.
+        if (order == 0) {
+            return 2;
+        }
+        if (order == 2) {
+            return 0;
+        }
+        return order;
+    }
+    public static int oilOrderFromTess(int order) {
+        // Tesseract TextlineOrder uses the direction enum's codes; swapping the endpoints is its inverse too.
+        return oilOrderDir(order);
+    }
     public static int oilBlockStride(int caps) {
         return (5 + (3 * oilHas(caps, ocWdir()))) + oilHas(caps, ocBtype());
     }
@@ -613,10 +627,6 @@ public final class Oil {
         emon.Port.cellsSet(c, (at + 4) + k, value);
         return 0;
     }
-    public static int oilEnd(emon.Port.Cells c, int at) {
-        emon.Port.cellsSet(c, at, emon.Port.cellsLen(c) - at);
-        return 0;
-    }
     public static int oilBlockAt(emon.Port.Cells c, int at, int index) {
         return (at + 28) + (index * oilBlockStride(oilGet(c, at, ohCaps())));
     }
@@ -650,6 +660,9 @@ public final class Oil {
         int n = oilGet(c, at, ohNblocks());
         oilSet(c, at, ohNblocks(), n + 1);
         return 0;
+    }
+    public static int oilTessBlock(emon.Port.Cells c, int at, int x, int y, int w, int h, int conf, int orient, int wdir, int order, int kind) {
+        return oilBlock(c, at, x, y, w, h, conf, orient, wdir, oilOrderFromTess(order), kind);
     }
     public static int oilLine(emon.Port.Cells c, int at, int x, int y, int w, int h, int block, int nwords, int conf, int par, int bx0, int by0, int bx1, int by1, int xh, int asc, int desc, int qx0, int qy0, int qx1, int qy1, int qx2, int qy2, int qx3, int qy3, int angle) {
         int caps = oilGet(c, at, ohCaps());
@@ -969,6 +982,18 @@ public final class Oil {
     public static int oilOrient(emon.Port.Cells c, int at) {
         return oilHeaderField(c, at, 9, ocOrient(), 0);
     }
+    public static int oilLayoutOrient(emon.Port.Cells c, int at) {
+        // Layout and OSD are independent Tesseract measurements. Its page layout orientation is the first normalized block's, even when OSD is absent or disagrees.
+        int caps = oilGet(c, at, ohCaps());
+        if ((oilHas(caps, ocBlocks()) != 0) && ((oilHas(caps, ocWdir()) != 0) && (oilGet(c, at, ohNblocks()) > 0))) {
+            int block = oilBlockAt(c, at, 0);
+            return emon.Port.cellsAt(c, block + 5);
+        }
+        if (oilGet(c, at, ohEngine()) == oenTesseract()) {
+            return 0;
+        }
+        return oilOrient(c, at);
+    }
     public static int oilOconf(emon.Port.Cells c, int at) {
         return oilHeaderField(c, at, 10, ocOrient(), -1);
     }
@@ -985,7 +1010,11 @@ public final class Oil {
         return oilHeaderField(c, at, 14, ocWdir(), 0);
     }
     public static int oilTlorder(emon.Port.Cells c, int at) {
-        return oilHeaderField(c, at, 15, ocWdir(), 0);
+        if (oilHas(oilGet(c, at, ohCaps()), ocWdir()) == 0) {
+            return 0;
+        }
+        int order = oilGet(c, at, ohLorder());
+        return oilOrderDir(order);
     }
     public static int oilBinary(emon.Port.Cells c, int at) {
         return oilHeaderField(c, at, 22, ocBinary(), 0);
@@ -1104,7 +1133,7 @@ public final class Oil {
         oilSet(c, at, ohScript(), script);
         oilSet(c, at, ohSconf(), sconf);
         oilSet(c, at, ohWdir(), wdir);
-        oilSet(c, at, ohLorder(), order);
+        oilSet(c, at, ohLorder(), oilOrderFromTess(order));
         oilSet(c, at, ohBinary(), binary);
         return at;
     }
@@ -1202,15 +1231,521 @@ public final class Oil {
         }
         return q;
     }
+    public static int oilFlatHeaderValid(emon.Port.Cells v) {
+        if ((emon.Port.cellsAt(v, 6) < 1) || (emon.Port.cellsAt(v, 6) > 5)) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(v, 17) < 0) || (emon.Port.cellsAt(v, 17) > 2)) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(v, 8) < 0) || (emon.Port.cellsAt(v, 8) > 1000)) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(v, 23) != 0) {
+            return 0;
+        }
+        int caps = emon.Port.cellsAt(v, 4);
+        if (oilHas(caps, ocOrient()) != 0) {
+            if ((emon.Port.cellsAt(v, 9) < 0) || (emon.Port.cellsAt(v, 9) > 3)) {
+                return 0;
+            }
+        }
+        if (oilHas(caps, ocWdir()) != 0) {
+            if ((emon.Port.cellsAt(v, 14) < 0) || (emon.Port.cellsAt(v, 14) > 3)) {
+                return 0;
+            }
+            if ((emon.Port.cellsAt(v, 15) < 0) || (emon.Port.cellsAt(v, 15) > 2)) {
+                return 0;
+            }
+        }
+        if (oilHas(caps, ocBinary()) != 0) {
+            if ((emon.Port.cellsAt(v, 22) < 0) || (emon.Port.cellsAt(v, 22) > 1)) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    public static int oilFlatSidecarEnd(emon.Port.Cells v, int p, int ns, int nb, int nl, int nw, int nsym) {
+        int size = emon.Port.cellsLen(v);
+        int end = 0;
+        int q = p + 6;
+        int count = 0;
+        int rows = 0;
+        int i = 0;
+        int j = 0;
+        int previous = -1;
+        if (p > (size - 6)) {
+            return -1;
+        }
+        if (emon.Port.cellsAt(v, p) < 6) {
+            return -1;
+        }
+        if (emon.Port.cellsAt(v, p) > (size - p)) {
+            return -1;
+        }
+        end = p + emon.Port.cellsAt(v, p);
+        if (emon.Port.cellsAt(v, p + 1) != ns) {
+            return -1;
+        }
+        int key = emon.Port.cellsAt(v, p + 2);
+        int subject = emon.Port.cellsAt(v, p + 3);
+        int dense = emon.Port.cellsAt(v, p + 4);
+        int registry = Oilregistry.oilKeyFind(ns, key);
+        if (registry < 0) {
+            return -1;
+        }
+        if (subject != Oilregistry.oilKeyField(registry, 4)) {
+            return -1;
+        }
+        if ((dense < 0) || (dense > 1)) {
+            return -1;
+        }
+        if (subject == 0) {
+            rows = 1;
+        }
+        if (subject == 1) {
+            rows = nb;
+        }
+        if (subject == 2) {
+            rows = nl;
+        }
+        if (subject == 3) {
+            rows = nw;
+        }
+        if (subject == 4) {
+            rows = nsym;
+        }
+        count = emon.Port.cellsAt(v, p + 5);
+        if ((count < 0) || (count > rows)) {
+            return -1;
+        }
+        if ((dense == 1) && (count != rows)) {
+            return -1;
+        }
+        while (i < count) {
+            if (dense == 0) {
+                if (q >= end) {
+                    return -1;
+                }
+                if ((emon.Port.cellsAt(v, q) <= previous) || (emon.Port.cellsAt(v, q) >= rows)) {
+                    return -1;
+                }
+                previous = emon.Port.cellsAt(v, q);
+                q += 1;
+            }
+            if (Oilregistry.oilKeyField(registry, 2) == 9) {
+                if (q >= end) {
+                    return -1;
+                }
+                j = emon.Port.cellsAt(v, q);
+                q += 1;
+                if ((j < 0) || (j > (end - q))) {
+                    return -1;
+                }
+                while (j > 0) {
+                    int cp = emon.Port.cellsAt(v, q);
+                    if ((cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343)))) {
+                        return -1;
+                    }
+                    q += 1;
+                    j -= 1;
+                }
+            } else {
+                j = Oilregistry.oilKeyField(registry, 3);
+                if (j > (end - q)) {
+                    return -1;
+                }
+                if (Oilregistry.oilKeyField(registry, 2) == 2) {
+                    if ((emon.Port.cellsAt(v, q) < -1) || (emon.Port.cellsAt(v, q) > 1000)) {
+                        return -1;
+                    }
+                }
+                q += j;
+            }
+            i += 1;
+        }
+        if (q != end) {
+            return -1;
+        }
+        return end;
+    }
+    public static int oilScSparse(emon.Port.Cells c, int at) {
+        // Expand dense rows before compaction. Inserting indices first avoids overwriting an unread payload when most rows survive sealing.
+        int p = oilFirstWord(c, at);
+        int i = 0;
+        while (i < oilNwords(c, at)) {
+            p = oilWordNext(c, at, p);
+            i += 1;
+        }
+        i = 0;
+        while (i < oilGet(c, at, ohNsc())) {
+            int length = emon.Port.cellsAt(c, p);
+            int count = emon.Port.cellsAt(c, p + 5);
+            int registry = Oilregistry.oilKeyFind(emon.Port.cellsAt(c, p + 1), emon.Port.cellsAt(c, p + 2));
+            int q = p + 6;
+            int k = 0;
+            int width = 0;
+            if (registry < 0) {
+                return -1;
+            }
+            if (emon.Port.cellsAt(c, p + 4) == 1) {
+                while (k < count) {
+                    width = Oilregistry.oilKeyField(registry, 3);
+                    if (Oilregistry.oilKeyField(registry, 2) == 9) {
+                        width = 1 + emon.Port.cellsAt(c, q);
+                    }
+                    oilInsert(c, q, k);
+                    q = (q + 1) + width;
+                    k += 1;
+                }
+                emon.Port.cellsSet(c, p, length + count);
+                emon.Port.cellsSet(c, p + 4, 0);
+            }
+            p += emon.Port.cellsAt(c, p);
+            i += 1;
+        }
+        return 0;
+    }
+    public static int oilScCpsEqual(emon.Port.Cells c, int p, int packed, int tablekind) {
+        int count = emon.Port.cellsAt(c, p);
+        int i = 0;
+        int j = 0;
+        int d = 16777216;
+        int cp = 0;
+        int k = 0;
+        if ((tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824))) {
+            while (i < 639) {
+                j = i + 1;
+                while (Ocrport.OP_NAMES[j] != 0) {
+                    j += 1;
+                }
+                if ((Ocrport.OP_NAMES[i] == tablekind) && (Ocrport.OP_NAMES[j + 1] == packed)) {
+                    if (count != ((j - i) - 1)) {
+                        return 0;
+                    }
+                    i += 1;
+                    while (i < j) {
+                        if (emon.Port.cellsAt(c, (p + 1) + k) != Ocrport.OP_NAMES[i]) {
+                            return 0;
+                        }
+                        i += 1;
+                        k += 1;
+                    }
+                    return 1;
+                }
+                i = j + 2;
+            }
+        }
+        while (d > 0) {
+            cp = (packed / d) % 256;
+            if (cp != 0) {
+                if (k >= count) {
+                    return 0;
+                }
+                if (emon.Port.cellsAt(c, (p + 1) + k) != cp) {
+                    return 0;
+                }
+                k += 1;
+            }
+            d = d / 256;
+        }
+        if (k == count) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int oilScKeep(emon.Port.Cells c, int at, int ns, int key, int row, int p, int flags) {
+        if (ns == oenTesseract()) {
+            if (key == 1) {
+                int caps = oilGet(c, at, ohCaps());
+                int implied = 0;
+                if (oilHas(caps, ocBtype()) != 0) {
+                    int b = oilBlockAt(c, at, row);
+                    int kind = emon.Port.cellsAt(c, (b + 5) + (3 * oilHas(caps, ocWdir())));
+                    if (kind == 0) {
+                        implied = 1;
+                    }
+                    if (kind == 1) {
+                        implied = 6;
+                    }
+                    if (kind == 2) {
+                        implied = 9;
+                    }
+                    if (kind == 3) {
+                        if (emon.Port.cellsAt(c, b + 2) >= emon.Port.cellsAt(c, b + 3)) {
+                            implied = 12;
+                        } else {
+                            implied = 13;
+                        }
+                    }
+                }
+                if (emon.Port.cellsAt(c, p) == implied) {
+                    return 0;
+                }
+            }
+            if (key == 2) {
+                int script = oilScript(c, at);
+                if (oilScCpsEqual(c, p, script, 2) == 1) {
+                    return 0;
+                }
+            }
+            if (key == 3) {
+                int word = oilFirstWord(c, at);
+                int i = 0;
+                while (i < row) {
+                    word = oilWordNext(c, at, word);
+                    i += 1;
+                }
+                int language = oilWlang(c, at, word);
+                if (oilScCpsEqual(c, p, language, 3) == 1) {
+                    return 0;
+                }
+            }
+        }
+        if (ns == oenPpocr()) {
+            if ((key == 1) && (emon.Port.cellsAt(c, p) == -1)) {
+                return 0;
+            }
+            if ((key == 2) && ((emon.Port.cellsAt(c, p) == 0) && (emon.Port.cellsAt(c, p + 1) < 500))) {
+                return 0;
+            }
+            if ((key == 3) && (emon.Port.cellsAt(c, p) == 0)) {
+                return 0;
+            }
+            if ((key == 4) && ((flags & 8) == 0)) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    public static int oilSeal(emon.Port.Cells c, int at, int flags) {
+        // Seal the last answer in place. All retained entries are canonical sparse rows; no normalized cell moves.
+        if (oilScSparse(c, at) < 0) {
+            return -1;
+        }
+        int total = oilGet(c, at, ohNsc());
+        int p = oilFirstWord(c, at);
+        int i = 0;
+        int write = 0;
+        int kept = 0;
+        while (i < oilNwords(c, at)) {
+            p = oilWordNext(c, at, p);
+            i += 1;
+        }
+        write = p;
+        i = 0;
+        while (i < total) {
+            int end = p + emon.Port.cellsAt(c, p);
+            int ns = emon.Port.cellsAt(c, p + 1);
+            int key = emon.Port.cellsAt(c, p + 2);
+            int subject = emon.Port.cellsAt(c, p + 3);
+            int dense = emon.Port.cellsAt(c, p + 4);
+            int count = emon.Port.cellsAt(c, p + 5);
+            int registry = Oilregistry.oilKeyFind(ns, key);
+            int entry = write;
+            int q = p + 6;
+            int k = 0;
+            int n = 0;
+            int row = 0;
+            int width = 0;
+            int j = 0;
+            if (registry < 0) {
+                return -1;
+            }
+            emon.Port.cellsSet(c, entry + 1, ns);
+            emon.Port.cellsSet(c, entry + 2, key);
+            emon.Port.cellsSet(c, entry + 3, subject);
+            emon.Port.cellsSet(c, entry + 4, 0);
+            write = entry + 6;
+            while (k < count) {
+                row = k;
+                if (dense == 0) {
+                    row = emon.Port.cellsAt(c, q);
+                    q += 1;
+                }
+                width = Oilregistry.oilKeyField(registry, 3);
+                if (Oilregistry.oilKeyField(registry, 2) == 9) {
+                    width = 1 + emon.Port.cellsAt(c, q);
+                }
+                if (oilScKeep(c, at, ns, key, row, q, flags) != 0) {
+                    emon.Port.cellsSet(c, write, row);
+                    write += 1;
+                    j = 0;
+                    while (j < width) {
+                        emon.Port.cellsSet(c, write, emon.Port.cellsAt(c, q + j));
+                        write += 1;
+                        j += 1;
+                    }
+                    n += 1;
+                }
+                q += width;
+                k += 1;
+            }
+            if (n == 0) {
+                write = entry;
+            } else {
+                emon.Port.cellsSet(c, entry, write - entry);
+                emon.Port.cellsSet(c, entry + 5, n);
+                kept += 1;
+            }
+            p = end;
+            i += 1;
+        }
+        emon.Port.cellsDrop(c, write);
+        oilSet(c, at, ohNsc(), kept);
+        emon.Port.cellsSet(c, at, write - at);
+        return 0;
+    }
+    public static int oilScPut(emon.Port.Cells c, int at, int key, int subject, int row, emon.Port.Cells value, int first, int count) {
+        // Append a sparse source value; registration and value framing are checked before incrementing nsc.
+        int start = emon.Port.cellsLen(c);
+        int ns = oilGet(c, at, ohEngine());
+        int registry = Oilregistry.oilKeyFind(ns, key);
+        int i = 0;
+        if (registry < 0) {
+            return -1;
+        }
+        if (subject != Oilregistry.oilKeyField(registry, 4)) {
+            return -1;
+        }
+        if ((first < 0) || ((count < 0) || (count > (emon.Port.cellsLen(value) - first)))) {
+            return -1;
+        }
+        if (Oilregistry.oilKeyField(registry, 2) == 9) {
+            if (count < 1) {
+                return -1;
+            }
+            if (emon.Port.cellsAt(value, first) != (count - 1)) {
+                return -1;
+            }
+        } else if (count != Oilregistry.oilKeyField(registry, 3)) {
+            return -1;
+        }
+        if (row < 0) {
+            return -1;
+        }
+        if ((subject == 0) && (row != 0)) {
+            return -1;
+        }
+        if ((subject == 1) && (row >= oilNblocks(c, at))) {
+            return -1;
+        }
+        if ((subject == 2) && (row >= oilNlines(c, at))) {
+            return -1;
+        }
+        if ((subject == 3) && (row >= oilNwords(c, at))) {
+            return -1;
+        }
+        emon.Port.cellsPush(c, 7 + count);
+        emon.Port.cellsPush(c, ns);
+        emon.Port.cellsPush(c, key);
+        emon.Port.cellsPush(c, subject);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, row);
+        while (i < count) {
+            emon.Port.cellsPush(c, emon.Port.cellsAt(value, first + i));
+            i += 1;
+        }
+        int nsc = oilGet(c, at, ohNsc());
+        oilSet(c, at, ohNsc(), nsc + 1);
+        emon.Port.cellsSet(c, at, emon.Port.cellsLen(c) - at);
+        return start;
+    }
+    public static int oilEndSource(emon.Port.Cells c, int at, int flags) {
+        return oilSeal(c, at, flags);
+    }
+    public static int oilEnd(emon.Port.Cells c, int at) {
+        return oilEndSource(c, at, 0);
+    }
+    public static int oilFlatBoxValid(emon.Port.Cells v, int p) {
+        if ((emon.Port.cellsAt(v, p + 2) < 0) || (emon.Port.cellsAt(v, p + 3) < 0)) {
+            return 0;
+        }
+        return 1;
+    }
+    public static int oilFlatRowsValid(emon.Port.Cells v, int caps, int nb, int nl) {
+        int p = 24;
+        int i = 0;
+        int q = 0;
+        while (i < nb) {
+            if (oilFlatBoxValid(v, p) == 0) {
+                return 0;
+            }
+            if ((emon.Port.cellsAt(v, p + 4) < -1) || (emon.Port.cellsAt(v, p + 4) > 1000)) {
+                return 0;
+            }
+            q = p + 5;
+            if (oilHas(caps, ocWdir()) != 0) {
+                if ((emon.Port.cellsAt(v, q) < 0) || (emon.Port.cellsAt(v, q) > 3)) {
+                    return 0;
+                }
+                if ((emon.Port.cellsAt(v, q + 1) < 0) || (emon.Port.cellsAt(v, q + 1) > 3)) {
+                    return 0;
+                }
+                if ((emon.Port.cellsAt(v, q + 2) < 0) || (emon.Port.cellsAt(v, q + 2) > 2)) {
+                    return 0;
+                }
+                q += 3;
+            }
+            if (oilHas(caps, ocBtype()) != 0) {
+                if ((emon.Port.cellsAt(v, q) < 0) || (emon.Port.cellsAt(v, q) > 4)) {
+                    return 0;
+                }
+            }
+            p += oilBlockStride(caps);
+            i += 1;
+        }
+        i = 0;
+        while (i < nl) {
+            if (oilFlatBoxValid(v, p) == 0) {
+                return 0;
+            }
+            if (emon.Port.cellsAt(v, p + 5) < 0) {
+                return 0;
+            }
+            if (oilHas(caps, ocBlocks()) == 0) {
+                if (emon.Port.cellsAt(v, p + 4) != -1) {
+                    return 0;
+                }
+            } else if ((emon.Port.cellsAt(v, p + 4) < 0) || (emon.Port.cellsAt(v, p + 4) >= nb)) {
+                return 0;
+            }
+            q = p + 6;
+            if (oilHas(caps, ocLconf()) != 0) {
+                if ((emon.Port.cellsAt(v, q) < -1) || (emon.Port.cellsAt(v, q) > 1000)) {
+                    return 0;
+                }
+                q += 1;
+            }
+            if (oilHas(caps, ocParas()) != 0) {
+                if (emon.Port.cellsAt(v, q) < -1) {
+                    return 0;
+                }
+                q += 1;
+            }
+            q += 4 * oilHas(caps, ocBaseline());
+            if (oilHas(caps, ocRowmetrics()) != 0) {
+                if ((emon.Port.cellsAt(v, q) < 0) || ((emon.Port.cellsAt(v, q + 1) < 0) || (emon.Port.cellsAt(v, q + 2) < 0))) {
+                    return 0;
+                }
+            }
+            p += oilLineStride(caps);
+            i += 1;
+        }
+        return 1;
+    }
     public static int oilFlat(emon.Port.Cells v, int id, emon.Port.Cells out) {
         // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
         int n = emon.Port.cellsLen(v);
+        int outAt = emon.Port.cellsLen(out);
         int p = 24;
         int i = 0;
         int caps = 0;
         int nb = 0;
         int nl = 0;
         int nw = 0;
+        int nsym = 0;
         if (n < 24) {
             return -1;
         }
@@ -1233,6 +1768,9 @@ public final class Oil {
         if (oilNativeCheck(caps, emon.Port.cellsAt(v, 5)) == 0) {
             return -1;
         }
+        if (oilFlatHeaderValid(v) == 0) {
+            return -1;
+        }
         nb = emon.Port.cellsAt(v, 18);
         nl = emon.Port.cellsAt(v, 19);
         nw = emon.Port.cellsAt(v, 20);
@@ -1249,8 +1787,34 @@ public final class Oil {
         if (p > n) {
             return -1;
         }
+        if (oilFlatRowsValid(v, caps, nb, nl) == 0) {
+            return -1;
+        }
         while (i < nw) {
-            p = oilFlatWordEnd(v, p, caps);
+            int end = oilFlatWordEnd(v, p, caps);
+            if (end < 0) {
+                return -1;
+            }
+            if (oilFlatBoxValid(v, p) == 0) {
+                return -1;
+            }
+            if ((emon.Port.cellsAt(v, p + 5) < -1) || (emon.Port.cellsAt(v, p + 5) > 1000)) {
+                return -1;
+            }
+            if ((emon.Port.cellsAt(v, p + 4) < -1) || (emon.Port.cellsAt(v, p + 4) >= nl)) {
+                return -1;
+            }
+            int q = p + oilWordBase(caps);
+            int a = 0;
+            if (oilHas(caps, ocWalts()) != 0) {
+                int count = emon.Port.cellsAt(v, q - 1);
+                while (a < count) {
+                    q = (q + 2) + emon.Port.cellsAt(v, q + 1);
+                    a += 1;
+                }
+            }
+            nsym += emon.Port.cellsAt(v, q);
+            p = end;
             if (p < 0) {
                 return -1;
             }
@@ -1258,17 +1822,8 @@ public final class Oil {
         }
         i = 0;
         while (i < emon.Port.cellsAt(v, 21)) {
-            if ((p + 5) >= n) {
-                return -1;
-            }
-            if (emon.Port.cellsAt(v, p) < 6) {
-                return -1;
-            }
-            if (emon.Port.cellsAt(v, p) > (n - p)) {
-                return -1;
-            }
-            p += emon.Port.cellsAt(v, p);
-            if (p > n) {
+            p = oilFlatSidecarEnd(v, p, emon.Port.cellsAt(v, 1), nb, nl, nw, nsym);
+            if (p < 0) {
                 return -1;
             }
             i += 1;
@@ -1285,7 +1840,7 @@ public final class Oil {
             emon.Port.cellsPush(out, emon.Port.cellsAt(v, i));
             i += 1;
         }
-        return 0;
+        return oilEnd(out, outAt);
     }
     public static int oilPolicyConf(emon.Port.Cells c, int at, int word) {
         return Ocalib.ocalWord(oilGet(c, at, ohEngine()), 0, emon.Port.cellsAt(c, word + 5));

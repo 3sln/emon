@@ -365,54 +365,121 @@ public static class Ocrporttest {
         return 0;
     }
     internal static int TFlat(emon.Port.Cells v) {
-        TP4(v, 0, 0, 2, -85);
-        TP4(v, 90, Ocrport.ScLatn(), 17, 187);
-        TP4(v, 1, 1, 2, 1);
-        TP2(v, 640, 480);
-        TP4(v, 10, 18, 70, 44);
-        TP4(v, 10, 60, 80, 62);
-        TP4(v, 0, 0, 0, -1);
-        TP2(v, -1, -1);
-        TP4(v, 5, 15, 80, 50);
-        TP4(v, 0, 0, 2, 10);
-        TP4(v, 20, 30, 40, 900);
-        TP4(v, 0, 0, 65, 1701734144);
-        TP4(v, 11, 3, 2, 72);
-        TP4(v, 105, 2, 10, 20);
-        TP4(v, 15, 40, 950, 1);
-        TP4(v, 72, 2, 120, 1);
-        TP4(v, 75, 80, 2, 78);
-        TP4(v, 77, 25, 20, 15);
-        TP4(v, 40, 900, 1, 105);
-        TP4(v, 0, 50, 20, 30);
-        TP4(v, 40, 800, 0, 0);
-        TP4(v, 0, 0, -1, 0);
-        TP2(v, 1, 33);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 1);
         emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 7339791);
+        emon.Port.CellsPush(v, 7339791);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 1000);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 187);
+        emon.Port.CellsPush(v, -85);
+        emon.Port.CellsPush(v, 1281455214);
+        emon.Port.CellsPush(v, 17);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 5);
+        emon.Port.CellsPush(v, 15);
+        emon.Port.CellsPush(v, 80);
+        emon.Port.CellsPush(v, 50);
+        emon.Port.CellsPush(v, -1);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 10);
+        emon.Port.CellsPush(v, 18);
+        emon.Port.CellsPush(v, 70);
+        emon.Port.CellsPush(v, 44);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 10);
+        emon.Port.CellsPush(v, 60);
+        emon.Port.CellsPush(v, 80);
+        emon.Port.CellsPush(v, 62);
+        emon.Port.CellsPush(v, 10);
+        emon.Port.CellsPush(v, 20);
+        emon.Port.CellsPush(v, 30);
+        emon.Port.CellsPush(v, 40);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 900);
+        emon.Port.CellsPush(v, 1701734144);
+        emon.Port.CellsPush(v, 65);
+        emon.Port.CellsPush(v, 11);
+        emon.Port.CellsPush(v, 3);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 72);
+        emon.Port.CellsPush(v, 105);
+        emon.Port.CellsPush(v, 10);
+        emon.Port.CellsPush(v, 20);
+        emon.Port.CellsPush(v, 15);
+        emon.Port.CellsPush(v, 40);
+        emon.Port.CellsPush(v, 950);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 72);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 120);
+        emon.Port.CellsPush(v, 75);
+        emon.Port.CellsPush(v, 2);
+        emon.Port.CellsPush(v, 80);
+        emon.Port.CellsPush(v, 78);
+        emon.Port.CellsPush(v, 77);
+        emon.Port.CellsPush(v, 25);
+        emon.Port.CellsPush(v, 20);
+        emon.Port.CellsPush(v, 15);
+        emon.Port.CellsPush(v, 40);
+        emon.Port.CellsPush(v, 900);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 105);
+        emon.Port.CellsPush(v, 50);
+        emon.Port.CellsPush(v, 20);
+        emon.Port.CellsPush(v, 30);
+        emon.Port.CellsPush(v, 40);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 800);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, -1);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 0);
+        emon.Port.CellsPush(v, 1);
+        emon.Port.CellsPush(v, 33);
         return 0;
     }
     internal static int TBuilt(emon.Port.Cells c) {
-        int at = Plan.AnOcr(c, 9);
-        int w0 = Plan.AnOcrWord(c, at, 10, 20, 30, 40, 900, 0, 0);
-        Plan.AnOcrCp(c, w0, 72);
-        Plan.AnOcrCp(c, w0, 105);
-        int w1 = Plan.AnOcrWord(c, at, 50, 20, 30, 40, 800, 0, 0);
-        Plan.AnOcrCp(c, w1, 33);
-        Ocr.OxBegin(c, 0, 0, 2, -85, 90, Ocrport.ScLatn(), 17, 187, 1, 1, 1, 640, 480);
-        Ocr.OxLine(c, 10, 18, 70, 44, 10, 60, 80, 62, 0, 0, 0, -1, -1, -1);
-        Ocr.OxBlock(c, 5, 15, 80, 50, 0, 0, 2);
-        int x0 = Ocr.OxWord(c, 65, 1701734144, 11, 3);
-        int s0 = Ocr.OxSym(c, x0, 10, 20, 15, 40, 950);
-        Ocr.OxSymCp(c, s0, 72);
-        int a0 = Ocr.OxAlt(c, s0, 120);
-        Ocr.OxAltCp(c, a0, 75);
-        int a1 = Ocr.OxAlt(c, s0, 80);
-        Ocr.OxAltCp(c, a1, 78);
-        Ocr.OxAltCp(c, a1, 77);
-        int s1 = Ocr.OxSym(c, x0, 25, 20, 15, 40, 900);
-        Ocr.OxSymCp(c, s1, 105);
-        Ocr.OxWord(c, 0, 0, -1, 0);
-        Plan.AnOcrEnd(c, at);
+        int at = Oil.OilTessBegin(c, 9, 3, 1, 0, 0, 2, -85, 90, Ocrport.ScLatn(), 17, 187, 1);
+        Oil.OilTessBlock(c, at, 5, 15, 80, 50, -1, 0, 0, 2, 0);
+        Oil.OilLine(c, at, 10, 18, 70, 44, 0, 2, -1, 0, 10, 60, 80, 62, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int w0 = Oil.OilWord(c, at, 10, 20, 30, 40, 0, 900, 1701734144, 65, 11, 3);
+        Oil.OilWordCp(c, at, w0, 72);
+        Oil.OilWordCp(c, at, w0, 105);
+        int s0 = Oil.OilSym(c, at, w0, 10, 20, 15, 40, 950);
+        Oil.OilSymCp(c, s0, 72);
+        int a0 = Oil.OilAlt(c, at, s0, 120);
+        Oil.OilAltCp(c, a0, 75);
+        int a1 = Oil.OilAlt(c, at, s0, 80);
+        Oil.OilAltCp(c, a1, 78);
+        Oil.OilAltCp(c, a1, 77);
+        int s1 = Oil.OilSym(c, at, w0, 25, 20, 15, 40, 900);
+        Oil.OilSymCp(c, s1, 105);
+        int w1 = Oil.OilWord(c, at, 50, 20, 30, 40, 0, 800, 0, 0, -1, 1);
+        Oil.OilWordCp(c, at, w1, 33);
+        Oil.OilEnd(c, at);
         return 0;
     }
     internal static int TSame(int emonT, emon.Port.Cells a, emon.Port.Cells b) {
@@ -440,7 +507,7 @@ public static class Ocrporttest {
         emon.Port.Cells want = emon.Port.NewCells();
         TFlat(v);
         TBuilt(want);
-        emon.Testport.AssertEq(Ocrport.OxFlat(v, 9, got), 0, "accepted");
+        emon.Testport.AssertEq(Oil.OilFlat(v, 9, got), 0, "accepted");
         TSame(0, got, want);
     }
     internal static int TRefuse(int emonT, int drop, int at, int val, string msg) {
@@ -454,23 +521,23 @@ public static class Ocrporttest {
         if (at >= 0) {
             emon.Port.CellsSet(v, at, val);
         }
-        emon.Testport.AssertEq(Ocrport.OxFlat(v, 9, got), -1, msg);
+        emon.Testport.AssertEq(Oil.OilFlat(v, 9, got), -1, msg);
         emon.Testport.AssertEq(emon.Port.CellsLen(got), 0, msg);
         return 0;
     }
     [Xunit.Fact]
     public static void TestAFlatFormWhoseCountsRunPastItIsRefusedAndWritesNothing() {
         TRefuse(0, 1, -1, 0, "the last word's symbol count is gone");
-        TRefuse(0, 0, 10, -1, "a negative count of words");
-        TRefuse(0, 0, 8, 100000, "more lines than cells");
-        TRefuse(0, 0, 46, 2000000000, "a text longer than the form, without overflowing");
+        TRefuse(0, 0, 20, -1, "a negative count of words");
+        TRefuse(0, 0, 19, 100000, "more lines than cells");
+        TRefuse(0, 0, 55, 2000000000, "a text longer than the form, without overflowing");
     }
     [Xunit.Fact]
     public static void TestAFlatFormWithAHeaderCutShortIsRefused() {
         emon.Port.Cells v = emon.Port.NewCells();
         emon.Port.Cells got = emon.Port.NewCells();
         TP4(v, 0, 0, 2, 0);
-        emon.Testport.AssertEq(Ocrport.OxFlat(v, 9, got), -1, "a header cut short");
+        emon.Testport.AssertEq(Oil.OilFlat(v, 9, got), -1, "a header cut short");
         emon.Testport.AssertEq(emon.Port.CellsLen(got), 0, "and nothing is written");
     }
     [Xunit.Fact]

@@ -513,7 +513,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 				break
 			}
 		}
-		oil.OilBlock(c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, kind)
+		oil.OilTessBlock(c, at, b.bx[0], b.bx[1], b.bx[2], b.bx[3], -1, b.orient, b.wdir, b.tlo, kind)
 	}
 	for li, l := range lines {
 		nw := int32(0)

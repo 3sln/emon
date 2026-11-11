@@ -171,3 +171,142 @@ func TestFlatOilRoundtripsAndRejectsOverflowingTextBeforeWriting(emonT *testing.
 	port.AssertEq(emonT, oil.OilFlat(flat, 77, bad), -1, "text count cannot overflow cursor")
 	port.AssertEq(emonT, port.CellsLen(bad), 0, "malformed form writes nothing")
 }
+
+func tFlatHeader(v *port.Cells) int32 {
+	var c *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenTesseract(), 0, 0, 1, 0, 0, 0)
+	var i int32 = 4
+	oil.OilEnd(c, at)
+	for i < port.CellsLen(c) {
+		port.CellsPush(v, port.CellsAt(c, i))
+		i += 1
+	}
+	return 0
+}
+
+func TestFlatHeaderEnumsAndReservedCellsAreValidated(emonT *testing.T) {
+	var v *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	tFlatHeader(v)
+	port.CellsPush(out, 123)
+	port.CellsSet(v, 6, 0)
+	port.AssertEq(emonT, oil.OilFlat(v, 1, out), -1, "undefined segmentation")
+	port.CellsSet(v, 6, 1)
+	port.CellsSet(v, 17, 3)
+	port.AssertEq(emonT, oil.OilFlat(v, 1, out), -1, "undefined granularity")
+	port.CellsSet(v, 17, 0)
+	port.CellsSet(v, 23, 1)
+	port.AssertEq(emonT, oil.OilFlat(v, 1, out), -1, "reserved header is zero")
+	port.AssertEq(emonT, port.CellsLen(out), 1, "all refusals preserve existing answers")
+}
+
+func TestFlatSidecarsMustBelongToTheSourceEngineAndRegistry(emonT *testing.T) {
+	var v *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	tFlatHeader(v)
+	port.CellsSet(v, 21, 1)
+	port.CellsPush(v, 8)
+	port.CellsPush(v, 2)
+	port.CellsPush(v, 3)
+	port.CellsPush(v, 2)
+	port.CellsPush(v, 0)
+	port.CellsPush(v, 1)
+	port.CellsPush(v, 0)
+	port.CellsPush(v, 1)
+	port.AssertEq(emonT, oil.OilFlat(v, 1, out), -1, "namespace cannot cross engines")
+	port.CellsSet(v, 25, 1)
+	port.CellsSet(v, 26, 999)
+	port.AssertEq(emonT, oil.OilFlat(v, 1, out), -1, "unknown key is rejected")
+	port.AssertEq(emonT, port.CellsLen(out), 0, "invalid sidecars write nothing")
+}
+
+func TestSourceSealingPrunesImpliedAndUnmeasuredValues(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var scalar *port.Cells = port.NewCells()
+	var cls *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenPpocr(), 0, 0, 1, 1, 0, 1)
+	oil.OilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	port.CellsPush(scalar, -1)
+	oil.OilScPut(c, at, 1, 2, 0, scalar, 0, 1)
+	port.CellsSet(scalar, 0, 0)
+	oil.OilScPut(c, at, 3, 2, 0, scalar, 0, 1)
+	port.CellsPush(cls, 0)
+	port.CellsPush(cls, 400)
+	oil.OilScPut(c, at, 2, 2, 0, cls, 0, 2)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhNsc()), 0, "all three source values are uninformative")
+	port.AssertEq(emonT, port.CellsLen(c), 34, "empty entries are physically removed")
+}
+
+func TestSourceSealingKeepsInformationAndIsIdempotent(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var value *port.Cells = port.NewCells()
+	var want *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(c, 1, oil.OenPpocr(), 0, 0, 1, 1, 0, 1)
+	var i int32 = 0
+	oil.OilLine(c, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	port.CellsPush(value, 850)
+	oil.OilScPut(c, at, 1, 2, 0, value, 0, 1)
+	port.CellsSet(value, 0, 1)
+	oil.OilScPut(c, at, 3, 2, 0, value, 0, 1)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhNsc()), 2, "measured score and quarter turn remain")
+	for i < port.CellsLen(c) {
+		port.CellsPush(want, port.CellsAt(c, i))
+		i += 1
+	}
+	port.AssertEq(emonT, oil.OilSeal(c, at, 0), 0, "seal twice")
+	port.AssertEq(emonT, port.CellsLen(c), port.CellsLen(want), "sealing cannot grow an already sealed answer")
+	i = 0
+	for i < port.CellsLen(c) {
+		port.AssertEq(emonT, port.CellsAt(c, i), port.CellsAt(want, i), "every sealed cell is stable")
+		i += 1
+	}
+}
+
+func TestDenseSourcePruningDoesNotOverwriteUnreadValues(emonT *testing.T) {
+	var flat *port.Cells = port.NewCells()
+	var raw *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(raw, 1, oil.OenPpocr(), 0, 0, 1, 1, 0, 1)
+	var i int32 = 0
+	for i < 3 {
+		oil.OilLine(raw, at, 0, 0, 20, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		i += 1
+	}
+	oil.OilEnd(raw, at)
+	i = 4
+	for i < port.CellsLen(raw) {
+		port.CellsPush(flat, port.CellsAt(raw, i))
+		i += 1
+	}
+	port.CellsSet(flat, 21, 1)
+	port.CellsPush(flat, 9)
+	port.CellsPush(flat, 2)
+	port.CellsPush(flat, 1)
+	port.CellsPush(flat, 2)
+	port.CellsPush(flat, 1)
+	port.CellsPush(flat, 3)
+	port.CellsPush(flat, 800)
+	port.CellsPush(flat, -1)
+	port.CellsPush(flat, 900)
+	port.AssertEq(emonT, oil.OilFlat(flat, 1, out), 0, "a registered dense source group")
+	port.AssertEq(emonT, port.CellsLen(out), 56, "sparse output can be larger than dense input")
+	port.AssertEq(emonT, port.CellsAt(out, 46), 10, "canonical sparse entry length")
+	port.AssertEq(emonT, port.CellsAt(out, 50), 0, "sparse output")
+	port.AssertEq(emonT, port.CellsAt(out, 51), 2, "unmeasured middle value removed")
+	port.AssertEq(emonT, port.CellsAt(out, 52), 0, "first source row")
+	port.AssertEq(emonT, port.CellsAt(out, 53), 800, "first measurement survives")
+	port.AssertEq(emonT, port.CellsAt(out, 54), 2, "last source row")
+	port.AssertEq(emonT, port.CellsAt(out, 55), 900, "last measurement survives expansion")
+}
+
+func TestTesseractLineOrderIsNormalizedBeforeItEntersTheWire(emonT *testing.T) {
+	var c *port.Cells = port.NewCells()
+	var at int32 = oil.OilTessBegin(c, 1, 3, 0, 0, 0, 2, 0, -1, 0, -1, -1, 0)
+	oil.OilTessBlock(c, at, 0, 0, 20, 10, -1, 0, 0, 2, 0)
+	oil.OilEnd(c, at)
+	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhLorder()), 0, "Tesseract top-to-bottom 2 is OIL top-to-bottom 0")
+	port.AssertEq(emonT, oil.OilBlockField(c, at, 0, 2), 0, "block order uses the same neutral enum")
+	port.AssertEq(emonT, oil.OilTlorder(c, at), 2, "the evidence direction enum retains top-to-bottom semantics")
+}

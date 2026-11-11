@@ -10,7 +10,7 @@
                               oc-psize oc-lexicon oc-walts oc-symbols oc-symconf oc-alts oen-tesseract oen-ppocr
                               oil-begin oil-end oil-line oil-word oil-word-cp
                               oil-sym oil-sym-cp oil-alt oil-alt-cp oil-first-word
-                              oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
+                              oil-tess-begin oil-tess-block oil-block-field oil-tlorder oh-lorder oil-sc-put oil-seal oil-set oh-nsc oil-line-at oil-word-next oil-word-text oil-get oh-nwords oil-obs-hash
                               oil-walt oil-walt-cp oil-line-field oil-header-field oil-flat]]
             [kin.lang :refer [defn return let set while if do + - <]]))
 
@@ -152,3 +152,104 @@
       (cells-set flat (+ word 3) 2147483647)
       (assert-eq (oil-flat flat 77 bad) -1 "text count cannot overflow cursor")
       (assert-eq (cells-len bad) 0 "malformed form writes nothing"))))
+
+;; Flat input is an untrusted adapter boundary. Refusal must be atomic even
+;; when an earlier answer is already present in the destination.
+(defn ^I32 t-flat-header [^:mut ^Cells v]
+  (let [^Cells c (new-cells) ^I32 at (oil-begin c 1 (oen-tesseract) 0 0 1 0 0 0)
+        ^:mut ^I32 i 4]
+    (oil-end c at)
+    (while (< i (cells-len c))
+      (do (cells-push v (cells-at c i)) (set i (+ i 1)))))
+  (return 0))
+
+(deftest test-flat-header-enums-and-reserved-cells-are-validated
+  (let [^Cells v (new-cells) ^Cells out (new-cells)]
+    (t-flat-header v)
+    (cells-push out 123)
+    (cells-set v 6 0)
+    (assert-eq (oil-flat v 1 out) -1 "undefined segmentation")
+    (cells-set v 6 1)
+    (cells-set v 17 3)
+    (assert-eq (oil-flat v 1 out) -1 "undefined granularity")
+    (cells-set v 17 0)
+    (cells-set v 23 1)
+    (assert-eq (oil-flat v 1 out) -1 "reserved header is zero")
+    (assert-eq (cells-len out) 1 "all refusals preserve existing answers")))
+
+(deftest test-flat-sidecars-must-belong-to-the-source-engine-and-registry
+  (let [^Cells v (new-cells) ^Cells out (new-cells)]
+    (t-flat-header v)
+    (cells-set v 21 1)
+    ;; A well-framed PP quarter-turn entry on a Tesseract answer.
+    (cells-push v 8) (cells-push v 2) (cells-push v 3)
+    (cells-push v 2) (cells-push v 0) (cells-push v 1)
+    (cells-push v 0) (cells-push v 1)
+    (assert-eq (oil-flat v 1 out) -1 "namespace cannot cross engines")
+    (cells-set v 25 1)
+    (cells-set v 26 999)
+    (assert-eq (oil-flat v 1 out) -1 "unknown key is rejected")
+    (assert-eq (cells-len out) 0 "invalid sidecars write nothing")))
+
+(deftest test-source-sealing-prunes-implied-and-unmeasured-values
+  (let [^Cells c (new-cells) ^Cells scalar (new-cells) ^Cells cls (new-cells)
+        ^I32 at (oil-begin c 1 (oen-ppocr) 0 0 1 1 0 1)]
+    (oil-line c at 0 0 20 10 -1 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (cells-push scalar -1)
+    (oil-sc-put c at 1 2 0 scalar 0 1)
+    (cells-set scalar 0 0)
+    (oil-sc-put c at 3 2 0 scalar 0 1)
+    (cells-push cls 0) (cells-push cls 400)
+    (oil-sc-put c at 2 2 0 cls 0 2)
+    (oil-end c at)
+    (assert-eq (oil-get c at (oh-nsc)) 0 "all three source values are uninformative")
+    (assert-eq (cells-len c) 34 "empty entries are physically removed")))
+
+(deftest test-source-sealing-keeps-information-and-is-idempotent
+  (let [^Cells c (new-cells) ^Cells value (new-cells) ^Cells want (new-cells)
+        ^I32 at (oil-begin c 1 (oen-ppocr) 0 0 1 1 0 1) ^:mut ^I32 i 0]
+    (oil-line c at 0 0 20 10 -1 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (cells-push value 850)
+    (oil-sc-put c at 1 2 0 value 0 1)
+    (cells-set value 0 1)
+    (oil-sc-put c at 3 2 0 value 0 1)
+    (oil-end c at)
+    (assert-eq (oil-get c at (oh-nsc)) 2 "measured score and quarter turn remain")
+    (while (< i (cells-len c)) (do (cells-push want (cells-at c i)) (set i (+ i 1))))
+    (assert-eq (oil-seal c at 0) 0 "seal twice")
+    (assert-eq (cells-len c) (cells-len want) "sealing cannot grow an already sealed answer")
+    (set i 0)
+    (while (< i (cells-len c))
+      (do (assert-eq (cells-at c i) (cells-at want i) "every sealed cell is stable") (set i (+ i 1))))))
+
+(deftest test-dense-source-pruning-does-not-overwrite-unread-values
+  (let [^Cells flat (new-cells) ^Cells raw (new-cells) ^Cells out (new-cells)
+        ^I32 at (oil-begin raw 1 (oen-ppocr) 0 0 1 1 0 1) ^:mut ^I32 i 0]
+    (while (< i 3)
+      (do (oil-line raw at 0 0 20 10 -1 0 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+          (set i (+ i 1))))
+    (oil-end raw at)
+    (set i 4)
+    (while (< i (cells-len raw)) (do (cells-push flat (cells-at raw i)) (set i (+ i 1))))
+    (cells-set flat 21 1)
+    (cells-push flat 9) (cells-push flat 2) (cells-push flat 1)
+    (cells-push flat 2) (cells-push flat 1) (cells-push flat 3)
+    (cells-push flat 800) (cells-push flat -1) (cells-push flat 900)
+    (assert-eq (oil-flat flat 1 out) 0 "a registered dense source group")
+    (assert-eq (cells-len out) 56 "sparse output can be larger than dense input")
+    (assert-eq (cells-at out 46) 10 "canonical sparse entry length")
+    (assert-eq (cells-at out 50) 0 "sparse output")
+    (assert-eq (cells-at out 51) 2 "unmeasured middle value removed")
+    (assert-eq (cells-at out 52) 0 "first source row")
+    (assert-eq (cells-at out 53) 800 "first measurement survives")
+    (assert-eq (cells-at out 54) 2 "last source row")
+    (assert-eq (cells-at out 55) 900 "last measurement survives expansion")))
+
+(deftest test-tesseract-line-order-is-normalized-before-it-enters-the-wire
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-tess-begin c 1 3 0 0 0 2 0 -1 0 -1 -1 0)]
+    (oil-tess-block c at 0 0 20 10 -1 0 0 2 0)
+    (oil-end c at)
+    (assert-eq (oil-get c at (oh-lorder)) 0 "Tesseract top-to-bottom 2 is OIL top-to-bottom 0")
+    (assert-eq (oil-block-field c at 0 2) 0 "block order uses the same neutral enum")
+    (assert-eq (oil-tlorder c at) 2 "the evidence direction enum retains top-to-bottom semantics")))

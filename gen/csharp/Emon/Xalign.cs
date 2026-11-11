@@ -1315,7 +1315,7 @@ public static class Xalign {
             r = o0 + i;
             XaLoadHead(scr, nt + i, owords, 32, r);
             XaHbs(scr, nt + i, 9, 3);
-            f = emon.Port.CellsAt(owords, (r * 28) + Evidence.OwfRun());
+            f = emon.Port.CellsAt(owords, (r * 32) + Evidence.OwfRun());
             XaHbs(scr, nt + i, 11, f);
             if (f != prun) {
                 rk += 1;

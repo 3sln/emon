@@ -8,6 +8,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/oil"
 	"emon/pdfdoc"
 	"emon/plan"
 	"emon/port"
@@ -99,30 +100,47 @@ func TestTheRequestCarriesTheResolutionAndTheLanguage(emonT *testing.T) {
 }
 
 func threeLines(an *port.Cells, id int32) int32 {
-	// An answer: three lines, one word each. Pixels, at 300 dpi (24 cpt a pixel). Lines 0 and 1 have the same baseline slope
-	// (6 px down over 300), line 2 is level; the lines have row attributes 20/14/6, block 0 is at 90 degrees clockwise.
-	var at int32 = plan.AnOcr(an, id)
-	var w0 int32 = plan.AnOcrWord(an, at, 10, 20, 300, 40, 900, 0, 0)
-	plan.AnOcrCp(an, w0, 65)
-	var w1 int32 = plan.AnOcrWord(an, at, 10, 100, 300, 40, 800, 1, 0)
-	plan.AnOcrCp(an, w1, 66)
-	var w2 int32 = plan.AnOcrWord(an, at, 10, 180, 300, 40, 0, 2, 0)
-	plan.AnOcrCp(an, w2, 67)
-	ocr.OxBegin(an, 1, 0, 0, -115, 90, 1231, 17, 187, 3, 1, 1, 640, 480)
-	ocr.OxLine(an, 10, 20, 300, 46, 10, 55, 310, 61, 0, 0, 0, 20, 14, 6)
-	ocr.OxLine(an, 10, 100, 300, 46, 10, 135, 310, 141, 0, 0, 0, 20, 14, 6)
-	ocr.OxLine(an, 10, 180, 300, 40, 10, 215, 310, 215, 0, 0, 0, 20, 14, 6)
-	ocr.OxBlock(an, 10, 20, 300, 200, 1, 2, 0)
-	var x0 int32 = ocr.OxWord(an, 0, 6647399, 11, 3)
-	var s0 int32 = ocr.OxSym(an, x0, 10, 20, 20, 40, 900)
-	ocr.OxSymCp(an, s0, 65)
-	var x1 int32 = ocr.OxWord(an, 0, 6647399, -1, 0)
-	var s1 int32 = ocr.OxSym(an, x1, 10, 100, 20, 40, 800)
-	ocr.OxSymCp(an, s1, 66)
-	var x2 int32 = ocr.OxWord(an, 0, 6647399, -1, 1)
-	var s2 int32 = ocr.OxSym(an, x2, 10, 180, 20, 40, 0)
-	ocr.OxSymCp(an, s2, 67)
-	plan.AnOcrEnd(an, at)
+	var at int32 = oil.OilTessBegin(an, id, 3, 1, 1, 0, 0, -115, 90, 1231, 17, 187, 1)
+	var k int32 = 0
+	var y int32 = 20
+	var height int32 = 46
+	var delta int32 = 6
+	var conf int32 = 900
+	var lex int32 = 3
+	var psize int32 = 11
+	var mask int32 = oil.OilGet(an, at, oil.OhCaps())
+	oil.OilSet(an, at, oil.OhCaps(), mask+oil.OcRowmetrics())
+	var measuredMask int32 = oil.OilGet(an, at, oil.OhNative())
+	oil.OilSet(an, at, oil.OhNative(), measuredMask+oil.OcRowmetrics())
+	oil.OilTessBlock(an, at, 10, 20, 300, 200, -1, 1, 2, 0, 0)
+	for k < 3 {
+		y = 20 + (k * 80)
+		if k == 2 {
+			height = 40
+			delta = 0
+		}
+		oil.OilLine(an, at, 10, y, 300, height, 0, 1, -1, 0, 10, y+35, 310, (y+35)+delta, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		k += 1
+	}
+	k = 0
+	for k < 3 {
+		y = 20 + (k * 80)
+		if k == 1 {
+			conf = 800
+			lex = 1
+			psize = -1
+		}
+		if k == 2 {
+			conf = 0
+			lex = 3
+		}
+		var word int32 = oil.OilWord(an, at, 10, y, 300, 40, k, conf, 6647399, 0, psize, lex)
+		oil.OilWordCp(an, at, word, 65+k)
+		var sym int32 = oil.OilSym(an, at, word, 10, y, 20, 40, conf)
+		oil.OilSymCp(an, sym, 65+k)
+		k += 1
+	}
+	oil.OilEnd(an, at)
 	return at
 }
 
@@ -152,7 +170,7 @@ func TestAnAnswersEvidenceKeepsTheEnginesNumbers(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.OwCount(owords), 3, "three words")
 	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfPsize()), 1100, "the engine's point size is in centipoints")
 	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfPsize()), -1, "unknown stays -1")
-	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags()), 3, "dictionary and numeric")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfFlags()), 1, "dictionary membership remains; alphabetic text is not numeric")
 	port.AssertEq(emonT, evidence.OwGet(owords, 2, evidence.HdConf()), 0, "a confidence of 0 is carried as it is (D130)")
 	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfXheight()), 480, "x-height 20 px is 480 cpt")
 	port.AssertEq(emonT, evidence.OlGet(olines, 0, evidence.OlfAsc()), 336, "ascenders 14 px")
@@ -308,45 +326,41 @@ func TestWithNoPageReadNothingIsTagged(emonT *testing.T) {
 	port.AssertEq(emonT, model.NodeAttr(nodes, attrs, 0, model.FkOcr()), -1, "and no `settings.ocr`")
 }
 
-func sym1(an *port.Cells, wx int32, x int32, y int32, h int32, cp int32) int32 {
+func sym1(an *port.Cells, at int32, wx int32, x int32, y int32, h int32, cp int32) int32 {
 	// A symbol of the word begun at `wx`: a box 15 px wide at (x, y) and h px high, confidence 900, one code point.
-	var s int32 = ocr.OxSym(an, wx, x, y, 15, h, 900)
-	ocr.OxSymCp(an, s, cp)
+	var s int32 = oil.OilSym(an, at, wx, x, y, 15, h, 900)
+	oil.OilSymCp(an, s, cp)
 	return 0
 }
 
 func noRowAttributes(an *port.Cells, id int32, withasc int32) int32 {
-	// An answer whose engine gives no row attributes: one line, its baseline level at y = 100 px, and the words `none` (x-height
-	// letters, tops at 80), with `withasc` 1 `bldh` (tops at 66: 34 px above the baseline) and `gyp` (bottoms at 106).
-	var at int32 = plan.AnOcr(an, id)
-	var w0 int32 = plan.AnOcrWord(an, at, 10, 80, 70, 20, 900, 0, 0)
-	plan.AnOcrCp(an, w0, 110)
+	var at int32 = oil.OilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0)
+	var count int32 = 1
 	if withasc == 1 {
-		var w1 int32 = plan.AnOcrWord(an, at, 90, 66, 70, 34, 900, 0, 0)
-		plan.AnOcrCp(an, w1, 98)
-		var w2 int32 = plan.AnOcrWord(an, at, 170, 80, 50, 26, 900, 0, 0)
-		plan.AnOcrCp(an, w2, 103)
+		count = 3
 	}
-	ocr.OxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0)
-	ocr.OxLine(an, 10, 66, 210, 46, 10, 100, 220, 100, 0, 0, 0, -1, -1, -1)
-	ocr.OxBlock(an, 10, 66, 210, 46, 0, 0, 0)
-	var x0 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x0, 10, 80, 20, 110)
-	sym1(an, x0, 25, 80, 20, 111)
-	sym1(an, x0, 40, 80, 20, 110)
-	sym1(an, x0, 55, 80, 20, 101)
+	oil.OilTessBlock(an, at, 10, 66, 210, 46, -1, 0, 0, 0, 0)
+	oil.OilLine(an, at, 10, 66, 210, 46, 0, count, -1, 0, 10, 100, 220, 100, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var x0 int32 = oil.OilWord(an, at, 10, 80, 70, 20, 0, 900, 0, 0, -1, 1)
+	oil.OilWordCp(an, at, x0, 110)
+	sym1(an, at, x0, 10, 80, 20, 110)
+	sym1(an, at, x0, 25, 80, 20, 111)
+	sym1(an, at, x0, 40, 80, 20, 110)
+	sym1(an, at, x0, 55, 80, 20, 101)
 	if withasc == 1 {
-		var x1 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-		sym1(an, x1, 90, 66, 34, 98)
-		sym1(an, x1, 105, 66, 34, 108)
-		sym1(an, x1, 120, 66, 34, 100)
-		sym1(an, x1, 135, 66, 34, 104)
-		var x2 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-		sym1(an, x2, 170, 80, 26, 103)
-		sym1(an, x2, 185, 80, 26, 121)
-		sym1(an, x2, 200, 80, 26, 112)
+		var x1 int32 = oil.OilWord(an, at, 90, 66, 70, 34, 0, 900, 0, 0, -1, 1)
+		oil.OilWordCp(an, at, x1, 98)
+		sym1(an, at, x1, 90, 66, 34, 98)
+		sym1(an, at, x1, 105, 66, 34, 108)
+		sym1(an, at, x1, 120, 66, 34, 100)
+		sym1(an, at, x1, 135, 66, 34, 104)
+		var x2 int32 = oil.OilWord(an, at, 170, 80, 50, 26, 0, 900, 0, 0, -1, 1)
+		oil.OilWordCp(an, at, x2, 103)
+		sym1(an, at, x2, 170, 80, 26, 103)
+		sym1(an, at, x2, 185, 80, 26, 121)
+		sym1(an, at, x2, 200, 80, 26, 112)
 	}
-	plan.AnOcrEnd(an, at)
+	oil.OilEnd(an, at)
 	return at
 }
 
@@ -386,37 +400,61 @@ func TestWithNoTallLettersTheAscenderLineIsTheXHeightTimes15(emonT *testing.T) {
 }
 
 func sizedLines(an *port.Cells, id int32) int32 {
-	// Five one-word lines with row attributes (x-height + ascenders, px): 20+14 (body), 20+15 (body, measured a pixel off), 20+14,
-	// 30+22 (a heading, 1.5 times as tall) and 20+14 again.
-	var at int32 = plan.AnOcr(an, id)
-	var w0 int32 = plan.AnOcrWord(an, at, 10, 20, 100, 40, 900, 0, 0)
-	plan.AnOcrCp(an, w0, 65)
-	var w1 int32 = plan.AnOcrWord(an, at, 10, 100, 100, 40, 900, 1, 0)
-	plan.AnOcrCp(an, w1, 66)
-	var w2 int32 = plan.AnOcrWord(an, at, 10, 180, 100, 40, 900, 2, 0)
-	plan.AnOcrCp(an, w2, 67)
-	var w3 int32 = plan.AnOcrWord(an, at, 10, 260, 100, 60, 900, 3, 0)
-	plan.AnOcrCp(an, w3, 68)
-	var w4 int32 = plan.AnOcrWord(an, at, 10, 360, 100, 40, 900, 4, 0)
-	plan.AnOcrCp(an, w4, 69)
-	ocr.OxBegin(an, 0, 0, 0, 0, -1, 0, -1, -1, 5, 1, 0, 0, 0)
-	ocr.OxLine(an, 10, 20, 100, 40, 10, 55, 110, 55, 0, 0, 0, 20, 14, 6)
-	ocr.OxLine(an, 10, 100, 100, 40, 10, 135, 110, 135, 0, 0, 0, 20, 15, 6)
-	ocr.OxLine(an, 10, 180, 100, 40, 10, 215, 110, 215, 0, 0, 0, 20, 14, 6)
-	ocr.OxLine(an, 10, 260, 100, 60, 10, 305, 110, 305, 0, 0, 0, 30, 22, 8)
-	ocr.OxLine(an, 10, 360, 100, 40, 10, 395, 110, 395, 0, 0, 0, 20, 14, 6)
-	ocr.OxBlock(an, 10, 20, 100, 380, 0, 0, 0)
-	var x0 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x0, 10, 20, 20, 65)
-	var x1 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x1, 10, 100, 20, 66)
-	var x2 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x2, 10, 180, 20, 67)
-	var x3 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x3, 10, 260, 20, 68)
-	var x4 int32 = ocr.OxWord(an, 0, 0, -1, 0)
-	sym1(an, x4, 10, 360, 20, 69)
-	plan.AnOcrEnd(an, at)
+	var at int32 = oil.OilTessBegin(an, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0)
+	var k int32 = 0
+	var y int32 = 20
+	var height int32 = 40
+	var xh int32 = 20
+	var asc int32 = 14
+	var desc int32 = 6
+	var base int32 = 55
+	var mask int32 = oil.OilGet(an, at, oil.OhCaps())
+	oil.OilSet(an, at, oil.OhCaps(), mask+oil.OcRowmetrics())
+	var measuredMask int32 = oil.OilGet(an, at, oil.OhNative())
+	oil.OilSet(an, at, oil.OhNative(), measuredMask+oil.OcRowmetrics())
+	oil.OilTessBlock(an, at, 10, 20, 100, 380, -1, 0, 0, 0, 0)
+	for k < 5 {
+		y = 20 + (k * 80)
+		height = 40
+		xh = 20
+		asc = 14
+		desc = 6
+		if k == 1 {
+			asc = 15
+		}
+		if k == 3 {
+			height = 60
+			xh = 30
+			asc = 22
+			desc = 8
+		}
+		if k == 4 {
+			y = 360
+		}
+		base = y + 35
+		if k == 3 {
+			base = 305
+		}
+		oil.OilLine(an, at, 10, y, 100, height, 0, 1, -1, 0, 10, base, 110, base, xh, asc, desc, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		k += 1
+	}
+	k = 0
+	for k < 5 {
+		y = 20 + (k * 80)
+		height = 40
+		if k == 3 {
+			height = 60
+		}
+		if k == 4 {
+			y = 360
+		}
+		var word int32 = oil.OilWord(an, at, 10, y, 100, height, k, 900, 0, 0, -1, 1)
+		oil.OilWordCp(an, at, word, 65+k)
+		var sym int32 = oil.OilSym(an, at, word, 10, y, 15, 20, 900)
+		oil.OilSymCp(an, sym, 65+k)
+		k += 1
+	}
+	oil.OilEnd(an, at)
 	return at
 }
 
@@ -1027,8 +1065,8 @@ func sctDirectDct(file string) int32 {
 	return scan.ScDctSpan(src, ar, dc, a, b, st, 5, sp)
 }
 
-func TestAScanJpegOutsideTheSharedNativeSubsetIsRenderedRatherThanDecodedDirectly(emonT *testing.T) {
-	port.AssertEq(emonT, sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent native decode")
+func TestAScanJpegOutsideTheSharedNativewordSubsetIsRenderedRatherThanDecodedDirectly(emonT *testing.T) {
+	port.AssertEq(emonT, sctDirectDct("assets/dct-arith.pdf"), 0, "arithmetic JPEG needs page rendering, not a host-dependent nativeword decode")
 	port.AssertEq(emonT, sctDirectDct("assets/dct-cmyk.pdf"), 0, "CMYK also needs rendering for scan OCR")
 	port.AssertEq(emonT, sctDirectDct("assets/dct-decode.pdf"), 1, "ordinary 8-bit three-component JPEG stays on the direct path")
 	port.AssertEq(emonT, sctDirectDct("assets/dct-a85-decode.pdf"), 0, "a filter chain still needs rendering")
@@ -1256,40 +1294,41 @@ func scMultilingualOwners(emonT *testing.T, lang int32, script int32, c0 int32, 
 	var owords *port.Cells = port.NewCells()
 	var wd *port.Cells = port.NewCells()
 	var ln *port.Cells = port.NewCells()
-	var at int32 = plan.AnOcr(an, 2)
-	var wnative int32 = plan.AnOcrWord(an, at, 10, 20, 60, 40, 900, 0, 0)
-	plan.AnOcrCp(an, wnative, c0)
-	plan.AnOcrCp(an, wnative, c1)
-	plan.AnOcrCp(an, wnative, c2)
-	var identifier int32 = plan.AnOcrWord(an, at, 90, 20, 60, 40, 900, 0, 0)
-	plan.AnOcrCp(an, identifier, 65)
-	plan.AnOcrCp(an, identifier, 55)
-	ocr.OxBegin(an, 0, 0, 0, 0, 0, script, 629, 500, 1, 1, 0, 0, 0)
-	ocr.OxLine(an, 10, 20, 140, 40, 10, 55, 150, 55, 0, 0, 0, 20, 14, 6)
-	ocr.OxBlock(an, 10, 20, 140, 40, 0, 0, 0)
-	ocr.OxWord(an, 0, lang, -1, 1)
-	ocr.OxWord(an, 0, 1701734144, -1, 1)
-	plan.AnOcrEnd(an, at)
+	var at int32 = oil.OilTessBegin(an, 2, 3, 0, 0, 0, 0, 0, 0, script, 629, 500, 0)
+	var mask int32 = oil.OilGet(an, at, oil.OhCaps())
+	oil.OilSet(an, at, oil.OhCaps(), mask+oil.OcRowmetrics())
+	var measuredMask int32 = oil.OilGet(an, at, oil.OhNative())
+	oil.OilSet(an, at, oil.OhNative(), measuredMask+oil.OcRowmetrics())
+	oil.OilTessBlock(an, at, 10, 20, 140, 40, -1, 0, 0, 0, 0)
+	oil.OilLine(an, at, 10, 20, 140, 40, 0, 2, -1, 0, 10, 55, 150, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var nativeword int32 = oil.OilWord(an, at, 10, 20, 60, 40, 0, 900, lang, 0, -1, 3)
+	oil.OilWordCp(an, at, nativeword, c0)
+	oil.OilWordCp(an, at, nativeword, c1)
+	oil.OilWordCp(an, at, nativeword, c2)
+	var identifier int32 = oil.OilWord(an, at, 90, 20, 60, 40, 0, 900, 1701734144, 0, -1, 3)
+	oil.OilWordCp(an, at, identifier, 65)
+	oil.OilWordCp(an, at, identifier, 55)
+	oil.OilEnd(an, at)
 	scan.ScPage(an, at, 1, 2, 1, 17712, 22848, 738, 952, 30000, 0, 0, 0, 0, 0, 17712, 22848, lang/256, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), runs, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells())
 	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfRequest()), 2, "reading belongs to its actual OCR request")
 	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfLanglen()), 3, "request language is recorded independently of word models")
 	port.AssertEq(emonT, port.CellsAt(et, evidence.OrGet(runs, 0, evidence.OrfLang())), lang/16777216, "request language first letter")
 	port.AssertEq(emonT, evidence.OwCount(owords), 2, "both recorded words remain evidence")
-	port.AssertEq(emonT, evidence.WdCount(wd), 2, "native text and Latin identifier remain selected")
-	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfRun()), 0, "native word belongs to this run")
+	port.AssertEq(emonT, evidence.WdCount(wd), 2, "nativeword text and Latin identifier remain selected")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfRun()), 0, "nativeword word belongs to this run")
 	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfRun()), 0, "Latin identifier belongs to the same run")
-	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfLang()), lang, "native word keeps its engine model")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.OwfLang()), lang, "nativeword word keeps its engine model")
 	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.OwfLang()), 1701734144, "identifier keeps its English model")
 	port.AssertEq(emonT, evidence.LnCount(ln), 1, "one selected source row")
-	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdLine()), 0, "native evidence word belongs to the recorded row")
+	port.AssertEq(emonT, evidence.OwGet(owords, 0, evidence.HdLine()), 0, "nativeword evidence word belongs to the recorded row")
 	port.AssertEq(emonT, evidence.OwGet(owords, 1, evidence.HdLine()), 0, "identifier evidence word belongs to the recorded row")
-	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdLine()), 0, "source row zero owns the native value")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdLine()), 0, "source row zero owns the nativeword value")
 	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdLine()), 0, "source row zero owns the identifier value")
-	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "complete native span")
+	port.AssertEq(emonT, evidence.WdGet(wd, 0, evidence.HdTlen()), 3, "complete nativeword span")
 	port.AssertEq(emonT, evidence.WdGet(wd, 1, evidence.HdTlen()), 2, "complete identifier span")
-	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())), c0, "first native scalar")
-	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+1), c1, "native diacritic or script scalar")
-	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+2), c2, "last native scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())), c0, "first nativeword scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+1), c1, "nativeword diacritic or script scalar")
+	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 0, evidence.HdTstart())+2), c2, "last nativeword scalar")
 	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 1, evidence.HdTstart())), 65, "identifier A stays exact")
 	port.AssertEq(emonT, port.CellsAt(et, evidence.WdGet(wd, 1, evidence.HdTstart())+1), 55, "identifier value 7 stays exact")
 	return 0
@@ -1299,7 +1338,7 @@ func TestGermanUmlautAndLatinIdentifierKeepTheirReadingAndRow(emonT *testing.T) 
 	scMultilingualOwners(emonT, 1684370688, 1281455214, 102, 252, 114)
 }
 
-func TestUrduNativeValuesDoNotAuthorizeDeletingLatinIdentifiers(emonT *testing.T) {
+func TestUrduNativewordValuesDoNotAuthorizeDeletingLatinIdentifiers(emonT *testing.T) {
 	scMultilingualOwners(emonT, 1970430976, 1098015074, 1593, 1575, 1605)
 }
 
@@ -1358,25 +1397,43 @@ func TestSelectedRerotatedLinesUseTheSelectedRunsUprightFrame(emonT *testing.T) 
 }
 
 func TestUnknownOcrBaselineUsesBoxBottomWithoutRewritingTheAnswer(emonT *testing.T) {
+	var raw *port.Cells = port.NewCells()
+	var flat *port.Cells = port.NewCells()
 	var an *port.Cells = port.NewCells()
 	var et *port.Cells = port.NewCells()
 	var runs *port.Cells = port.NewCells()
 	var lines *port.Cells = port.NewCells()
 	var words *port.Cells = port.NewCells()
-	var at int32 = threeLines(an, 2)
-	var ext int32 = ocr.OxFind(an, at)
-	var l int32 = ocr.OxLineAt(an, ext, 0)
-	port.CellsSet(an, l+4, -1)
-	port.CellsSet(an, l+5, -1)
-	port.CellsSet(an, l+6, -1)
-	port.CellsSet(an, l+7, -1)
-	port.CellsSet(an, l+11, -1)
-	port.CellsSet(an, l+12, -1)
-	port.CellsSet(an, l+13, -1)
-	pageOf(an, at, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), runs, port.NewCells(), lines, words, port.NewCells(), port.NewCells())
-	port.AssertEq(emonT, port.CellsAt(an, l+4), -1, "raw answer still records absence")
-	port.AssertEq(emonT, port.CellsAt(an, l+5), -1, "no measured baseline is invented in the transcript")
-	port.AssertEq(emonT, evidence.OlGet(lines, 0, evidence.LhBy0()), 66*24, "layout fallback is the measured line box bottom")
-	port.AssertEq(emonT, evidence.OwGet(words, 0, evidence.HdBy0()), 66*24, "word layout does not interpolate minus one pixels")
+	var original int32 = threeLines(raw, 2)
+	var first int32 = oil.OilLineAt(raw, original, 0)
+	var end int32 = first + 42
+	var i int32 = 4
+	for i < port.CellsLen(raw) {
+		if (i < first) || ((i >= end) || (((i - first) % 14) < 7)) {
+			if (i == 8) || (i == 9) {
+				port.CellsPush(flat, port.CellsAt(raw, i)-24)
+			} else {
+				port.CellsPush(flat, port.CellsAt(raw, i))
+			}
+		}
+		i += 1
+	}
+	port.AssertEq(emonT, oil.OilFlat(flat, 2, an), 0, "a baseline-free OIL answer is valid")
+	var size int32 = port.CellsLen(an)
+	pageOf(an, 0, port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), runs, port.NewCells(), lines, words, port.NewCells(), port.NewCells())
+	port.AssertEq(emonT, port.CellsLen(an), size, "ingestion does not add invented baseline cells")
+	port.AssertEq(emonT, oil.OilLineField(an, 0, 0, 4), -1, "the raw baseline remains absent")
+	port.AssertEq(emonT, evidence.OlGet(lines, 0, evidence.LhBy0()), 66*24, "layout fallback uses the measured line box bottom")
+	port.AssertEq(emonT, evidence.OwGet(words, 0, evidence.HdBy0()), 66*24, "word layout does not interpolate absent measurements")
 	port.AssertEq(emonT, evidence.OwGet(words, 0, evidence.HdBy1()), 66*24, "both ends use the same fallback")
+}
+
+func TestLayoutOrientationAndOsdRemainIndependentMeasurements(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var at int32 = threeLines(ans, 2)
+	oil.OilSet(ans, at, oil.OhOrient(), 2)
+	pageOf(ans, at, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), runs, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfOrient()), 1, "layout orientation comes from the measured block")
+	port.AssertEq(emonT, evidence.OrGet(runs, 0, evidence.OrfOsd()), 180, "OSD orientation remains the independent header measurement")
 }

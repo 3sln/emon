@@ -440,7 +440,7 @@ public static class Scan {
         // centipoints.
         int nl = Oil.OilNlines(an, ext);
         int nb = Oil.OilNblocks(an, ext);
-        int orient0 = Oil.OilOrient(an, ext);
+        int orient0 = Oil.OilLayoutOrient(an, ext);
         int wdir0 = Oil.OilWdir(an, ext);
         int k = 0;
         int px = 0;
@@ -761,7 +761,7 @@ public static class Scan {
             Evidence.OrSet(oruns, run, Evidence.OrfLanglen(), 3);
         }
         if (ext >= 0) {
-            Evidence.OrSet(oruns, run, Evidence.OrfOrient(), Oil.OilOrient(an, ext));
+            Evidence.OrSet(oruns, run, Evidence.OrfOrient(), Oil.OilLayoutOrient(an, ext));
             Evidence.OrSet(oruns, run, Evidence.OrfWdir(), Oil.OilWdir(an, ext));
             Evidence.OrSet(oruns, run, Evidence.OrfLorder(), Oil.OilTlorder(an, ext));
             Evidence.OrSet(oruns, run, Evidence.OrfDeskew(), Oil.OilDeskew(an, ext));

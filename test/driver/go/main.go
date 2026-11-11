@@ -44,7 +44,7 @@ import (
 	"sync"
 
 	"emon"
-	"emon/ocr"
+	"emon/oil"
 	"emon/plan"
 	"emon/planrun"
 	"emon/port"
@@ -73,16 +73,14 @@ type fakeOcr struct{}
 
 func (fakeOcr) Fulfil(req port.PlanRequest, _ port.PlanBitmaps, _ bool) (port.PlanAnswer, error) {
 	c := port.NewCells()
-	at := plan.AnOcr(c, req.ID())
-	w := plan.AnOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0)
+	at := oil.OilTessBegin(c, req.ID(), 3, 0, 0, 0, 0, 0, -1, 0, -1, -1, 0)
+	oil.OilTessBlock(c, at, 10, 10, 100, 30, -1, 0, 0, 0, 0)
+	oil.OilLine(c, at, 10, 10, 100, 30, 0, 1, -1, 0, 10, 35, 110, 35, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	w := oil.OilWord(c, at, 10, 10, 100, 30, 0, 900, 0, 0, -1, 1)
 	for _, ch := range "Hello" {
-		plan.AnOcrCp(c, w, int32(ch))
+		oil.OilWordCp(c, at, w, int32(ch))
 	}
-	ocr.OxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0)
-	ocr.OxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6)
-	ocr.OxBlock(c, 10, 10, 100, 30, 0, 0, 0)
-	ocr.OxWord(c, 0, 0, -1, 0)
-	plan.AnOcrEnd(c, at)
+	oil.OilEnd(c, at)
 	return port.PlanAnswer{Rec: append([]int32(nil), c.V...)}, nil
 }
 

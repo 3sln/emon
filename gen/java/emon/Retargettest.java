@@ -468,18 +468,18 @@ public final class Retargettest {
     }
     public static void testOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber() {
         emon.Port.Cells ans = emon.Port.newCells();
-        int a = Plan.anOcr(ans, 1);
-        int wa = Plan.anOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0);
-        Plan.anOcrCp(ans, wa, 49);
-        Plan.anOcrCp(ans, wa, 50);
-        Plan.anOcrEnd(ans, a);
-        int b = Plan.anOcr(ans, 2);
-        int wb = Plan.anOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0);
-        Plan.anOcrCp(ans, wb, 84);
-        Plan.anOcrCp(ans, wb, 101);
-        Plan.anOcrCp(ans, wb, 120);
-        Plan.anOcrCp(ans, wb, 116);
-        Plan.anOcrEnd(ans, b);
+        int a = Oil.oilBegin(ans, 1, 1, 256, 256, 1, 1, 0, 0);
+        int wa = Oil.oilWord(ans, a, 0, 0, 10, 500, -1, 990, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, a, wa, 49);
+        Oil.oilWordCp(ans, a, wa, 50);
+        Oil.oilEnd(ans, a);
+        int b = Oil.oilBegin(ans, 2, 1, 256, 256, 1, 1, 0, 0);
+        int wb = Oil.oilWord(ans, b, 50, 50, 500, 40, -1, 900, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, b, wb, 84);
+        Oil.oilWordCp(ans, b, wb, 101);
+        Oil.oilWordCp(ans, b, wb, 120);
+        Oil.oilWordCp(ans, b, wb, 116);
+        Oil.oilEnd(ans, b);
         emon.Testport.assertThat(Retarget.rtAnswerScore(ans, b) > Retarget.rtAnswerScore(ans, a), "body text beats a narrow Bates strip");
     }
     public static void testSmallTracedTextIsStillRetried() {
@@ -618,16 +618,16 @@ public final class Retargettest {
     }
     public static void testEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess() {
         emon.Port.Cells ans = emon.Port.newCells();
-        int empty = Plan.anOcr(ans, 31);
-        Plan.anOcrEnd(ans, empty);
+        int empty = Oil.oilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0);
+        Oil.oilEnd(ans, empty);
         emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
         emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue");
         emon.Testport.assertEq(Retarget.rtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
-        int full = Plan.anOcr(ans, 32);
-        int word = Plan.anOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0);
-        Plan.anOcrCp(ans, word, 72);
-        Plan.anOcrCp(ans, word, 105);
-        Plan.anOcrEnd(ans, full);
+        int full = Oil.oilBegin(ans, 32, 1, 256, 256, 1, 1, 0, 0);
+        int word = Oil.oilWord(ans, full, 0, 0, 10, 10, -1, 900, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, full, word, 72);
+        Oil.oilWordCp(ans, full, word, 105);
+        Oil.oilEnd(ans, full);
         emon.Testport.assertEq(Retarget.rtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
         emon.Testport.assertEq(Retarget.rtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
     }

@@ -548,7 +548,7 @@ public final class Tess implements Ocr {
             Block ob = blocks.get(bi);
             int kind = 0;
             for (Line l : lines) { if (l.block == bi) { kind = l.btype; break; } }
-            emon.Oil.oilBlock(c, at, ob.bx[0], ob.bx[1], ob.bx[2], ob.bx[3], -1, ob.orient, ob.wdir, ob.tlo, kind);
+            emon.Oil.oilTessBlock(c, at, ob.bx[0], ob.bx[1], ob.bx[2], ob.bx[3], -1, ob.orient, ob.wdir, ob.tlo, kind);
         }
         for (int li = 0; li < lines.size(); li++) {
             Line l = lines.get(li);

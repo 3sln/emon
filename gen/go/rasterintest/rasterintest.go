@@ -7,6 +7,8 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/oil"
+	"emon/oilfixturetest"
 	"emon/plan"
 	"emon/port"
 	"emon/rasterin"
@@ -140,20 +142,21 @@ func TestAFailedFrameDecodeIsTheUnitsFailure(emonT *testing.T) {
 }
 
 func fakeOcr(ans *port.Cells, id int32) int32 {
-	// An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
-	var at int32 = plan.AnOcr(ans, id)
-	var w int32 = plan.AnOcrWord(ans, at, 10, 20, 30, 40, 900, 0, 0)
-	plan.AnOcrCp(ans, w, 72)
-	plan.AnOcrCp(ans, w, 105)
-	ocr.OxBegin(ans, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0)
-	ocr.OxLine(ans, 10, 20, 30, 40, 10, 55, 40, 55, 0, 0, 0, 20, 14, 6)
-	ocr.OxBlock(ans, 10, 20, 30, 40, 0, 0, 0)
-	var x int32 = ocr.OxWord(ans, 0, 0, -1, 0)
-	var s0 int32 = ocr.OxSym(ans, x, 10, 20, 15, 40, 900)
-	ocr.OxSymCp(ans, s0, 72)
-	var s1 int32 = ocr.OxSym(ans, x, 25, 20, 15, 40, 900)
-	ocr.OxSymCp(ans, s1, 105)
-	plan.AnOcrEnd(ans, at)
+	var at int32 = oil.OilTessBegin(ans, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0)
+	var mask int32 = oil.OilGet(ans, at, oil.OhCaps())
+	oil.OilSet(ans, at, oil.OhCaps(), mask+oil.OcRowmetrics())
+	var measuredMask int32 = oil.OilGet(ans, at, oil.OhNative())
+	oil.OilSet(ans, at, oil.OhNative(), measuredMask+oil.OcRowmetrics())
+	oil.OilTessBlock(ans, at, 10, 20, 30, 40, -1, 0, 0, 0, 0)
+	oil.OilLine(ans, at, 10, 20, 30, 40, 0, 1, -1, 0, 10, 55, 40, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	var word int32 = oil.OilWord(ans, at, 10, 20, 30, 40, 0, 900, 0, 0, -1, 1)
+	oil.OilWordCp(ans, at, word, 72)
+	oil.OilWordCp(ans, at, word, 105)
+	var s0 int32 = oil.OilSym(ans, at, word, 10, 20, 15, 40, 900)
+	oil.OilSymCp(ans, s0, 72)
+	var s1 int32 = oil.OilSym(ans, at, word, 25, 20, 15, 40, 900)
+	oil.OilSymCp(ans, s1, 105)
+	oil.OilEnd(ans, at)
 	return at
 }
 
@@ -230,31 +233,7 @@ func TestAnOcrAnswerBecomesEvidenceAndThePipelinesLines(emonT *testing.T) {
 }
 
 func fakeLines(ans *port.Cells, id int32, nlines int32, scale int32, xh int32, osd int32, oconf int32) int32 {
-	// An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
-	// that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
-	var at int32 = plan.AnOcr(ans, id)
-	var k int32 = 0
-	var word int32 = 0
-	for k < nlines {
-		word = plan.AnOcrWord(ans, at, 10*scale, (20+(k*60))*scale, 60*scale, 40*scale, 900, k, 0)
-		plan.AnOcrCp(ans, word, 72)
-		plan.AnOcrCp(ans, word, 105)
-		k += 1
-	}
-	ocr.OxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxLine(ans, 10*scale, (20+(k*60))*scale, 60*scale, 40*scale, 10*scale, (55+(k*60))*scale, 70*scale, (55+(k*60))*scale, 0, 0, 0, xh*scale, 14, 6)
-		k += 1
-	}
-	ocr.OxBlock(ans, 10*scale, 20*scale, 60*scale, (nlines*60)*scale, 0, 0, 0)
-	k = 0
-	for k < nlines {
-		ocr.OxWord(ans, 0, 0, -1, 0)
-		k += 1
-	}
-	plan.AnOcrEnd(ans, at)
-	return at
+	return oilfixturetest.OfxLines(ans, id, nlines, xh, 60, scale, 900, osd, 1281455214, 100, oconf, 0, 0, 0)
 }
 
 func whiteFrame(bms *port.BitmapSet, id int32, w int32, h int32) int32 {

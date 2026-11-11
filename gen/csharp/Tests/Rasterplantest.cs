@@ -203,7 +203,7 @@ public static class Rasterplantest {
         Evidence.OwNew(owords, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, t0, 5, 0, 900, -1);
         Evidence.OwNew(owords, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, t1, 5, 0, 900, -1);
         Evidence.OrSet(oruns, run, Evidence.OrfRequest(), request);
-        Evidence.OrSet(oruns, run, Evidence.OrfWfirst(), w0 / 28);
+        Evidence.OrSet(oruns, run, Evidence.OrfWfirst(), w0 / 32);
         Evidence.OrSet(oruns, run, Evidence.OrfWcount(), 2);
         return run;
     }

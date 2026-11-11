@@ -5,6 +5,8 @@ package oil
 
 import (
 	"emon/ocalib"
+	"emon/ocrport"
+	"emon/oilregistry"
 	"emon/port"
 	"strings"
 )
@@ -525,6 +527,22 @@ func OilPm(numerator int32, denominator int32) int32 {
 	return int32((n + (d / 2)) / d)
 }
 
+func OilOrderDir(order int32) int32 {
+	// Wire lo is ttb=0 rtl=1 ltr=2; the evidence direction enum is ltr=0 rtl=1 ttb=2.
+	if order == 0 {
+		return 2
+	}
+	if order == 2 {
+		return 0
+	}
+	return order
+}
+
+func OilOrderFromTess(order int32) int32 {
+	// Tesseract TextlineOrder uses the direction enum's codes; swapping the endpoints is its inverse too.
+	return OilOrderDir(order)
+}
+
 func OilBlockStride(caps int32) int32 {
 	return (5 + (3 * OilHas(caps, OcWdir()))) + OilHas(caps, OcBtype())
 }
@@ -660,11 +678,6 @@ func OilSet(c *port.Cells, at int32, k int32, value int32) int32 {
 	return 0
 }
 
-func OilEnd(c *port.Cells, at int32) int32 {
-	port.CellsSet(c, at, port.CellsLen(c)-at)
-	return 0
-}
-
 func OilBlockAt(c *port.Cells, at int32, index int32) int32 {
 	return (at + 28) + (index * OilBlockStride(OilGet(c, at, OhCaps())))
 }
@@ -701,6 +714,10 @@ func OilBlock(c *port.Cells, at int32, x int32, y int32, w int32, h int32, conf 
 	var n int32 = OilGet(c, at, OhNblocks())
 	OilSet(c, at, OhNblocks(), n+1)
 	return 0
+}
+
+func OilTessBlock(c *port.Cells, at int32, x int32, y int32, w int32, h int32, conf int32, orient int32, wdir int32, order int32, kind int32) int32 {
+	return OilBlock(c, at, x, y, w, h, conf, orient, wdir, OilOrderFromTess(order), kind)
 }
 
 func OilLine(c *port.Cells, at int32, x int32, y int32, w int32, h int32, block int32, nwords int32, conf int32, par int32, bx0 int32, by0 int32, bx1 int32, by1 int32, xh int32, asc int32, desc int32, qx0 int32, qy0 int32, qx1 int32, qy1 int32, qx2 int32, qy2 int32, qx3 int32, qy3 int32, angle int32) int32 {
@@ -1042,6 +1059,19 @@ func OilOrient(c *port.Cells, at int32) int32 {
 	return OilHeaderField(c, at, 9, OcOrient(), 0)
 }
 
+func OilLayoutOrient(c *port.Cells, at int32) int32 {
+	// Layout and OSD are independent Tesseract measurements. Its page layout orientation is the first normalized block's, even when OSD is absent or disagrees.
+	var caps int32 = OilGet(c, at, OhCaps())
+	if (OilHas(caps, OcBlocks()) != 0) && ((OilHas(caps, OcWdir()) != 0) && (OilGet(c, at, OhNblocks()) > 0)) {
+		var block int32 = OilBlockAt(c, at, 0)
+		return port.CellsAt(c, block+5)
+	}
+	if OilGet(c, at, OhEngine()) == OenTesseract() {
+		return 0
+	}
+	return OilOrient(c, at)
+}
+
 func OilOconf(c *port.Cells, at int32) int32 {
 	return OilHeaderField(c, at, 10, OcOrient(), -1)
 }
@@ -1063,7 +1093,11 @@ func OilWdir(c *port.Cells, at int32) int32 {
 }
 
 func OilTlorder(c *port.Cells, at int32) int32 {
-	return OilHeaderField(c, at, 15, OcWdir(), 0)
+	if OilHas(OilGet(c, at, OhCaps()), OcWdir()) == 0 {
+		return 0
+	}
+	var order int32 = OilGet(c, at, OhLorder())
+	return OilOrderDir(order)
 }
 
 func OilBinary(c *port.Cells, at int32) int32 {
@@ -1201,7 +1235,7 @@ func OilTessBegin(c *port.Cells, id int32, psm int32, symbols int32, orient int3
 	OilSet(c, at, OhScript(), script)
 	OilSet(c, at, OhSconf(), sconf)
 	OilSet(c, at, OhWdir(), wdir)
-	OilSet(c, at, OhLorder(), order)
+	OilSet(c, at, OhLorder(), OilOrderFromTess(order))
 	OilSet(c, at, OhBinary(), binary)
 	return at
 }
@@ -1301,15 +1335,532 @@ func oilFlatWordEnd(v *port.Cells, p int32, caps int32) int32 {
 	return q
 }
 
+func oilFlatHeaderValid(v *port.Cells) int32 {
+	if (port.CellsAt(v, 6) < 1) || (port.CellsAt(v, 6) > 5) {
+		return 0
+	}
+	if (port.CellsAt(v, 17) < 0) || (port.CellsAt(v, 17) > 2) {
+		return 0
+	}
+	if (port.CellsAt(v, 8) < 0) || (port.CellsAt(v, 8) > 1000) {
+		return 0
+	}
+	if port.CellsAt(v, 23) != 0 {
+		return 0
+	}
+	var caps int32 = port.CellsAt(v, 4)
+	if OilHas(caps, OcOrient()) != 0 {
+		if (port.CellsAt(v, 9) < 0) || (port.CellsAt(v, 9) > 3) {
+			return 0
+		}
+	}
+	if OilHas(caps, OcWdir()) != 0 {
+		if (port.CellsAt(v, 14) < 0) || (port.CellsAt(v, 14) > 3) {
+			return 0
+		}
+		if (port.CellsAt(v, 15) < 0) || (port.CellsAt(v, 15) > 2) {
+			return 0
+		}
+	}
+	if OilHas(caps, OcBinary()) != 0 {
+		if (port.CellsAt(v, 22) < 0) || (port.CellsAt(v, 22) > 1) {
+			return 0
+		}
+	}
+	return 1
+}
+
+func oilFlatSidecarEnd(v *port.Cells, p int32, ns int32, nb int32, nl int32, nw int32, nsym int32) int32 {
+	var size int32 = port.CellsLen(v)
+	var end int32 = 0
+	var q int32 = p + 6
+	var count int32 = 0
+	var rows int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var previous int32 = -1
+	if p > (size - 6) {
+		return -1
+	}
+	if port.CellsAt(v, p) < 6 {
+		return -1
+	}
+	if port.CellsAt(v, p) > (size - p) {
+		return -1
+	}
+	end = p + port.CellsAt(v, p)
+	if port.CellsAt(v, p+1) != ns {
+		return -1
+	}
+	var key int32 = port.CellsAt(v, p+2)
+	var subject int32 = port.CellsAt(v, p+3)
+	var dense int32 = port.CellsAt(v, p+4)
+	var registry int32 = oilregistry.OilKeyFind(ns, key)
+	if registry < 0 {
+		return -1
+	}
+	if subject != oilregistry.OilKeyField(registry, 4) {
+		return -1
+	}
+	if (dense < 0) || (dense > 1) {
+		return -1
+	}
+	if subject == 0 {
+		rows = 1
+	}
+	if subject == 1 {
+		rows = nb
+	}
+	if subject == 2 {
+		rows = nl
+	}
+	if subject == 3 {
+		rows = nw
+	}
+	if subject == 4 {
+		rows = nsym
+	}
+	count = port.CellsAt(v, p+5)
+	if (count < 0) || (count > rows) {
+		return -1
+	}
+	if (dense == 1) && (count != rows) {
+		return -1
+	}
+	for i < count {
+		if dense == 0 {
+			if q >= end {
+				return -1
+			}
+			if (port.CellsAt(v, q) <= previous) || (port.CellsAt(v, q) >= rows) {
+				return -1
+			}
+			previous = port.CellsAt(v, q)
+			q += 1
+		}
+		if oilregistry.OilKeyField(registry, 2) == 9 {
+			if q >= end {
+				return -1
+			}
+			j = port.CellsAt(v, q)
+			q += 1
+			if (j < 0) || (j > (end - q)) {
+				return -1
+			}
+			for j > 0 {
+				var cp int32 = port.CellsAt(v, q)
+				if (cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343))) {
+					return -1
+				}
+				q += 1
+				j -= 1
+			}
+		} else {
+			j = oilregistry.OilKeyField(registry, 3)
+			if j > (end - q) {
+				return -1
+			}
+			if oilregistry.OilKeyField(registry, 2) == 2 {
+				if (port.CellsAt(v, q) < -1) || (port.CellsAt(v, q) > 1000) {
+					return -1
+				}
+			}
+			q += j
+		}
+		i += 1
+	}
+	if q != end {
+		return -1
+	}
+	return end
+}
+
+func oilScSparse(c *port.Cells, at int32) int32 {
+	// Expand dense rows before compaction. Inserting indices first avoids overwriting an unread payload when most rows survive sealing.
+	var p int32 = OilFirstWord(c, at)
+	var i int32 = 0
+	for i < OilNwords(c, at) {
+		p = OilWordNext(c, at, p)
+		i += 1
+	}
+	i = 0
+	for i < OilGet(c, at, OhNsc()) {
+		var length int32 = port.CellsAt(c, p)
+		var count int32 = port.CellsAt(c, p+5)
+		var registry int32 = oilregistry.OilKeyFind(port.CellsAt(c, p+1), port.CellsAt(c, p+2))
+		var q int32 = p + 6
+		var k int32 = 0
+		var width int32 = 0
+		if registry < 0 {
+			return -1
+		}
+		if port.CellsAt(c, p+4) == 1 {
+			for k < count {
+				width = oilregistry.OilKeyField(registry, 3)
+				if oilregistry.OilKeyField(registry, 2) == 9 {
+					width = 1 + port.CellsAt(c, q)
+				}
+				oilInsert(c, q, k)
+				q = (q + 1) + width
+				k += 1
+			}
+			port.CellsSet(c, p, length+count)
+			port.CellsSet(c, p+4, 0)
+		}
+		p += port.CellsAt(c, p)
+		i += 1
+	}
+	return 0
+}
+
+func oilScCpsEqual(c *port.Cells, p int32, packed int32, tablekind int32) int32 {
+	var count int32 = port.CellsAt(c, p)
+	var i int32 = 0
+	var j int32 = 0
+	var d int32 = 16777216
+	var cp int32 = 0
+	var k int32 = 0
+	if (tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824)) {
+		for i < 639 {
+			j = i + 1
+			for ocrport.OpNames[j] != 0 {
+				j += 1
+			}
+			if (ocrport.OpNames[i] == tablekind) && (ocrport.OpNames[j+1] == packed) {
+				if count != ((j - i) - 1) {
+					return 0
+				}
+				i += 1
+				for i < j {
+					if port.CellsAt(c, (p+1)+k) != ocrport.OpNames[i] {
+						return 0
+					}
+					i += 1
+					k += 1
+				}
+				return 1
+			}
+			i = j + 2
+		}
+	}
+	for d > 0 {
+		cp = (packed / d) % 256
+		if cp != 0 {
+			if k >= count {
+				return 0
+			}
+			if port.CellsAt(c, (p+1)+k) != cp {
+				return 0
+			}
+			k += 1
+		}
+		d = d / 256
+	}
+	if k == count {
+		return 1
+	}
+	return 0
+}
+
+func oilScKeep(c *port.Cells, at int32, ns int32, key int32, row int32, p int32, flags int32) int32 {
+	if ns == OenTesseract() {
+		if key == 1 {
+			var caps int32 = OilGet(c, at, OhCaps())
+			var implied int32 = 0
+			if OilHas(caps, OcBtype()) != 0 {
+				var b int32 = OilBlockAt(c, at, row)
+				var kind int32 = port.CellsAt(c, (b+5)+(3*OilHas(caps, OcWdir())))
+				if kind == 0 {
+					implied = 1
+				}
+				if kind == 1 {
+					implied = 6
+				}
+				if kind == 2 {
+					implied = 9
+				}
+				if kind == 3 {
+					if port.CellsAt(c, b+2) >= port.CellsAt(c, b+3) {
+						implied = 12
+					} else {
+						implied = 13
+					}
+				}
+			}
+			if port.CellsAt(c, p) == implied {
+				return 0
+			}
+		}
+		if key == 2 {
+			var script int32 = OilScript(c, at)
+			if oilScCpsEqual(c, p, script, 2) == 1 {
+				return 0
+			}
+		}
+		if key == 3 {
+			var word int32 = OilFirstWord(c, at)
+			var i int32 = 0
+			for i < row {
+				word = OilWordNext(c, at, word)
+				i += 1
+			}
+			var language int32 = OilWlang(c, at, word)
+			if oilScCpsEqual(c, p, language, 3) == 1 {
+				return 0
+			}
+		}
+	}
+	if ns == OenPpocr() {
+		if (key == 1) && (port.CellsAt(c, p) == -1) {
+			return 0
+		}
+		if (key == 2) && ((port.CellsAt(c, p) == 0) && (port.CellsAt(c, p+1) < 500)) {
+			return 0
+		}
+		if (key == 3) && (port.CellsAt(c, p) == 0) {
+			return 0
+		}
+		if (key == 4) && ((flags & 8) == 0) {
+			return 0
+		}
+	}
+	return 1
+}
+
+func OilSeal(c *port.Cells, at int32, flags int32) int32 {
+	// Seal the last answer in place. All retained entries are canonical sparse rows; no normalized cell moves.
+	if oilScSparse(c, at) < 0 {
+		return -1
+	}
+	var total int32 = OilGet(c, at, OhNsc())
+	var p int32 = OilFirstWord(c, at)
+	var i int32 = 0
+	var write int32 = 0
+	var kept int32 = 0
+	for i < OilNwords(c, at) {
+		p = OilWordNext(c, at, p)
+		i += 1
+	}
+	write = p
+	i = 0
+	for i < total {
+		var end int32 = p + port.CellsAt(c, p)
+		var ns int32 = port.CellsAt(c, p+1)
+		var key int32 = port.CellsAt(c, p+2)
+		var subject int32 = port.CellsAt(c, p+3)
+		var dense int32 = port.CellsAt(c, p+4)
+		var count int32 = port.CellsAt(c, p+5)
+		var registry int32 = oilregistry.OilKeyFind(ns, key)
+		var entry int32 = write
+		var q int32 = p + 6
+		var k int32 = 0
+		var n int32 = 0
+		var row int32 = 0
+		var width int32 = 0
+		var j int32 = 0
+		if registry < 0 {
+			return -1
+		}
+		port.CellsSet(c, entry+1, ns)
+		port.CellsSet(c, entry+2, key)
+		port.CellsSet(c, entry+3, subject)
+		port.CellsSet(c, entry+4, 0)
+		write = entry + 6
+		for k < count {
+			row = k
+			if dense == 0 {
+				row = port.CellsAt(c, q)
+				q += 1
+			}
+			width = oilregistry.OilKeyField(registry, 3)
+			if oilregistry.OilKeyField(registry, 2) == 9 {
+				width = 1 + port.CellsAt(c, q)
+			}
+			if oilScKeep(c, at, ns, key, row, q, flags) != 0 {
+				port.CellsSet(c, write, row)
+				write += 1
+				j = 0
+				for j < width {
+					port.CellsSet(c, write, port.CellsAt(c, q+j))
+					write += 1
+					j += 1
+				}
+				n += 1
+			}
+			q += width
+			k += 1
+		}
+		if n == 0 {
+			write = entry
+		} else {
+			port.CellsSet(c, entry, write-entry)
+			port.CellsSet(c, entry+5, n)
+			kept += 1
+		}
+		p = end
+		i += 1
+	}
+	port.CellsDrop(c, write)
+	OilSet(c, at, OhNsc(), kept)
+	port.CellsSet(c, at, write-at)
+	return 0
+}
+
+func OilScPut(c *port.Cells, at int32, key int32, subject int32, row int32, value *port.Cells, first int32, count int32) int32 {
+	// Append a sparse source value; registration and value framing are checked before incrementing nsc.
+	var start int32 = port.CellsLen(c)
+	var ns int32 = OilGet(c, at, OhEngine())
+	var registry int32 = oilregistry.OilKeyFind(ns, key)
+	var i int32 = 0
+	if registry < 0 {
+		return -1
+	}
+	if subject != oilregistry.OilKeyField(registry, 4) {
+		return -1
+	}
+	if (first < 0) || ((count < 0) || (count > (port.CellsLen(value) - first))) {
+		return -1
+	}
+	if oilregistry.OilKeyField(registry, 2) == 9 {
+		if count < 1 {
+			return -1
+		}
+		if port.CellsAt(value, first) != (count - 1) {
+			return -1
+		}
+	} else if count != oilregistry.OilKeyField(registry, 3) {
+		return -1
+	}
+	if row < 0 {
+		return -1
+	}
+	if (subject == 0) && (row != 0) {
+		return -1
+	}
+	if (subject == 1) && (row >= OilNblocks(c, at)) {
+		return -1
+	}
+	if (subject == 2) && (row >= OilNlines(c, at)) {
+		return -1
+	}
+	if (subject == 3) && (row >= OilNwords(c, at)) {
+		return -1
+	}
+	port.CellsPush(c, 7+count)
+	port.CellsPush(c, ns)
+	port.CellsPush(c, key)
+	port.CellsPush(c, subject)
+	port.CellsPush(c, 0)
+	port.CellsPush(c, 1)
+	port.CellsPush(c, row)
+	for i < count {
+		port.CellsPush(c, port.CellsAt(value, first+i))
+		i += 1
+	}
+	var nsc int32 = OilGet(c, at, OhNsc())
+	OilSet(c, at, OhNsc(), nsc+1)
+	port.CellsSet(c, at, port.CellsLen(c)-at)
+	return start
+}
+
+func OilEndSource(c *port.Cells, at int32, flags int32) int32 {
+	return OilSeal(c, at, flags)
+}
+
+func OilEnd(c *port.Cells, at int32) int32 {
+	return OilEndSource(c, at, 0)
+}
+
+func oilFlatBoxValid(v *port.Cells, p int32) int32 {
+	if (port.CellsAt(v, p+2) < 0) || (port.CellsAt(v, p+3) < 0) {
+		return 0
+	}
+	return 1
+}
+
+func oilFlatRowsValid(v *port.Cells, caps int32, nb int32, nl int32) int32 {
+	var p int32 = 24
+	var i int32 = 0
+	var q int32 = 0
+	for i < nb {
+		if oilFlatBoxValid(v, p) == 0 {
+			return 0
+		}
+		if (port.CellsAt(v, p+4) < -1) || (port.CellsAt(v, p+4) > 1000) {
+			return 0
+		}
+		q = p + 5
+		if OilHas(caps, OcWdir()) != 0 {
+			if (port.CellsAt(v, q) < 0) || (port.CellsAt(v, q) > 3) {
+				return 0
+			}
+			if (port.CellsAt(v, q+1) < 0) || (port.CellsAt(v, q+1) > 3) {
+				return 0
+			}
+			if (port.CellsAt(v, q+2) < 0) || (port.CellsAt(v, q+2) > 2) {
+				return 0
+			}
+			q += 3
+		}
+		if OilHas(caps, OcBtype()) != 0 {
+			if (port.CellsAt(v, q) < 0) || (port.CellsAt(v, q) > 4) {
+				return 0
+			}
+		}
+		p += OilBlockStride(caps)
+		i += 1
+	}
+	i = 0
+	for i < nl {
+		if oilFlatBoxValid(v, p) == 0 {
+			return 0
+		}
+		if port.CellsAt(v, p+5) < 0 {
+			return 0
+		}
+		if OilHas(caps, OcBlocks()) == 0 {
+			if port.CellsAt(v, p+4) != -1 {
+				return 0
+			}
+		} else if (port.CellsAt(v, p+4) < 0) || (port.CellsAt(v, p+4) >= nb) {
+			return 0
+		}
+		q = p + 6
+		if OilHas(caps, OcLconf()) != 0 {
+			if (port.CellsAt(v, q) < -1) || (port.CellsAt(v, q) > 1000) {
+				return 0
+			}
+			q += 1
+		}
+		if OilHas(caps, OcParas()) != 0 {
+			if port.CellsAt(v, q) < -1 {
+				return 0
+			}
+			q += 1
+		}
+		q += 4 * OilHas(caps, OcBaseline())
+		if OilHas(caps, OcRowmetrics()) != 0 {
+			if (port.CellsAt(v, q) < 0) || ((port.CellsAt(v, q+1) < 0) || (port.CellsAt(v, q+2) < 0)) {
+				return 0
+			}
+		}
+		p += OilLineStride(caps)
+		i += 1
+	}
+	return 1
+}
+
 func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 	// Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
 	var n int32 = port.CellsLen(v)
+	var outAt int32 = port.CellsLen(out)
 	var p int32 = 24
 	var i int32 = 0
 	var caps int32 = 0
 	var nb int32 = 0
 	var nl int32 = 0
 	var nw int32 = 0
+	var nsym int32 = 0
 	if n < 24 {
 		return -1
 	}
@@ -1332,6 +1883,9 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 	if OilNativeCheck(caps, port.CellsAt(v, 5)) == 0 {
 		return -1
 	}
+	if oilFlatHeaderValid(v) == 0 {
+		return -1
+	}
 	nb = port.CellsAt(v, 18)
 	nl = port.CellsAt(v, 19)
 	nw = port.CellsAt(v, 20)
@@ -1348,8 +1902,34 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 	if p > n {
 		return -1
 	}
+	if oilFlatRowsValid(v, caps, nb, nl) == 0 {
+		return -1
+	}
 	for i < nw {
-		p = oilFlatWordEnd(v, p, caps)
+		var end int32 = oilFlatWordEnd(v, p, caps)
+		if end < 0 {
+			return -1
+		}
+		if oilFlatBoxValid(v, p) == 0 {
+			return -1
+		}
+		if (port.CellsAt(v, p+5) < -1) || (port.CellsAt(v, p+5) > 1000) {
+			return -1
+		}
+		if (port.CellsAt(v, p+4) < -1) || (port.CellsAt(v, p+4) >= nl) {
+			return -1
+		}
+		var q int32 = p + OilWordBase(caps)
+		var a int32 = 0
+		if OilHas(caps, OcWalts()) != 0 {
+			var count int32 = port.CellsAt(v, q-1)
+			for a < count {
+				q = (q + 2) + port.CellsAt(v, q+1)
+				a += 1
+			}
+		}
+		nsym += port.CellsAt(v, q)
+		p = end
 		if p < 0 {
 			return -1
 		}
@@ -1357,17 +1937,8 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 	}
 	i = 0
 	for i < port.CellsAt(v, 21) {
-		if (p + 5) >= n {
-			return -1
-		}
-		if port.CellsAt(v, p) < 6 {
-			return -1
-		}
-		if port.CellsAt(v, p) > (n - p) {
-			return -1
-		}
-		p += port.CellsAt(v, p)
-		if p > n {
+		p = oilFlatSidecarEnd(v, p, port.CellsAt(v, 1), nb, nl, nw, nsym)
+		if p < 0 {
 			return -1
 		}
 		i += 1
@@ -1384,7 +1955,7 @@ func OilFlat(v *port.Cells, id int32, out *port.Cells) int32 {
 		port.CellsPush(out, port.CellsAt(v, i))
 		i += 1
 	}
-	return 0
+	return OilEnd(out, outAt)
 }
 
 func OilPolicyConf(c *port.Cells, at int32, word int32) int32 {

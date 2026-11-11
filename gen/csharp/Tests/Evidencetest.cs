@@ -391,10 +391,10 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.EvStrides[10], 16, "fonts");
         emon.Testport.AssertEq(Evidence.EvStrides[11], 24, "paths");
         emon.Testport.AssertEq(Evidence.EvStrides[12], 20, "images");
-        emon.Testport.AssertEq(Evidence.EvStrides[13], 28, "oruns");
+        emon.Testport.AssertEq(Evidence.EvStrides[13], 32, "oruns");
         emon.Testport.AssertEq(Evidence.EvStrides[14], 16, "oblocks");
-        emon.Testport.AssertEq(Evidence.EvStrides[15], 24, "olines");
-        emon.Testport.AssertEq(Evidence.EvStrides[16], 28, "owords");
+        emon.Testport.AssertEq(Evidence.EvStrides[15], 28, "olines");
+        emon.Testport.AssertEq(Evidence.EvStrides[16], 32, "owords");
         emon.Testport.AssertEq(Evidence.EvStrides[17], 20, "osyms");
         emon.Testport.AssertEq(Evidence.EvStrides[18], 4, "oalts");
         emon.Testport.AssertEq(Evidence.EvStrides[19], 12, "inks");
@@ -592,7 +592,7 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfZ()), -1, "no paint number");
         emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfVby()), -1, "no occluder");
         emon.Testport.AssertEq(Evidence.OrNew(oruns, 3, 0), 0, "first run");
-        emon.Testport.AssertEq(emon.Port.CellsLen(oruns), 28, "28 cells");
+        emon.Testport.AssertEq(emon.Port.CellsLen(oruns), 32, "32 cells");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfBview()), -1, "no binarised view");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfRequest()), -1, "no request");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfLang()), -1, "no languages");
@@ -602,11 +602,11 @@ public static class Evidencetest {
         emon.Testport.AssertEq(emon.Port.CellsLen(oblocks), 16, "16 cells");
         emon.Testport.AssertEq(Evidence.ObGet(oblocks, 0, Evidence.ObfConf()), -1, "no confidence");
         emon.Testport.AssertEq(Evidence.OlNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
-        emon.Testport.AssertEq(emon.Port.CellsLen(olines), 24, "24 cells");
+        emon.Testport.AssertEq(emon.Port.CellsLen(olines), 28, "28 cells");
         emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfPar()), -1, "in no paragraph");
         emon.Testport.AssertEq(Evidence.OlGet(olines, 0, Evidence.OlfXheight()), -1, "x-height unknown");
         emon.Testport.AssertEq(Evidence.OwNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
-        emon.Testport.AssertEq(emon.Port.CellsLen(owords), 28, "28 cells");
+        emon.Testport.AssertEq(emon.Port.CellsLen(owords), 32, "32 cells");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.HdConf()), 850, "confidence");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfPsize()), -1, "point size unknown");
         emon.Testport.AssertEq(Evidence.OwGet(owords, 0, Evidence.OwfSfirst()), -1, "no symbols");
@@ -1224,7 +1224,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
             }
             if (ea == 14) {
-                emon.Testport.AssertEq(cells, 28, "oruns: every cell");
+                emon.Testport.AssertEq(cells, 32, "oruns: every cell");
             }
             if (ea == 15) {
                 emon.Testport.AssertEq(Evidence.EvStrides[14] - cells, 2, "oblocks: two spare");
@@ -1233,7 +1233,7 @@ public static class Evidencetest {
                 emon.Testport.AssertEq(Evidence.EvStrides[15] - cells, 1, "olines: one spare");
             }
             if (ea == 17) {
-                emon.Testport.AssertEq(cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)");
+                emon.Testport.AssertEq(cells, 32, "owords: every cell (D731 printed a fused copy's source, `from`)");
             }
             if (ea == 18) {
                 emon.Testport.AssertEq(Evidence.EvStrides[17] - cells, 3, "osyms: three spare");

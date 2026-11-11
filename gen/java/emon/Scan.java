@@ -440,7 +440,7 @@ public final class Scan {
         // centipoints.
         int nl = Oil.oilNlines(an, ext);
         int nb = Oil.oilNblocks(an, ext);
-        int orient0 = Oil.oilOrient(an, ext);
+        int orient0 = Oil.oilLayoutOrient(an, ext);
         int wdir0 = Oil.oilWdir(an, ext);
         int k = 0;
         int px = 0;
@@ -761,7 +761,7 @@ public final class Scan {
             Evidence.orSet(oruns, run, Evidence.orfLanglen(), 3);
         }
         if (ext >= 0) {
-            Evidence.orSet(oruns, run, Evidence.orfOrient(), Oil.oilOrient(an, ext));
+            Evidence.orSet(oruns, run, Evidence.orfOrient(), Oil.oilLayoutOrient(an, ext));
             Evidence.orSet(oruns, run, Evidence.orfWdir(), Oil.oilWdir(an, ext));
             Evidence.orSet(oruns, run, Evidence.orfLorder(), Oil.oilTlorder(an, ext));
             Evidence.orSet(oruns, run, Evidence.orfDeskew(), Oil.oilDeskew(an, ext));

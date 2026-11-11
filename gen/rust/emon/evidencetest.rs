@@ -390,10 +390,10 @@ fn test_every_arena_has_the_stride_the_spec_gives() {
     crate::testport::assert_eq(EV_STRIDES[(10) as usize], 16, "fonts");
     crate::testport::assert_eq(EV_STRIDES[(11) as usize], 24, "paths");
     crate::testport::assert_eq(EV_STRIDES[(12) as usize], 20, "images");
-    crate::testport::assert_eq(EV_STRIDES[(13) as usize], 28, "oruns");
+    crate::testport::assert_eq(EV_STRIDES[(13) as usize], 32, "oruns");
     crate::testport::assert_eq(EV_STRIDES[(14) as usize], 16, "oblocks");
-    crate::testport::assert_eq(EV_STRIDES[(15) as usize], 24, "olines");
-    crate::testport::assert_eq(EV_STRIDES[(16) as usize], 28, "owords");
+    crate::testport::assert_eq(EV_STRIDES[(15) as usize], 28, "olines");
+    crate::testport::assert_eq(EV_STRIDES[(16) as usize], 32, "owords");
     crate::testport::assert_eq(EV_STRIDES[(17) as usize], 20, "osyms");
     crate::testport::assert_eq(EV_STRIDES[(18) as usize], 4, "oalts");
     crate::testport::assert_eq(EV_STRIDES[(19) as usize], 12, "inks");
@@ -591,7 +591,7 @@ fn test_builders_set_the_layout_and_its_defaults() {
     crate::testport::assert_eq(im_get(images, 0, mf_z()), -1, "no paint number");
     crate::testport::assert_eq(im_get(images, 0, mf_vby()), -1, "no occluder");
     crate::testport::assert_eq(or_new(oruns, 3, 0), 0, "first run");
-    crate::testport::assert_eq(crate::port::cells_len(oruns), 28, "28 cells");
+    crate::testport::assert_eq(crate::port::cells_len(oruns), 32, "32 cells");
     crate::testport::assert_eq(or_get(oruns, 0, orf_bview()), -1, "no binarised view");
     crate::testport::assert_eq(or_get(oruns, 0, orf_request()), -1, "no request");
     crate::testport::assert_eq(or_get(oruns, 0, orf_lang()), -1, "no languages");
@@ -601,11 +601,11 @@ fn test_builders_set_the_layout_and_its_defaults() {
     crate::testport::assert_eq(crate::port::cells_len(oblocks), 16, "16 cells");
     crate::testport::assert_eq(ob_get(oblocks, 0, obf_conf()), -1, "no confidence");
     crate::testport::assert_eq(ol_new(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
-    crate::testport::assert_eq(crate::port::cells_len(olines), 24, "24 cells");
+    crate::testport::assert_eq(crate::port::cells_len(olines), 28, "28 cells");
     crate::testport::assert_eq(ol_get(olines, 0, olf_par()), -1, "in no paragraph");
     crate::testport::assert_eq(ol_get(olines, 0, olf_xheight()), -1, "x-height unknown");
     crate::testport::assert_eq(ow_new(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
-    crate::testport::assert_eq(crate::port::cells_len(owords), 28, "28 cells");
+    crate::testport::assert_eq(crate::port::cells_len(owords), 32, "32 cells");
     crate::testport::assert_eq(ow_get(owords, 0, hd_conf()), 850, "confidence");
     crate::testport::assert_eq(ow_get(owords, 0, owf_psize()), -1, "point size unknown");
     crate::testport::assert_eq(ow_get(owords, 0, owf_sfirst()), -1, "no symbols");
@@ -1223,7 +1223,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
         }
         if ea == 14 {
-            crate::testport::assert_eq(cells, 28, "oruns: every cell");
+            crate::testport::assert_eq(cells, 32, "oruns: every cell");
         }
         if ea == 15 {
             crate::testport::assert_eq(EV_STRIDES[(14) as usize] - cells, 2, "oblocks: two spare");
@@ -1232,7 +1232,7 @@ fn test_every_cell_of_every_stride_is_printed_or_spare() {
             crate::testport::assert_eq(EV_STRIDES[(15) as usize] - cells, 1, "olines: one spare");
         }
         if ea == 17 {
-            crate::testport::assert_eq(cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)");
+            crate::testport::assert_eq(cells, 32, "owords: every cell (D731 printed a fused copy's source, `from`)");
         }
         if ea == 18 {
             crate::testport::assert_eq(EV_STRIDES[(17) as usize] - cells, 3, "osyms: three spare");

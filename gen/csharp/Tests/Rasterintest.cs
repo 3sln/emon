@@ -128,20 +128,21 @@ public static class Rasterintest {
         emon.Testport.AssertEq(PagePol(0, a2, emon.Port.NewCells(), 0, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Rasterin.RsUnsupported(), "not read, whatever the policy");
     }
     internal static int FakeOcr(emon.Port.Cells ans, int id) {
-        // An OCR answer for one line holding the word "Hi": 10,20 30x40 pixels, baseline y 55, row attributes 20 + 14 / 6.
-        int at = Plan.AnOcr(ans, id);
-        int w = Plan.AnOcrWord(ans, at, 10, 20, 30, 40, 900, 0, 0);
-        Plan.AnOcrCp(ans, w, 72);
-        Plan.AnOcrCp(ans, w, 105);
-        Ocr.OxBegin(ans, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        Ocr.OxLine(ans, 10, 20, 30, 40, 10, 55, 40, 55, 0, 0, 0, 20, 14, 6);
-        Ocr.OxBlock(ans, 10, 20, 30, 40, 0, 0, 0);
-        int x = Ocr.OxWord(ans, 0, 0, -1, 0);
-        int s0 = Ocr.OxSym(ans, x, 10, 20, 15, 40, 900);
-        Ocr.OxSymCp(ans, s0, 72);
-        int s1 = Ocr.OxSym(ans, x, 25, 20, 15, 40, 900);
-        Ocr.OxSymCp(ans, s1, 105);
-        Plan.AnOcrEnd(ans, at);
+        int at = Oil.OilTessBegin(ans, id, 3, 1, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        int mask = Oil.OilGet(ans, at, Oil.OhCaps());
+        Oil.OilSet(ans, at, Oil.OhCaps(), mask + Oil.OcRowmetrics());
+        int measuredMask = Oil.OilGet(ans, at, Oil.OhNative());
+        Oil.OilSet(ans, at, Oil.OhNative(), measuredMask + Oil.OcRowmetrics());
+        Oil.OilTessBlock(ans, at, 10, 20, 30, 40, -1, 0, 0, 0, 0);
+        Oil.OilLine(ans, at, 10, 20, 30, 40, 0, 1, -1, 0, 10, 55, 40, 55, 20, 14, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        int word = Oil.OilWord(ans, at, 10, 20, 30, 40, 0, 900, 0, 0, -1, 1);
+        Oil.OilWordCp(ans, at, word, 72);
+        Oil.OilWordCp(ans, at, word, 105);
+        int s0 = Oil.OilSym(ans, at, word, 10, 20, 15, 40, 900);
+        Oil.OilSymCp(ans, s0, 72);
+        int s1 = Oil.OilSym(ans, at, word, 25, 20, 15, 40, 900);
+        Oil.OilSymCp(ans, s1, 105);
+        Oil.OilEnd(ans, at);
         return at;
     }
     [Xunit.Fact]
@@ -217,31 +218,7 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Evidence.LnGet(ln, 0, Evidence.LhY1()), (55 * 24) + (6 * 24), "and its bottom the baseline plus descenders");
     }
     internal static int FakeLines(emon.Port.Cells ans, int id, int nlines, int scale, int xh, int osd, int oconf) {
-        // An OCR answer of `nlines` lines, each of one word "Hi" (60 x 40 pixels at `scale`, x-height `xh` at `scale`, the line 60 pixels below the one before)
-        // that OSD says is turned `osd` degrees at the confidence `oconf` (x10; -1: no OSD).
-        int at = Plan.AnOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.AnOcrWord(ans, at, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 900, k, 0);
-            Plan.AnOcrCp(ans, word, 72);
-            Plan.AnOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.OxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxLine(ans, 10 * scale, (20 + (k * 60)) * scale, 60 * scale, 40 * scale, 10 * scale, (55 + (k * 60)) * scale, 70 * scale, (55 + (k * 60)) * scale, 0, 0, 0, xh * scale, 14, 6);
-            k += 1;
-        }
-        Ocr.OxBlock(ans, 10 * scale, 20 * scale, 60 * scale, (nlines * 60) * scale, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.AnOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.OfxLines(ans, id, nlines, xh, 60, scale, 900, osd, 1281455214, 100, oconf, 0, 0, 0);
     }
     internal static int WhiteFrame(emon.Port.BitmapSet bms, int id, int w, int h) {
         // A decoded frame of paper (255) under the id of its decode request, as the host puts one in the set.

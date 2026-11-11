@@ -6,31 +6,7 @@ namespace emon;
 
 public static class Upscaletest {
     internal static int UtAnswer(emon.Port.Cells ans, int id, int nlines, int xh, int w, int osd, int oconf) {
-        // An OCR answer of `nlines` lines, each of one word "Hi" 40 pixels high and `w` wide, whose row x-height is `xh` (0: the engine says none); OSD says `osd` degrees
-        // at the confidence `oconf` (x10; -1 for no OSD). Answers where it is.
-        int at = Plan.AnOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.AnOcrWord(ans, at, 10, 20 + (k * 60), w, 40, 900, k, 0);
-            Plan.AnOcrCp(ans, word, 72);
-            Plan.AnOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.OxBegin(ans, 0, 0, 0, 0, osd, 1281455214, 100, oconf, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxLine(ans, 10, 20 + (k * 60), w, 40, 10, 55 + (k * 60), 10 + w, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
-            k += 1;
-        }
-        Ocr.OxBlock(ans, 10, 20, w, nlines * 60, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.AnOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.OfxLines(ans, id, nlines, xh, w, 1, 900, osd, 1281455214, 100, oconf, 0, 0, 0);
     }
     internal static int UtFactor(int nlines, int xh, int pxw, int pxh, int osd, int oconf) {
         emon.Port.Cells ans = emon.Port.NewCells();
@@ -38,30 +14,8 @@ public static class Upscaletest {
         return Upscale.UpFactor(ans, at, pxw, pxh, emon.Port.NewCells());
     }
     internal static int UtFactorC(int nlines, int xh, int conf) {
-        // `up-factor` of a first pass of `nlines` one-word lines of this x-height and word confidence (no OSD), on a 765 x 990 raster.
         emon.Port.Cells ans = emon.Port.NewCells();
-        int at = Plan.AnOcr(ans, 272);
-        int k = 0;
-        int word = 0;
-        while (k < nlines) {
-            word = Plan.AnOcrWord(ans, at, 10, 20 + (k * 60), 200, 40, conf, k, 0);
-            Plan.AnOcrCp(ans, word, 72);
-            Plan.AnOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.OxBegin(ans, 0, 0, 0, 0, -1, 1281455214, 100, -1, nlines, 1, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxLine(ans, 10, 20 + (k * 60), 200, 40, 10, 55 + (k * 60), 210, 55 + (k * 60), 0, 0, 0, xh, 14, 6);
-            k += 1;
-        }
-        Ocr.OxBlock(ans, 10, 20, 200, nlines * 60, 0, 0, 0);
-        k = 0;
-        while (k < nlines) {
-            Ocr.OxWord(ans, 0, 0, -1, 0);
-            k += 1;
-        }
-        Plan.AnOcrEnd(ans, at);
+        int at = Oilfixturetest.OfxLines(ans, 272, nlines, xh, 200, 1, conf, -1, 1281455214, 100, -1, 0, 0, 0);
         return Upscale.UpFactor(ans, at, 765, 990, emon.Port.NewCells());
     }
     [Xunit.Fact]
@@ -87,12 +41,12 @@ public static class Upscaletest {
         emon.Port.Cells ans = emon.Port.NewCells();
         emon.Port.Cells hist = emon.Port.NewCells();
         int at = UtAnswer(ans, 272, 5, 6, 300, -1, -1);
-        int ext = Ocr.OxFind(ans, at);
+        int ext = Oil.OilFind(ans, at);
         emon.Testport.AssertEq(Upscale.UpXheight(ans, ext, hist), 6, "five lines of 6 pixels");
         emon.Testport.AssertEq(emon.Port.CellsLen(hist), 101, "the histogram is made");
         emon.Port.Cells ans2 = emon.Port.NewCells();
         int at2 = UtAnswer(ans2, 272, 3, 0, 300, -1, -1);
-        int ext2 = Ocr.OxFind(ans2, at2);
+        int ext2 = Oil.OilFind(ans2, at2);
         emon.Testport.AssertEq(Upscale.UpXheight(ans2, ext2, hist), 18, "the engine says none: 45 per cent of the 40 pixel box");
     }
     [Xunit.Fact]
@@ -198,19 +152,19 @@ public static class Upscaletest {
     [Xunit.Fact]
     public static void TestReceiptQualityUsesConfidentAlphanumericBearingTokenLength() {
         emon.Port.Cells ans = emon.Port.NewCells();
-        int at = Plan.AnOcr(ans, 31);
-        int low = Plan.AnOcrWord(ans, at, 0, 0, 10, 10, 499, 0, 0);
-        Plan.AnOcrCp(ans, low, 65);
-        int edge = Plan.AnOcrWord(ans, at, 10, 0, 10, 10, 500, 0, 0);
-        Plan.AnOcrCp(ans, edge, 57);
-        int dots = Plan.AnOcrWord(ans, at, 20, 0, 10, 10, 999, 0, 0);
-        Plan.AnOcrCp(ans, dots, 46);
-        Plan.AnOcrCp(ans, dots, 46);
-        Plan.AnOcrCp(ans, dots, 46);
-        int token = Plan.AnOcrWord(ans, at, 30, 0, 10, 10, 800, 0, 0);
-        Plan.AnOcrCp(ans, token, 36);
-        Plan.AnOcrCp(ans, token, 65);
-        Plan.AnOcrEnd(ans, at);
+        int at = Oil.OilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0);
+        int low = Oil.OilWord(ans, at, 0, 0, 10, 10, -1, 499, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, at, low, 65);
+        int edge = Oil.OilWord(ans, at, 10, 0, 10, 10, -1, 500, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, at, edge, 57);
+        int dots = Oil.OilWord(ans, at, 20, 0, 10, 10, -1, 999, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, at, dots, 46);
+        Oil.OilWordCp(ans, at, dots, 46);
+        Oil.OilWordCp(ans, at, dots, 46);
+        int token = Oil.OilWord(ans, at, 30, 0, 10, 10, -1, 800, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, at, token, 36);
+        Oil.OilWordCp(ans, at, token, 65);
+        Oil.OilEnd(ans, at);
         emon.Testport.AssertEq(Upscale.UpReceiptScore(ans, at), 131, "conf49 is ignored, conf50 is included, punctuation alone cannot vote; the full alphanumeric-bearing token contributes");
     }
 }

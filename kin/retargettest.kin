@@ -1,10 +1,10 @@
 ;; Laws for `emon.retarget` (P7.4; SPEC 8.3, 7.3; D196): what the first pass calls for, the body-ink view, the request that names a kin-made view and its hash,
 ;; and which run's line the pipeline reads.
 (ns emon.retargettest
-  (:require [emon.lang :refer [I32 Bitmap Cells BitmapSet]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-nwords oil-first-word oil-wlen oil-wcp oil-word-next]] [emon.lang :refer [I32 Bitmap Cells BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set test-t TestT]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bitmap-hash bms-put bms-get cells-len cells-at cells-set cells-push]]
-            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs pk-ocr view-base pu-view-id rec-count an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.plan :refer [rec-id rec-kind rq-arg rq-nargs pk-ocr view-base pu-view-id rec-count    ]]
             [emon.evidence :refer [tl-new tl-set tlf-conf co-new co-set cf-pxx cf-pxy cf-pxw cf-pxh cf-fill cf-holes cf-gray cf-ink cf-conf ik-new ik-set ikf-role ir-color
                                    vw-new vw-get vwf-flags vwf-pxw vwf-pxh vwf-dpi vwf-cropx vwf-cropy vg-receipt-thermal vg-receipt-deferred vk-render
                                    op-receipt op-receipt-rescue op-body-ink or-new or-set or-get orf-pass orf-lfirst orf-lcount orf-wfirst orf-wcount orf-osd orf-oconf
@@ -467,14 +467,14 @@
 
 (deftest test-orientation-votes-use-text-area-rather-than-a-confident-margin-number
   (let [^Cells ans (new-cells)
-        ^I32 a (an-ocr ans 1)]
-    (let [^I32 wa (an-ocr-word ans a 0 0 10 500 990 0 0)]
-      (an-ocr-cp ans wa 49) (an-ocr-cp ans wa 50))
-    (an-ocr-end ans a)
-    (let [^I32 b (an-ocr ans 2)]
-      (let [^I32 wb (an-ocr-word ans b 50 50 500 40 900 0 0)]
-        (an-ocr-cp ans wb 84) (an-ocr-cp ans wb 101) (an-ocr-cp ans wb 120) (an-ocr-cp ans wb 116))
-      (an-ocr-end ans b)
+        ^I32 a (oil-begin ans 1 1 256 256 1 1 0 0)]
+    (let [^I32 wa (oil-word ans a 0 0 10 500 -1 990 0 0 -1 0)]
+      (oil-word-cp ans a wa 49) (oil-word-cp ans a wa 50))
+    (oil-end ans a)
+    (let [^I32 b (oil-begin ans 2 1 256 256 1 1 0 0)]
+      (let [^I32 wb (oil-word ans b 50 50 500 40 -1 900 0 0 -1 0)]
+        (oil-word-cp ans b wb 84) (oil-word-cp ans b wb 101) (oil-word-cp ans b wb 120) (oil-word-cp ans b wb 116))
+      (oil-end ans b)
       (assert-that (> (rt-answer-score ans b) (rt-answer-score ans a)) "body text beats a narrow Bates strip"))))
 
 (deftest test-small-traced-text-is-still-retried
@@ -573,13 +573,13 @@
           (set y (+ y 1))))))
 
 (deftest test-empty-receipt-rescue-waits-for-the-view-and-does-not-reread-success
-  (let [^Cells ans (new-cells) ^I32 empty (an-ocr ans 31)]
-    (an-ocr-end ans empty)
+  (let [^Cells ans (new-cells) ^I32 empty (oil-begin ans 31 1 256 256 1 1 0 0)]
+    (oil-end ans empty)
     (assert-eq (rt-empty-receipt 1 ans -1) 0 "wait for the extra view before the all-empty rescue")
     (assert-eq (rt-empty-receipt 1 ans empty) 1 "an empty view permits the rescue")
     (assert-eq (rt-empty-receipt 0 ans -1) 1 "non-receipts retain the existing fallback")
-    (let [^I32 full (an-ocr ans 32) ^I32 word (an-ocr-word ans full 0 0 10 10 900 0 0)]
-      (an-ocr-cp ans word 72) (an-ocr-cp ans word 105) (an-ocr-end ans full)
+    (let [^I32 full (oil-begin ans 32 1 256 256 1 1 0 0) ^I32 word (oil-word ans full 0 0 10 10 -1 900 0 0 -1 0)]
+      (oil-word-cp ans full word 72) (oil-word-cp ans full word 105) (oil-end ans full)
       (assert-eq (rt-empty-receipt 1 ans full) 0 "a successful photo view needs no further full-page read")
       (assert-eq (rt-empty-receipt 2 ans full) 1 "the rejected thermal lane retains the original emergency planner"))))
 

@@ -205,7 +205,7 @@ pub(crate) fn rpt_reading(mut oruns: &mut crate::port::Cells, mut owords: &mut c
     ow_new(owords, 1, 100, 100, 600, 200, 100, 100, 600, 200, 0, 0, t0, 5, 0, 900, -1);
     ow_new(owords, 1, 700, 100, 1200, 200, 700, 100, 1200, 200, 0, 0, t1, 5, 0, 900, -1);
     or_set(oruns, run, orf_request(), request);
-    or_set(oruns, run, orf_wfirst(), w0 / 28);
+    or_set(oruns, run, orf_wfirst(), w0 / 32);
     or_set(oruns, run, orf_wcount(), 2);
     return run;
 }

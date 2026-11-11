@@ -6,17 +6,17 @@
 ;;   THE ANSWER. A model's request name, the OSD's script in ISO 15924, a block's type, and the flat form of the browser's adapter
 ;;   turned into the very record the builders write (and refused when its counts run past it).
 (ns emon.ocrporttest
-  (:require [emon.lang :refer [I32 Cells Text]]
+  (:require [emon.oil :refer [oil-tess-begin oil-tess-block oil-line oil-word oil-word-cp oil-sym oil-sym-cp oil-alt oil-alt-cp oil-end oil-flat]] [emon.lang :refer [I32 Cells Text]]
             [emon.test :refer [deftest assert-eq assert-text assert-that new-cells new-text test-t TestT Str]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
-            [emon.plan :refer [view-base rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end an-ocr an-ocr-word an-ocr-cp an-ocr-end]]
+            [emon.plan :refer [view-base rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end    ]]
             [emon.evidence :refer [ev-emit-ocr-model]]
             [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
-                              ox-begin ox-line ox-block ox-word ox-sym ox-sym-cp ox-alt ox-alt-cp]]
+                                     ]]
             [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name zh-chs zh-cht zh-emit-name
                                   pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation
                                   op-lang-first op-lang-count op-lang-at op-model-selector op-models op-models-configured op-dropped op-find op-names-count op-names-at
-                                  op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ox-flat]]
+                                  op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 
@@ -265,7 +265,6 @@
   (t-osd (test-t) 1265396078 1735355904 0 0 0 1265396078 "a name the table lacks is cut to four")
   (t-osd (test-t) 0 0 0 0 0 0 "none"))
 
-
 (deftest test-a-script-cell-is-four-letters-the-first-uppercase
   (assert-eq (op-is-script (sc-cyrl)) 1 "Cyrl")
   (assert-eq (op-is-script (zh-chs)) 0 "chs: a language")
@@ -295,55 +294,116 @@
 
 ;; the flat form of a page of two words, a line, a block and one word's symbols with alternatives
 (defn ^I32 t-flat [^:mut ^Cells v]
-  (t-p4 v 0 0 2 -85)
-  (t-p4 v 90 (sc-latn) 17 187)
-  (t-p4 v 1 1 2 1)
-  (t-p2 v 640 480)
-  (t-p4 v 10 18 70 44)
-  (t-p4 v 10 60 80 62)
-  (t-p4 v 0 0 0 -1)
-  (t-p2 v -1 -1)
-  (t-p4 v 5 15 80 50)
-  (t-p4 v 0 0 2 10)
-  (t-p4 v 20 30 40 900)
-  (t-p4 v 0 0 65 1701734144)
-  (t-p4 v 11 3 2 72)
-  (t-p4 v 105 2 10 20)
-  (t-p4 v 15 40 950 1)
-  (t-p4 v 72 2 120 1)
-  (t-p4 v 75 80 2 78)
-  (t-p4 v 77 25 20 15)
-  (t-p4 v 40 900 1 105)
-  (t-p4 v 0 50 20 30)
-  (t-p4 v 40 800 0 0)
-  (t-p4 v 0 0 -1 0)
-  (t-p2 v 1 33)
+  (cells-push v 1)
+  (cells-push v 1)
   (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 7339791)
+  (cells-push v 7339791)
+  (cells-push v 1)
+  (cells-push v 1)
+  (cells-push v 1000)
+  (cells-push v 1)
+  (cells-push v 187)
+  (cells-push v -85)
+  (cells-push v 1281455214)
+  (cells-push v 17)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 1)
+  (cells-push v 1)
+  (cells-push v 2)
+  (cells-push v 0)
+  (cells-push v 1)
+  (cells-push v 0)
+  (cells-push v 5)
+  (cells-push v 15)
+  (cells-push v 80)
+  (cells-push v 50)
+  (cells-push v -1)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v 10)
+  (cells-push v 18)
+  (cells-push v 70)
+  (cells-push v 44)
+  (cells-push v 0)
+  (cells-push v 2)
+  (cells-push v 0)
+  (cells-push v 10)
+  (cells-push v 60)
+  (cells-push v 80)
+  (cells-push v 62)
+  (cells-push v 10)
+  (cells-push v 20)
+  (cells-push v 30)
+  (cells-push v 40)
+  (cells-push v 0)
+  (cells-push v 900)
+  (cells-push v 1701734144)
+  (cells-push v 65)
+  (cells-push v 11)
+  (cells-push v 3)
+  (cells-push v 2)
+  (cells-push v 2)
+  (cells-push v 72)
+  (cells-push v 105)
+  (cells-push v 10)
+  (cells-push v 20)
+  (cells-push v 15)
+  (cells-push v 40)
+  (cells-push v 950)
+  (cells-push v 1)
+  (cells-push v 2)
+  (cells-push v 72)
+  (cells-push v 1)
+  (cells-push v 120)
+  (cells-push v 75)
+  (cells-push v 2)
+  (cells-push v 80)
+  (cells-push v 78)
+  (cells-push v 77)
+  (cells-push v 25)
+  (cells-push v 20)
+  (cells-push v 15)
+  (cells-push v 40)
+  (cells-push v 900)
+  (cells-push v 1)
+  (cells-push v 0)
+  (cells-push v 105)
+  (cells-push v 50)
+  (cells-push v 20)
+  (cells-push v 30)
+  (cells-push v 40)
+  (cells-push v 0)
+  (cells-push v 800)
+  (cells-push v 0)
+  (cells-push v 0)
+  (cells-push v -1)
+  (cells-push v 1)
+  (cells-push v 0)
+  (cells-push v 1)
+  (cells-push v 33)
   (return 0))
 
 ;; ... and the same page written by the builders
 (defn ^I32 t-built [^:mut ^Cells c]
-  (let [^I32 at (an-ocr c 9)
-        ^I32 w0 (an-ocr-word c at 10 20 30 40 900 0 0)]
-    (an-ocr-cp c w0 72)
-    (an-ocr-cp c w0 105)
-    (let [^I32 w1 (an-ocr-word c at 50 20 30 40 800 0 0)]
-      (an-ocr-cp c w1 33))
-    (ox-begin c 0 0 2 -85 90 (sc-latn) 17 187 1 1 1 640 480)
-    (ox-line c 10 18 70 44 10 60 80 62 0 0 0 -1 -1 -1)
-    (ox-block c 5 15 80 50 0 0 2)
-    (let [^I32 x0 (ox-word c 65 1701734144 11 3)
-          ^I32 s0 (ox-sym c x0 10 20 15 40 950)]
-      (ox-sym-cp c s0 72)
-      (let [^I32 a0 (ox-alt c s0 120)]
-        (ox-alt-cp c a0 75))
-      (let [^I32 a1 (ox-alt c s0 80)]
-        (ox-alt-cp c a1 78)
-        (ox-alt-cp c a1 77))
-      (let [^I32 s1 (ox-sym c x0 25 20 15 40 900)]
-        (ox-sym-cp c s1 105)))
-    (ox-word c 0 0 -1 0)
-    (an-ocr-end c at)
+  (let [^I32 at (oil-tess-begin c 9 3 1 0 0 2 -85 90 (sc-latn) 17 187 1)]
+    (oil-tess-block c at 5 15 80 50 -1 0 0 2 0)
+    (oil-line c at 10 18 70 44 0 2 -1 0 10 60 80 62 -1 -1 -1 0 0 0 0 0 0 0 0 0)
+    (let [^I32 w0 (oil-word c at 10 20 30 40 0 900 1701734144 65 11 3)]
+      (oil-word-cp c at w0 72) (oil-word-cp c at w0 105)
+      (let [^I32 s0 (oil-sym c at w0 10 20 15 40 950)]
+        (oil-sym-cp c s0 72)
+        (let [^I32 a0 (oil-alt c at s0 120)] (oil-alt-cp c a0 75))
+        (let [^I32 a1 (oil-alt c at s0 80)] (oil-alt-cp c a1 78) (oil-alt-cp c a1 77)))
+      (let [^I32 s1 (oil-sym c at w0 25 20 15 40 900)] (oil-sym-cp c s1 105)))
+    (let [^I32 w1 (oil-word c at 50 20 30 40 0 800 0 0 -1 1)] (oil-word-cp c at w1 33))
+    (oil-end c at)
     (return 0)))
 
 (defn ^I32 t-same [^TestT emon-t ^Cells a ^Cells b]
@@ -365,7 +425,7 @@
         ^Cells want (new-cells)]
     (t-flat v)
     (t-built want)
-    (assert-eq (ox-flat v 9 got) 0 "accepted")
+    (assert-eq (oil-flat v 9 got) 0 "accepted")
     (t-same (test-t) got want)))
 
 (defn ^I32 t-refuse [^TestT emon-t ^I32 drop ^I32 at ^I32 val ^Str msg]
@@ -375,23 +435,22 @@
     (t-flat v)
     (if (> drop 0) (cells-drop v drop))
     (if (>= at 0) (cells-set v at val))
-    (assert-eq (ox-flat v 9 got) -1 msg)
+    (assert-eq (oil-flat v 9 got) -1 msg)
     (assert-eq (cells-len got) 0 msg)
     (return 0)))
 
 (deftest test-a-flat-form-whose-counts-run-past-it-is-refused-and-writes-nothing
   (t-refuse (test-t) 1 -1 0 "the last word's symbol count is gone")
-  (t-refuse (test-t) 0 10 -1 "a negative count of words")
-  (t-refuse (test-t) 0 8 100000 "more lines than cells")
-  (t-refuse (test-t) 0 46 2000000000 "a text longer than the form, without overflowing"))
+  (t-refuse (test-t) 0 20 -1 "a negative count of words")
+  (t-refuse (test-t) 0 19 100000 "more lines than cells")
+  (t-refuse (test-t) 0 55 2000000000 "a text longer than the form, without overflowing"))
 
 (deftest test-a-flat-form-with-a-header-cut-short-is-refused
   (let [^Cells v (new-cells)
         ^Cells got (new-cells)]
     (t-p4 v 0 0 2 0)
-    (assert-eq (ox-flat v 9 got) -1 "a header cut short")
+    (assert-eq (oil-flat v 9 got) -1 "a header cut short")
     (assert-eq (cells-len got) 0 "and nothing is written")))
-
 
 (deftest test-an-automatic-first-pass-uses-one-model-instead-of-all-installed-scripts
   (let [^Cells r (new-cells) ^Cells inst (new-cells)]

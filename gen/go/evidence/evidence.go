@@ -6213,16 +6213,16 @@ func EvPeek(ea int32, row int32, f int32, epages *port.Cells, views *port.Cells,
 		return port.CellsAt(images, (row*20)+f)
 	}
 	if ea == 14 {
-		return port.CellsAt(oruns, (row*28)+f)
+		return port.CellsAt(oruns, (row*32)+f)
 	}
 	if ea == 15 {
 		return port.CellsAt(oblocks, (row*16)+f)
 	}
 	if ea == 16 {
-		return port.CellsAt(olines, (row*24)+f)
+		return port.CellsAt(olines, (row*28)+f)
 	}
 	if ea == 17 {
-		return port.CellsAt(owords, (row*28)+f)
+		return port.CellsAt(owords, (row*32)+f)
 	}
 	if ea == 18 {
 		return port.CellsAt(osyms, (row*20)+f)
@@ -6303,7 +6303,7 @@ func EvPoke(ea int32, row int32, f int32, v int32, epages *port.Cells, views *po
 		return 0
 	}
 	if ea == 14 {
-		port.CellsSet(oruns, (row*28)+f, v)
+		port.CellsSet(oruns, (row*32)+f, v)
 		return 0
 	}
 	if ea == 15 {
@@ -6311,11 +6311,11 @@ func EvPoke(ea int32, row int32, f int32, v int32, epages *port.Cells, views *po
 		return 0
 	}
 	if ea == 16 {
-		port.CellsSet(olines, (row*24)+f, v)
+		port.CellsSet(olines, (row*28)+f, v)
 		return 0
 	}
 	if ea == 17 {
-		port.CellsSet(owords, (row*28)+f, v)
+		port.CellsSet(owords, (row*32)+f, v)
 		return 0
 	}
 	if ea == 18 {

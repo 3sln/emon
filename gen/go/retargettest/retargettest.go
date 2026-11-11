@@ -6,6 +6,7 @@ package retargettest
 import (
 	"emon/evidence"
 	"emon/norm"
+	"emon/oil"
 	"emon/plan"
 	"emon/port"
 	"emon/retarget"
@@ -499,18 +500,18 @@ func TestTracedInkWithNoOcrWordGetsACroppedRetry(emonT *testing.T) {
 
 func TestOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
-	var a int32 = plan.AnOcr(ans, 1)
-	var wa int32 = plan.AnOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0)
-	plan.AnOcrCp(ans, wa, 49)
-	plan.AnOcrCp(ans, wa, 50)
-	plan.AnOcrEnd(ans, a)
-	var b int32 = plan.AnOcr(ans, 2)
-	var wb int32 = plan.AnOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0)
-	plan.AnOcrCp(ans, wb, 84)
-	plan.AnOcrCp(ans, wb, 101)
-	plan.AnOcrCp(ans, wb, 120)
-	plan.AnOcrCp(ans, wb, 116)
-	plan.AnOcrEnd(ans, b)
+	var a int32 = oil.OilBegin(ans, 1, 1, 256, 256, 1, 1, 0, 0)
+	var wa int32 = oil.OilWord(ans, a, 0, 0, 10, 500, -1, 990, 0, 0, -1, 0)
+	oil.OilWordCp(ans, a, wa, 49)
+	oil.OilWordCp(ans, a, wa, 50)
+	oil.OilEnd(ans, a)
+	var b int32 = oil.OilBegin(ans, 2, 1, 256, 256, 1, 1, 0, 0)
+	var wb int32 = oil.OilWord(ans, b, 50, 50, 500, 40, -1, 900, 0, 0, -1, 0)
+	oil.OilWordCp(ans, b, wb, 84)
+	oil.OilWordCp(ans, b, wb, 101)
+	oil.OilWordCp(ans, b, wb, 120)
+	oil.OilWordCp(ans, b, wb, 116)
+	oil.OilEnd(ans, b)
 	port.AssertThat(emonT, retarget.RtAnswerScore(ans, b) > retarget.RtAnswerScore(ans, a), "body text beats a narrow Bates strip")
 }
 
@@ -658,16 +659,16 @@ func TestFaintViewIsBlackInkOnWhitePaper(emonT *testing.T) {
 
 func TestEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess(emonT *testing.T) {
 	var ans *port.Cells = port.NewCells()
-	var empty int32 = plan.AnOcr(ans, 31)
-	plan.AnOcrEnd(ans, empty)
+	var empty int32 = oil.OilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0)
+	oil.OilEnd(ans, empty)
 	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue")
 	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue")
 	port.AssertEq(emonT, retarget.RtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback")
-	var full int32 = plan.AnOcr(ans, 32)
-	var word int32 = plan.AnOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0)
-	plan.AnOcrCp(ans, word, 72)
-	plan.AnOcrCp(ans, word, 105)
-	plan.AnOcrEnd(ans, full)
+	var full int32 = oil.OilBegin(ans, 32, 1, 256, 256, 1, 1, 0, 0)
+	var word int32 = oil.OilWord(ans, full, 0, 0, 10, 10, -1, 900, 0, 0, -1, 0)
+	oil.OilWordCp(ans, full, word, 72)
+	oil.OilWordCp(ans, full, word, 105)
+	oil.OilEnd(ans, full)
 	port.AssertEq(emonT, retarget.RtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read")
 	port.AssertEq(emonT, retarget.RtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner")
 }

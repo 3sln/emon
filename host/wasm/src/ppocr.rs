@@ -135,7 +135,7 @@ pub unsafe extern "C" fn emon_pp_begin(p: u32, n: u32, id: i32, x: i32, y: i32, 
     STATE.with(|s| s.borrow_mut().task = Some(Box::pin(async move {
         let image = crate::ppocr_image::Image::new(decoded.width() as usize, decoded.height() as usize, decoded.into_raw())?;
         let mut pipeline = crate::ppocr_pipeline::Pipeline::open(Path::new(""), include_str!("ppocr_dictionary.txt"))?;
-        answer(pipeline.read(&image).await?, id, dx, dy).await
+        answer(pipeline.read(&image).await?, id, dx, dy, image.width, image.height).await
     })));
     advance()
 }

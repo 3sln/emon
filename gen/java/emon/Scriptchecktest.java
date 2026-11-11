@@ -6,35 +6,7 @@ package emon;
 
 public final class Scriptchecktest {
     public static int skAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0, int dflags) {
-        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
-        // `dflags` 1 says the engine's dictionary knows the words, 0 not.
-        int at = Plan.anOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < n) {
-            word = Plan.anOcrWord(ans, at, 10, 20 + (k * 60), 60, 40, 760, k, 0);
-            Plan.anOcrCp(ans, word, 72);
-            Plan.anOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.oxBegin(ans, 0, 0, 0, 0, 0, script, sconf, 500, n, 1, 0, 0, 0);
-        k = 0;
-        while (k < n) {
-            Ocr.oxLine(ans, 10, 20 + (k * 60), 60, 40, 10, 55 + (k * 60), 70, 55 + (k * 60), 0, 0, 0, 20, 14, 6);
-            k += 1;
-        }
-        Ocr.oxBlock(ans, 10, 20, 60, n * 60, 0, 0, 0);
-        k = 0;
-        while (k < n) {
-            if (k == 0) {
-                Ocr.oxWord(ans, 0, lang0, -1, dflags);
-            } else {
-                Ocr.oxWord(ans, 0, lang, -1, dflags);
-            }
-            k += 1;
-        }
-        Plan.anOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.ofxLines(ans, id, n, 20, 60, 1, 760, 0, script, sconf, 500, lang, lang0, dflags);
     }
     public static int unreadOfD(int n, int script, int sconf, int lang, int lang0, int dflags) {
         emon.Port.Cells ans = emon.Port.newCells();
@@ -72,10 +44,10 @@ public final class Scriptchecktest {
     }
     public static void testAnAnswerWithNoExtensionIsNotFlagged() {
         emon.Port.Cells ans = emon.Port.newCells();
-        int at = Plan.anOcr(ans, 272);
-        int w = Plan.anOcrWord(ans, at, 10, 20, 60, 40, 760, 0, 0);
-        Plan.anOcrCp(ans, w, 72);
-        Plan.anOcrEnd(ans, at);
+        int at = Oil.oilBegin(ans, 272, 1, 256, 256, 1, 1, 0, 0);
+        int w = Oil.oilWord(ans, at, 10, 20, 60, 40, -1, 760, 0, 0, -1, 0);
+        Oil.oilWordCp(ans, at, w, 72);
+        Oil.oilEnd(ans, at);
         emon.Testport.assertEq(Scriptcheck.skUnread(ans, at, emon.Port.newCells()), 0, "an engine that says nothing of the script");
     }
     public static void testOsdRoutesAnUnreadPageThroughItsScriptAndEnglish() {

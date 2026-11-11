@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"emon/evidence"
+	"emon/oil"
 	"emon/plan"
 	"emon/planprobe"
 	"emon/planrun"
@@ -24,18 +25,25 @@ import (
 
 // The evidence arenas travel in four bundles, held by the host as structs (SPEC 8.4.6, D096).
 type EvShared struct{ Epages, Views, Pts, Refs, Etext, Feats *port.Cells }
+
 func NewEvShared() EvShared {
 	return EvShared{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
+
 type EvText struct{ Glyphs, Words, Lines, Marks, Fonts, Paths, Images *port.Cells }
+
 func NewEvText() EvText {
 	return EvText{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
+
 type EvOcr struct{ Oruns, Oblocks, Olines, Owords, Osyms, Oalts *port.Cells }
+
 func NewEvOcr() EvOcr {
 	return EvOcr{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
+
 type EvTrace struct{ Inks, Components, Rules, Prims, Tlines *port.Cells }
+
 func NewEvTrace() EvTrace {
 	return EvTrace{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
@@ -112,7 +120,7 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 			plan.AnFail(c, port.PlanKindOcr, id, port.PlanStatusFailed)
 			return answer(c, nil)
 		}
-		at := plan.AnOcr(c, id)
+		at := oil.OilBegin(c, id, 1, 256, 256, 1, 1, 0, 0)
 		type word struct {
 			x, y, w, h, conf, line int32
 			text                   []int32
@@ -123,12 +131,12 @@ func fake(req port.PlanRequest, bm port.PlanBitmaps) (port.PlanAnswer, error) {
 			{4, 16, 6, 10, 640, 1, []int32{8364, 128512}},
 		}
 		for _, w := range words {
-			wd := plan.AnOcrWord(c, at, w.x, w.y, w.w, w.h, w.conf, w.line, 0)
+			wd := oil.OilWord(c, at, w.x, w.y, w.w, w.h, -1, w.conf, 0, 0, -1, 0)
 			for _, cp := range w.text {
-				plan.AnOcrCp(c, wd, cp)
+				oil.OilWordCp(c, at, wd, cp)
 			}
 		}
-		plan.AnOcrEnd(c, at)
+		oil.OilEnd(c, at)
 		return answer(c, nil)
 	}
 	return port.PlanAnswer{}, planrun.FulfilFailed(fmt.Sprintf("the fake has no kind %d", req.Kind()))

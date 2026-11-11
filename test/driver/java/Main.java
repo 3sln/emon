@@ -90,14 +90,12 @@ public class Main {
     static final class FakeOcr implements emon.api.Ocr {
         public Planrun.Answer fulfil(Planrun.Request req, java.util.Map<Integer, emon.Port.Bitmap> bm, boolean keep) {
             emon.Port.Cells c = emon.Port.newCells();
-            int at = emon.Plan.anOcr(c, req.id());
-            int w = emon.Plan.anOcrWord(c, at, 10, 10, 100, 30, 900, 0, 0);
-            "Hello".codePoints().forEach(cp -> emon.Plan.anOcrCp(c, w, cp));
-            emon.Ocr.oxBegin(c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-            emon.Ocr.oxLine(c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
-            emon.Ocr.oxBlock(c, 10, 10, 100, 30, 0, 0, 0);
-            emon.Ocr.oxWord(c, 0, 0, -1, 0);
-            emon.Plan.anOcrEnd(c, at);
+            int at = emon.Oil.oilTessBegin(c, req.id(), 3, 0, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+            emon.Oil.oilTessBlock(c, at, 10, 10, 100, 30, -1, 0, 0, 0, 0);
+            emon.Oil.oilLine(c, at, 10, 10, 100, 30, 0, 1, -1, 0, 10, 35, 110, 35, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            int w = emon.Oil.oilWord(c, at, 10, 10, 100, 30, 0, 900, 0, 0, -1, 1);
+            "Hello".codePoints().forEach(cp -> emon.Oil.oilWordCp(c, at, w, cp));
+            emon.Oil.oilEnd(c, at);
             return new Planrun.Answer(emon.Port.cellsVec(c));
         }
 

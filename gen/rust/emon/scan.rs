@@ -447,7 +447,7 @@ pub(crate) fn sc_ev_lines(an: &mut crate::port::Cells, ext: i32, view: i32, run:
     // centipoints.
     let nl: i32 = oil_nlines(an, ext);
     let nb: i32 = oil_nblocks(an, ext);
-    let orient0: i32 = oil_orient(an, ext);
+    let orient0: i32 = oil_layout_orient(an, ext);
     let wdir0: i32 = oil_wdir(an, ext);
     let mut k: i32 = 0;
     let mut px: i32 = 0;
@@ -768,7 +768,7 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
         or_set(oruns, run, orf_langlen(), 3);
     }
     if ext >= 0 {
-        or_set(oruns, run, orf_orient(), oil_orient(an, ext));
+        or_set(oruns, run, orf_orient(), oil_layout_orient(an, ext));
         or_set(oruns, run, orf_wdir(), oil_wdir(an, ext));
         or_set(oruns, run, orf_lorder(), oil_tlorder(an, ext));
         or_set(oruns, run, orf_deskew(), oil_deskew(an, ext));

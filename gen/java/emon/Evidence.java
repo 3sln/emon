@@ -5679,16 +5679,16 @@ public final class Evidence {
             return emon.Port.cellsAt(images, (row * 20) + f);
         }
         if (ea == 14) {
-            return emon.Port.cellsAt(oruns, (row * 28) + f);
+            return emon.Port.cellsAt(oruns, (row * 32) + f);
         }
         if (ea == 15) {
             return emon.Port.cellsAt(oblocks, (row * 16) + f);
         }
         if (ea == 16) {
-            return emon.Port.cellsAt(olines, (row * 24) + f);
+            return emon.Port.cellsAt(olines, (row * 28) + f);
         }
         if (ea == 17) {
-            return emon.Port.cellsAt(owords, (row * 28) + f);
+            return emon.Port.cellsAt(owords, (row * 32) + f);
         }
         if (ea == 18) {
             return emon.Port.cellsAt(osyms, (row * 20) + f);
@@ -5768,7 +5768,7 @@ public final class Evidence {
             return 0;
         }
         if (ea == 14) {
-            emon.Port.cellsSet(oruns, (row * 28) + f, v);
+            emon.Port.cellsSet(oruns, (row * 32) + f, v);
             return 0;
         }
         if (ea == 15) {
@@ -5776,11 +5776,11 @@ public final class Evidence {
             return 0;
         }
         if (ea == 16) {
-            emon.Port.cellsSet(olines, (row * 24) + f, v);
+            emon.Port.cellsSet(olines, (row * 28) + f, v);
             return 0;
         }
         if (ea == 17) {
-            emon.Port.cellsSet(owords, (row * 28) + f, v);
+            emon.Port.cellsSet(owords, (row * 32) + f, v);
             return 0;
         }
         if (ea == 18) {

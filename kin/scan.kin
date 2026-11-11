@@ -36,7 +36,7 @@
 ;;     `xo-angle` is): a scan that was fed in 1 degree off is a page of upright lines, and one line that is not is still not.
 ;; The evidence rows (`olines`, `owords`) keep the engine's own numbers; only the pipeline's rows are normalised.
 (ns emon.scan
-  (:require [emon.oil :refer [oh-caps oh-ck oh-engine oh-lg oh-native oil-alt oil-alt-next oil-binary oil-block oil-block-at oil-block-field oil-deskew oil-find oil-first-sym oil-first-word oil-get oil-line oil-line-field oil-nblocks oil-nlines oil-nsym oil-nwords oil-oconf oil-orient oil-osd oil-sconf oil-script oil-sym oil-sym-alts oil-sym-next oil-tlorder oil-wcp oil-wdir oil-wflags oil-wlang oil-wlen oil-word oil-word-flags oil-word-next oil-wpsize]]
+  (:require [emon.oil :refer [oh-caps oh-ck oh-engine oh-lg oh-native oil-alt oil-alt-next oil-binary oil-block oil-block-at oil-block-field oil-deskew oil-find oil-first-sym oil-first-word oil-get oil-line oil-line-field oil-nblocks oil-nlines oil-nsym oil-nwords oil-oconf oil-layout-orient oil-osd oil-sconf oil-script oil-sym oil-sym-alts oil-sym-next oil-tlorder oil-wcp oil-wdir oil-wflags oil-wlang oil-wlen oil-word oil-word-flags oil-word-next oil-wpsize]]
             [emon.ocalib :refer [ocal-word]]
             [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
@@ -306,7 +306,7 @@
   (comment "centipoints.")
   (let [^I32 nl (oil-nlines an ext)
         ^I32 nb (oil-nblocks an ext)
-        ^I32 orient0 (oil-orient an ext)
+        ^I32 orient0 (oil-layout-orient an ext)
         ^I32 wdir0 (oil-wdir an ext)
         ^:mut ^I32 k 0
         ^:mut ^I32 px 0
@@ -609,7 +609,7 @@
           (or-set oruns run (orf-lang) ts)
           (or-set oruns run (orf-langlen) 3)))
     (if (>= ext 0)
-      (do (or-set oruns run (orf-orient) (oil-orient an ext))
+      (do (or-set oruns run (orf-orient) (oil-layout-orient an ext))
           (or-set oruns run (orf-wdir) (oil-wdir an ext))
           (or-set oruns run (orf-lorder) (oil-tlorder an ext))
           (or-set oruns run (orf-deskew) (oil-deskew an ext))

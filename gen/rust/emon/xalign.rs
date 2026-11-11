@@ -1316,7 +1316,7 @@ pub fn xa_page(page: i32, epages: &mut crate::port::Cells, words: &mut crate::po
         r = o0 + i;
         xa_load_head(scr, nt + i, owords, 32, r);
         xa_hbs(scr, nt + i, 9, 3);
-        f = crate::port::cells_at(owords, (r * 28) + owf_run());
+        f = crate::port::cells_at(owords, (r * 32) + owf_run());
         xa_hbs(scr, nt + i, 11, f);
         if f != prun {
             rk += 1;

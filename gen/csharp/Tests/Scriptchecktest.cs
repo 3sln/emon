@@ -6,35 +6,7 @@ namespace emon;
 
 public static class Scriptchecktest {
     internal static int SkAnswer(emon.Port.Cells ans, int id, int n, int script, int sconf, int lang, int lang0, int dflags) {
-        // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
-        // `dflags` 1 says the engine's dictionary knows the words, 0 not.
-        int at = Plan.AnOcr(ans, id);
-        int k = 0;
-        int word = 0;
-        while (k < n) {
-            word = Plan.AnOcrWord(ans, at, 10, 20 + (k * 60), 60, 40, 760, k, 0);
-            Plan.AnOcrCp(ans, word, 72);
-            Plan.AnOcrCp(ans, word, 105);
-            k += 1;
-        }
-        Ocr.OxBegin(ans, 0, 0, 0, 0, 0, script, sconf, 500, n, 1, 0, 0, 0);
-        k = 0;
-        while (k < n) {
-            Ocr.OxLine(ans, 10, 20 + (k * 60), 60, 40, 10, 55 + (k * 60), 70, 55 + (k * 60), 0, 0, 0, 20, 14, 6);
-            k += 1;
-        }
-        Ocr.OxBlock(ans, 10, 20, 60, n * 60, 0, 0, 0);
-        k = 0;
-        while (k < n) {
-            if (k == 0) {
-                Ocr.OxWord(ans, 0, lang0, -1, dflags);
-            } else {
-                Ocr.OxWord(ans, 0, lang, -1, dflags);
-            }
-            k += 1;
-        }
-        Plan.AnOcrEnd(ans, at);
-        return at;
+        return Oilfixturetest.OfxLines(ans, id, n, 20, 60, 1, 760, 0, script, sconf, 500, lang, lang0, dflags);
     }
     internal static int UnreadOfD(int n, int script, int sconf, int lang, int lang0, int dflags) {
         emon.Port.Cells ans = emon.Port.NewCells();
@@ -76,10 +48,10 @@ public static class Scriptchecktest {
     [Xunit.Fact]
     public static void TestAnAnswerWithNoExtensionIsNotFlagged() {
         emon.Port.Cells ans = emon.Port.NewCells();
-        int at = Plan.AnOcr(ans, 272);
-        int w = Plan.AnOcrWord(ans, at, 10, 20, 60, 40, 760, 0, 0);
-        Plan.AnOcrCp(ans, w, 72);
-        Plan.AnOcrEnd(ans, at);
+        int at = Oil.OilBegin(ans, 272, 1, 256, 256, 1, 1, 0, 0);
+        int w = Oil.OilWord(ans, at, 10, 20, 60, 40, -1, 760, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, at, w, 72);
+        Oil.OilEnd(ans, at);
         emon.Testport.AssertEq(Scriptcheck.SkUnread(ans, at, emon.Port.NewCells()), 0, "an engine that says nothing of the script");
     }
     [Xunit.Fact]

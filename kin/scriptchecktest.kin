@@ -1,11 +1,11 @@
 ;; Laws for `emon.scriptcheck` (D564, P12.3 I-13): a page whose script OSD is sure of and that no model the engine read it with reads is UNREAD; one read by a model that
 ;; reads the script, a Latin page, a page OSD is unsure of, and a page of too few words are not.
 (ns emon.scriptchecktest
-  (:require [emon.lang :refer [I32 Cells]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells test-t TestT]]
             [emon.port :refer [cells-at cells-drop cells-push cells-set]]
-            [emon.plan :refer [an-ocr an-ocr-word an-ocr-cp an-ocr-end rq-arg rec-count an-find]]
-            [emon.ocr :refer [ox-begin ox-line ox-block ox-word]]
+            [emon.plan :refer [    rq-arg rec-count an-find]]
+
             [emon.scriptcheck :refer [sk-route sk-unread sk-unpack sk-min-conf sk-weak-conf sk-tag-conflicts]]
             [emon.evidence :refer [or-new or-set ow-new orf-pass orf-script orf-sconf orf-wfirst orf-wcount op-first op-line]]
             [emon.model :refer [model-init node-new nk-paragraph node-add-region node-set-text node-set-conf node-conf node-flags node-text-start node-text-len node-parent fl-script-unread node-add-src sr-text sr-ocr nk-text]]
@@ -13,28 +13,7 @@
                               + - * < > <= >= == != and or quot bit-and]]))
 
 (defn ^I32 sk-answer [^:mut ^Cells ans ^I32 id ^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0 ^I32 dflags]
-  (comment "An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;")
-  (comment "`dflags` 1 says the engine's dictionary knows the words, 0 not.")
-  (let [^I32 at (an-ocr ans id)
-        ^:mut ^I32 k 0
-        ^:mut ^I32 word 0]
-    (while (< k n)
-      (do (set word (an-ocr-word ans at 10 (+ 20 (* k 60)) 60 40 760 k 0))
-          (an-ocr-cp ans word 72)
-          (an-ocr-cp ans word 105)
-          (set k (+ k 1))))
-    (ox-begin ans 0 0 0 0 0 script sconf 500 n 1 0 0 0)
-    (set k 0)
-    (while (< k n)
-      (do (ox-line ans 10 (+ 20 (* k 60)) 60 40 10 (+ 55 (* k 60)) 70 (+ 55 (* k 60)) 0 0 0 20 14 6)
-          (set k (+ k 1))))
-    (ox-block ans 10 20 60 (* n 60) 0 0 0)
-    (set k 0)
-    (while (< k n)
-      (do (if (== k 0) (ox-word ans 0 lang0 -1 dflags) (ox-word ans 0 lang -1 dflags))
-          (set k (+ k 1))))
-    (an-ocr-end ans at)
-    (return at)))
+    (return (ofx-lines ans id n 20 60 1 760 0 script sconf 500 lang lang0 dflags)))
 
 (defn ^I32 unread-of-d [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0 ^I32 dflags]
   (let [^Cells ans (new-cells)
@@ -72,10 +51,10 @@
 
 (deftest test-an-answer-with-no-extension-is-not-flagged
   (let [^Cells ans (new-cells)
-        ^I32 at (an-ocr ans 272)
-        ^I32 w (an-ocr-word ans at 10 20 60 40 760 0 0)]
-    (an-ocr-cp ans w 72)
-    (an-ocr-end ans at)
+        ^I32 at (oil-begin ans 272 1 256 256 1 1 0 0)
+        ^I32 w (oil-word ans at 10 20 60 40 -1 760 0 0 -1 0)]
+    (oil-word-cp ans at w 72)
+    (oil-end ans at)
     (assert-eq (sk-unread ans at (new-cells)) 0 "an engine that says nothing of the script")))
 
 (deftest test-osd-routes-an-unread-page-through-its-script-and-english

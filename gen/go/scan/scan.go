@@ -463,7 +463,7 @@ func scEvLines(an *port.Cells, ext int32, view int32, run int32, page int32, vie
 	// centipoints.
 	var nl int32 = oil.OilNlines(an, ext)
 	var nb int32 = oil.OilNblocks(an, ext)
-	var orient0 int32 = oil.OilOrient(an, ext)
+	var orient0 int32 = oil.OilLayoutOrient(an, ext)
 	var wdir0 int32 = oil.OilWdir(an, ext)
 	var k int32 = 0
 	var px int32 = 0
@@ -786,7 +786,7 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 		evidence.OrSet(oruns, run, evidence.OrfLanglen(), 3)
 	}
 	if ext >= 0 {
-		evidence.OrSet(oruns, run, evidence.OrfOrient(), oil.OilOrient(an, ext))
+		evidence.OrSet(oruns, run, evidence.OrfOrient(), oil.OilLayoutOrient(an, ext))
 		evidence.OrSet(oruns, run, evidence.OrfWdir(), oil.OilWdir(an, ext))
 		evidence.OrSet(oruns, run, evidence.OrfLorder(), oil.OilTlorder(an, ext))
 		evidence.OrSet(oruns, run, evidence.OrfDeskew(), oil.OilDeskew(an, ext))

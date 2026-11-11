@@ -390,10 +390,10 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.EV_STRIDES[10], 16, "fonts");
         emon.Testport.assertEq(Evidence.EV_STRIDES[11], 24, "paths");
         emon.Testport.assertEq(Evidence.EV_STRIDES[12], 20, "images");
-        emon.Testport.assertEq(Evidence.EV_STRIDES[13], 28, "oruns");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[13], 32, "oruns");
         emon.Testport.assertEq(Evidence.EV_STRIDES[14], 16, "oblocks");
-        emon.Testport.assertEq(Evidence.EV_STRIDES[15], 24, "olines");
-        emon.Testport.assertEq(Evidence.EV_STRIDES[16], 28, "owords");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[15], 28, "olines");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[16], 32, "owords");
         emon.Testport.assertEq(Evidence.EV_STRIDES[17], 20, "osyms");
         emon.Testport.assertEq(Evidence.EV_STRIDES[18], 4, "oalts");
         emon.Testport.assertEq(Evidence.EV_STRIDES[19], 12, "inks");
@@ -588,7 +588,7 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfZ()), -1, "no paint number");
         emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfVby()), -1, "no occluder");
         emon.Testport.assertEq(Evidence.orNew(oruns, 3, 0), 0, "first run");
-        emon.Testport.assertEq(emon.Port.cellsLen(oruns), 28, "28 cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(oruns), 32, "32 cells");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfBview()), -1, "no binarised view");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfRequest()), -1, "no request");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfLang()), -1, "no languages");
@@ -598,11 +598,11 @@ public final class Evidencetest {
         emon.Testport.assertEq(emon.Port.cellsLen(oblocks), 16, "16 cells");
         emon.Testport.assertEq(Evidence.obGet(oblocks, 0, Evidence.obfConf()), -1, "no confidence");
         emon.Testport.assertEq(Evidence.olNew(olines, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, 0, 1), 0, "first OCR line");
-        emon.Testport.assertEq(emon.Port.cellsLen(olines), 24, "24 cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(olines), 28, "28 cells");
         emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfPar()), -1, "in no paragraph");
         emon.Testport.assertEq(Evidence.olGet(olines, 0, Evidence.olfXheight()), -1, "x-height unknown");
         emon.Testport.assertEq(Evidence.owNew(owords, 3, 1, 2, 3, 4, 1, 4, 3, 4, 0, 0, -1, 0, -1, 850, -1), 0, "first OCR word");
-        emon.Testport.assertEq(emon.Port.cellsLen(owords), 28, "28 cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(owords), 32, "32 cells");
         emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.hdConf()), 850, "confidence");
         emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfPsize()), -1, "point size unknown");
         emon.Testport.assertEq(Evidence.owGet(owords, 0, Evidence.owfSfirst()), -1, "no symbols");
@@ -1206,7 +1206,7 @@ public final class Evidencetest {
                 emon.Testport.assertEq(cells, 20, "images: every cell (P3.13 printed the placement orientation in the last)");
             }
             if (ea == 14) {
-                emon.Testport.assertEq(cells, 28, "oruns: every cell");
+                emon.Testport.assertEq(cells, 32, "oruns: every cell");
             }
             if (ea == 15) {
                 emon.Testport.assertEq(Evidence.EV_STRIDES[14] - cells, 2, "oblocks: two spare");
@@ -1215,7 +1215,7 @@ public final class Evidencetest {
                 emon.Testport.assertEq(Evidence.EV_STRIDES[15] - cells, 1, "olines: one spare");
             }
             if (ea == 17) {
-                emon.Testport.assertEq(cells, 28, "owords: every cell (D731 printed a fused copy's source, `from`)");
+                emon.Testport.assertEq(cells, 32, "owords: every cell (D731 printed a fused copy's source, `from`)");
             }
             if (ea == 18) {
                 emon.Testport.assertEq(Evidence.EV_STRIDES[17] - cells, 3, "osyms: three spare");

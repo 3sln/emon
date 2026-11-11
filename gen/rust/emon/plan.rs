@@ -103,30 +103,6 @@ pub fn flt_ccitt() -> i32 {
 pub fn ocr_symbols() -> i32 {
     return 1;
 }
-pub fn aw_x() -> i32 {
-    return 0;
-}
-pub fn aw_y() -> i32 {
-    return 1;
-}
-pub fn aw_w() -> i32 {
-    return 2;
-}
-pub fn aw_h() -> i32 {
-    return 3;
-}
-pub fn aw_conf() -> i32 {
-    return 4;
-}
-pub fn aw_line() -> i32 {
-    return 5;
-}
-pub fn aw_block() -> i32 {
-    return 6;
-}
-pub fn aw_len() -> i32 {
-    return 7;
-}
 pub fn rec_len(c: &mut crate::port::Cells, at: i32) -> i32 {
     return crate::port::cells_at(c, at);
 }
@@ -533,40 +509,6 @@ pub fn an_decode_img(mut c: &mut crate::port::Cells, id: i32, w: i32, h: i32, ch
     rec_end(c, at);
     return at;
 }
-pub fn an_ocr(mut c: &mut crate::port::Cells, id: i32) -> i32 {
-    // Start an OCR answer (ok, no words yet); add words with `an-ocr-word`
-    // and `an-ocr-cp`, close with `an-ocr-end`. Answers its start.
-    let at: i32 = rec_begin(c, pk_ocr(), id);
-    crate::port::cells_push(c, ps_ok());
-    crate::port::cells_push(c, 0);
-    return at;
-}
-pub fn an_ocr_word(mut c: &mut crate::port::Cells, at: i32, x: i32, y: i32, w: i32, h: i32, conf: i32, line: i32, block: i32) -> i32 {
-    // Begin a word of the OCR answer at `at`; answers the word's start.
-    // Its code points follow, through `an-ocr-cp` (the LAST word only).
-    let word: i32 = crate::port::cells_len(c);
-    let nwords: i32 = crate::port::cells_at(c, at + 4);
-    crate::port::cells_set(c, at + 4, nwords + 1);
-    crate::port::cells_push(c, x);
-    crate::port::cells_push(c, y);
-    crate::port::cells_push(c, w);
-    crate::port::cells_push(c, h);
-    crate::port::cells_push(c, conf);
-    crate::port::cells_push(c, line);
-    crate::port::cells_push(c, block);
-    crate::port::cells_push(c, 0);
-    return word;
-}
-pub fn an_ocr_cp(mut c: &mut crate::port::Cells, word: i32, cp: i32) -> i32 {
-    // Append a code point to the last word, which began at `word`.
-    let n: i32 = crate::port::cells_at(c, word + 7);
-    crate::port::cells_set(c, word + 7, n + 1);
-    crate::port::cells_push(c, cp);
-    return 0;
-}
-pub fn an_ocr_end(mut c: &mut crate::port::Cells, at: i32) -> i32 {
-    return rec_end(c, at);
-}
 pub fn an_bytes(mut c: &mut crate::port::Cells, id: i32, offset: i32, length: i32) -> i32 {
     let at: i32 = rec_begin(c, pk_bytes(), id);
     crate::port::cells_push(c, ps_ok());
@@ -574,19 +516,4 @@ pub fn an_bytes(mut c: &mut crate::port::Cells, id: i32, offset: i32, length: i3
     crate::port::cells_push(c, length);
     rec_end(c, at);
     return at;
-}
-pub fn an_ocr_count(c: &mut crate::port::Cells, at: i32) -> i32 {
-    return crate::port::cells_at(c, at + 4);
-}
-pub fn an_ocr_first(c: &mut crate::port::Cells, at: i32) -> i32 {
-    return at + 5;
-}
-pub fn aw_get(c: &mut crate::port::Cells, word: i32, f: i32) -> i32 {
-    return crate::port::cells_at(c, word + f);
-}
-pub fn aw_cp(c: &mut crate::port::Cells, word: i32, k: i32) -> i32 {
-    return crate::port::cells_at(c, (word + 8) + k);
-}
-pub fn aw_next(c: &mut crate::port::Cells, word: i32) -> i32 {
-    return (word + 8) + crate::port::cells_at(c, word + 7);
 }

@@ -483,18 +483,18 @@ public static class Retargettest {
     [Xunit.Fact]
     public static void TestOrientationVotesUseTextAreaRatherThanAConfidentMarginNumber() {
         emon.Port.Cells ans = emon.Port.NewCells();
-        int a = Plan.AnOcr(ans, 1);
-        int wa = Plan.AnOcrWord(ans, a, 0, 0, 10, 500, 990, 0, 0);
-        Plan.AnOcrCp(ans, wa, 49);
-        Plan.AnOcrCp(ans, wa, 50);
-        Plan.AnOcrEnd(ans, a);
-        int b = Plan.AnOcr(ans, 2);
-        int wb = Plan.AnOcrWord(ans, b, 50, 50, 500, 40, 900, 0, 0);
-        Plan.AnOcrCp(ans, wb, 84);
-        Plan.AnOcrCp(ans, wb, 101);
-        Plan.AnOcrCp(ans, wb, 120);
-        Plan.AnOcrCp(ans, wb, 116);
-        Plan.AnOcrEnd(ans, b);
+        int a = Oil.OilBegin(ans, 1, 1, 256, 256, 1, 1, 0, 0);
+        int wa = Oil.OilWord(ans, a, 0, 0, 10, 500, -1, 990, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, a, wa, 49);
+        Oil.OilWordCp(ans, a, wa, 50);
+        Oil.OilEnd(ans, a);
+        int b = Oil.OilBegin(ans, 2, 1, 256, 256, 1, 1, 0, 0);
+        int wb = Oil.OilWord(ans, b, 50, 50, 500, 40, -1, 900, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, b, wb, 84);
+        Oil.OilWordCp(ans, b, wb, 101);
+        Oil.OilWordCp(ans, b, wb, 120);
+        Oil.OilWordCp(ans, b, wb, 116);
+        Oil.OilEnd(ans, b);
         emon.Testport.AssertThat(Retarget.RtAnswerScore(ans, b) > Retarget.RtAnswerScore(ans, a), "body text beats a narrow Bates strip");
     }
     [Xunit.Fact]
@@ -642,16 +642,16 @@ public static class Retargettest {
     [Xunit.Fact]
     public static void TestEmptyReceiptRescueWaitsForTheViewAndDoesNotRereadSuccess() {
         emon.Port.Cells ans = emon.Port.NewCells();
-        int empty = Plan.AnOcr(ans, 31);
-        Plan.AnOcrEnd(ans, empty);
+        int empty = Oil.OilBegin(ans, 31, 1, 256, 256, 1, 1, 0, 0);
+        Oil.OilEnd(ans, empty);
         emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, -1), 0, "wait for the extra view before the all-empty rescue");
         emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, empty), 1, "an empty view permits the rescue");
         emon.Testport.AssertEq(Retarget.RtEmptyReceipt(0, ans, -1), 1, "non-receipts retain the existing fallback");
-        int full = Plan.AnOcr(ans, 32);
-        int word = Plan.AnOcrWord(ans, full, 0, 0, 10, 10, 900, 0, 0);
-        Plan.AnOcrCp(ans, word, 72);
-        Plan.AnOcrCp(ans, word, 105);
-        Plan.AnOcrEnd(ans, full);
+        int full = Oil.OilBegin(ans, 32, 1, 256, 256, 1, 1, 0, 0);
+        int word = Oil.OilWord(ans, full, 0, 0, 10, 10, -1, 900, 0, 0, -1, 0);
+        Oil.OilWordCp(ans, full, word, 72);
+        Oil.OilWordCp(ans, full, word, 105);
+        Oil.OilEnd(ans, full);
         emon.Testport.AssertEq(Retarget.RtEmptyReceipt(1, ans, full), 0, "a successful photo view needs no further full-page read");
         emon.Testport.AssertEq(Retarget.RtEmptyReceipt(2, ans, full), 1, "the rejected thermal lane retains the original emergency planner");
     }

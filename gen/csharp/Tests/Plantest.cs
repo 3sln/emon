@@ -192,23 +192,23 @@ public static class Plantest {
     [Xunit.Fact]
     public static void TestAnOcrAnswerHoldsWordsWithTheirText() {
         emon.Port.Cells c = emon.Port.NewCells();
-        int at = Plan.AnOcr(c, 3);
-        int w0 = Plan.AnOcrWord(c, at, 10, 20, 300, 40, 912, 0, 1);
-        Plan.AnOcrCp(c, w0, 72);
-        Plan.AnOcrCp(c, w0, 105);
-        int w1 = Plan.AnOcrWord(c, at, 400, 20, 50, 40, 870, 0, 1);
-        Plan.AnOcrCp(c, w1, 128512);
-        Plan.AnOcrEnd(c, at);
-        emon.Testport.AssertEq(Plan.AnOcrCount(c, at), 2, "two words");
-        emon.Testport.AssertEq(Plan.AnOcrFirst(c, at), 5, "the first word follows the count");
-        emon.Testport.AssertEq(Plan.AnOcrFirst(c, at), w0, "and is w0");
-        emon.Testport.AssertEq(Plan.AwGet(c, w0, Plan.AwX()), 10, "x");
-        emon.Testport.AssertEq(Plan.AwGet(c, w0, Plan.AwConf()), 912, "confidence x10");
-        emon.Testport.AssertEq(Plan.AwGet(c, w0, Plan.AwLen()), 2, "two code points");
-        emon.Testport.AssertEq(Plan.AwCp(c, w0, 1), 105, "i");
-        emon.Testport.AssertEq(Plan.AwNext(c, w0), w1, "the next word");
-        emon.Testport.AssertEq(Plan.AwCp(c, w1, 0), 128512, "a code point outside the BMP is one cell");
-        emon.Testport.AssertEq(Plan.AwNext(c, w1), emon.Port.CellsLen(c), "and the last ends the record");
+        int at = Oil.OilBegin(c, 3, 1, 256, 256, 1, 1, 0, 0);
+        int w0 = Oil.OilWord(c, at, 10, 20, 300, 40, -1, 912, 0, 0, -1, 0);
+        Oil.OilWordCp(c, at, w0, 72);
+        Oil.OilWordCp(c, at, w0, 105);
+        int w1 = Oil.OilWord(c, at, 400, 20, 50, 40, -1, 870, 0, 0, -1, 0);
+        Oil.OilWordCp(c, at, w1, 128512);
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilNwords(c, at), 2, "two words");
+        emon.Testport.AssertEq(Oil.OilFirstWord(c, at), 28, "the first word follows the OIL header");
+        emon.Testport.AssertEq(Oil.OilFirstWord(c, at), w0, "and is w0");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, w0), 10, "x");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, w0 + 5), 912, "confidence x10");
+        emon.Testport.AssertEq(Oil.OilWlen(c, at, w0), 2, "two code points");
+        emon.Testport.AssertEq(Oil.OilWcp(c, at, w0, 1), 105, "i");
+        emon.Testport.AssertEq(Oil.OilWordNext(c, at, w0), w1, "the next word");
+        emon.Testport.AssertEq(Oil.OilWcp(c, at, w1, 0), 128512, "a code point outside the BMP is one cell");
+        emon.Testport.AssertEq(Oil.OilWordNext(c, at, w1), emon.Port.CellsLen(c), "and the last ends the record");
         emon.Testport.AssertEq(Plan.RecLen(c, at), emon.Port.CellsLen(c), "the record's length covers them");
     }
     [Xunit.Fact]
@@ -301,11 +301,11 @@ public static class Plantest {
         int second4 = Plan.RecNext(rq, 0);
         emon.Testport.AssertEq(Plan.RecId(rq, second4), 4, "id 4");
         emon.Testport.AssertEq(Plan.RqArg(rq, second4, 0), 2, "of the decode's bitmap");
-        int o3 = Plan.AnOcr(an, 3);
-        int w = Plan.AnOcrWord(an, o3, 6, 3, 40, 9, 911, 0, 0);
-        Plan.AnOcrCp(an, w, 72);
-        Plan.AnOcrCp(an, w, 105);
-        Plan.AnOcrEnd(an, o3);
+        int o3 = Oil.OilBegin(an, 3, 1, 256, 256, 1, 1, 0, 0);
+        int w = Oil.OilWord(an, o3, 6, 3, 40, 9, -1, 911, 0, 0, -1, 0);
+        Oil.OilWordCp(an, o3, w, 72);
+        Oil.OilWordCp(an, o3, w, 105);
+        Oil.OilEnd(an, o3);
         Plan.AnFail(an, 3, 4, 1);
         emon.Port.CellsDrop(rq, 0);
         emon.Testport.AssertEq(PtUnit(s, an, rq, et, t), 0, "round 2 is done");

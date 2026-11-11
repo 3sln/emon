@@ -3,40 +3,13 @@
 
 use crate::emon::evidence::*;
 use crate::emon::model::*;
-use crate::emon::ocr::*;
+use crate::emon::oil::*;
+use crate::emon::oilfixturetest::*;
 use crate::emon::plan::*;
 use crate::emon::scriptcheck::*;
 
 pub(crate) fn sk_answer(mut ans: &mut crate::port::Cells, id: i32, n: i32, script: i32, sconf: i32, lang: i32, lang0: i32, dflags: i32) -> i32 {
-    // An OCR answer of `n` words, one a line, each read in the language cell `lang` (the first in `lang0`), whose page OSD says is in `script` at the confidence `sconf`;
-    // `dflags` 1 says the engine's dictionary knows the words, 0 not.
-    let at: i32 = an_ocr(ans, id);
-    let mut k: i32 = 0;
-    let mut word: i32 = 0;
-    while k < n {
-        word = an_ocr_word(ans, at, 10, 20 + (k * 60), 60, 40, 760, k, 0);
-        an_ocr_cp(ans, word, 72);
-        an_ocr_cp(ans, word, 105);
-        k += 1;
-    }
-    ox_begin(ans, 0, 0, 0, 0, 0, script, sconf, 500, n, 1, 0, 0, 0);
-    k = 0;
-    while k < n {
-        ox_line(ans, 10, 20 + (k * 60), 60, 40, 10, 55 + (k * 60), 70, 55 + (k * 60), 0, 0, 0, 20, 14, 6);
-        k += 1;
-    }
-    ox_block(ans, 10, 20, 60, n * 60, 0, 0, 0);
-    k = 0;
-    while k < n {
-        if k == 0 {
-            ox_word(ans, 0, lang0, -1, dflags);
-        } else {
-            ox_word(ans, 0, lang, -1, dflags);
-        }
-        k += 1;
-    }
-    an_ocr_end(ans, at);
-    return at;
+    return ofx_lines(ans, id, n, 20, 60, 1, 760, 0, script, sconf, 500, lang, lang0, dflags);
 }
 pub(crate) fn unread_of_d(n: i32, script: i32, sconf: i32, lang: i32, lang0: i32, dflags: i32) -> i32 {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -78,10 +51,10 @@ fn test_a_page_the_engine_can_read_or_osd_is_unsure_of_is_not_flagged() {
 #[test]
 fn test_an_answer_with_no_extension_is_not_flagged() {
     let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let at: i32 = an_ocr(ans, 272);
-    let w: i32 = an_ocr_word(ans, at, 10, 20, 60, 40, 760, 0, 0);
-    an_ocr_cp(ans, w, 72);
-    an_ocr_end(ans, at);
+    let at: i32 = oil_begin(ans, 272, 1, 256, 256, 1, 1, 0, 0);
+    let w: i32 = oil_word(ans, at, 10, 20, 60, 40, -1, 760, 0, 0, -1, 0);
+    oil_word_cp(ans, at, w, 72);
+    oil_end(ans, at);
     crate::testport::assert_eq(sk_unread(ans, at, &mut crate::port::Cells::new()), 0, "an engine that says nothing of the script");
 }
 #[test]

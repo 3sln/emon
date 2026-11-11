@@ -2,6 +2,8 @@
 // source: emon.oil
 
 use crate::emon::ocalib::*;
+use crate::emon::ocrport::*;
+use crate::emon::oilregistry::*;
 
 pub fn oen_tesseract() -> i32 {
     return 1;
@@ -504,6 +506,20 @@ pub fn oil_pm(numerator: i32, denominator: i32) -> i32 {
     }
     return ((n + (d / 2)) / d) as i32;
 }
+pub fn oil_order_dir(order: i32) -> i32 {
+    // Wire lo is ttb=0 rtl=1 ltr=2; the evidence direction enum is ltr=0 rtl=1 ttb=2.
+    if order == 0 {
+        return 2;
+    }
+    if order == 2 {
+        return 0;
+    }
+    return order;
+}
+pub fn oil_order_from_tess(order: i32) -> i32 {
+    // Tesseract TextlineOrder uses the direction enum's codes; swapping the endpoints is its inverse too.
+    return oil_order_dir(order);
+}
 pub fn oil_block_stride(caps: i32) -> i32 {
     return (5 + (3 * oil_has(caps, oc_wdir()))) + oil_has(caps, oc_btype());
 }
@@ -611,10 +627,6 @@ pub fn oil_set(mut c: &mut crate::port::Cells, at: i32, k: i32, value: i32) -> i
     crate::port::cells_set(c, (at + 4) + k, value);
     return 0;
 }
-pub fn oil_end(mut c: &mut crate::port::Cells, at: i32) -> i32 {
-    crate::port::cells_set(c, at, crate::port::cells_len(c) - at);
-    return 0;
-}
 pub fn oil_block_at(c: &mut crate::port::Cells, at: i32, index: i32) -> i32 {
     return (at + 28) + (index * oil_block_stride(oil_get(c, at, oh_caps())));
 }
@@ -648,6 +660,9 @@ pub fn oil_block(mut c: &mut crate::port::Cells, at: i32, x: i32, y: i32, w: i32
     let n: i32 = oil_get(c, at, oh_nblocks());
     oil_set(c, at, oh_nblocks(), n + 1);
     return 0;
+}
+pub fn oil_tess_block(mut c: &mut crate::port::Cells, at: i32, x: i32, y: i32, w: i32, h: i32, conf: i32, orient: i32, wdir: i32, order: i32, kind: i32) -> i32 {
+    return oil_block(c, at, x, y, w, h, conf, orient, wdir, oil_order_from_tess(order), kind);
 }
 pub fn oil_line(mut c: &mut crate::port::Cells, at: i32, x: i32, y: i32, w: i32, h: i32, block: i32, nwords: i32, conf: i32, par: i32, bx0: i32, by0: i32, bx1: i32, by1: i32, xh: i32, asc: i32, desc: i32, qx0: i32, qy0: i32, qx1: i32, qy1: i32, qx2: i32, qy2: i32, qx3: i32, qy3: i32, angle: i32) -> i32 {
     let caps: i32 = oil_get(c, at, oh_caps());
@@ -967,6 +982,18 @@ pub fn oil_find(c: &mut crate::port::Cells, at: i32) -> i32 {
 pub fn oil_orient(c: &mut crate::port::Cells, at: i32) -> i32 {
     return oil_header_field(c, at, 9, oc_orient(), 0);
 }
+pub fn oil_layout_orient(c: &mut crate::port::Cells, at: i32) -> i32 {
+    // Layout and OSD are independent Tesseract measurements. Its page layout orientation is the first normalized block's, even when OSD is absent or disagrees.
+    let caps: i32 = oil_get(c, at, oh_caps());
+    if (oil_has(caps, oc_blocks()) != 0) && ((oil_has(caps, oc_wdir()) != 0) && (oil_get(c, at, oh_nblocks()) > 0)) {
+        let block: i32 = oil_block_at(c, at, 0);
+        return crate::port::cells_at(c, block + 5);
+    }
+    if oil_get(c, at, oh_engine()) == oen_tesseract() {
+        return 0;
+    }
+    return oil_orient(c, at);
+}
 pub fn oil_oconf(c: &mut crate::port::Cells, at: i32) -> i32 {
     return oil_header_field(c, at, 10, oc_orient(), -1);
 }
@@ -983,7 +1010,11 @@ pub fn oil_wdir(c: &mut crate::port::Cells, at: i32) -> i32 {
     return oil_header_field(c, at, 14, oc_wdir(), 0);
 }
 pub fn oil_tlorder(c: &mut crate::port::Cells, at: i32) -> i32 {
-    return oil_header_field(c, at, 15, oc_wdir(), 0);
+    if oil_has(oil_get(c, at, oh_caps()), oc_wdir()) == 0 {
+        return 0;
+    }
+    let order: i32 = oil_get(c, at, oh_lorder());
+    return oil_order_dir(order);
 }
 pub fn oil_binary(c: &mut crate::port::Cells, at: i32) -> i32 {
     return oil_header_field(c, at, 22, oc_binary(), 0);
@@ -1102,7 +1133,7 @@ pub fn oil_tess_begin(mut c: &mut crate::port::Cells, id: i32, psm: i32, symbols
     oil_set(c, at, oh_script(), script);
     oil_set(c, at, oh_sconf(), sconf);
     oil_set(c, at, oh_wdir(), wdir);
-    oil_set(c, at, oh_lorder(), order);
+    oil_set(c, at, oh_lorder(), oil_order_from_tess(order));
     oil_set(c, at, oh_binary(), binary);
     return at;
 }
@@ -1200,15 +1231,521 @@ pub(crate) fn oil_flat_word_end(v: &mut crate::port::Cells, p: i32, caps: i32) -
     }
     return q;
 }
+pub(crate) fn oil_flat_header_valid(v: &mut crate::port::Cells) -> i32 {
+    if (crate::port::cells_at(v, 6) < 1) || (crate::port::cells_at(v, 6) > 5) {
+        return 0;
+    }
+    if (crate::port::cells_at(v, 17) < 0) || (crate::port::cells_at(v, 17) > 2) {
+        return 0;
+    }
+    if (crate::port::cells_at(v, 8) < 0) || (crate::port::cells_at(v, 8) > 1000) {
+        return 0;
+    }
+    if crate::port::cells_at(v, 23) != 0 {
+        return 0;
+    }
+    let caps: i32 = crate::port::cells_at(v, 4);
+    if oil_has(caps, oc_orient()) != 0 {
+        if (crate::port::cells_at(v, 9) < 0) || (crate::port::cells_at(v, 9) > 3) {
+            return 0;
+        }
+    }
+    if oil_has(caps, oc_wdir()) != 0 {
+        if (crate::port::cells_at(v, 14) < 0) || (crate::port::cells_at(v, 14) > 3) {
+            return 0;
+        }
+        if (crate::port::cells_at(v, 15) < 0) || (crate::port::cells_at(v, 15) > 2) {
+            return 0;
+        }
+    }
+    if oil_has(caps, oc_binary()) != 0 {
+        if (crate::port::cells_at(v, 22) < 0) || (crate::port::cells_at(v, 22) > 1) {
+            return 0;
+        }
+    }
+    return 1;
+}
+pub(crate) fn oil_flat_sidecar_end(v: &mut crate::port::Cells, p: i32, ns: i32, nb: i32, nl: i32, nw: i32, nsym: i32) -> i32 {
+    let size: i32 = crate::port::cells_len(v);
+    let mut end: i32 = 0;
+    let mut q: i32 = p + 6;
+    let mut count: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut previous: i32 = -1;
+    if p > (size - 6) {
+        return -1;
+    }
+    if crate::port::cells_at(v, p) < 6 {
+        return -1;
+    }
+    if crate::port::cells_at(v, p) > (size - p) {
+        return -1;
+    }
+    end = p + crate::port::cells_at(v, p);
+    if crate::port::cells_at(v, p + 1) != ns {
+        return -1;
+    }
+    let key: i32 = crate::port::cells_at(v, p + 2);
+    let subject: i32 = crate::port::cells_at(v, p + 3);
+    let dense: i32 = crate::port::cells_at(v, p + 4);
+    let registry: i32 = oil_key_find(ns, key);
+    if registry < 0 {
+        return -1;
+    }
+    if subject != oil_key_field(registry, 4) {
+        return -1;
+    }
+    if (dense < 0) || (dense > 1) {
+        return -1;
+    }
+    if subject == 0 {
+        rows = 1;
+    }
+    if subject == 1 {
+        rows = nb;
+    }
+    if subject == 2 {
+        rows = nl;
+    }
+    if subject == 3 {
+        rows = nw;
+    }
+    if subject == 4 {
+        rows = nsym;
+    }
+    count = crate::port::cells_at(v, p + 5);
+    if (count < 0) || (count > rows) {
+        return -1;
+    }
+    if (dense == 1) && (count != rows) {
+        return -1;
+    }
+    while i < count {
+        if dense == 0 {
+            if q >= end {
+                return -1;
+            }
+            if (crate::port::cells_at(v, q) <= previous) || (crate::port::cells_at(v, q) >= rows) {
+                return -1;
+            }
+            previous = crate::port::cells_at(v, q);
+            q += 1;
+        }
+        if oil_key_field(registry, 2) == 9 {
+            if q >= end {
+                return -1;
+            }
+            j = crate::port::cells_at(v, q);
+            q += 1;
+            if (j < 0) || (j > (end - q)) {
+                return -1;
+            }
+            while j > 0 {
+                let cp: i32 = crate::port::cells_at(v, q);
+                if (cp < 0) || ((cp > 1114111) || ((cp >= 55296) && (cp <= 57343))) {
+                    return -1;
+                }
+                q += 1;
+                j -= 1;
+            }
+        } else {
+            j = oil_key_field(registry, 3);
+            if j > (end - q) {
+                return -1;
+            }
+            if oil_key_field(registry, 2) == 2 {
+                if (crate::port::cells_at(v, q) < -1) || (crate::port::cells_at(v, q) > 1000) {
+                    return -1;
+                }
+            }
+            q += j;
+        }
+        i += 1;
+    }
+    if q != end {
+        return -1;
+    }
+    return end;
+}
+pub(crate) fn oil_sc_sparse(mut c: &mut crate::port::Cells, at: i32) -> i32 {
+    // Expand dense rows before compaction. Inserting indices first avoids overwriting an unread payload when most rows survive sealing.
+    let mut p: i32 = oil_first_word(c, at);
+    let mut i: i32 = 0;
+    while i < oil_nwords(c, at) {
+        p = oil_word_next(c, at, p);
+        i += 1;
+    }
+    i = 0;
+    while i < oil_get(c, at, oh_nsc()) {
+        let length: i32 = crate::port::cells_at(c, p);
+        let count: i32 = crate::port::cells_at(c, p + 5);
+        let registry: i32 = oil_key_find(crate::port::cells_at(c, p + 1), crate::port::cells_at(c, p + 2));
+        let mut q: i32 = p + 6;
+        let mut k: i32 = 0;
+        let mut width: i32 = 0;
+        if registry < 0 {
+            return -1;
+        }
+        if crate::port::cells_at(c, p + 4) == 1 {
+            while k < count {
+                width = oil_key_field(registry, 3);
+                if oil_key_field(registry, 2) == 9 {
+                    width = 1 + crate::port::cells_at(c, q);
+                }
+                oil_insert(c, q, k);
+                q = (q + 1) + width;
+                k += 1;
+            }
+            crate::port::cells_set(c, p, length + count);
+            crate::port::cells_set(c, p + 4, 0);
+        }
+        p += crate::port::cells_at(c, p);
+        i += 1;
+    }
+    return 0;
+}
+pub(crate) fn oil_sc_cps_equal(c: &mut crate::port::Cells, p: i32, packed: i32, tablekind: i32) -> i32 {
+    let count: i32 = crate::port::cells_at(c, p);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut d: i32 = 16777216;
+    let mut cp: i32 = 0;
+    let mut k: i32 = 0;
+    if (tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824)) {
+        while i < 639 {
+            j = i + 1;
+            while OP_NAMES[(j) as usize] != 0 {
+                j += 1;
+            }
+            if (OP_NAMES[(i) as usize] == tablekind) && (OP_NAMES[(j + 1) as usize] == packed) {
+                if count != ((j - i) - 1) {
+                    return 0;
+                }
+                i += 1;
+                while i < j {
+                    if crate::port::cells_at(c, (p + 1) + k) != OP_NAMES[(i) as usize] {
+                        return 0;
+                    }
+                    i += 1;
+                    k += 1;
+                }
+                return 1;
+            }
+            i = j + 2;
+        }
+    }
+    while d > 0 {
+        cp = (packed / d) % 256;
+        if cp != 0 {
+            if k >= count {
+                return 0;
+            }
+            if crate::port::cells_at(c, (p + 1) + k) != cp {
+                return 0;
+            }
+            k += 1;
+        }
+        d = d / 256;
+    }
+    if k == count {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn oil_sc_keep(c: &mut crate::port::Cells, at: i32, ns: i32, key: i32, row: i32, p: i32, flags: i32) -> i32 {
+    if ns == oen_tesseract() {
+        if key == 1 {
+            let caps: i32 = oil_get(c, at, oh_caps());
+            let mut implied: i32 = 0;
+            if oil_has(caps, oc_btype()) != 0 {
+                let b: i32 = oil_block_at(c, at, row);
+                let kind: i32 = crate::port::cells_at(c, (b + 5) + (3 * oil_has(caps, oc_wdir())));
+                if kind == 0 {
+                    implied = 1;
+                }
+                if kind == 1 {
+                    implied = 6;
+                }
+                if kind == 2 {
+                    implied = 9;
+                }
+                if kind == 3 {
+                    if crate::port::cells_at(c, b + 2) >= crate::port::cells_at(c, b + 3) {
+                        implied = 12;
+                    } else {
+                        implied = 13;
+                    }
+                }
+            }
+            if crate::port::cells_at(c, p) == implied {
+                return 0;
+            }
+        }
+        if key == 2 {
+            let script: i32 = oil_script(c, at);
+            if oil_sc_cps_equal(c, p, script, 2) == 1 {
+                return 0;
+            }
+        }
+        if key == 3 {
+            let mut word: i32 = oil_first_word(c, at);
+            let mut i: i32 = 0;
+            while i < row {
+                word = oil_word_next(c, at, word);
+                i += 1;
+            }
+            let language: i32 = oil_wlang(c, at, word);
+            if oil_sc_cps_equal(c, p, language, 3) == 1 {
+                return 0;
+            }
+        }
+    }
+    if ns == oen_ppocr() {
+        if (key == 1) && (crate::port::cells_at(c, p) == -1) {
+            return 0;
+        }
+        if (key == 2) && ((crate::port::cells_at(c, p) == 0) && (crate::port::cells_at(c, p + 1) < 500)) {
+            return 0;
+        }
+        if (key == 3) && (crate::port::cells_at(c, p) == 0) {
+            return 0;
+        }
+        if (key == 4) && ((flags & 8) == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+pub fn oil_seal(mut c: &mut crate::port::Cells, at: i32, flags: i32) -> i32 {
+    // Seal the last answer in place. All retained entries are canonical sparse rows; no normalized cell moves.
+    if oil_sc_sparse(c, at) < 0 {
+        return -1;
+    }
+    let total: i32 = oil_get(c, at, oh_nsc());
+    let mut p: i32 = oil_first_word(c, at);
+    let mut i: i32 = 0;
+    let mut write: i32 = 0;
+    let mut kept: i32 = 0;
+    while i < oil_nwords(c, at) {
+        p = oil_word_next(c, at, p);
+        i += 1;
+    }
+    write = p;
+    i = 0;
+    while i < total {
+        let end: i32 = p + crate::port::cells_at(c, p);
+        let ns: i32 = crate::port::cells_at(c, p + 1);
+        let key: i32 = crate::port::cells_at(c, p + 2);
+        let subject: i32 = crate::port::cells_at(c, p + 3);
+        let dense: i32 = crate::port::cells_at(c, p + 4);
+        let count: i32 = crate::port::cells_at(c, p + 5);
+        let registry: i32 = oil_key_find(ns, key);
+        let entry: i32 = write;
+        let mut q: i32 = p + 6;
+        let mut k: i32 = 0;
+        let mut n: i32 = 0;
+        let mut row: i32 = 0;
+        let mut width: i32 = 0;
+        let mut j: i32 = 0;
+        if registry < 0 {
+            return -1;
+        }
+        crate::port::cells_set(c, entry + 1, ns);
+        crate::port::cells_set(c, entry + 2, key);
+        crate::port::cells_set(c, entry + 3, subject);
+        crate::port::cells_set(c, entry + 4, 0);
+        write = entry + 6;
+        while k < count {
+            row = k;
+            if dense == 0 {
+                row = crate::port::cells_at(c, q);
+                q += 1;
+            }
+            width = oil_key_field(registry, 3);
+            if oil_key_field(registry, 2) == 9 {
+                width = 1 + crate::port::cells_at(c, q);
+            }
+            if oil_sc_keep(c, at, ns, key, row, q, flags) != 0 {
+                crate::port::cells_set(c, write, row);
+                write += 1;
+                j = 0;
+                while j < width {
+                    crate::port::cells_set(c, write, crate::port::cells_at(c, q + j));
+                    write += 1;
+                    j += 1;
+                }
+                n += 1;
+            }
+            q += width;
+            k += 1;
+        }
+        if n == 0 {
+            write = entry;
+        } else {
+            crate::port::cells_set(c, entry, write - entry);
+            crate::port::cells_set(c, entry + 5, n);
+            kept += 1;
+        }
+        p = end;
+        i += 1;
+    }
+    crate::port::cells_drop(c, write);
+    oil_set(c, at, oh_nsc(), kept);
+    crate::port::cells_set(c, at, write - at);
+    return 0;
+}
+pub fn oil_sc_put(mut c: &mut crate::port::Cells, at: i32, key: i32, subject: i32, row: i32, value: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
+    // Append a sparse source value; registration and value framing are checked before incrementing nsc.
+    let start: i32 = crate::port::cells_len(c);
+    let ns: i32 = oil_get(c, at, oh_engine());
+    let registry: i32 = oil_key_find(ns, key);
+    let mut i: i32 = 0;
+    if registry < 0 {
+        return -1;
+    }
+    if subject != oil_key_field(registry, 4) {
+        return -1;
+    }
+    if (first < 0) || ((count < 0) || (count > (crate::port::cells_len(value) - first))) {
+        return -1;
+    }
+    if oil_key_field(registry, 2) == 9 {
+        if count < 1 {
+            return -1;
+        }
+        if crate::port::cells_at(value, first) != (count - 1) {
+            return -1;
+        }
+    } else if count != oil_key_field(registry, 3) {
+        return -1;
+    }
+    if row < 0 {
+        return -1;
+    }
+    if (subject == 0) && (row != 0) {
+        return -1;
+    }
+    if (subject == 1) && (row >= oil_nblocks(c, at)) {
+        return -1;
+    }
+    if (subject == 2) && (row >= oil_nlines(c, at)) {
+        return -1;
+    }
+    if (subject == 3) && (row >= oil_nwords(c, at)) {
+        return -1;
+    }
+    crate::port::cells_push(c, 7 + count);
+    crate::port::cells_push(c, ns);
+    crate::port::cells_push(c, key);
+    crate::port::cells_push(c, subject);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, row);
+    while i < count {
+        crate::port::cells_push(c, crate::port::cells_at(value, first + i));
+        i += 1;
+    }
+    let nsc: i32 = oil_get(c, at, oh_nsc());
+    oil_set(c, at, oh_nsc(), nsc + 1);
+    crate::port::cells_set(c, at, crate::port::cells_len(c) - at);
+    return start;
+}
+pub fn oil_end_source(mut c: &mut crate::port::Cells, at: i32, flags: i32) -> i32 {
+    return oil_seal(c, at, flags);
+}
+pub fn oil_end(mut c: &mut crate::port::Cells, at: i32) -> i32 {
+    return oil_end_source(c, at, 0);
+}
+pub(crate) fn oil_flat_box_valid(v: &mut crate::port::Cells, p: i32) -> i32 {
+    if (crate::port::cells_at(v, p + 2) < 0) || (crate::port::cells_at(v, p + 3) < 0) {
+        return 0;
+    }
+    return 1;
+}
+pub(crate) fn oil_flat_rows_valid(v: &mut crate::port::Cells, caps: i32, nb: i32, nl: i32) -> i32 {
+    let mut p: i32 = 24;
+    let mut i: i32 = 0;
+    let mut q: i32 = 0;
+    while i < nb {
+        if oil_flat_box_valid(v, p) == 0 {
+            return 0;
+        }
+        if (crate::port::cells_at(v, p + 4) < -1) || (crate::port::cells_at(v, p + 4) > 1000) {
+            return 0;
+        }
+        q = p + 5;
+        if oil_has(caps, oc_wdir()) != 0 {
+            if (crate::port::cells_at(v, q) < 0) || (crate::port::cells_at(v, q) > 3) {
+                return 0;
+            }
+            if (crate::port::cells_at(v, q + 1) < 0) || (crate::port::cells_at(v, q + 1) > 3) {
+                return 0;
+            }
+            if (crate::port::cells_at(v, q + 2) < 0) || (crate::port::cells_at(v, q + 2) > 2) {
+                return 0;
+            }
+            q += 3;
+        }
+        if oil_has(caps, oc_btype()) != 0 {
+            if (crate::port::cells_at(v, q) < 0) || (crate::port::cells_at(v, q) > 4) {
+                return 0;
+            }
+        }
+        p += oil_block_stride(caps);
+        i += 1;
+    }
+    i = 0;
+    while i < nl {
+        if oil_flat_box_valid(v, p) == 0 {
+            return 0;
+        }
+        if crate::port::cells_at(v, p + 5) < 0 {
+            return 0;
+        }
+        if oil_has(caps, oc_blocks()) == 0 {
+            if crate::port::cells_at(v, p + 4) != -1 {
+                return 0;
+            }
+        } else if (crate::port::cells_at(v, p + 4) < 0) || (crate::port::cells_at(v, p + 4) >= nb) {
+            return 0;
+        }
+        q = p + 6;
+        if oil_has(caps, oc_lconf()) != 0 {
+            if (crate::port::cells_at(v, q) < -1) || (crate::port::cells_at(v, q) > 1000) {
+                return 0;
+            }
+            q += 1;
+        }
+        if oil_has(caps, oc_paras()) != 0 {
+            if crate::port::cells_at(v, q) < -1 {
+                return 0;
+            }
+            q += 1;
+        }
+        q += 4 * oil_has(caps, oc_baseline());
+        if oil_has(caps, oc_rowmetrics()) != 0 {
+            if (crate::port::cells_at(v, q) < 0) || ((crate::port::cells_at(v, q + 1) < 0) || (crate::port::cells_at(v, q + 2) < 0)) {
+                return 0;
+            }
+        }
+        p += oil_line_stride(caps);
+        i += 1;
+    }
+    return 1;
+}
 pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::Cells) -> i32 {
     // Flat OIL is the header and rows without the four-cell answer envelope. Validate before writing.
     let n: i32 = crate::port::cells_len(v);
+    let out_at: i32 = crate::port::cells_len(out);
     let mut p: i32 = 24;
     let mut i: i32 = 0;
     let mut caps: i32 = 0;
     let mut nb: i32 = 0;
     let mut nl: i32 = 0;
     let mut nw: i32 = 0;
+    let mut nsym: i32 = 0;
     if n < 24 {
         return -1;
     }
@@ -1231,6 +1768,9 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
     if oil_native_check(caps, crate::port::cells_at(v, 5)) == 0 {
         return -1;
     }
+    if oil_flat_header_valid(v) == 0 {
+        return -1;
+    }
     nb = crate::port::cells_at(v, 18);
     nl = crate::port::cells_at(v, 19);
     nw = crate::port::cells_at(v, 20);
@@ -1247,8 +1787,34 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
     if p > n {
         return -1;
     }
+    if oil_flat_rows_valid(v, caps, nb, nl) == 0 {
+        return -1;
+    }
     while i < nw {
-        p = oil_flat_word_end(v, p, caps);
+        let end: i32 = oil_flat_word_end(v, p, caps);
+        if end < 0 {
+            return -1;
+        }
+        if oil_flat_box_valid(v, p) == 0 {
+            return -1;
+        }
+        if (crate::port::cells_at(v, p + 5) < -1) || (crate::port::cells_at(v, p + 5) > 1000) {
+            return -1;
+        }
+        if (crate::port::cells_at(v, p + 4) < -1) || (crate::port::cells_at(v, p + 4) >= nl) {
+            return -1;
+        }
+        let mut q: i32 = p + oil_word_base(caps);
+        let mut a: i32 = 0;
+        if oil_has(caps, oc_walts()) != 0 {
+            let count: i32 = crate::port::cells_at(v, q - 1);
+            while a < count {
+                q = (q + 2) + crate::port::cells_at(v, q + 1);
+                a += 1;
+            }
+        }
+        nsym += crate::port::cells_at(v, q);
+        p = end;
         if p < 0 {
             return -1;
         }
@@ -1256,17 +1822,8 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
     }
     i = 0;
     while i < crate::port::cells_at(v, 21) {
-        if (p + 5) >= n {
-            return -1;
-        }
-        if crate::port::cells_at(v, p) < 6 {
-            return -1;
-        }
-        if crate::port::cells_at(v, p) > (n - p) {
-            return -1;
-        }
-        p += crate::port::cells_at(v, p);
-        if p > n {
+        p = oil_flat_sidecar_end(v, p, crate::port::cells_at(v, 1), nb, nl, nw, nsym);
+        if p < 0 {
             return -1;
         }
         i += 1;
@@ -1283,7 +1840,7 @@ pub fn oil_flat(v: &mut crate::port::Cells, id: i32, mut out: &mut crate::port::
         crate::port::cells_push(out, crate::port::cells_at(v, i));
         i += 1;
     }
-    return 0;
+    return oil_end(out, out_at);
 }
 pub fn oil_policy_conf(c: &mut crate::port::Cells, at: i32, word: i32) -> i32 {
     return ocal_word(oil_get(c, at, oh_engine()), 0, crate::port::cells_at(c, word + 5));

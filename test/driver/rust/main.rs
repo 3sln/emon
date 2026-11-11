@@ -93,18 +93,16 @@ impl emon::Renderer for FakeRenderer {
 struct FakeOcr;
 impl emon::Ocr for FakeOcr {
     fn fulfil(&self, req: &emon::plan::Request, _bm: &emon::plan::Bitmaps, _keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
-        use emon::emon::{ocr, plan};
+        use emon::emon::oil;
         let mut c = emon::port::Cells::new();
-        let at = plan::an_ocr(&mut c, req.id());
-        let w = plan::an_ocr_word(&mut c, at, 10, 10, 100, 30, 900, 0, 0);
+        let at = oil::oil_tess_begin(&mut c, req.id(), 3, 0, 0, 0, 0, 0, -1, 0, -1, -1, 0);
+        oil::oil_tess_block(&mut c, at, 10, 10, 100, 30, -1, 0, 0, 0, 0);
+        oil::oil_line(&mut c, at, 10, 10, 100, 30, 0, 1, -1, 0, 10, 35, 110, 35, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        let w = oil::oil_word(&mut c, at, 10, 10, 100, 30, 0, 900, 0, 0, -1, 1);
         for ch in "Hello".chars() {
-            plan::an_ocr_cp(&mut c, w, ch as i32);
+            oil::oil_word_cp(&mut c, at, w, ch as i32);
         }
-        ocr::ox_begin(&mut c, 0, 0, 0, 0, -1, 0, -1, -1, 1, 1, 0, 0, 0);
-        ocr::ox_line(&mut c, 10, 10, 100, 30, 10, 35, 110, 35, 0, 0, 0, 20, 14, 6);
-        ocr::ox_block(&mut c, 10, 10, 100, 30, 0, 0, 0);
-        let _ = ocr::ox_word(&mut c, 0, 0, -1, 0);
-        plan::an_ocr_end(&mut c, at);
+        oil::oil_end(&mut c, at);
         let rec = (0..emon::port::cells_len(&c)).map(|i| emon::port::cells_at(&c, i)).collect();
         Ok(emon::plan::Answer { rec, bitmap: None })
     }
