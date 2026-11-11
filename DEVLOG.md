@@ -4107,7 +4107,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 
 - [ ] P13.1 — One-file release (REL1). Placeholder versions in tracked manifests, stamped from `version.edn` at build time. `release.yml` runs end to end on a `version.edn` bump on main, and retries manually with `workflow_dispatch version [only]`. Replaces bump/draft/publish-on-release. In progress.
 - [ ] P13.2 — OIL phase 1: OIL replaces the Tesseract-shaped answer record. Tesseract and PP are expressed in it, with emon's own enums, capability bits, requested and observed engine identity, and the sidecar registry. Gate: the Tesseract path shows zero accuracy regressions, and PP P/R stays within ±0.002. Fix the four host bugs the audit found: PP's `osd=0`, the browser's missing OSD and zero baselines, row metrics never filled, and PP calibration living in the Rust host.
-- [ ] P13.3 — Packaging design (PKG1): `emon-core` (no OCR engine) plus adapter packages, a turnkey `emon` per platform, hybrids composed in core, and SHA-pinned model/language packs as release assets. Covers the package matrix per ecosystem and the C ABI adapter-callback form. In progress.
+- [x] P13.3 — Packaging design (PKG1): `emon-core` (no OCR engine) plus adapter packages, a turnkey `emon` per platform, hybrids composed in core, and SHA-pinned model/language packs as release assets. Covers the package matrix per ecosystem and the C ABI adapter-callback form. DONE (D885). Executed as P13.14–P13.22.
 - [ ] P13.4 — OIL phase 2: PP-alone as a first-class engine. Measure first (row/line split on the OP1 bundles), then build kin row assembly for segment engines. Gate: CORD line items ≥ 22/151, the D849 baseline.
 - [ ] P13.5 — Threshold refit: about 20 `scan`/`retarget` thresholds move from raw Tesseract confidence to calibrated `pcal`. A separate reviewed phase, taken after P13.4 acceptance.
 - [ ] P13.6 — Dart P1: a C ABI fit for mobile embedding. `emon.h` may break freely; re-record `api/surface.edn`.
@@ -4118,6 +4118,15 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [ ] P13.11 — OIL phase 5: Windows.Media.Ocr (Rust and C#) and ML Kit (an optional Android plugin through the Dart package). Uncalibrated engines vote only (D883 ruling 3).
 - [ ] P13.12 — Dart web backend: the same Dart API over the wasm build and JS SDK, through `dart:js_interop`.
 - [ ] P13.13 — Dart release: pub.dev automated publishing via GitHub OIDC, folded into `release.yml`.
+- [ ] P13.14 — K1 kin: engine table recorded first in transcripts, pack resolution, roles; `release/packs/packs.edn` → `bb packs --emit` → `kin/packdata.kin` + `packs.json`; turnkey defaults table. After P13.2.
+- [ ] P13.15 — K2 native adapter ABI (`emon_adapter.h`), `libemon_ocr_tesseract`, core `libemon` without Tesseract, `emon_engines_*` registry and step-loop self-fulfilment.
+- [ ] P13.16 — K3 host registries: Go (cgo adapters), Java, C#, Rust, JS, pod, CLI; delete the per-host Tesseract twins.
+- [ ] P13.17 — K4 packs infrastructure: append-only `packs` GitHub release + R2 mirror `packs.emon.3sln.com` (public read; CI-only scoped write token), `bb packs build|verify|bundle|list`, licence allowlist.
+- [ ] P13.18 — K5 packaging + release: `bb package` per piece, core/adapters/turnkey layering check, native bundle per triple, `release.yml` per-package jobs and `only` retry.
+- [ ] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8).
+- [ ] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing needs a maintainer-provided tag-push credential).
+- [ ] P13.21 — K8 platform adapters Vision, Windows OCR, ML Kit (= P13.10, P13.11).
+- [ ] P13.22 — K9 turnkey defaults per platform, switched one engine at a time with its scoreboard rows.
 
 ---
 
@@ -14236,5 +14245,81 @@ pub.dev:
 Plan: P1-P7 of `.claude/coord/dart1-report.md`. The MVP with Tesseract everywhere is about 13-20 agent-days; the whole plan is about 33-49.
 
 The maintainer accepted this on 2026-11-11 and asked that it go in the plan (Phase 13, P13.6–P13.8 and P13.12–P13.13). The package shape is revised by P13.3 (PKG1): a core with no OCR engine, plus adapter packages and a turnkey `emon`, replacing the spike's two variants per triple.
+
+- [ ] **Signed off** (maintainer)
+
+### D885 — Packaging: emon core plus OCR and render adapter packages, content-addressed model packs
+
+The OCR adapter is emon's main seam, and the packages follow it.
+
+**Core.** Each ecosystem has a core package with no native binary and no OCR engine. It is MIT only. It converts born-digital PDFs and images, and it accepts engines the caller brings:
+- `emon` crate with `default-features = false`;
+- `emon` Go package;
+- `@3sln/emon-core`, `com.3sln:emon-core`, `Emon.Core`;
+- the pub `emon` with no adapters.
+
+**Adapter contract.** One contract, expressed in OIL (D883):
+- **kin** owns the engine table, recorded first in every transcript; capability negotiation; pack resolution, with pack hashes in the requested identity; roles; and `unsupported`/`failed` as unread, never blank.
+- **A native adapter ABI** (`emon_ocr_adapter_v1`, OIL flat answers, sync or async) generalizes the PP v1 ABI.
+- **The C ABI** gains an `emon_engines` registry, used by the one-shot calls and the step loop. The loop keeps its shape, adds `EMON_WAITING`/`emon_complete`, and drops `EMON_NATIVE`, `emon_set_native_paths` and the Tesseract policy exports.
+- **Each SDK** has a registry over the same shapes.
+
+**Tesseract.** It becomes one native library, `libemon_ocr_tesseract`, loaded by every host. The Go, Java and C# Tesseract twins are deleted.
+
+**Platform engines.** Vision, Windows OCR and PP are adapter libraries. ML Kit is a Flutter plugin. Hybrids are configurations composed by kin, not packages.
+
+**pdfium** is a render adapter of its own: `emon-pdfium` and `@3sln/emon-pdfium`. It is bundled in every turnkey package and native bundle, but not in core.
+
+**Turnkey.** The turnkey `emon` in each ecosystem depends on core, pdfium and the platform's default OCR adapter. The defaults come from one kin table, and stay Tesseract until each platform engine passes its D883 acceptance.
+
+**Publishes per release:**
+- crates: 1;
+- Go: 1 tag;
+- npm: 5 (`emon`, `emon-core`, `emon-pdfium`, `emon-ocr-tesseract`, `emon-ocr-ppocr`);
+- Maven: 4 (one Central deployment);
+- NuGet: 4 (+ `Emon.Ocr.WindowsMedia` once accepted);
+- pub: 1 (user-defines select adapters; + `emon_mlkit`);
+- GitHub: one native bundle per triple (CLI, C library and pod merged) plus PP adapter archives.
+
+**Model packs.** Language and model data (tessdata, PP detector, classifier and recognizers, lexicons) are content-addressed, SHA-256-pinned packs, not registry packages.
+- They are authored in `release/packs/packs.edn` and generated into kin data and `packs.json`.
+- They are versioned separately from emon and immutable.
+- They are hosted on an append-only `packs` data release and a CORS CDN mirror. GitHub release assets cannot be fetched by browsers.
+- They are fetched on demand, cached per user and always verified.
+- Offline use goes through `EMON_MODELS` or `emon packs bundle`. Flutter bundles packs as app assets until hooks support data assets.
+
+PP's dictionary checks use a derived `lex-eng` pack instead of a pinned Tesseract instance.
+
+**Release (REL1).** `release.yml` builds the native matrix, attaches the bundles and the native catalogue, and publishes each registry's packages in dependency order, turnkey last. Each package is skipped if already published. Retry is `only=<registry>[:<package>]`. Pub publishes from a token-pushed `emon-vX.Y.Z` tag. Packs publish through their own `packs.yml`, and a release requires every catalogued pack to be remotely verified.
+
+**Verification:**
+- per-adapter OIL laws plus `L-adapter-caps`, `L-engines-recorded`, `L-pack-ident` and `L-lex-tess`;
+- `bb adapter-identity`: one adapter binary, five loaders, identical answers;
+- a core-only consumer check: no native binary in the closure, born-digital byte-identical, scans unread without error, replay with no adapter;
+- per-adapter and turnkey consumer checks;
+- per-engine accuracy baselines from D883.
+
+Plan: K0-K9 of `.claude/coord/pkg1-report.md`. This replaces dart1's two libemon variants per triple with one core library plus adapter libraries.
+
+**Maintainer rulings of 2026-11-11:**
+- **Layering is strict.** `emon-core` is the product. Adapters (`emon-ocr-*`, `emon-pdfium`) depend only on core. Turnkey `emon` packages depend on core plus adapters. Core never depends on an adapter, and adapters never depend on each other: hybrids compose in core through the registry. P13.18 adds a dependency-direction check.
+- **PP-OCR ships for every target:** crates feature, Go, Maven, NuGet, npm, pub and the native bundle. The earlier "native + npm only" proposal is withdrawn.
+- **Go adapters keep cgo.** No purego. The core Go module stays pure Go.
+- **Packs:**
+  - The `packs` GitHub release is the canonical store, and an R2 mirror at `packs.emon.3sln.com` serves CORS reads.
+  - Reads are public and anonymous; SDKs carry no credentials.
+  - Only CI holds a write token scoped to that bucket.
+  - Integrity rests on the catalogue SHA-256s, not on the host.
+
+The other open questions take the coordinator's recommendations unless the maintainer overrides them:
+- names `emon-core`, `emon` (turnkey), `emon-ocr-<engine>` and `emon-pdfium`, flat under `@3sln/`;
+- fetch `auto` for turnkey, CLI and Dart, `never` for core and adapters, overridden by `EMON_OFFLINE=1`;
+- one turnkey native bundle per triple;
+- `eng` and `osd` bundled;
+- one Maven jar per adapter with all desktop triples;
+- Windows arm64 in, Intel iOS simulator out;
+- remote OCR denied by default, with the contract only.
+
+The pub tag-push credential is deferred to P13.20.
 
 - [ ] **Signed off** (maintainer)
