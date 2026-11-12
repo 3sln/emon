@@ -234,6 +234,7 @@ public final class Engine {
     }
     public static int enPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         int status = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+        Ocrengine.oeTag(rq, d.pscr, 2 * c.oengine);
         if (status == 0) {
             if (Oilsrc.oxsCollect(ans, ev.views, ev.oruns, ev.olines, ev.oxs) < 0) {
                 return 2;
@@ -242,7 +243,6 @@ public final class Engine {
                 return 2;
             }
         }
-        Ocrengine.oeTag(rq, d.pscr, 2 * c.oengine);
         return status;
     }
     public static int enAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
@@ -547,6 +547,9 @@ public final class Engine {
         if (kind == 0) {
             Inline.ilAnalyze(d.fw, s.lt, d.et, d.gl, d.ift, s.sf, d.an, d.txt, d.pg, m.pages, np, m.text, s.hc, s.isw);
         }
+        if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, 2 * c.oengine, s.s0) < 0) {
+            return 2;
+        }
         Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
         if (kind == 0) {
             enFigures(m, s, d, c.level);
@@ -555,11 +558,7 @@ public final class Engine {
             if (kind == 0) {
                 Figclass.fcEmitBudget(s.fcand, s.ffd, d.evidence);
             }
-            if (c.oengine != 0) {
-                if (enOcrPlanned(c, d) == 1) {
-                    Ocrengine.oeEvidence(d.evidence, c.oengine);
-                }
-            }
+            Ocrengine.oeEvidence(d.evidence, ev.oet, s.s0);
             emon.Port.textAscii(d.evidence, "}");
         }
         Restruct.rsRun(m.nodes, m.attrs, m.regions, m.text, s.rn, s.ra, s.rr, s.rnm, s.rstk, s.rused, s.rout, m.layout);
@@ -623,6 +622,7 @@ public final class Engine {
                 enAssetStage(c, m, s, d.cand, d.cbytes);
             }
         }
+        Scan.scNodeEngines(m.nodes, m.regions, ev.oruns);
         if (pending == 0) {
             w = enSeal(m, s.chk, s.sealout, c.level);
             if (w != 0) {

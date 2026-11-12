@@ -988,6 +988,9 @@ pub fn fl_in_table_image() -> i32 {
 pub fn fl_script_unread() -> i32 {
     return 1024;
 }
+pub fn fl_uncalibrated_engine() -> i32 {
+    return 2048;
+}
 pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "low-conf");
@@ -1031,6 +1034,10 @@ pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 1024 {
         crate::port::text_ascii(t, "script-unread");
+        return 1;
+    }
+    if code == 2048 {
+        crate::port::text_ascii(t, "uncalibrated-engine");
         return 1;
     }
     return 0;
@@ -1880,7 +1887,7 @@ pub fn av_bool() -> i32 {
     return 3;
 }
 pub fn nodes_stride() -> i32 {
-    return 16;
+    return 17;
 }
 pub fn attrs_stride() -> i32 {
     return 5;
@@ -1907,14 +1914,14 @@ pub fn max_depth() -> i32 {
     return 200;
 }
 pub(crate) fn nget(nodes: &mut crate::port::Cells, n: i32, f: i32) -> i32 {
-    return crate::port::cells_at(nodes, (n * 16) + f);
+    return crate::port::cells_at(nodes, (n * 17) + f);
 }
 pub(crate) fn nput(mut nodes: &mut crate::port::Cells, n: i32, f: i32, v: i32) -> i32 {
-    crate::port::cells_set(nodes, (n * 16) + f, v);
+    crate::port::cells_set(nodes, (n * 17) + f, v);
     return 0;
 }
 pub fn node_count(nodes: &mut crate::port::Cells) -> i32 {
-    return crate::port::cells_len(nodes) / 16;
+    return crate::port::cells_len(nodes) / 17;
 }
 pub fn node_kind(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     return nget(nodes, n, 0);
@@ -1963,6 +1970,12 @@ pub fn node_sub(nodes: &mut crate::port::Cells, n: i32) -> i32 {
 }
 pub fn node_aux(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     return nget(nodes, n, 15);
+}
+pub fn node_engine(nodes: &mut crate::port::Cells, n: i32) -> i32 {
+    return nget(nodes, n, 16);
+}
+pub fn node_set_engine(mut nodes: &mut crate::port::Cells, n: i32, engine: i32) -> i32 {
+    return nput(nodes, n, 16, engine);
 }
 pub fn node_has_text(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     // 1 when the node carries a text run (even an empty one).
@@ -2070,7 +2083,7 @@ pub fn node_new(mut nodes: &mut crate::port::Cells, kind: i32, parent: i32) -> i
     // unknown, or the node would nest deeper than `max-depth`. A new
     // node has no text, no regions, no attributes, `src` 0, `conf` -1
     // (absent), `flags` 0, `sub` 0, `aux` 0.
-    let n: i32 = crate::port::cells_len(nodes) / 16;
+    let n: i32 = crate::port::cells_len(nodes) / 17;
     let mut last: i32 = -1;
     if (kind < 1) || (kind > 26) {
         return -1;
@@ -2100,6 +2113,7 @@ pub fn node_new(mut nodes: &mut crate::port::Cells, kind: i32, parent: i32) -> i
     crate::port::cells_push(nodes, 0);
     crate::port::cells_push(nodes, 0);
     crate::port::cells_push(nodes, -1);
+    crate::port::cells_push(nodes, 0);
     crate::port::cells_push(nodes, 0);
     crate::port::cells_push(nodes, 0);
     crate::port::cells_push(nodes, 0);
@@ -2138,6 +2152,9 @@ pub fn node_set_aux(mut nodes: &mut crate::port::Cells, n: i32, v: i32) -> i32 {
     return nput(nodes, n, 15, v);
 }
 pub fn node_set_src(mut nodes: &mut crate::port::Cells, n: i32, v: i32) -> i32 {
+    if ((v & sr_ocr()) != 0) && (node_engine(nodes, n) == 0) {
+        node_set_engine(nodes, n, 1);
+    }
     return nput(nodes, n, 11, v);
 }
 pub fn node_set_flags(mut nodes: &mut crate::port::Cells, n: i32, v: i32) -> i32 {
@@ -2155,7 +2172,7 @@ pub fn node_set_conf(mut nodes: &mut crate::port::Cells, n: i32, v: i32) -> i32 
 }
 pub fn node_add_src(mut nodes: &mut crate::port::Cells, n: i32, bits: i32) -> i32 {
     let old: i32 = nget(nodes, n, 11);
-    return nput(nodes, n, 11, old | bits);
+    return node_set_src(nodes, n, old | bits);
 }
 pub fn node_add_flag(mut nodes: &mut crate::port::Cells, n: i32, bits: i32) -> i32 {
     let old: i32 = nget(nodes, n, 13);
@@ -2820,7 +2837,7 @@ pub(crate) fn mc_check_order(nodes: &mut crate::port::Cells, nn: i32, mut st: &m
     return 0;
 }
 pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, text: &mut crate::port::Cells, pages: &mut crate::port::Cells, ledger: &mut crate::port::Cells, layout: &mut crate::port::Cells, mut st: &mut crate::port::Cells) -> i32 {
-    let nn: i32 = crate::port::cells_len(nodes) / 16;
+    let nn: i32 = crate::port::cells_len(nodes) / 17;
     let nlay: i32 = crate::port::cells_len(layout) / 8;
     let mut j: i32 = 0;
     let mut i: i32 = 0;
@@ -2831,7 +2848,7 @@ pub fn model_check(nodes: &mut crate::port::Cells, attrs: &mut crate::port::Cell
     let tl: i32 = crate::port::cells_len(text);
     crate::port::cells_drop(st, 0);
     crate::port::cells_push(st, 0);
-    if (crate::port::cells_len(nodes) % 16) != 0 {
+    if (crate::port::cells_len(nodes) % 17) != 0 {
         return mc_fail(st, mc_bad_stride(), 0);
     }
     if (crate::port::cells_len(attrs) % 5) != 0 {
@@ -3111,7 +3128,7 @@ pub fn model_check_assets(nodes: &mut crate::port::Cells, attrs: &mut crate::por
     // `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
     let na: i32 = crate::port::cells_len(assets) / 24;
     let nu: i32 = crate::port::cells_len(uses) / 8;
-    let nn: i32 = crate::port::cells_len(nodes) / 16;
+    let nn: i32 = crate::port::cells_len(nodes) / 17;
     let bl: i32 = crate::port::buf_len(abytes);
     let mut i: i32 = 0;
     let mut u: i32 = 0;

@@ -24,51 +24,49 @@ public static class Calib {
         }
         return 3;
     }
-    public static int CalLookup(int kind, int cls, int raw) {
-        // `cal-conf` for a class code: a code the table has no row for (9 is none) reads the kind's `any` rows.
+    public static int CalLookupEngine(int kind, int cls, int engine, int raw) {
         if (raw < 0) {
             return raw;
         }
-        int n = 30;
+        int tier = 0;
         int i = 0;
-        int hitC = -1;
-        int firstC = -1;
-        int hitA = -1;
-        int firstA = -1;
-        while (i < n) {
-            if (Calibdata.CdRows[i * 4 + 0] == kind) {
-                if (Calibdata.CdRows[i * 4 + 1] == cls) {
-                    if (firstC < 0) {
-                        firstC = Calibdata.CdRows[i * 4 + 3];
-                    }
-                    if (Calibdata.CdRows[i * 4 + 2] <= raw) {
-                        hitC = Calibdata.CdRows[i * 4 + 3];
-                    }
-                }
-                if (Calibdata.CdRows[i * 4 + 1] == -1) {
-                    if (firstA < 0) {
-                        firstA = Calibdata.CdRows[i * 4 + 3];
-                    }
-                    if (Calibdata.CdRows[i * 4 + 2] <= raw) {
-                        hitA = Calibdata.CdRows[i * 4 + 3];
-                    }
-                }
+        int first = -1;
+        int hit = -1;
+        int wantClass = cls;
+        int wantEngine = engine;
+        while (tier < 3) {
+            if (tier == 1) {
+                wantEngine = -1;
             }
-            i += 1;
-        }
-        if (hitC >= 0) {
-            return hitC;
-        }
-        if (firstC >= 0) {
-            return firstC;
-        }
-        if (hitA >= 0) {
-            return hitA;
-        }
-        if (firstA >= 0) {
-            return firstA;
+            if (tier == 2) {
+                wantClass = -1;
+            }
+            i = 0;
+            first = -1;
+            hit = -1;
+            while (i < 30) {
+                if ((Calibdata.CdRows[i * 5 + 0] == kind) && (Calibdata.CdRows[i * 5 + 1] == wantClass) && (Calibdata.CdRows[i * 5 + 2] == wantEngine)) {
+                    if (first < 0) {
+                        first = Calibdata.CdRows[i * 5 + 4];
+                    }
+                    if (Calibdata.CdRows[i * 5 + 3] <= raw) {
+                        hit = Calibdata.CdRows[i * 5 + 4];
+                    }
+                }
+                i += 1;
+            }
+            if (hit >= 0) {
+                return hit;
+            }
+            if (first >= 0) {
+                return first;
+            }
+            tier += 1;
         }
         return raw;
+    }
+    public static int CalLookup(int kind, int cls, int raw) {
+        return CalLookupEngine(kind, cls, 1, raw);
     }
     public static int CalConf(int kind, int src, int raw) {
         // The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.
@@ -80,8 +78,14 @@ public static class Calib {
         // step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
         // at a script it cannot read would carry the confidence of what it can.
         int raw = Model.NodeConf(nodes, n);
-        int cf = CalConf(Model.NodeKind(nodes, n), Model.NodeSrc(nodes, n), raw);
+        int cf = CalLookupEngine(Model.NodeKind(nodes, n), CalClass(Model.NodeSrc(nodes, n)), Model.NodeEngine(nodes, n), raw);
         int a = n;
+        if (((Model.NodeFlags(nodes, n) & Model.FlUncalibratedEngine()) != 0) && (cf > 500)) {
+            if (raw < 500) {
+                return raw;
+            }
+            return 500;
+        }
         if (raw < 0) {
             return cf;
         }

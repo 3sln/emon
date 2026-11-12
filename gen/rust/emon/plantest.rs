@@ -2,6 +2,7 @@
 // source: emon.plantest
 
 use crate::emon::evidence::*;
+use crate::emon::ocridentity::*;
 use crate::emon::oil::*;
 use crate::emon::plan::*;
 use crate::emon::planprobe::*;
@@ -73,7 +74,7 @@ fn test_an_ocr_request_carries_its_languages() {
     rq_ocr_lang(c, 101, 110, 103, 0);
     rq_ocr_lang(c, 100, 101, 117, 0);
     rq_ocr_end(c, at);
-    crate::testport::assert_eq(rec_len(c, 0), 12, "ten cells and two languages");
+    crate::testport::assert_eq(rec_len(c, 0), (12 + 4) + 112, "ten cells and two languages");
     crate::testport::assert_eq(rec_kind(c, 0), 3, "kind");
     crate::testport::assert_eq(rq_arg(c, 0, 0), 3, "bitmap");
     crate::testport::assert_eq(rq_arg(c, 0, 1), 6, "psm");
@@ -81,7 +82,7 @@ fn test_an_ocr_request_carries_its_languages() {
     crate::testport::assert_eq(rq_arg(c, 0, 6), 40, "region height");
     crate::testport::assert_eq(rq_arg(c, 0, 7), 1701734144, "eng packed big-endian");
     crate::testport::assert_eq(rq_arg(c, 0, 8), 1684370688, "deu packed big-endian");
-    crate::testport::assert_eq(rq_nargs(c, 0), 9, "nine args");
+    crate::testport::assert_eq(rq_nargs(c, 0), 13 + 112, "arguments include requested identity");
 }
 #[test]
 fn test_a_bytes_request_is_a_span() {

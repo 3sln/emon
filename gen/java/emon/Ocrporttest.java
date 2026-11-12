@@ -100,7 +100,7 @@ public final class Ocrporttest {
     }
     public static int tModels(int emonT, emon.Port.Cells req, emon.Port.Cells inst, int n, int i0, int i1, String msg) {
         emon.Port.Cells out = emon.Port.newCells();
-        int got = Ocrport.opModels(req, inst, out);
+        int got = Ocrtess.opModels(req, inst, out);
         emon.Testport.assertEq(got, n, msg);
         emon.Testport.assertEq(emon.Port.cellsLen(out), n, msg);
         if (i0 >= 0) {
@@ -149,7 +149,7 @@ public final class Ocrporttest {
         emon.Port.Cells gone = emon.Port.newCells();
         tInst(inst, kind);
         tReq1(r, a, b, d, e);
-        emon.Testport.assertEq(Ocrport.opDropped(r, inst, gone), 1, msg);
+        emon.Testport.assertEq(Ocrtess.opDropped(r, inst, gone), 1, msg);
         emon.Testport.assertEq(emon.Port.cellsLen(gone), cells, msg);
         emon.Testport.assertEq(emon.Port.cellsAt(gone, at), want, msg);
         return 0;
@@ -245,8 +245,8 @@ public final class Ocrporttest {
         emon.Testport.assertEq(Ocrport.scHani(), tPack(72, 97, 110, 105), "Hani");
         emon.Testport.assertEq(Ocrport.scJpan(), tPack(74, 112, 97, 110), "Jpan");
         emon.Testport.assertEq(Ocrport.scCans(), tPack(67, 97, 110, 115), "Cans");
-        emon.Testport.assertEq(Ocrport.zhChs(), tPack(99, 104, 115, 0), "chs");
-        emon.Testport.assertEq(Ocrport.zhCht(), tPack(99, 104, 116, 0), "cht");
+        emon.Testport.assertEq(Ocrtess.zhChs(), tPack(99, 104, 115, 0), "chs");
+        emon.Testport.assertEq(Ocrtess.zhCht(), tPack(99, 104, 116, 0), "cht");
     }
     public static int tRows(int emonT) {
         // Every row of the name table: a known kind and a value that is an ISO 15924 code (or a request name of a Chinese model).
@@ -258,16 +258,16 @@ public final class Ocrporttest {
         StringBuilder t = emon.Testport.newText();
         while (i < n) {
             j = i + 1;
-            while (Ocrport.OP_NAMES[j] != 0) {
+            while (Ocrtess.OP_NAMES[j] != 0) {
                 j += 1;
             }
-            emon.Testport.assertThat(Ocrport.OP_NAMES[i] >= 1, "kind from 1");
-            emon.Testport.assertThat(Ocrport.OP_NAMES[i] <= 3, "to 3");
-            if (Ocrport.OP_NAMES[i] == 3) {
-                emon.Testport.assertThat((Ocrport.OP_NAMES[j + 1] == Ocrport.zhChs()) || (Ocrport.OP_NAMES[j + 1] == Ocrport.zhCht()), "a request name");
+            emon.Testport.assertThat(Ocrtess.OP_NAMES[i] >= 1, "kind from 1");
+            emon.Testport.assertThat(Ocrtess.OP_NAMES[i] <= 3, "to 3");
+            if (Ocrtess.OP_NAMES[i] == 3) {
+                emon.Testport.assertThat((Ocrtess.OP_NAMES[j + 1] == Ocrtess.zhChs()) || (Ocrtess.OP_NAMES[j + 1] == Ocrtess.zhCht()), "a request name");
             }
-            if (Ocrport.OP_NAMES[i] != 3) {
-                emon.Testport.assertEq(Ocrport.scEmitName(t, Ocrport.OP_NAMES[j + 1]), 1, "an ISO 15924 code");
+            if (Ocrtess.OP_NAMES[i] != 3) {
+                emon.Testport.assertEq(Ocrport.scEmitName(t, Ocrtess.OP_NAMES[j + 1]), 1, "an ISO 15924 code");
             }
             emon.Testport.assertThat(j > (i + 1), "a name");
             rows += 1;
@@ -287,7 +287,7 @@ public final class Ocrporttest {
         emon.Port.Cells m = emon.Port.newCells();
         tPushp(m, p1);
         tPushp(m, p2);
-        emon.Testport.assertEq(Ocrport.opWordLang(m), want, msg);
+        emon.Testport.assertEq(Ocrtess.opWordLang(m), want, msg);
         return 0;
     }
     public static int tOsd(int emonT, int p1, int p2, int p3, int p4, int p5, int want, String msg) {
@@ -298,13 +298,13 @@ public final class Ocrporttest {
         tPushp(m, p3);
         tPushp(m, p4);
         tPushp(m, p5);
-        emon.Testport.assertEq(Ocrport.opOsdScript(m), want, msg);
+        emon.Testport.assertEq(Ocrtess.opOsdScript(m), want, msg);
         return 0;
     }
     public static void testAWordIsReadInTheLanguageARequestCallsIt() {
         tWl(0, 1701734144, 0, 1701734144, "eng stays eng");
-        tWl(0, 1667787103, 1936289024, Ocrport.zhChs(), "chi_sim is chs");
-        tWl(0, 1667787103, 1953652992, Ocrport.zhCht(), "chi_tra is cht");
+        tWl(0, 1667787103, 1936289024, Ocrtess.zhChs(), "chi_sim is chs");
+        tWl(0, 1667787103, 1953652992, Ocrtess.zhCht(), "chi_tra is cht");
         tWl(0, 1802859103, 1634885888, 1802859103, "kur_ara is cut to four");
         tWl(0, 0, 0, 0, "no language");
     }
@@ -319,24 +319,24 @@ public final class Ocrporttest {
     }
     public static void testAScriptCellIsFourLettersTheFirstUppercase() {
         emon.Testport.assertEq(Ocrport.opIsScript(Ocrport.scCyrl()), 1, "Cyrl");
-        emon.Testport.assertEq(Ocrport.opIsScript(Ocrport.zhChs()), 0, "chs: a language");
+        emon.Testport.assertEq(Ocrport.opIsScript(Ocrtess.zhChs()), 0, "chs: a language");
         emon.Testport.assertEq(Ocrport.opIsScript(1701734144), 0, "eng: a language");
         emon.Testport.assertEq(Ocrport.opIsScript(0), 0, "none");
         emon.Testport.assertEq(Ocrport.opIsScript(1128942413), 1, "CJKM, four capitals");
         emon.Testport.assertEq(Ocrport.opIsScript(1131968768), 0, "Cxy and a 0: three chars");
     }
     public static void testABlocksTypeIsTextTableImageLineOrOther() {
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbFlowingText()), Ocr.btText(), "flowing text");
-        emon.Testport.assertEq(Ocrport.opBlockType(2), Ocr.btText(), "heading text");
-        emon.Testport.assertEq(Ocrport.opBlockType(7), Ocr.btText(), "vertical text");
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbTable()), Ocr.btTable(), "a table");
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbHeadingImage()), Ocr.btImage(), "a heading image");
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbHorzLine()), Ocr.btLine(), "a rule");
-        emon.Testport.assertEq(Ocrport.opBlockType(13), Ocr.btLine(), "a vertical rule");
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbEquation()), Ocr.btOther(), "an equation");
-        emon.Testport.assertEq(Ocrport.opBlockType(0), Ocr.btOther(), "unknown");
-        emon.Testport.assertEq(Ocrport.opBlockType(Ocrport.pbNoise()), Ocr.btOther(), "noise");
-        emon.Testport.assertEq(Ocrport.opBlockType(99), Ocr.btOther(), "anything else");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbFlowingText()), Ocr.btText(), "flowing text");
+        emon.Testport.assertEq(Ocrtess.opBlockType(2), Ocr.btText(), "heading text");
+        emon.Testport.assertEq(Ocrtess.opBlockType(7), Ocr.btText(), "vertical text");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbTable()), Ocr.btTable(), "a table");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbHeadingImage()), Ocr.btImage(), "a heading image");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbHorzLine()), Ocr.btLine(), "a rule");
+        emon.Testport.assertEq(Ocrtess.opBlockType(13), Ocr.btLine(), "a vertical rule");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbEquation()), Ocr.btOther(), "an equation");
+        emon.Testport.assertEq(Ocrtess.opBlockType(0), Ocr.btOther(), "unknown");
+        emon.Testport.assertEq(Ocrtess.opBlockType(Ocrtess.pbNoise()), Ocr.btOther(), "noise");
+        emon.Testport.assertEq(Ocrtess.opBlockType(99), Ocr.btOther(), "anything else");
     }
     public static int tP2(emon.Port.Cells c, int a, int b) {
         emon.Port.cellsPush(c, a);
@@ -536,14 +536,14 @@ public final class Ocrporttest {
         emon.Port.Cells out = emon.Port.newCells();
         tReq1(r, 0, 0, 0, 0);
         tInstEngJpn(inst);
-        emon.Testport.assertEq(Ocrport.opModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng");
+        emon.Testport.assertEq(Ocrtess.opModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 1), 1, "the Japanese model is retained");
         emon.Port.Cells auto = emon.Port.newCells();
-        emon.Testport.assertEq(Ocrport.opModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model");
+        emon.Testport.assertEq(Ocrtess.opModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model");
         emon.Port.Cells named = emon.Port.newCells();
         emon.Port.Cells picked = emon.Port.newCells();
         tReq1(named, 101, 110, 103, 0);
-        emon.Testport.assertEq(Ocrport.opModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
+        emon.Testport.assertEq(Ocrtess.opModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults");
     }
     public static int tEngBest(emon.Port.Cells c) {
         tEng(c);
@@ -565,24 +565,24 @@ public final class Ocrporttest {
         at = Plan.rqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(req, 101, 110, 103, 0);
         Plan.rqOcrEnd(req, at);
-        emon.Testport.assertEq(Ocrport.opModelSelector(req), 0, "default English model");
-        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "one fast English model by default");
+        emon.Testport.assertEq(Ocrtess.opModelSelector(req), 0, "default English model");
+        emon.Testport.assertEq(Ocrtess.opModels(req, inst, out), 1, "one fast English model by default");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 0, "eng_best is not taken merely because installed");
         emon.Port.cellsDrop(req, 0);
         emon.Port.cellsDrop(out, 0);
         at = Plan.rqOcr(req, 12, 4, 11, 5, 0, 0, 0, 0);
         Plan.rqOcrLang(req, 101, 110, 103, 0);
         Plan.rqOcrEnd(req, at);
-        emon.Testport.assertEq(Ocrport.opModelSelector(req), 1, "explicit crop model selector");
-        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "best English when explicitly requested");
+        emon.Testport.assertEq(Ocrtess.opModelSelector(req), 1, "explicit crop model selector");
+        emon.Testport.assertEq(Ocrtess.opModels(req, inst, out), 1, "best English when explicitly requested");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 1, "eng_best is selected by its whole name");
         emon.Port.cellsDrop(out, 0);
-        emon.Testport.assertEq(Ocrport.opDropped(req, inst, out), 0, "installed best model is not reported as a dropped language");
+        emon.Testport.assertEq(Ocrtess.opDropped(req, inst, out), 0, "installed best model is not reported as a dropped language");
         emon.Port.cellsDrop(inst, 0);
         emon.Port.cellsDrop(out, 0);
         tEng(inst);
-        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read");
-        emon.Testport.assertEq(Ocrport.opDropped(req, inst, out), 1, "missing optional model is reported by model name");
+        emon.Testport.assertEq(Ocrtess.opModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read");
+        emon.Testport.assertEq(Ocrtess.opDropped(req, inst, out), 1, "missing optional model is reported by model name");
         emon.Testport.assertEq(emon.Port.cellsLen(out), 9, "eng_best and its separator");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 3), 95, "eng_best, not eng");
     }
@@ -596,7 +596,7 @@ public final class Ocrporttest {
         tEng(inst);
         emon.Port.cellsPush(req, Ocrport.scLatn());
         Plan.rqOcrEnd(req, at);
-        emon.Testport.assertEq(Ocrport.opModels(req, inst, out), 1, "default Latin discovery excludes optional variants");
+        emon.Testport.assertEq(Ocrtess.opModels(req, inst, out), 1, "default Latin discovery excludes optional variants");
         emon.Testport.assertEq(emon.Port.cellsAt(out, 0), 1, "only the standard model is selected");
     }
     public static void testBestModelEvidenceIsAdditive() {
@@ -610,6 +610,6 @@ public final class Ocrporttest {
     public static void testOptionalBestModelKeepsTheEnglishWordLanguage() {
         emon.Port.Cells model = emon.Port.newCells();
         tEngBest(model);
-        emon.Testport.assertEq(Ocrport.opWordLang(model), 1701734144, "the selected model changes; the word language is still eng");
+        emon.Testport.assertEq(Ocrtess.opWordLang(model), 1701734144, "the selected model changes; the word language is still eng");
     }
 }

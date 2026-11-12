@@ -8,6 +8,8 @@ import (
 	"emon/model"
 	"emon/ocr"
 	"emon/ocrport"
+	"emon/ocrscript"
+	"emon/ocrtess"
 	"emon/oil"
 	"emon/oilsrc"
 	"emon/plan"
@@ -66,6 +68,79 @@ func skDict(nw int32, an *port.Cells, ext int32) int32 {
 	return k
 }
 
+func SkCensus(an *port.Cells, at int32, scr *port.Cells) int32 {
+	// No-OSD fallback: at least three script-bearing characters and a 60% dominant script. Digits and punctuation do not vote. Never invent OSD confidence.
+	port.CellsDrop(scr, 0)
+	var k int32 = 0
+	var i int32 = 0
+	var j int32 = 0
+	var total int32 = 0
+	var best int32 = 0
+	var winner int32 = -1
+	var w int32 = oil.OilFirstWord(an, at)
+	for k < 30 {
+		port.CellsPush(scr, 0)
+		k += 1
+	}
+	for i < oil.OilNwords(an, at) {
+		j = 0
+		for j < oil.OilWlen(an, at, w) {
+			k = ocrscript.OsCensusOf(oil.OilWcp(an, at, w, j))
+			if k >= 0 {
+				port.CellsSet(scr, k, port.CellsAt(scr, k)+1)
+				total += 1
+			}
+			j += 1
+		}
+		w = oil.OilWordNext(an, at, w)
+		i += 1
+	}
+	k = 0
+	for k < 30 {
+		if port.CellsAt(scr, k) > best {
+			best = port.CellsAt(scr, k)
+			winner = k
+		}
+		k += 1
+	}
+	if (total >= 3) && ((best * 1000) >= (total * 600)) {
+		return ocrscript.OsCensusScripts[winner]
+	}
+	return 0
+}
+
+func skNoOsdUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
+	var script int32 = SkCensus(an, at, scr)
+	var model int32 = ocrscript.OsLangScript(oil.OilGet(an, at, oil.OhLang()))
+	var i int32 = 0
+	var w int32 = oil.OilFirstWord(an, at)
+	var known int32 = 0
+	if script == 0 {
+		return 0
+	}
+	if (script == ocrport.ScLatn()) || (script == ocrport.ScLatf()) {
+		return 0
+	}
+	if model > 0 {
+		known = 1
+		if ocrport.OpScriptReads(script, model) == 1 {
+			return 0
+		}
+	}
+	for i < oil.OilNwords(an, at) {
+		model = ocrscript.OsLangScript(oil.OilWlang(an, at, w))
+		if model > 0 {
+			known = 1
+			if ocrport.OpScriptReads(script, model) == 1 {
+				return 0
+			}
+		}
+		w = oil.OilWordNext(an, at, w)
+		i += 1
+	}
+	return known
+}
+
 func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	// 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
 	var ext int32 = oil.OilFind(an, at)
@@ -79,6 +154,12 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	var sourceFirst int32 = 0
 	if ext < 0 {
 		return 0
+	}
+	if oil.OilHas(oil.OilGet(an, ext, oil.OhCaps()), oil.OcScript()) == 0 {
+		if nw < SkMinWords() {
+			return 0
+		}
+		return skNoOsdUnread(an, ext, scr)
 	}
 	script = oil.OilScript(an, ext)
 	if script <= 0 {
@@ -108,14 +189,14 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	for i < nw {
 		model = oilsrc.OxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr)
 		if model >= 0 {
-			if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, model+1, (model+1)+port.CellsAt(scr, model))) == 1 {
+			if ocrport.OpScriptReads(script, ocrtess.OpModelScript(scr, model+1, (model+1)+port.CellsAt(scr, model))) == 1 {
 				return 0
 			}
 		} else {
 			lang = oil.OilWlang(an, ext, w)
 			if lang > 0 {
 				n = SkUnpack(lang, scr)
-				if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, 0, n)) == 1 {
+				if ocrport.OpScriptReads(script, ocrtess.OpModelScript(scr, 0, n)) == 1 {
 					return 0
 				}
 			}
@@ -135,6 +216,9 @@ func SkRoute(ans *port.Cells, at int32, id int32, bitmap int32, dpi int32, rq *p
 	var found int32 = plan.AnFind(ans, id)
 	var ext int32 = oil.OilFind(ans, at)
 	var script int32 = oil.OilScript(ans, ext)
+	if oil.OilHas(oil.OilGet(ans, ext, oil.OhCaps()), oil.OcScript()) == 0 {
+		script = SkCensus(ans, ext, scr)
+	}
 	if found >= 0 {
 		if plan.AnOk(ans, found) == 1 {
 			return found

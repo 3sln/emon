@@ -74,7 +74,8 @@
 ;; included, is DISCARDED, the host fetches what the `Src` missed and re-runs).
 ;; Anything else is the unit's own error and is the host's to report.
 (ns emon.plan
-  (:require [emon.lang :refer [I32 Cells]]
+  (:require [emon.ocridentity :refer [oi-default]]
+            [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-len cells-at cells-set cells-push]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -294,6 +295,7 @@
     (return 0)))
 
 (defn ^:pub ^I32 rq-ocr-end [^:mut ^Cells c ^I32 at]
+  (oi-default c)
   (return (rec-end c at)))
 
 (defn ^:pub ^I32 rq-bytes [^:mut ^Cells c ^I32 id ^I32 input ^I32 offset ^I32 length]

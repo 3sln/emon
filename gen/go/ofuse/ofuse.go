@@ -35,6 +35,9 @@ func OfActive(image int32, trigger int32, keyword int32) int32 {
 }
 
 func OfRule(incumbent int32, numeric int32, incumbentValid int32, candidateValid int32, dictionary int32, votes int32, incumbentVotes int32, confidence int32, incumbentConfidence int32) int32 {
+	if confidence < 0 {
+		return 0
+	}
 	if votes == 0 {
 		return 0
 	}
@@ -1241,6 +1244,13 @@ func ofSeqSame(words *port.Cells, text *port.Cells, refs *port.Cells, start int3
 	return 1
 }
 
+func ofScore(words *port.Cells, w int32) int32 {
+	if (evidence.OwGet(words, w, evidence.OwfFlags()) & evidence.OeUncalibrated()) != 0 {
+		return -1
+	}
+	return evidence.OwConfidence(words, w)
+}
+
 func ofAddCandidate(words *port.Cells, text *port.Cells, run int32, seq *port.Cells, c *port.Cells, refs *port.Cells) int32 {
 	var n int32 = port.CellsLen(seq)
 	var r int32 = port.CellsLen(c) / OfCstride()
@@ -1259,7 +1269,7 @@ func ofAddCandidate(words *port.Cells, text *port.Cells, run int32, seq *port.Ce
 	for i < n {
 		w = port.CellsAt(seq, i)
 		port.CellsPush(refs, w)
-		sum += int64(evidence.OwConfidence(words, w))
+		sum += int64(ofScore(words, w))
 		if (evidence.OwGet(words, w, evidence.OwfFlags()) & evidence.OeDictionary()) == 0 {
 			dictionary = 0
 		}
@@ -1377,7 +1387,7 @@ func OfCandidates(words *port.Cells, text *port.Cells, rows *port.Cells, parents
 			sum = int64(0)
 			j = 0
 			for j < port.CellsLen(seq) {
-				sum += int64(evidence.OwConfidence(words, port.CellsAt(seq, j)))
+				sum += int64(ofScore(words, port.CellsAt(seq, j)))
 				j += 1
 			}
 			confidence = int32(sum / int64(port.CellsLen(seq)))

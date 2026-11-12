@@ -58,7 +58,7 @@ export function ocrRequest(rec, bitmap, w) {
   const marker = w.ocrIdentityAt(rec);
   for (let k = w.ocrLangFirst(rec); k < (marker < 0 ? args.length : marker - 3); k++) langs.push(unpack4(args[k]));
   return {
-    ...(marker >= 0 ? { record: Int32Array.from(rec) } : {}),
+    ...(marker >= 0 ? { record: Int32Array.from(rec), engine: rec[marker + 2], configuration: String.fromCodePoint(...rec.slice(marker + 4)) } : {}),
     models: (installed) => w.ocrModels(rec, installed),
     wordLang: (model) => unpack4(w.ocrWordLang(model)),
     blockType: (polyBlockType) => w.ocrBlockType(polyBlockType),

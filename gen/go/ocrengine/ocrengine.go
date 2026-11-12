@@ -4,17 +4,20 @@
 package ocrengine
 
 import (
+	"emon/evidence"
+	"emon/ocridentity"
+	"emon/oil"
 	"emon/plan"
 	"emon/port"
 	"strings"
 )
 
 var OeIdentity [74]int32 = [74]int32{
-	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
-	100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
-	101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
-	53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
-	53, 48, 57, 55, 57, 101, 100, 54, 54, 102,
+	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 49, 51, 52, 56, 97, 99,
+	52, 54, 57, 50, 53, 56, 50, 54, 53, 52, 48, 51, 100, 52, 100, 56,
+	48, 57, 53, 49, 97, 54, 101, 54, 54, 49, 102, 102, 101, 99, 52, 56,
+	98, 101, 51, 54, 53, 101, 51, 51, 54, 100, 56, 48, 54, 101, 49, 99,
+	97, 50, 53, 99, 56, 99, 101, 98, 100, 98,
 }
 
 var OeRoles [4]int32 = [4]int32{
@@ -49,46 +52,82 @@ func OeRequestSlot(engine int32) int32 {
 	return -1
 }
 
-func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
-	if engine == 0 {
+func OeSelect(requests *port.Cells, at int32, engine int32) int32 {
+	// Select an engine immediately after closing the last request. Allocation slots never select engines.
+	if engine != 2 {
+		return 0
+	}
+	var end int32 = port.CellsLen(requests)
+	var k int32 = 10
+	var first int32 = -1
+	for ((at + k) + 3) < end {
+		if (port.CellsAt(requests, at+k) == -3100) && (port.CellsAt(requests, (at+k)+1) == 2) && (port.CellsAt(requests, (at+k)+3) == ((end - (at + k)) - 4)) {
+			first = at + k
+		}
+		k += 1
+	}
+	if first < 0 {
+		return -1
+	}
+	port.CellsDrop(requests, first)
+	port.CellsPush(requests, -3100)
+	port.CellsPush(requests, 2)
+	port.CellsPush(requests, engine)
+	port.CellsPush(requests, 74)
+	k = 0
+	for k < 74 {
+		port.CellsPush(requests, OeIdentity[k])
+		k += 1
+	}
+	port.CellsSet(requests, at, port.CellsLen(requests)-at)
+	return 0
+}
+
+func oeContext(requests *port.Cells, at int32) int32 {
+	var end int32 = port.CellsLen(requests)
+	var k int32 = at + 10
+	for (k + 3) < end {
+		if (port.CellsAt(requests, k) == -3100) && (port.CellsAt(requests, k+1) == 2) && (port.CellsAt(requests, k+2) == 1) && (port.CellsAt(requests, k+3) == ((end - k) - 4)) {
+			port.CellsDrop(requests, k)
+			ocridentity.OiDefault(requests)
+			port.CellsSet(requests, k+3, (112+1)+74)
+			port.CellsPush(requests, 59)
+			var i int32 = 0
+			for i < 74 {
+				port.CellsPush(requests, OeIdentity[i])
+				i += 1
+			}
+			port.CellsSet(requests, at, port.CellsLen(requests)-at)
+			return 0
+		}
+		k += 1
+	}
+	return 0
+}
+
+func OeTag(requests *port.Cells, scratch *port.Cells, mode int32) int32 {
+	// Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.
+	if mode == 0 {
 		return 0
 	}
 	port.CellsDrop(scratch, 0)
 	var at int32 = 0
 	var i int32 = 0
-	var k int32 = 0
 	for at < port.CellsLen(requests) {
 		var n int32 = port.CellsAt(requests, at)
 		var out int32 = port.CellsLen(scratch)
-		var kind int32 = port.CellsAt(requests, at+1)
-		var count int32 = n
-		var first int32 = 10
-		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot(2))) {
-			k = first
-			for (k + 2) < count {
-				if (port.CellsAt(requests, at+k) == -3100) && ((port.CellsAt(requests, (at+k)+1) == 1) && (port.CellsAt(requests, (at+k)+2) == ((count - k) - 3))) {
-					count = k
-					k = first
-				} else {
-					k += 1
-				}
-			}
-		}
 		i = 0
-		for i < count {
+		for i < n {
 			port.CellsPush(scratch, port.CellsAt(requests, at+i))
 			i += 1
 		}
-		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot(2))) {
-			port.CellsPush(scratch, -3100)
-			port.CellsPush(scratch, 1)
-			port.CellsPush(scratch, 74)
-			k = 0
-			for k < 74 {
-				port.CellsPush(scratch, OeIdentity[k])
-				k += 1
+		if port.CellsAt(requests, at+1) == plan.PkOcr() {
+			if mode == 1 {
+				OeSelect(scratch, out, 2)
 			}
-			port.CellsSet(scratch, out, port.CellsLen(scratch)-out)
+			if mode == 2 {
+				oeContext(scratch, out)
+			}
 		}
 		at += n
 	}
@@ -101,16 +140,115 @@ func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
 	return 0
 }
 
-func OeEvidence(out *strings.Builder, engine int32) int32 {
-	if engine == 0 {
-		return 0
+func oeConfig(out *port.Cells, engine int32, context int32) int32 {
+	port.CellsDrop(out, 0)
+	var i int32 = 0
+	if engine == 1 {
+		for i < 112 {
+			port.CellsPush(out, ocridentity.OiTesseract[i])
+			i += 1
+		}
+		if context == 2 {
+			port.CellsPush(out, 59)
+		}
 	}
-	port.TextAscii(out, ",\"ocr-engine\":{\"name\":\"ppocr\",\"model\":\"")
-	var k int32 = 0
-	for k < 74 {
-		port.TextCp(out, OeIdentity[k])
-		k += 1
+	if (engine == 2) || ((engine == 1) && (context == 2)) {
+		i = 0
+		for i < 74 {
+			port.CellsPush(out, OeIdentity[i])
+			i += 1
+		}
 	}
-	port.TextAscii(out, "\"}")
+	return 0
+}
+
+func OeRegister(table *port.Cells, runs *port.Cells, lines *port.Cells, words *port.Cells, context int32, scratch *port.Cells) int32 {
+	port.CellsDrop(table, 0)
+	var r int32 = 0
+	var i int32 = 0
+	var hit int32 = -1
+	var engine int32 = 0
+	var hi int32 = 0
+	var lo int32 = 0
+	var bit int32 = 1
+	var j int32 = 0
+	for r < evidence.OrCount(runs) {
+		engine = evidence.OrGet(runs, r, evidence.OrfEngine())
+		oeConfig(scratch, engine, context)
+		var hash int64 = oil.OilObsHash(scratch, 0, port.CellsLen(scratch))
+		hi = int32(int64(uint64(hash) >> uint(32)))
+		lo = int32(hash)
+		hit = -1
+		i = 0
+		for i < (port.CellsLen(table) / 7) {
+			if (port.CellsAt(table, i*7) == engine) && (port.CellsAt(table, (i*7)+1) == hi) && (port.CellsAt(table, (i*7)+2) == lo) && (port.CellsAt(table, (i*7)+3) == evidence.OrGet(runs, r, evidence.OrfObservedHi())) && (port.CellsAt(table, (i*7)+4) == evidence.OrGet(runs, r, evidence.OrfObservedLo())) {
+				hit = i
+			}
+			i += 1
+		}
+		if hit < 0 {
+			hit = port.CellsLen(table) / 7
+			if hit >= 16 {
+				return -1
+			}
+			port.CellsPush(table, engine)
+			port.CellsPush(table, hi)
+			port.CellsPush(table, lo)
+			port.CellsPush(table, evidence.OrGet(runs, r, evidence.OrfObservedHi()))
+			port.CellsPush(table, evidence.OrGet(runs, r, evidence.OrfObservedLo()))
+			port.CellsPush(table, 0)
+			port.CellsPush(table, context)
+		}
+		evidence.OrSet(runs, r, evidence.OrfEix(), hit)
+		bit = 1
+		j = 0
+		for j < hit {
+			bit *= 2
+			j += 1
+		}
+		i = 0
+		for i < evidence.OwCount(words) {
+			if evidence.OwGet(words, i, evidence.OwfRun()) == r {
+				evidence.OwSet(words, i, evidence.OwfProv(), bit)
+			}
+			i += 1
+		}
+		i = 0
+		for i < evidence.OlCount(lines) {
+			if evidence.OlGet(lines, i, evidence.OlfRun()) == r {
+				evidence.OlSet(lines, i, evidence.OlfProv(), bit)
+			}
+			i += 1
+		}
+		r += 1
+	}
+	return 0
+}
+
+func OeEvidence(out *strings.Builder, table *port.Cells, scratch *port.Cells) int32 {
+	port.TextAscii(out, ",\"ocr-engines\":[")
+	var i int32 = 0
+	var j int32 = 0
+	for i < (port.CellsLen(table) / 7) {
+		if i > 0 {
+			port.TextAscii(out, ",")
+		}
+		port.TextAscii(out, "{\"engine\":\"")
+		oil.OenEmitName(out, port.CellsAt(table, i*7))
+		port.TextAscii(out, "\",\"config\":\"")
+		oeConfig(scratch, port.CellsAt(table, i*7), port.CellsAt(table, (i*7)+6))
+		j = 0
+		for j < port.CellsLen(scratch) {
+			port.TextCp(out, port.CellsAt(scratch, j))
+			j += 1
+		}
+		port.TextAscii(out, "\",\"observed\":[")
+		port.TextI32(out, port.CellsAt(table, (i*7)+3))
+		port.TextAscii(out, ",")
+		port.TextI32(out, port.CellsAt(table, (i*7)+4))
+		port.TextAscii(out, "]}")
+		i += 1
+	}
+	port.TextAscii(out, "]")
 	return 0
 }

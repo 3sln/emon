@@ -737,4 +737,8 @@ public static class Transcripttest {
         }
         emon.Testport.AssertEq(row, 129, "the transcripts under test/");
     }
+    [Xunit.Fact]
+    public static void TestRequestedAndObservedEngineVectorRoundtripsAndDeduplicatesReadings() {
+        TtRoundtrip(0, emon.Testport.TextBlob("{:emon-transcript 1\n :producer {:runtime \"obs\"}\n :engines [{:engine \"ppocr\" :config \"cfg\" :observed \"obs\"}]\n :inputs []\n :entries [\n  {:round 0 :kind :ocr :req [17 3 12 1 3 0 0 0 0 0 -3100 2 2 3 99 102 103] :ans [28 3 12 0 1 2 439459865 569200837 0 0 1 1 1000 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]}\n  {:round 0 :kind :ocr :req [17 3 12 1 3 0 0 0 0 0 -3100 2 2 3 99 102 103] :ans [28 3 12 0 1 2 439459865 569200837 0 0 1 1 1000 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]}]}\n"), 0);
+    }
 }

@@ -6,11 +6,11 @@ package emon;
 
 public final class Ocrengine {
     public static final int[] OE_IDENTITY = {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
-        100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
-        101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
-        53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
-        53, 48, 57, 55, 57, 101, 100, 54, 54, 102
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 49, 51, 52, 56, 97, 99,
+        52, 54, 57, 50, 53, 56, 50, 54, 53, 52, 48, 51, 100, 52, 100, 56,
+        48, 57, 53, 49, 97, 54, 101, 54, 54, 49, 102, 102, 101, 99, 52, 56,
+        98, 101, 51, 54, 53, 101, 51, 51, 54, 100, 56, 48, 54, 101, 49, 99,
+        97, 50, 53, 99, 56, 99, 101, 98, 100, 98
     };
     public static final int[] OE_ROLES = {
         1, 1,
@@ -41,46 +41,80 @@ public final class Ocrengine {
         }
         return -1;
     }
-    public static int oeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int engine) {
-        if (engine == 0) {
+    public static int oeSelect(emon.Port.Cells requests, int at, int engine) {
+        // Select an engine immediately after closing the last request. Allocation slots never select engines.
+        if (engine != 2) {
+            return 0;
+        }
+        int end = emon.Port.cellsLen(requests);
+        int k = 10;
+        int first = -1;
+        while (((at + k) + 3) < end) {
+            if ((emon.Port.cellsAt(requests, at + k) == -3100) && (emon.Port.cellsAt(requests, (at + k) + 1) == 2) && (emon.Port.cellsAt(requests, (at + k) + 3) == ((end - (at + k)) - 4))) {
+                first = at + k;
+            }
+            k += 1;
+        }
+        if (first < 0) {
+            return -1;
+        }
+        emon.Port.cellsDrop(requests, first);
+        emon.Port.cellsPush(requests, -3100);
+        emon.Port.cellsPush(requests, 2);
+        emon.Port.cellsPush(requests, engine);
+        emon.Port.cellsPush(requests, 74);
+        k = 0;
+        while (k < 74) {
+            emon.Port.cellsPush(requests, OE_IDENTITY[k]);
+            k += 1;
+        }
+        emon.Port.cellsSet(requests, at, emon.Port.cellsLen(requests) - at);
+        return 0;
+    }
+    public static int oeContext(emon.Port.Cells requests, int at) {
+        int end = emon.Port.cellsLen(requests);
+        int k = at + 10;
+        while ((k + 3) < end) {
+            if ((emon.Port.cellsAt(requests, k) == -3100) && (emon.Port.cellsAt(requests, k + 1) == 2) && (emon.Port.cellsAt(requests, k + 2) == 1) && (emon.Port.cellsAt(requests, k + 3) == ((end - k) - 4))) {
+                emon.Port.cellsDrop(requests, k);
+                Ocridentity.oiDefault(requests);
+                emon.Port.cellsSet(requests, k + 3, (112 + 1) + 74);
+                emon.Port.cellsPush(requests, 59);
+                int i = 0;
+                while (i < 74) {
+                    emon.Port.cellsPush(requests, OE_IDENTITY[i]);
+                    i += 1;
+                }
+                emon.Port.cellsSet(requests, at, emon.Port.cellsLen(requests) - at);
+                return 0;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int oeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int mode) {
+        // Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.
+        if (mode == 0) {
             return 0;
         }
         emon.Port.cellsDrop(scratch, 0);
         int at = 0;
         int i = 0;
-        int k = 0;
         while (at < emon.Port.cellsLen(requests)) {
             int n = emon.Port.cellsAt(requests, at);
             int out = emon.Port.cellsLen(scratch);
-            int kind = emon.Port.cellsAt(requests, at + 1);
-            int count = n;
-            int first = 10;
-            if ((kind == Plan.pkOcr()) && ((engine == 1) || ((emon.Port.cellsAt(requests, at + 2) % 256) == oeRequestSlot(2)))) {
-                k = first;
-                while ((k + 2) < count) {
-                    if ((emon.Port.cellsAt(requests, at + k) == -3100) && ((emon.Port.cellsAt(requests, (at + k) + 1) == 1) && (emon.Port.cellsAt(requests, (at + k) + 2) == ((count - k) - 3)))) {
-                        count = k;
-                        k = first;
-                    } else {
-                        k += 1;
-                    }
-                }
-            }
             i = 0;
-            while (i < count) {
+            while (i < n) {
                 emon.Port.cellsPush(scratch, emon.Port.cellsAt(requests, at + i));
                 i += 1;
             }
-            if ((kind == Plan.pkOcr()) && ((engine == 1) || ((emon.Port.cellsAt(requests, at + 2) % 256) == oeRequestSlot(2)))) {
-                emon.Port.cellsPush(scratch, -3100);
-                emon.Port.cellsPush(scratch, 1);
-                emon.Port.cellsPush(scratch, 74);
-                k = 0;
-                while (k < 74) {
-                    emon.Port.cellsPush(scratch, OE_IDENTITY[k]);
-                    k += 1;
+            if (emon.Port.cellsAt(requests, at + 1) == Plan.pkOcr()) {
+                if (mode == 1) {
+                    oeSelect(scratch, out, 2);
                 }
-                emon.Port.cellsSet(scratch, out, emon.Port.cellsLen(scratch) - out);
+                if (mode == 2) {
+                    oeContext(scratch, out);
+                }
             }
             at += n;
         }
@@ -92,17 +126,114 @@ public final class Ocrengine {
         }
         return 0;
     }
-    public static int oeEvidence(StringBuilder out, int engine) {
-        if (engine == 0) {
-            return 0;
+    public static int oeConfig(emon.Port.Cells out, int engine, int context) {
+        emon.Port.cellsDrop(out, 0);
+        int i = 0;
+        if (engine == 1) {
+            while (i < 112) {
+                emon.Port.cellsPush(out, Ocridentity.OI_TESSERACT[i]);
+                i += 1;
+            }
+            if (context == 2) {
+                emon.Port.cellsPush(out, 59);
+            }
         }
-        emon.Port.textAscii(out, ",\"ocr-engine\":{\"name\":\"ppocr\",\"model\":\"");
-        int k = 0;
-        while (k < 74) {
-            emon.Port.textCp(out, OE_IDENTITY[k]);
-            k += 1;
+        if ((engine == 2) || ((engine == 1) && (context == 2))) {
+            i = 0;
+            while (i < 74) {
+                emon.Port.cellsPush(out, OE_IDENTITY[i]);
+                i += 1;
+            }
         }
-        emon.Port.textAscii(out, "\"}");
+        return 0;
+    }
+    public static int oeRegister(emon.Port.Cells table, emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, int context, emon.Port.Cells scratch) {
+        emon.Port.cellsDrop(table, 0);
+        int r = 0;
+        int i = 0;
+        int hit = -1;
+        int engine = 0;
+        int hi = 0;
+        int lo = 0;
+        int bit = 1;
+        int j = 0;
+        while (r < Evidence.orCount(runs)) {
+            engine = Evidence.orGet(runs, r, Evidence.orfEngine());
+            oeConfig(scratch, engine, context);
+            long hash = Oil.oilObsHash(scratch, 0, emon.Port.cellsLen(scratch));
+            hi = (int) (hash >>> 32);
+            lo = (int) hash;
+            hit = -1;
+            i = 0;
+            while (i < (emon.Port.cellsLen(table) / 7)) {
+                if ((emon.Port.cellsAt(table, i * 7) == engine) && (emon.Port.cellsAt(table, (i * 7) + 1) == hi) && (emon.Port.cellsAt(table, (i * 7) + 2) == lo) && (emon.Port.cellsAt(table, (i * 7) + 3) == Evidence.orGet(runs, r, Evidence.orfObservedHi())) && (emon.Port.cellsAt(table, (i * 7) + 4) == Evidence.orGet(runs, r, Evidence.orfObservedLo()))) {
+                    hit = i;
+                }
+                i += 1;
+            }
+            if (hit < 0) {
+                hit = emon.Port.cellsLen(table) / 7;
+                if (hit >= 16) {
+                    return -1;
+                }
+                emon.Port.cellsPush(table, engine);
+                emon.Port.cellsPush(table, hi);
+                emon.Port.cellsPush(table, lo);
+                emon.Port.cellsPush(table, Evidence.orGet(runs, r, Evidence.orfObservedHi()));
+                emon.Port.cellsPush(table, Evidence.orGet(runs, r, Evidence.orfObservedLo()));
+                emon.Port.cellsPush(table, 0);
+                emon.Port.cellsPush(table, context);
+            }
+            Evidence.orSet(runs, r, Evidence.orfEix(), hit);
+            bit = 1;
+            j = 0;
+            while (j < hit) {
+                bit *= 2;
+                j += 1;
+            }
+            i = 0;
+            while (i < Evidence.owCount(words)) {
+                if (Evidence.owGet(words, i, Evidence.owfRun()) == r) {
+                    Evidence.owSet(words, i, Evidence.owfProv(), bit);
+                }
+                i += 1;
+            }
+            i = 0;
+            while (i < Evidence.olCount(lines)) {
+                if (Evidence.olGet(lines, i, Evidence.olfRun()) == r) {
+                    Evidence.olSet(lines, i, Evidence.olfProv(), bit);
+                }
+                i += 1;
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static int oeEvidence(StringBuilder out, emon.Port.Cells table, emon.Port.Cells scratch) {
+        emon.Port.textAscii(out, ",\"ocr-engines\":[");
+        int i = 0;
+        int j = 0;
+        while (i < (emon.Port.cellsLen(table) / 7)) {
+            if (i > 0) {
+                emon.Port.textAscii(out, ",");
+            }
+            emon.Port.textAscii(out, "{\"engine\":\"");
+            Oil.oenEmitName(out, emon.Port.cellsAt(table, i * 7));
+            emon.Port.textAscii(out, "\",\"config\":\"");
+            oeConfig(scratch, emon.Port.cellsAt(table, i * 7), emon.Port.cellsAt(table, (i * 7) + 6));
+            j = 0;
+            while (j < emon.Port.cellsLen(scratch)) {
+                emon.Port.textCp(out, emon.Port.cellsAt(scratch, j));
+                j += 1;
+            }
+            emon.Port.textAscii(out, "\",\"observed\":[");
+            emon.Port.textI32(out, emon.Port.cellsAt(table, (i * 7) + 3));
+            emon.Port.textAscii(out, ",");
+            emon.Port.textI32(out, emon.Port.cellsAt(table, (i * 7) + 4));
+            emon.Port.textAscii(out, "]}");
+            i += 1;
+        }
+        emon.Port.textAscii(out, "]");
         return 0;
     }
 }

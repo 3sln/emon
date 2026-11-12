@@ -3,6 +3,7 @@
 
 namespace emon;
 
+
 public static class Plan {
     public static int PkRender() {
         return 1;
@@ -285,6 +286,7 @@ public static class Plan {
         return 0;
     }
     public static int RqOcrEnd(emon.Port.Cells c, int at) {
+        Ocridentity.OiDefault(c);
         return RecEnd(c, at);
     }
     public static int RqBytes(emon.Port.Cells c, int id, int input, int offset, int length) {

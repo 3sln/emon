@@ -42,7 +42,7 @@ public sealed unsafe class PpOcr : emon.Api.IOcr, IDisposable {
     }
     public emon.Planrun.Answer Fulfil(emon.Planrun.Request req, Dictionary<int,emon.Port.Bitmap> bitmaps, bool keep) {
         var r=emon.Port.NewCells(); foreach(int v in req.Rec) emon.Port.CellsPush(r,v);
-        if(emon.Ocrport.OpIdentityAt(r)<0) {
+        if(emon.Ocrport.OpRequestEngine(r)!=2) {
             if(incumbent==null) throw emon.Planrun.FulfilFailed("ppocr-incumbent-missing");
             return incumbent.Fulfil(req,bitmaps,keep);
         }

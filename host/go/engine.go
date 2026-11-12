@@ -39,7 +39,6 @@ import (
 	"emon/engine"
 	"emon/html"
 	"emon/model"
-	"emon/ocrport"
 	"emon/plan"
 	"emon/planloop"
 	"emon/planrun"
@@ -1356,19 +1355,7 @@ func (e *Engine) Record(inputs []Input, opts Options) (*Model, *Transcript, erro
 
 // Replay converts from a transcript: no Renderer or Ocr is called; a request it has no answer for is an error.
 func (e *Engine) Replay(inputs []Input, opts Options, t *Transcript) (*Model, error) {
-	if !opts.PpOcr {
-		for _, entry := range t.Entries {
-			if len(entry.Req) > 1 && entry.Req[1] == plan.PkOcr() {
-				r := port.NewCells()
-				for _, v := range entry.Req {
-					port.CellsPush(r, v)
-				}
-				if ocrport.OpIdentityAt(r) >= 0 {
-					return nil, planError(&port.PlanError{Name: "transcript-miss", Msg: "OCR engine mismatch"})
-				}
-			}
-		}
-	}
+
 	m, _, err := e.convertWith(inputs, opts, nil, t)
 	return m, err
 }

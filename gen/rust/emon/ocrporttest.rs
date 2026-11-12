@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrport::*;
+use crate::emon::ocrtess::*;
 use crate::emon::oil::*;
 use crate::emon::plan::*;
 

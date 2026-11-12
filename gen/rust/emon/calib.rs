@@ -23,51 +23,49 @@ pub fn cal_class(src: i32) -> i32 {
     }
     return 3;
 }
-pub fn cal_lookup(kind: i32, cls: i32, raw: i32) -> i32 {
-    // `cal-conf` for a class code: a code the table has no row for (9 is none) reads the kind's `any` rows.
+pub fn cal_lookup_engine(kind: i32, cls: i32, engine: i32, raw: i32) -> i32 {
     if raw < 0 {
         return raw;
     }
-    let n: i32 = 30;
+    let mut tier: i32 = 0;
     let mut i: i32 = 0;
-    let mut hit_c: i32 = -1;
-    let mut first_c: i32 = -1;
-    let mut hit_a: i32 = -1;
-    let mut first_a: i32 = -1;
-    while i < n {
-        if CD_ROWS[(i * 4 + 0) as usize] == kind {
-            if CD_ROWS[(i * 4 + 1) as usize] == cls {
-                if first_c < 0 {
-                    first_c = CD_ROWS[(i * 4 + 3) as usize];
-                }
-                if CD_ROWS[(i * 4 + 2) as usize] <= raw {
-                    hit_c = CD_ROWS[(i * 4 + 3) as usize];
-                }
-            }
-            if CD_ROWS[(i * 4 + 1) as usize] == -1 {
-                if first_a < 0 {
-                    first_a = CD_ROWS[(i * 4 + 3) as usize];
-                }
-                if CD_ROWS[(i * 4 + 2) as usize] <= raw {
-                    hit_a = CD_ROWS[(i * 4 + 3) as usize];
-                }
-            }
+    let mut first: i32 = -1;
+    let mut hit: i32 = -1;
+    let mut want_class: i32 = cls;
+    let mut want_engine: i32 = engine;
+    while tier < 3 {
+        if tier == 1 {
+            want_engine = -1;
         }
-        i += 1;
-    }
-    if hit_c >= 0 {
-        return hit_c;
-    }
-    if first_c >= 0 {
-        return first_c;
-    }
-    if hit_a >= 0 {
-        return hit_a;
-    }
-    if first_a >= 0 {
-        return first_a;
+        if tier == 2 {
+            want_class = -1;
+        }
+        i = 0;
+        first = -1;
+        hit = -1;
+        while i < 30 {
+            if (CD_ROWS[(i * 5 + 0) as usize] == kind) && (CD_ROWS[(i * 5 + 1) as usize] == want_class) && (CD_ROWS[(i * 5 + 2) as usize] == want_engine) {
+                if first < 0 {
+                    first = CD_ROWS[(i * 5 + 4) as usize];
+                }
+                if CD_ROWS[(i * 5 + 3) as usize] <= raw {
+                    hit = CD_ROWS[(i * 5 + 4) as usize];
+                }
+            }
+            i += 1;
+        }
+        if hit >= 0 {
+            return hit;
+        }
+        if first >= 0 {
+            return first;
+        }
+        tier += 1;
     }
     return raw;
+}
+pub fn cal_lookup(kind: i32, cls: i32, raw: i32) -> i32 {
+    return cal_lookup_engine(kind, cls, 1, raw);
 }
 pub fn cal_conf(kind: i32, src: i32, raw: i32) -> i32 {
     // The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.
@@ -79,8 +77,14 @@ pub fn cal_node_conf(nodes: &mut crate::port::Cells, n: i32) -> i32 {
     // step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
     // at a script it cannot read would carry the confidence of what it can.
     let raw: i32 = node_conf(nodes, n);
-    let cf: i32 = cal_conf(node_kind(nodes, n), node_src(nodes, n), raw);
+    let cf: i32 = cal_lookup_engine(node_kind(nodes, n), cal_class(node_src(nodes, n)), node_engine(nodes, n), raw);
     let mut a: i32 = n;
+    if ((node_flags(nodes, n) & fl_uncalibrated_engine()) != 0) && (cf > 500) {
+        if raw < 500 {
+            return raw;
+        }
+        return 500;
+    }
     if raw < 0 {
         return cf;
     }

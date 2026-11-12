@@ -36,7 +36,8 @@
 ;;     `xo-angle` is): a scan that was fed in 1 degree off is a page of upright lines, and one line that is not is still not.
 ;; The evidence rows (`olines`, `owords`) keep the engine's own numbers; only the pipeline's rows are normalised.
 (ns emon.scan
-  (:require [emon.oil :refer [oh-caps oh-ck oh-engine oh-lg oh-native oil-alt oil-alt-next oil-binary oil-block oil-block-at oil-block-field oil-deskew oil-find oil-first-sym oil-first-word oil-get oil-line oil-line-field oil-nblocks oil-nlines oil-nsym oil-nwords oil-oconf oil-layout-orient oil-osd oil-sconf oil-script oil-sym oil-sym-alts oil-sym-next oil-tlorder oil-wcp oil-wdir oil-wflags oil-wlang oil-wlen oil-word oil-word-flags oil-word-next oil-wpsize]]
+  (:require [emon.oil :refer [oh-obs-hi oh-obs-lo oh-caps oh-ck oh-engine oh-lg oh-native oil-alt oil-alt-next oil-binary oil-block oil-block-at oil-block-field oil-deskew oil-find oil-first-sym oil-first-word oil-get oil-line oil-line-field oil-nblocks oil-nlines oil-nsym oil-nwords oil-oconf oil-layout-orient oil-osd oil-sconf oil-script oil-sym oil-sym-alts oil-sym-next oil-tlorder oil-wcp oil-wdir oil-wflags oil-wlang oil-wlen oil-word oil-word-flags oil-word-next oil-wpsize]]
+            [emon.ocrengine :refer [oe-role]]
             [emon.ocalib :refer [ocal-word]]
             [emon.lang :refer [I32 I64 Cells Src i64 i32 mul64 add64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop]]
@@ -56,8 +57,8 @@
                                    epf-flags epf-dpi
                                    rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick
                                    co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 cf-conf cf-ink ik-get ikf-role ir-body
-                                   oe-garbage oe-rule-ghost oe-corrected
-                                   orf-engine orf-eix orf-caps orf-native orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
+                                   oe-uncalibrated oe-garbage oe-rule-ghost oe-corrected
+                                   orf-observed-hi orf-observed-lo orf-page orf-engine orf-eix orf-caps orf-native orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
                                    orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
                                    orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
                                    obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
@@ -73,7 +74,7 @@
             [emon.pdflex :refer [pl-kind-of pl-first pl-next pl-int-value pl-stream-start pl-stream-len]]
             [emon.pdfdoc :refer [pd-get pd-stream-plan pd-pg-count pd-pg-crop pd-pg-rotate]]
             [emon.model :refer [sr-ocr sr-text node-count node-kind node-parent node-region-head node-region-count
-                                node-src node-flags node-conf node-set-src node-set-conf node-add-flag nk-is-inline
+                                node-set-engine fl-uncalibrated-engine node-src node-flags node-conf node-set-src node-set-conf node-add-flag nk-is-inline
                                 region-page region-next region-x0 region-y0 region-x1 region-y1 fl-rotated fl-ocr-only fl-low-conf fl-script-unread page-count page-set-kind pk-scanned
                                 ledger-add dr-ocr-empty dr-ocr-ghost dr-background sr-vector page-w page-h
                                 node-text-start node-text-len node-set-text node-set-attr-text text-append-cp fk-ocr]]
@@ -517,6 +518,9 @@
                 (if (> ps 1000000) (set ps 1000000))
                 (if (>= ps 0) (ow-set owords ow (owf-psize) (* ps 100)))
                 (ow-set owords ow (owf-flags) (oil-word-flags an ext wx))
+                (if (< (ow-get owords ow (owf-pcal)) 0)
+                  (let [^I32 flags (ow-get owords ow (owf-flags))]
+                    (ow-set owords ow (owf-flags) (bit-or flags (oe-uncalibrated)))))
                 (set ns (oil-nsym an ext wx))
                 (ow-set owords ow (owf-sfirst) (os-count osyms))
                 (ow-set owords ow (owf-scount) ns)
@@ -591,6 +595,8 @@
         ^:mut ^I32 w 0
         ^:mut ^I32 rotmed 0
         ^:mut ^I32 ts 0]
+    (or-set oruns run (orf-observed-hi) (oil-get an at (oh-obs-hi)))
+    (or-set oruns run (orf-observed-lo) (oil-get an at (oh-obs-lo)))
     (or-set oruns run (orf-engine) (oil-get an at (oh-engine)))
     (or-set oruns run (orf-caps) (oil-get an at (oh-caps)))
     (or-set oruns run (orf-native) (oil-get an at (oh-native)))
@@ -2396,3 +2402,23 @@
                   (set rows (+ rows 1)))))
           (set p (+ p 1))))
     (return rows)))
+
+(defn ^:pub ^I32 sc-node-engines [^:mut ^Cells nodes ^Cells regions ^Cells runs]
+  (comment "The node map is keyed by the page's primary engine. A hybrid keeps the registered incumbent as primary, including seal and stamp pages.")
+  (let [^:mut ^I32 n 1 ^:mut ^I32 r 0 ^:mut ^I32 pg 0 ^:mut ^I32 engine 0 ^:mut ^I32 candidate 0]
+    (while (< n (node-count nodes))
+      (do (if (!= (bit-and (node-src nodes n) (sr-ocr)) 0)
+            (do (set pg (sc-node-page nodes regions n)) (set engine 0) (set r 0)
+                (while (< r (or-count runs))
+                  (do (if (== (or-get runs r (orf-page)) pg)
+                        (do (set candidate (or-get runs r (orf-engine)))
+                            (if (or (== engine 0) (and (!= (oe-role engine) 1) (== (oe-role candidate) 1)))
+                              (set engine candidate))))
+                      (set r (+ r 1))))
+                (if (> engine 0)
+                  (do (node-set-engine nodes n engine)
+                      (if (< (ocal-word engine 0 500) 0)
+                        (do (node-add-flag nodes n (fl-uncalibrated-engine))
+                            (if (> (node-conf nodes n) 500) (node-set-conf nodes n 500))))))))
+          (set n (+ n 1)))))
+  (return 0))

@@ -5,9 +5,9 @@
 (defn pp-entry? [entry]
   (let [r (:req entry) n (count r)]
     (and (= :ocr (:kind entry))
-         (some (fn [i] (and (= -3100 (nth r i)) (= 1 (nth r (inc i)))
-                            (= (nth r (+ i 2)) (- n i 3))))
-               (range 10 (- n 2))))))
+         (some (fn [i] (and (= -3100 (nth r i)) (= 2 (nth r (inc i))) (= 2 (nth r (+ i 2)))
+                            (= (nth r (+ i 3)) (- n i 4))))
+               (range 10 (- n 3))))))
 
 (def rows
   (vec (mapcat

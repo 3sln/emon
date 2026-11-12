@@ -54,6 +54,7 @@ public static class Enctx {
         public emon.Port.Cells Ofuse = emon.Port.NewCells();
         public emon.Port.Cells Oarb = emon.Port.NewCells();
         public emon.Port.Cells Oxs = emon.Port.NewCells();
+        public emon.Port.Cells Oet = emon.Port.NewCells();
         public EvArenas() {
         }
         public EvArenas Clone() {
@@ -79,6 +80,7 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Ofuse, this.Ofuse);
             emon.Port.CellsCopyInto(c.Oarb, this.Oarb);
             emon.Port.CellsCopyInto(c.Oxs, this.Oxs);
+            emon.Port.CellsCopyInto(c.Oet, this.Oet);
             return c;
         }
     }

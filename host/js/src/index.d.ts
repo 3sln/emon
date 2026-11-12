@@ -40,6 +40,9 @@ export function toSource(input: Input, options?: { lazy?: boolean; max?: number 
 
 /** A request for the OCR port (`ports.ocr`): see `@3sln/emon/tesseract`. */
 export interface OcrRequest {
+  engine?: number;
+  configuration?: string;
+  record?: Int32Array;
   id: number;
   psm: number;
   flags: number;

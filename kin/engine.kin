@@ -27,7 +27,7 @@
             [emon.pdfdoc :refer [pd-pg-count pd-open-pw pd-pages pd-need-bytes pd-version-major pd-version-minor pd-encrypted]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.pageunit :refer [pu-plan pu-run-pdf pu-kind pk-born pk-scan]]
-            [emon.ocrengine :refer [oe-tag oe-evidence]]
+            [emon.ocrengine :refer [oe-register oe-tag oe-evidence]]
             [emon.oilsrc :refer [oxs-collect oxs-check oxs-emit]]
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfmeta :refer [pm-run]]
@@ -57,7 +57,7 @@
             [emon.fields :refer [fl-run]]
             [emon.figclass :refer [fc-emit-budget fc-write fc-stage fc-images]]
             [emon.scriptcheck :refer [sk-tag-conflicts]]
-            [emon.scan :refer [sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
+            [emon.scan :refer [sc-node-engines sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
             [emon.ocrledger :refer [oc-account oc-ink-account]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
@@ -258,10 +258,10 @@
 
 (defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
   (let [^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
+    (oe-tag rq (fd d pscr) (* 2 (fd c oengine)))
     (if (== status 0)
       (do (if (< (oxs-collect ans (fd ev views) (fd ev oruns) (fd ev olines) (fd ev oxs)) 0) (return 2))
           (if (< (oxs-check (fd ev oxs) (fd ev oruns)) 0) (return 2))))
-    (oe-tag rq (fd d pscr) (* 2 (fd c oengine)))
     (return status)))
 
 ;; ----------------------------------------------------------------------------------------------- the asset unit
@@ -490,6 +490,7 @@
       (do
         (il-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd d ift) (fd s sf) (fd d an) (fd d txt) (fd d pg) (fd m pages) np (fd m text) (fd s hc)
  (fd s isw))))
+    (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (* 2 (fd c oengine)) (fd s s0)) 0) (return 2))
     (pa-build (fd d fw) (fd d et) np (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
          (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
          (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al) (fd s pix))
@@ -498,9 +499,7 @@
       (en-figures m s d (fd c level)))
     (if (!= (fd c keep) 0)
       (do (if (== kind 0) (fc-emit-budget (fd s fcand) (fd s ffd) (fd d evidence)))
-          (if (!= (fd c oengine) 0)
-            (if (== (en-ocr-planned c d) 1)
-              (oe-evidence (fd d evidence) (fd c oengine))))
+          (oe-evidence (fd d evidence) (fd ev oet) (fd s s0))
           (emit-ascii (fd d evidence) "}")))
     ;; restructuring (kin/restruct.kin, P4.5, P4.6): the body is copied into new arenas, in document order, and they replace the old ones
       (rs-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s rn) (fd s ra) (fd s rr) (fd s rnm) (fd s rstk) (fd s rused) (fd s rout)
@@ -566,6 +565,7 @@
               (set pending 1)
               (en-asset-stage c m s (fd d cand) (fd d cbytes))))))
     ;; `figures` leaves the asset stage to the asset unit (D351), which asks the Renderer; so it does the checks after it too
+    (sc-node-engines (fd m nodes) (fd m regions) (fd ev oruns))
     (if (== pending 0)
       (do (set w (en-seal m (fd s chk) (fd s sealout) (fd c level)))
           (if (!= w 0)

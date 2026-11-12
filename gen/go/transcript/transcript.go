@@ -4,6 +4,7 @@
 package transcript
 
 import (
+	"emon/oil"
 	"emon/port"
 	"emon/transcriptctx"
 	"strings"
@@ -1223,6 +1224,150 @@ func TrBitmapName(n int32, out *strings.Builder) int32 {
 	return n
 }
 
+var twWeb [33]int32 = [33]int32{
+	32, 114, 117, 110, 116, 105, 109, 101, 61, 79, 82, 84, 32, 87, 101, 98,
+	32, 49, 46, 50, 50, 46, 48, 32, 119, 97, 115, 109, 32, 83, 73, 77,
+	68,
+}
+
+func twMarker(t *transcriptctx.Tr, e int32) int32 {
+	var start int32 = e + 6
+	var end int32 = start + port.CellsAt(t.Ents, e+5)
+	var k int32 = start + 10
+	if port.CellsAt(t.Ents, start+1) != 3 {
+		return -1
+	}
+	for (k + 3) < end {
+		if (port.CellsAt(t.Ents, k) == -3100) && (port.CellsAt(t.Ents, k+1) == 2) && (port.CellsAt(t.Ents, k+3) == ((end - k) - 4)) {
+			return k
+		}
+		k += 1
+	}
+	return -1
+}
+
+func twAnswer(t *transcriptctx.Tr, e int32) int32 {
+	return (e + 6) + port.CellsAt(t.Ents, e+5)
+}
+
+func twSameEngine(t *transcriptctx.Tr, e int32, other int32) int32 {
+	var a int32 = twMarker(t, e)
+	var b int32 = twMarker(t, other)
+	var aa int32 = twAnswer(t, e)
+	var ab int32 = twAnswer(t, other)
+	var k int32 = 2
+	if (a < 0) || (b < 0) {
+		return 0
+	}
+	if ((other + port.CellsAt(t.Ents, other)) - ab) < 28 {
+		return 0
+	}
+	if port.CellsAt(t.Ents, a+3) != port.CellsAt(t.Ents, b+3) {
+		return 0
+	}
+	if (port.CellsAt(t.Ents, aa+6) != port.CellsAt(t.Ents, ab+6)) || (port.CellsAt(t.Ents, aa+7) != port.CellsAt(t.Ents, ab+7)) {
+		return 0
+	}
+	for k < (4 + port.CellsAt(t.Ents, a+3)) {
+		if port.CellsAt(t.Ents, a+k) != port.CellsAt(t.Ents, b+k) {
+			return 0
+		}
+		k += 1
+	}
+	return 1
+}
+
+func twHashMatches(cps *port.Cells, start int32, n int32, hi int32, lo int32) int32 {
+	var hash int64 = oil.OilObsHash(cps, start, n)
+	if (int32(int64(uint64(hash)>>uint(32))) == hi) && (int32(hash) == lo) {
+		return 1
+	}
+	return 0
+}
+
+func twObserved(t *transcriptctx.Tr, out *strings.Builder, marker int32, answer int32) int32 {
+	var hi int32 = port.CellsAt(t.Ents, answer+6)
+	var lo int32 = port.CellsAt(t.Ents, answer+7)
+	var p int32 = 0
+	var k int32 = 0
+	for p < port.CellsLen(t.Prod) {
+		var kn int32 = port.CellsAt(t.Prod, p)
+		var v int32 = (p + kn) + 2
+		var vn int32 = port.CellsAt(t.Prod, v-1)
+		if twHashMatches(t.Prod, v, vn, hi, lo) == 1 {
+			twCps(out, t.Prod, v, vn, 1)
+			return 1
+		}
+		p = v + vn
+	}
+	p = port.CellsAt(t.Ents, marker+3)
+	if twHashMatches(t.Ents, marker+4, p, hi, lo) == 1 {
+		twCps(out, t.Ents, marker+4, p, 1)
+		return 1
+	}
+	port.CellsDrop(t.Tmp, 0)
+	for k < p {
+		port.CellsPush(t.Tmp, port.CellsAt(t.Ents, (marker+4)+k))
+		k += 1
+	}
+	k = 0
+	for k < 33 {
+		port.CellsPush(t.Tmp, twWeb[k])
+		k += 1
+	}
+	var n int32 = port.CellsLen(t.Tmp)
+	if twHashMatches(t.Tmp, 0, n, hi, lo) == 1 {
+		twCps(out, t.Tmp, 0, n, 1)
+		return 1
+	}
+	return 0
+}
+
+func twEngines(t *transcriptctx.Tr, out *strings.Builder) int32 {
+	var e int32 = 0
+	var other int32 = 0
+	var duplicate int32 = 0
+	var count int32 = 0
+	var marker int32 = 0
+	var answer int32 = 0
+	for e < port.CellsLen(t.Ents) {
+		marker = twMarker(t, e)
+		answer = twAnswer(t, e)
+		if (marker >= 0) && (((e + port.CellsAt(t.Ents, e)) - answer) >= 28) && (port.CellsAt(t.Ents, answer+3) == 0) {
+			other = 0
+			duplicate = 0
+			for other < e {
+				if twSameEngine(t, e, other) == 1 {
+					duplicate = 1
+				}
+				other += port.CellsAt(t.Ents, other)
+			}
+			if duplicate == 0 {
+				if count == 0 {
+					port.TextAscii(out, " :engines [")
+				} else {
+					port.TextAscii(out, " ")
+				}
+				port.TextAscii(out, "{:engine \"")
+				oil.OenEmitName(out, port.CellsAt(t.Ents, marker+2))
+				port.TextAscii(out, "\" :config \"")
+				var configN int32 = port.CellsAt(t.Ents, marker+3)
+				twCps(out, t.Ents, marker+4, configN, 1)
+				port.TextAscii(out, "\" :observed \"")
+				twObserved(t, out, marker, answer)
+				port.TextAscii(out, "\"}")
+				count += 1
+			}
+		}
+		e += port.CellsAt(t.Ents, e)
+	}
+	if count > 0 {
+		port.TextAscii(out, "]")
+		port.TextCp(out, 10)
+	}
+	return 0
+}
+
 func TrWrite(t *transcriptctx.Tr, out *strings.Builder) int32 {
 	// Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.
 	port.TextAscii(out, "{:")
@@ -1252,6 +1397,7 @@ func TrWrite(t *transcriptctx.Tr, out *strings.Builder) int32 {
 		port.TextAscii(out, "}")
 		port.TextCp(out, 10)
 	}
+	twEngines(t, out)
 	port.TextAscii(out, " :")
 	TfEmitName(out, TfInputs())
 	port.TextAscii(out, " [")

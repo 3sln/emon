@@ -391,7 +391,7 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.EvStrides[10], 16, "fonts");
         emon.Testport.AssertEq(Evidence.EvStrides[11], 24, "paths");
         emon.Testport.AssertEq(Evidence.EvStrides[12], 20, "images");
-        emon.Testport.AssertEq(Evidence.EvStrides[13], 32, "oruns");
+        emon.Testport.AssertEq(Evidence.EvStrides[13], 34, "oruns");
         emon.Testport.AssertEq(Evidence.EvStrides[14], 16, "oblocks");
         emon.Testport.AssertEq(Evidence.EvStrides[15], 28, "olines");
         emon.Testport.AssertEq(Evidence.EvStrides[16], 32, "owords");
@@ -592,7 +592,7 @@ public static class Evidencetest {
         emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfZ()), -1, "no paint number");
         emon.Testport.AssertEq(Evidence.ImGet(images, 0, Evidence.MfVby()), -1, "no occluder");
         emon.Testport.AssertEq(Evidence.OrNew(oruns, 3, 0), 0, "first run");
-        emon.Testport.AssertEq(emon.Port.CellsLen(oruns), 32, "32 cells");
+        emon.Testport.AssertEq(emon.Port.CellsLen(oruns), 34, "34 cells");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfBview()), -1, "no binarised view");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfRequest()), -1, "no request");
         emon.Testport.AssertEq(Evidence.OrGet(oruns, 0, Evidence.OrfLang()), -1, "no languages");

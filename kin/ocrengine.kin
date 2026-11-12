@@ -1,15 +1,18 @@
-;; Optional OCR request identity (OP1, D843). Legacy requests remain byte-identical.
+;; Engine roles and OIL requested configurations (D883).
 (ns emon.ocrengine
-  (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
-            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-cp]]
+  (:require [emon.lang :refer [I32 I64 Cells Text emit-ascii i32 shr64]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-cp text-i32]]
+            [emon.oil :refer [oil-obs-hash oen-emit-name]]
+            [emon.evidence :refer [or-count or-get or-set orf-engine orf-eix orf-observed-hi orf-observed-lo ow-count ow-get ow-set owf-run owf-prov ol-count ol-get ol-set olf-run olf-prov]]
             [emon.plan :refer [pk-ocr]]
-            [kin.lang :refer [defn defdata return let set while if do comment + - * < > <= >= == != and or rem]]))
+            [emon.ocridentity :refer [oi-default oi-tess-count oi-tess-at]]
+            [kin.lang :refer [defn defdata return let set while if do comment + - * < > <= >= == != and or rem quot]]))
 
 ;; The version covers graph hashes, dictionary, ORT CPU settings, image and CTC
 ;; policy and the frozen calibration. Update on any observable adapter change.
 (defdata ^:pub oe-identity
   :emitter kin.lang/flat-array
-  :data [112 112 111 99 114 53 45 101 110 45 54 101 55 48 101 55 100 97 48 102 50 100 56 57 56 56 55 53 53 100 48 55 101 98 48 101 50 99 49 48 99 55 49 98 99 54 55 53 53 97 99 48 100 50 56 56 52 57 102 48 100 51 48 53 53 48 57 55 57 101 100 54 54 102]
+  :data [112 112 111 99 114 53 45 101 110 45 49 51 52 56 97 99 52 54 57 50 53 56 50 54 53 52 48 51 100 52 100 56 48 57 53 49 97 54 101 54 54 49 102 102 101 99 52 56 98 101 51 54 53 101 51 51 54 100 56 48 54 101 49 99 97 50 53 99 56 99 101 98 100 98]
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
@@ -39,49 +42,126 @@
           (set i (+ i 1)))))
   (return -1))
 
-(defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 engine]
-  (if (== engine 0) (return 0))
+(defn ^:pub ^I32 oe-select [^:mut ^Cells requests ^I32 at ^I32 engine]
+  (comment "Select an engine immediately after closing the last request. Allocation slots never select engines.")
+  (if (!= engine 2) (return 0))
+  (let [^I32 end (cells-len requests)
+        ^:mut ^I32 k 10 ^:mut ^I32 first -1]
+    (while (< (+ (+ at k) 3) end)
+      (do (if (and (== (cells-at requests (+ at k)) -3100)
+                   (== (cells-at requests (+ (+ at k) 1)) 2)
+                   (== (cells-at requests (+ (+ at k) 3)) (- (- end (+ at k)) 4)))
+            (set first (+ at k)))
+          (set k (+ k 1))))
+    (if (< first 0) (return -1))
+    (cells-drop requests first)
+    (cells-push requests -3100) (cells-push requests 2) (cells-push requests engine)
+    (cells-push requests (oe-id-count 0))
+    (set k 0)
+    (while (< k (oe-id-count 0))
+      (do (cells-push requests (oe-id-at 0 k)) (set k (+ k 1))))
+    (cells-set requests at (- (cells-len requests) at)))
+  (return 0))
+
+(defn ^I32 oe-context [^:mut ^Cells requests ^I32 at]
+  (let [^I32 end (cells-len requests) ^:mut ^I32 k (+ at 10)]
+    (while (< (+ k 3) end)
+      (do (if (and (== (cells-at requests k) -3100) (== (cells-at requests (+ k 1)) 2)
+                   (== (cells-at requests (+ k 2)) 1)
+                   (== (cells-at requests (+ k 3)) (- (- end k) 4)))
+            (do (cells-drop requests k)
+                (oi-default requests)
+                (cells-set requests (+ k 3) (+ (+ (oi-tess-count 0) 1) (oe-id-count 0)))
+                (cells-push requests 59)
+                (let [^:mut ^I32 i 0]
+                  (while (< i (oe-id-count 0))
+                    (do (cells-push requests (oe-id-at 0 i)) (set i (+ i 1)))))
+                (cells-set requests at (- (cells-len requests) at))
+                (return 0)))
+          (set k (+ k 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 mode]
+  (comment "Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.")
+  (if (== mode 0) (return 0))
   (cells-drop scratch 0)
-  (let [^:mut ^I32 at 0 ^:mut ^I32 i 0 ^:mut ^I32 k 0]
+  (let [^:mut ^I32 at 0 ^:mut ^I32 i 0]
     (while (< at (cells-len requests))
-      (let [^I32 n (cells-at requests at)
-            ^I32 out (cells-len scratch)
-            ^I32 kind (cells-at requests (+ at 1))
-            ^:mut ^I32 count n
-            ^:mut ^I32 first 10]
-        ;; Queued requests may already have been tagged by an earlier page unit.
-        ;; Replace a reserved trailer rather than appending a second identity.
-        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot 2))))
-          (do (set k first)
-              (while (< (+ k 2) count)
-                (if (and (== (cells-at requests (+ at k)) -3100)
-                         (and (== (cells-at requests (+ (+ at k) 1)) 1)
-                              (== (cells-at requests (+ (+ at k) 2)) (- (- count k) 3))))
-                  (do (set count k) (set k first))
-                  (set k (+ k 1))))))
+      (let [^I32 n (cells-at requests at) ^I32 out (cells-len scratch)]
         (set i 0)
-        (while (< i count)
+        (while (< i n)
           (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
-        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot 2))))
-          (do (cells-push scratch -3100)
-              (cells-push scratch 1)
-              (cells-push scratch (oe-id-count 0))
-              (set k 0)
-              (while (< k (oe-id-count 0))
-                (do (cells-push scratch (oe-id-at 0 k)) (set k (+ k 1))))
-              (cells-set scratch out (- (cells-len scratch) out))))
+        (if (== (cells-at requests (+ at 1)) (pk-ocr))
+          (do (if (== mode 1) (oe-select scratch out 2))
+              (if (== mode 2) (oe-context scratch out))))
         (set at (+ at n))))
-    (cells-drop requests 0)
-    (set i 0)
+    (cells-drop requests 0) (set i 0)
     (while (< i (cells-len scratch))
       (do (cells-push requests (cells-at scratch i)) (set i (+ i 1)))))
   (return 0))
 
-(defn ^:pub ^I32 oe-evidence [^Text out ^I32 engine]
-  (if (== engine 0) (return 0))
-  (emit-ascii out ",\"ocr-engine\":{\"name\":\"ppocr\",\"model\":\"")
-  (let [^:mut ^I32 k 0]
-    (while (< k (oe-id-count 0))
-      (do (text-cp out (oe-id-at 0 k)) (set k (+ k 1)))))
-  (emit-ascii out "\"}")
+;; Engine table: [engine requested-hi requested-lo observed-hi observed-lo class context].
+(defn ^I32 oe-config [^:mut ^Cells out ^I32 engine ^I32 context]
+  (cells-drop out 0)
+  (let [^:mut ^I32 i 0]
+    (if (== engine 1)
+      (do (while (< i (oi-tess-count 0))
+            (do (cells-push out (oi-tess-at 0 i)) (set i (+ i 1))))
+          (if (== context 2) (cells-push out 59))))
+    (if (or (== engine 2) (and (== engine 1) (== context 2)))
+      (do (set i 0)
+          (while (< i (oe-id-count 0))
+            (do (cells-push out (oe-id-at 0 i)) (set i (+ i 1)))))))
+  (return 0))
+
+(defn ^:pub ^I32 oe-register [^:mut ^Cells table ^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^I32 context ^:mut ^Cells scratch]
+  (cells-drop table 0)
+  (let [^:mut ^I32 r 0 ^:mut ^I32 i 0 ^:mut ^I32 hit -1 ^:mut ^I32 engine 0
+        ^:mut ^I32 hi 0 ^:mut ^I32 lo 0 ^:mut ^I32 bit 1 ^:mut ^I32 j 0]
+    (while (< r (or-count runs))
+      (do (set engine (or-get runs r (orf-engine)))
+          (oe-config scratch engine context)
+          (let [^I64 hash (oil-obs-hash scratch 0 (cells-len scratch))]
+            (set hi (i32 (shr64 hash 32))) (set lo (i32 hash)))
+          (set hit -1) (set i 0)
+          (while (< i (quot (cells-len table) 7))
+            (do (if (and (== (cells-at table (* i 7)) engine)
+                         (== (cells-at table (+ (* i 7) 1)) hi) (== (cells-at table (+ (* i 7) 2)) lo)
+                         (== (cells-at table (+ (* i 7) 3)) (or-get runs r (orf-observed-hi)))
+                         (== (cells-at table (+ (* i 7) 4)) (or-get runs r (orf-observed-lo)))) (set hit i))
+                (set i (+ i 1))))
+          (if (< hit 0)
+            (do (set hit (quot (cells-len table) 7))
+                (if (>= hit 16) (return -1))
+                (cells-push table engine) (cells-push table hi) (cells-push table lo)
+                (cells-push table (or-get runs r (orf-observed-hi))) (cells-push table (or-get runs r (orf-observed-lo)))
+                (cells-push table 0) (cells-push table context)))
+          (or-set runs r (orf-eix) hit)
+          (set bit 1) (set j 0)
+          (while (< j hit) (do (set bit (* bit 2)) (set j (+ j 1))))
+          (set i 0)
+          (while (< i (ow-count words))
+            (do (if (== (ow-get words i (owf-run)) r) (ow-set words i (owf-prov) bit)) (set i (+ i 1))))
+          (set i 0)
+          (while (< i (ol-count lines))
+            (do (if (== (ol-get lines i (olf-run)) r) (ol-set lines i (olf-prov) bit)) (set i (+ i 1))))
+          (set r (+ r 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 oe-evidence [^Text out ^Cells table ^:mut ^Cells scratch]
+  (emit-ascii out ",\"ocr-engines\":[")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 j 0]
+    (while (< i (quot (cells-len table) 7))
+      (do (if (> i 0) (emit-ascii out ","))
+          (emit-ascii out "{\"engine\":\"")
+          (oen-emit-name out (cells-at table (* i 7)))
+          (emit-ascii out "\",\"config\":\"")
+          (oe-config scratch (cells-at table (* i 7)) (cells-at table (+ (* i 7) 6)))
+          (set j 0)
+          (while (< j (cells-len scratch)) (do (text-cp out (cells-at scratch j)) (set j (+ j 1))))
+          (emit-ascii out "\",\"observed\":[")
+          (text-i32 out (cells-at table (+ (* i 7) 3))) (emit-ascii out ",")
+          (text-i32 out (cells-at table (+ (* i 7) 4))) (emit-ascii out "]}")
+          (set i (+ i 1)))))
+  (emit-ascii out "]")
   (return 0))

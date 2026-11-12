@@ -32,4 +32,10 @@ public static class Ocalibtest {
         emon.Testport.AssertEq(Ocalib.OcalWord(2, 0, 800), 521, "next frozen bin");
         emon.Testport.AssertEq(Ocalib.OcalWord(3, 0, 1000), -1, "unfitted engine is not a zero probability");
     }
+    [Xunit.Fact]
+    public static void TestWordCalibrationPreservesAbsenceAndRefusesUnknownClass() {
+        emon.Testport.AssertEq(Ocalib.OcalWord(2, 0, -1), -1, "absent PP raw score remains absent");
+        emon.Testport.AssertEq(Ocalib.OcalWord(1, 9, 800), -1, "unknown Tesseract calibration class is unfitted");
+        emon.Testport.AssertEq(Ocalib.OcalWord(2, 9, 800), -1, "unknown PP calibration class is unfitted");
+    }
 }

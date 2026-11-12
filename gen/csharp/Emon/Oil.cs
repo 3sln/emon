@@ -1451,16 +1451,16 @@ public static class Oil {
         if ((tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824))) {
             while (i < 639) {
                 j = i + 1;
-                while (Ocrport.OpNames[j] != 0) {
+                while (Ocrtess.OpNames[j] != 0) {
                     j += 1;
                 }
-                if ((Ocrport.OpNames[i] == tablekind) && (Ocrport.OpNames[j + 1] == packed)) {
+                if ((Ocrtess.OpNames[i] == tablekind) && (Ocrtess.OpNames[j + 1] == packed)) {
                     if (count != ((j - i) - 1)) {
                         return 0;
                     }
                     i += 1;
                     while (i < j) {
-                        if (emon.Port.CellsAt(c, (p + 1) + k) != Ocrport.OpNames[i]) {
+                        if (emon.Port.CellsAt(c, (p + 1) + k) != Ocrtess.OpNames[i]) {
                             return 0;
                         }
                         i += 1;

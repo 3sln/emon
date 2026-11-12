@@ -51,6 +51,77 @@ public final class Scriptcheck {
         }
         return k;
     }
+    public static int skCensus(emon.Port.Cells an, int at, emon.Port.Cells scr) {
+        // No-OSD fallback: at least three script-bearing characters and a 60% dominant script. Digits and punctuation do not vote. Never invent OSD confidence.
+        emon.Port.cellsDrop(scr, 0);
+        int k = 0;
+        int i = 0;
+        int j = 0;
+        int total = 0;
+        int best = 0;
+        int winner = -1;
+        int w = Oil.oilFirstWord(an, at);
+        while (k < 30) {
+            emon.Port.cellsPush(scr, 0);
+            k += 1;
+        }
+        while (i < Oil.oilNwords(an, at)) {
+            j = 0;
+            while (j < Oil.oilWlen(an, at, w)) {
+                k = Ocrscript.osCensusOf(Oil.oilWcp(an, at, w, j));
+                if (k >= 0) {
+                    emon.Port.cellsSet(scr, k, emon.Port.cellsAt(scr, k) + 1);
+                    total += 1;
+                }
+                j += 1;
+            }
+            w = Oil.oilWordNext(an, at, w);
+            i += 1;
+        }
+        k = 0;
+        while (k < 30) {
+            if (emon.Port.cellsAt(scr, k) > best) {
+                best = emon.Port.cellsAt(scr, k);
+                winner = k;
+            }
+            k += 1;
+        }
+        if ((total >= 3) && ((best * 1000) >= (total * 600))) {
+            return Ocrscript.OS_CENSUS_SCRIPTS[winner];
+        }
+        return 0;
+    }
+    public static int skNoOsdUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
+        int script = skCensus(an, at, scr);
+        int model = Ocrscript.osLangScript(Oil.oilGet(an, at, Oil.ohLang()));
+        int i = 0;
+        int w = Oil.oilFirstWord(an, at);
+        int known = 0;
+        if (script == 0) {
+            return 0;
+        }
+        if ((script == Ocrport.scLatn()) || (script == Ocrport.scLatf())) {
+            return 0;
+        }
+        if (model > 0) {
+            known = 1;
+            if (Ocrport.opScriptReads(script, model) == 1) {
+                return 0;
+            }
+        }
+        while (i < Oil.oilNwords(an, at)) {
+            model = Ocrscript.osLangScript(Oil.oilWlang(an, at, w));
+            if (model > 0) {
+                known = 1;
+                if (Ocrport.opScriptReads(script, model) == 1) {
+                    return 0;
+                }
+            }
+            w = Oil.oilWordNext(an, at, w);
+            i += 1;
+        }
+        return known;
+    }
     public static int skUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
         // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
         int ext = Oil.oilFind(an, at);
@@ -64,6 +135,12 @@ public final class Scriptcheck {
         int sourceFirst = 0;
         if (ext < 0) {
             return 0;
+        }
+        if (Oil.oilHas(Oil.oilGet(an, ext, Oil.ohCaps()), Oil.ocScript()) == 0) {
+            if (nw < skMinWords()) {
+                return 0;
+            }
+            return skNoOsdUnread(an, ext, scr);
         }
         script = Oil.oilScript(an, ext);
         if (script <= 0) {
@@ -93,14 +170,14 @@ public final class Scriptcheck {
         while (i < nw) {
             model = Oilsrc.oxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr);
             if (model >= 0) {
-                if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, model + 1, (model + 1) + emon.Port.cellsAt(scr, model))) == 1) {
+                if (Ocrport.opScriptReads(script, Ocrtess.opModelScript(scr, model + 1, (model + 1) + emon.Port.cellsAt(scr, model))) == 1) {
                     return 0;
                 }
             } else {
                 lang = Oil.oilWlang(an, ext, w);
                 if (lang > 0) {
                     n = skUnpack(lang, scr);
-                    if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, 0, n)) == 1) {
+                    if (Ocrport.opScriptReads(script, Ocrtess.opModelScript(scr, 0, n)) == 1) {
                         return 0;
                     }
                 }
@@ -119,6 +196,9 @@ public final class Scriptcheck {
         int found = Plan.anFind(ans, id);
         int ext = Oil.oilFind(ans, at);
         int script = Oil.oilScript(ans, ext);
+        if (Oil.oilHas(Oil.oilGet(ans, ext, Oil.ohCaps()), Oil.ocScript()) == 0) {
+            script = skCensus(ans, ext, scr);
+        }
         if (found >= 0) {
             if (Plan.anOk(ans, found) == 1) {
                 return found;

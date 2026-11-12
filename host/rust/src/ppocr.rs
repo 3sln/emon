@@ -105,15 +105,16 @@ impl Ocr for PpOcr {
         for &v in &req.rec {
             crate::port::cells_push(&mut r, v);
         }
-        if crate::emon::ocrport::op_identity_at(&mut r) < 0 {
+        if crate::emon::ocrport::op_request_engine(&mut r) != 2 {
             return self.incumbent.fulfil(req, bitmaps, _keep_binary);
         }
         let marker = usize::try_from(crate::emon::ocrport::op_identity_at(&mut r))
             .map_err(|_| fail("PP-OCR request has no model identity"))?;
         if req.rec.get(marker) != Some(&-3100)
-            || req.rec.get(marker + 1) != Some(&1)
-            || req.rec.get(marker + 2) != Some(&(self.identity.chars().count() as i32))
-            || req.rec.get(marker + 3..)
+            || req.rec.get(marker + 1) != Some(&2)
+            || req.rec.get(marker + 2) != Some(&2)
+            || req.rec.get(marker + 3) != Some(&(self.identity.chars().count() as i32))
+            || req.rec.get(marker + 4..)
                 != Some(
                     self.identity
                         .chars()
@@ -205,6 +206,12 @@ impl Ocr for PpOcr {
         // Segments are not layout blocks; OSD never ran on this engine.
         let caps = 32 | 64 | 256 | 8192 | 16384;
         let at = crate::emon::oil::oil_begin(&mut out, req.id(), 2, caps, 32 | 256, 1, 1, 1701734144, 1);
+        let mut observed = Cells::new();
+        for i in 0..crate::emon::ocrengine::oe_id_count(0) {
+            crate::port::cells_push(&mut observed, crate::emon::ocrengine::oe_id_at(0, i));
+        }
+        let observed_len = crate::port::cells_len(&observed);
+        crate::emon::oil::oil_observed(&mut out, at, &mut observed, 0, observed_len);
         for (i, b) in reading.lines.iter().enumerate() {
             let q = reading.quads[i];
             let px = |v: f64| v.round().clamp(0., image.width as f64) as i32 + dx;

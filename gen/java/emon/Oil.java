@@ -1451,16 +1451,16 @@ public final class Oil {
         if ((tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824))) {
             while (i < 639) {
                 j = i + 1;
-                while (Ocrport.OP_NAMES[j] != 0) {
+                while (Ocrtess.OP_NAMES[j] != 0) {
                     j += 1;
                 }
-                if ((Ocrport.OP_NAMES[i] == tablekind) && (Ocrport.OP_NAMES[j + 1] == packed)) {
+                if ((Ocrtess.OP_NAMES[i] == tablekind) && (Ocrtess.OP_NAMES[j + 1] == packed)) {
                     if (count != ((j - i) - 1)) {
                         return 0;
                     }
                     i += 1;
                     while (i < j) {
-                        if (emon.Port.cellsAt(c, (p + 1) + k) != Ocrport.OP_NAMES[i]) {
+                        if (emon.Port.cellsAt(c, (p + 1) + k) != Ocrtess.OP_NAMES[i]) {
                             return 0;
                         }
                         i += 1;

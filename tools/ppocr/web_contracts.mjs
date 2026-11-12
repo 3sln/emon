@@ -10,7 +10,7 @@ const w = await Wasm.instantiate(module);
 const policy = String.fromCodePoint(...fs.readFileSync('kin/ocrengine.kin', 'utf8')
   .match(/:data \[([0-9 ]+)\]/)[1].trim().split(/\s+/).map(Number));
 const plain = [11, w.kind.ocr, 2, 1, 3, 0, 0, 0, 0, 0, 1701734144];
-const tagged = plain.concat([-3100, 1, policy.length], Array.from(policy, c => c.codePointAt(0)));
+const tagged = plain.concat([-3100, 2, 2, policy.length], Array.from(policy, c => c.codePointAt(0)));
 tagged[0] = tagged.length;
 const check = rec => w.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p, n) => w.x.emon_pp_check(p, n, 0, 0));
 assert.equal(check(plain), 0);

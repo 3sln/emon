@@ -15,15 +15,15 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ocrengine.OeRequestSlot(3), -1, "unregistered engine has no extra slot");
     }
     [Xunit.Fact]
-    public static void TestDefaultOcrRequestIsUnchanged() {
+    public static void TestEveryDefaultOcrRequestCarriesRequestedIdentity() {
         emon.Port.Cells r = emon.Port.NewCells();
         emon.Port.Cells scratch = emon.Port.NewCells();
         int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.RqOcrLang(r, 101, 110, 103, 0);
         Plan.RqOcrEnd(r, at);
         Ocrengine.OeTag(r, scratch, 0);
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), 11, "legacy request length unchanged");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), 11, "record header unchanged");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + 112, "default identity extends the key");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), emon.Port.CellsLen(r), "record header includes identity");
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "one legacy language");
     }
     [Xunit.Fact]
@@ -34,10 +34,11 @@ public static class Ocrenginetest {
         Plan.RqOcrLang(r, 101, 110, 103, 0);
         Plan.RqOcrEnd(r, at);
         Ocrengine.OeTag(r, scratch, 1);
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), 14 + 74, "identity extends request key");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + 74, "identity extends request key");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), emon.Port.CellsLen(r), "record length includes identity");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 11), -3100, "identity marker");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 12), 1, "PP-OCR engine");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 12), 2, "requested identity version");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 13), 2, "PP-OCR engine");
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "identity is not a language");
         emon.Testport.AssertEq(Ocrport.OpLangAt(r, 0), 1701734144, "English language unchanged");
     }
@@ -50,7 +51,7 @@ public static class Ocrenginetest {
         Plan.RqOcrEnd(r, at);
         Ocrengine.OeTag(r, scratch, 1);
         Ocrengine.OeTag(r, scratch, 1);
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), 14 + 74, "exactly one identity trailer");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + 74, "exactly one identity trailer");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), emon.Port.CellsLen(r), "canonical record length");
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "English remains the only language");
     }
@@ -58,7 +59,7 @@ public static class Ocrenginetest {
     public static void TestMixedQueuedViewsKeepHashesAndExactlyOneTrailer() {
         emon.Port.Cells r = emon.Port.NewCells();
         emon.Port.Cells scratch = emon.Port.NewCells();
-        int first = 14 + 74;
+        int first = 15 + 74;
         int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.RqOcrLang(r, 101, 110, 103, 0);
         Plan.RqOcrEnd(r, at);
@@ -68,8 +69,8 @@ public static class Ocrenginetest {
         Ocrengine.OeTag(r, scratch, 1);
         Ocrengine.OeTag(r, scratch, 1);
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), first, "first request length");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, first), 16 + 74, "view request length");
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), (30 + 74) + 74, "two canonical records");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, first), 17 + 74, "view request length");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), (32 + 74) + 74, "two canonical records");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, first + 11), -3100, "hash cell is not a trailer marker");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, first + 13), -3100, "view trailer follows its language");
     }
@@ -86,7 +87,7 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 0, "shared helper excludes the trailer");
         emon.Testport.AssertEq(Ocrport.OpPpLangFirst(r, 123, 456), 7, "compact layout");
         emon.Testport.AssertEq(Ocrport.OpPpLangCount(r, 7), 0, "identity is not parsed as language");
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), 13 + 74, "one canonical trailer");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 14 + 74, "one canonical trailer");
     }
     [Xunit.Fact]
     public static void TestActualViewHashDisambiguatesLanguageShapedHashCells() {
@@ -117,20 +118,15 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ofuse.OfRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion");
     }
     [Xunit.Fact]
-    public static void TestOptionalFusionTagsOnlyTheAdditionalReading() {
+    public static void TestEngineSelectionDoesNotDependOnItsAllocationSlot() {
         emon.Port.Cells r = emon.Port.NewCells();
-        emon.Port.Cells scratch = emon.Port.NewCells();
-        int first = Plan.RqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0);
+        int first = Plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
         Plan.RqOcrEnd(r, first);
-        int extra = Plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
-        Plan.RqOcrEnd(r, extra);
-        Ocrengine.OeTag(r, scratch, 2);
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), 10, "Tesseract request key unchanged");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 10), 13 + 74, "only additional reading is tagged");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 20), -3100, "PP identity on additional reading");
-        Ocrengine.OeTag(r, scratch, 2);
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), 10, "repeated rounds preserve Tesseract");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 10), 13 + 74, "PP tag remains canonical");
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 1, "former PP slot stays Tesseract by default");
+        Ocrengine.OeSelect(r, first, 2);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 2, "explicit PP configuration");
+        Ocrengine.OeSelect(r, first, 2);
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 14 + 74, "one canonical trailer");
     }
     [Xunit.Fact]
     public static void TestAdditionalReadingCannotTruncateATextSlot() {
@@ -246,5 +242,30 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ofuse.OfPpCode(year, 0, 7), 0, "source year range remains protected");
         emon.Testport.AssertEq(Ofuse.OfPpCode(time, 0, 5), 0, "source time remains protected");
         emon.Testport.AssertEq(Ofuse.OfPpCode(word, 0, 4), 0, "PAND/PANO failure band is not an identifier");
+    }
+    [Xunit.Fact]
+    public static void TestEngineTableSeparatesObservedIdentitiesAndDeduplicatesRuns() {
+        emon.Port.Cells table = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int a = Evidence.OrNew(runs, 1, 0);
+        int b = Evidence.OrNew(runs, 1, 0);
+        int c = Evidence.OrNew(runs, 2, 0);
+        Evidence.OrSet(runs, a, Evidence.OrfEngine(), 2);
+        Evidence.OrSet(runs, b, Evidence.OrfEngine(), 2);
+        Evidence.OrSet(runs, c, Evidence.OrfEngine(), 2);
+        Evidence.OrSet(runs, b, Evidence.OrfObservedHi(), 1);
+        emon.Testport.AssertEq(Ocrengine.OeRegister(table, runs, lines, words, 2, scratch), 0, "registered");
+        emon.Testport.AssertEq(emon.Port.CellsLen(table), 14, "two identities, not three runs or engine-minus-one");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, a, Evidence.OrfEix()), 0, "first observed identity");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, b, Evidence.OrfEix()), 1, "different runtime or model");
+        emon.Testport.AssertEq(Evidence.OrGet(runs, c, Evidence.OrfEix()), 0, "repeat identity deduplicates");
+    }
+    [Xunit.Fact]
+    public static void TestUncalibratedCandidateCanNeverInsertOrReplace() {
+        emon.Testport.AssertEq(Ofuse.OfRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion");
+        emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
     }
 }

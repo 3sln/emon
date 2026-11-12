@@ -6,11 +6,11 @@ namespace emon;
 
 public static class Ocrengine {
     public static readonly int[] OeIdentity = new int[] {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
-        100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
-        101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
-        53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
-        53, 48, 57, 55, 57, 101, 100, 54, 54, 102
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 49, 51, 52, 56, 97, 99,
+        52, 54, 57, 50, 53, 56, 50, 54, 53, 52, 48, 51, 100, 52, 100, 56,
+        48, 57, 53, 49, 97, 54, 101, 54, 54, 49, 102, 102, 101, 99, 52, 56,
+        98, 101, 51, 54, 53, 101, 51, 51, 54, 100, 56, 48, 54, 101, 49, 99,
+        97, 50, 53, 99, 56, 99, 101, 98, 100, 98
     };
     public static readonly int[] OeRoles = new int[] {
         1, 1,
@@ -41,46 +41,80 @@ public static class Ocrengine {
         }
         return -1;
     }
-    public static int OeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int engine) {
-        if (engine == 0) {
+    public static int OeSelect(emon.Port.Cells requests, int at, int engine) {
+        // Select an engine immediately after closing the last request. Allocation slots never select engines.
+        if (engine != 2) {
+            return 0;
+        }
+        int end = emon.Port.CellsLen(requests);
+        int k = 10;
+        int first = -1;
+        while (((at + k) + 3) < end) {
+            if ((emon.Port.CellsAt(requests, at + k) == -3100) && (emon.Port.CellsAt(requests, (at + k) + 1) == 2) && (emon.Port.CellsAt(requests, (at + k) + 3) == ((end - (at + k)) - 4))) {
+                first = at + k;
+            }
+            k += 1;
+        }
+        if (first < 0) {
+            return -1;
+        }
+        emon.Port.CellsDrop(requests, first);
+        emon.Port.CellsPush(requests, -3100);
+        emon.Port.CellsPush(requests, 2);
+        emon.Port.CellsPush(requests, engine);
+        emon.Port.CellsPush(requests, 74);
+        k = 0;
+        while (k < 74) {
+            emon.Port.CellsPush(requests, OeIdentity[k]);
+            k += 1;
+        }
+        emon.Port.CellsSet(requests, at, emon.Port.CellsLen(requests) - at);
+        return 0;
+    }
+    internal static int OeContext(emon.Port.Cells requests, int at) {
+        int end = emon.Port.CellsLen(requests);
+        int k = at + 10;
+        while ((k + 3) < end) {
+            if ((emon.Port.CellsAt(requests, k) == -3100) && (emon.Port.CellsAt(requests, k + 1) == 2) && (emon.Port.CellsAt(requests, k + 2) == 1) && (emon.Port.CellsAt(requests, k + 3) == ((end - k) - 4))) {
+                emon.Port.CellsDrop(requests, k);
+                Ocridentity.OiDefault(requests);
+                emon.Port.CellsSet(requests, k + 3, (112 + 1) + 74);
+                emon.Port.CellsPush(requests, 59);
+                int i = 0;
+                while (i < 74) {
+                    emon.Port.CellsPush(requests, OeIdentity[i]);
+                    i += 1;
+                }
+                emon.Port.CellsSet(requests, at, emon.Port.CellsLen(requests) - at);
+                return 0;
+            }
+            k += 1;
+        }
+        return 0;
+    }
+    public static int OeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int mode) {
+        // Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.
+        if (mode == 0) {
             return 0;
         }
         emon.Port.CellsDrop(scratch, 0);
         int at = 0;
         int i = 0;
-        int k = 0;
         while (at < emon.Port.CellsLen(requests)) {
             int n = emon.Port.CellsAt(requests, at);
             int @out = emon.Port.CellsLen(scratch);
-            int kind = emon.Port.CellsAt(requests, at + 1);
-            int count = n;
-            int first = 10;
-            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot(2)))) {
-                k = first;
-                while ((k + 2) < count) {
-                    if ((emon.Port.CellsAt(requests, at + k) == -3100) && ((emon.Port.CellsAt(requests, (at + k) + 1) == 1) && (emon.Port.CellsAt(requests, (at + k) + 2) == ((count - k) - 3)))) {
-                        count = k;
-                        k = first;
-                    } else {
-                        k += 1;
-                    }
-                }
-            }
             i = 0;
-            while (i < count) {
+            while (i < n) {
                 emon.Port.CellsPush(scratch, emon.Port.CellsAt(requests, at + i));
                 i += 1;
             }
-            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot(2)))) {
-                emon.Port.CellsPush(scratch, -3100);
-                emon.Port.CellsPush(scratch, 1);
-                emon.Port.CellsPush(scratch, 74);
-                k = 0;
-                while (k < 74) {
-                    emon.Port.CellsPush(scratch, OeIdentity[k]);
-                    k += 1;
+            if (emon.Port.CellsAt(requests, at + 1) == Plan.PkOcr()) {
+                if (mode == 1) {
+                    OeSelect(scratch, @out, 2);
                 }
-                emon.Port.CellsSet(scratch, @out, emon.Port.CellsLen(scratch) - @out);
+                if (mode == 2) {
+                    OeContext(scratch, @out);
+                }
             }
             at += n;
         }
@@ -92,17 +126,114 @@ public static class Ocrengine {
         }
         return 0;
     }
-    public static int OeEvidence(System.Text.StringBuilder @out, int engine) {
-        if (engine == 0) {
-            return 0;
+    internal static int OeConfig(emon.Port.Cells @out, int engine, int context) {
+        emon.Port.CellsDrop(@out, 0);
+        int i = 0;
+        if (engine == 1) {
+            while (i < 112) {
+                emon.Port.CellsPush(@out, Ocridentity.OiTesseract[i]);
+                i += 1;
+            }
+            if (context == 2) {
+                emon.Port.CellsPush(@out, 59);
+            }
         }
-        emon.Port.TextAscii(@out, ",\"ocr-engine\":{\"name\":\"ppocr\",\"model\":\"");
-        int k = 0;
-        while (k < 74) {
-            emon.Port.TextCp(@out, OeIdentity[k]);
-            k += 1;
+        if ((engine == 2) || ((engine == 1) && (context == 2))) {
+            i = 0;
+            while (i < 74) {
+                emon.Port.CellsPush(@out, OeIdentity[i]);
+                i += 1;
+            }
         }
-        emon.Port.TextAscii(@out, "\"}");
+        return 0;
+    }
+    public static int OeRegister(emon.Port.Cells table, emon.Port.Cells runs, emon.Port.Cells lines, emon.Port.Cells words, int context, emon.Port.Cells scratch) {
+        emon.Port.CellsDrop(table, 0);
+        int r = 0;
+        int i = 0;
+        int hit = -1;
+        int engine = 0;
+        int hi = 0;
+        int lo = 0;
+        int bit = 1;
+        int j = 0;
+        while (r < Evidence.OrCount(runs)) {
+            engine = Evidence.OrGet(runs, r, Evidence.OrfEngine());
+            OeConfig(scratch, engine, context);
+            long hash = Oil.OilObsHash(scratch, 0, emon.Port.CellsLen(scratch));
+            hi = (int) ((long)((ulong)(hash) >> 32));
+            lo = (int) hash;
+            hit = -1;
+            i = 0;
+            while (i < (emon.Port.CellsLen(table) / 7)) {
+                if ((emon.Port.CellsAt(table, i * 7) == engine) && (emon.Port.CellsAt(table, (i * 7) + 1) == hi) && (emon.Port.CellsAt(table, (i * 7) + 2) == lo) && (emon.Port.CellsAt(table, (i * 7) + 3) == Evidence.OrGet(runs, r, Evidence.OrfObservedHi())) && (emon.Port.CellsAt(table, (i * 7) + 4) == Evidence.OrGet(runs, r, Evidence.OrfObservedLo()))) {
+                    hit = i;
+                }
+                i += 1;
+            }
+            if (hit < 0) {
+                hit = emon.Port.CellsLen(table) / 7;
+                if (hit >= 16) {
+                    return -1;
+                }
+                emon.Port.CellsPush(table, engine);
+                emon.Port.CellsPush(table, hi);
+                emon.Port.CellsPush(table, lo);
+                emon.Port.CellsPush(table, Evidence.OrGet(runs, r, Evidence.OrfObservedHi()));
+                emon.Port.CellsPush(table, Evidence.OrGet(runs, r, Evidence.OrfObservedLo()));
+                emon.Port.CellsPush(table, 0);
+                emon.Port.CellsPush(table, context);
+            }
+            Evidence.OrSet(runs, r, Evidence.OrfEix(), hit);
+            bit = 1;
+            j = 0;
+            while (j < hit) {
+                bit *= 2;
+                j += 1;
+            }
+            i = 0;
+            while (i < Evidence.OwCount(words)) {
+                if (Evidence.OwGet(words, i, Evidence.OwfRun()) == r) {
+                    Evidence.OwSet(words, i, Evidence.OwfProv(), bit);
+                }
+                i += 1;
+            }
+            i = 0;
+            while (i < Evidence.OlCount(lines)) {
+                if (Evidence.OlGet(lines, i, Evidence.OlfRun()) == r) {
+                    Evidence.OlSet(lines, i, Evidence.OlfProv(), bit);
+                }
+                i += 1;
+            }
+            r += 1;
+        }
+        return 0;
+    }
+    public static int OeEvidence(System.Text.StringBuilder @out, emon.Port.Cells table, emon.Port.Cells scratch) {
+        emon.Port.TextAscii(@out, ",\"ocr-engines\":[");
+        int i = 0;
+        int j = 0;
+        while (i < (emon.Port.CellsLen(table) / 7)) {
+            if (i > 0) {
+                emon.Port.TextAscii(@out, ",");
+            }
+            emon.Port.TextAscii(@out, "{\"engine\":\"");
+            Oil.OenEmitName(@out, emon.Port.CellsAt(table, i * 7));
+            emon.Port.TextAscii(@out, "\",\"config\":\"");
+            OeConfig(scratch, emon.Port.CellsAt(table, i * 7), emon.Port.CellsAt(table, (i * 7) + 6));
+            j = 0;
+            while (j < emon.Port.CellsLen(scratch)) {
+                emon.Port.TextCp(@out, emon.Port.CellsAt(scratch, j));
+                j += 1;
+            }
+            emon.Port.TextAscii(@out, "\",\"observed\":[");
+            emon.Port.TextI32(@out, emon.Port.CellsAt(table, (i * 7) + 3));
+            emon.Port.TextAscii(@out, ",");
+            emon.Port.TextI32(@out, emon.Port.CellsAt(table, (i * 7) + 4));
+            emon.Port.TextAscii(@out, "]}");
+            i += 1;
+        }
+        emon.Port.TextAscii(@out, "]");
         return 0;
     }
 }

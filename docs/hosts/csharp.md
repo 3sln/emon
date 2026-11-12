@@ -514,7 +514,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Ffi.PpOcr` | `sealed unsafe class : emon.Api.IOcr,IDisposable` |
 | `emon.Ffi.PpOcr#Dispose()` | `void` |
 | `emon.Ffi.PpOcr#Fulfil(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `emon.Planrun.Answer` |
-| `emon.Ffi.PpOcr#Open(string?,emon.Api.IOcr)` | `static PpOcr` |
+| `emon.Ffi.PpOcr#Open(string,emon.Api.IOcr)` | `static PpOcr` |
 | `emon.Ffi.PpOcr#Producer()` | `List<string[]>` |
 | `emon.Ffi.Tess` | `sealed unsafe class : emon.Api.IOcr` |
 | `emon.Ffi.Tess#Fulfil(Planrun.Request,Dictionary<int,Port.Bitmap>,bool)` | `Planrun.Answer` |

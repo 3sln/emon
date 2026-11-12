@@ -12,6 +12,8 @@
     bb calibration --refit         identity table, `bb emit`, collect, fit, the real table, `bb emit`: the whole of a
                                    recalibration, which is a reviewed change with its reliability diagram (SPEC 9.6)
 
+--engine E selects labelled engine rows; --rows FILE supplies qualified raw EDN rows (maps with :engine, :kind, :class, :conf, :y and document :id). A targeted fit retains the other engines' maps and writes its reliability under test/calibration/engines/E.
+
 THE DATA is three runs of the real Engine: `emon` over every input form of the corpus, `emon-replay` over the scans
 that have a committed OCR transcript, and `emon-fusion` over the born-digital documents that have a fusion transcript
 (the replay predictors of `bb accuracy`: no engine but ours runs).  A node's `kind` is the Model's, its `class` is
@@ -29,11 +31,13 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
             [babashka.fs :as fs]
             [babashka.process :as proc]
             [clojure.string :as str]
+            [clojure.edn :as edn]
             [pyjson]))
 
 (def ROOT A/ROOT)
 (def OUT (str (fs/path ROOT "test" "calibration")))
 (def MIN-N 8)
+(def ^:dynamic *target-engine* nil)
 (def CLASS-TOL 20)   ; per mille: a class within this of its kind's fit is not worth a row
 (def FOLDS 5)
 
@@ -63,7 +67,7 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
                per (doall (pmap (fn [[id v inp gp]]
                                   (when-let [m (predict cmd id v inp gp)]
                                     (for [[kind class conf y] (CR/rows m (pyjson/parse-file gp))]
-                                      {:run name :variant v :cat (A/category id) :id id :kind kind :class class :conf conf :y y})))
+                                      {:run name :variant v :cat (A/category id) :id id :kind kind :class class :engine (if (#{"ocr" "fused"} class) 1 -1) :conf conf :y y})))
                                 docs))]
          row (apply concat per)]
      row)))
@@ -106,7 +110,7 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
     (vec (for [[lo _hi n sy] (C/pav shrunk)]
            [lo (long (Math/round (/ (double sy) n))) n]))))
 
-(defn fit-base
+(defn fit-pooled
   "{[kind class] steps}: the per (kind, class) fit, a class with too few rows taking its kind's pooled fit under the
   class `any`, a kind with too few rows nothing."
   [rows]
@@ -125,12 +129,27 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
                                   [[kind class] steps])))))
                   by-kind))))
 
+(defn fit-base [rows]
+  (if-not (some :engine rows) (fit-pooled rows)
+    (let [base (fit-pooled rows)
+          pooled (remove (fn [[[kind class] _]] (#{"ocr" "fused"} class)) base)
+          engines (for [[[engine kind class] rs] (group-by (juxt :engine :kind :class) rows)
+                        :when (and engine (pos? engine) (#{"ocr" "fused"} class) (>= (count rs) MIN-N))
+                        :let [steps (fit-points rs) any (get base [kind "any"])]
+                        :when (or *target-engine*
+                                  (not (and (= (map first steps) (map first any))
+                                            (every? #(<= % CLASS-TOL) (map #(Math/abs (long (- (second %1) (second %2)))) steps any)))))]
+                    [[kind class engine] steps])]
+      (into (sorted-map) (concat pooled engines)))))
+
 (defn apply-fit
   "The calibrated confidence of a raw one under `fit`, the way `emon.calib` reads the table."
-  [fit kind class raw]
-  (if-let [steps (or (get fit [kind class]) (get fit [kind "any"]))]
+  ([fit kind class raw] (apply-fit fit kind class 1 raw))
+  ([fit kind class engine raw]
+  (if-let [steps (or (get fit [kind class engine]) (get fit [kind class -1])
+                     (get fit [kind class]) (get fit [kind "any" -1]) (get fit [kind "any"]))]
     (let [s (or (last (filter #(<= (first %) raw) steps)) (first steps))] (second s))
-    raw))
+    raw)))
 
 (defn- fold-of [id] (mod (Math/abs (long (hash id))) FOLDS))
 
@@ -142,7 +161,7 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
    (let [fits (into {} (for [f (range FOLDS)]
                          [f (into {} (filter (fn [[[k _] _]] (or (nil? kinds) (contains? kinds k)))
                                              (fit-base (remove #(= f (fold-of (:id %))) rows))))]))]
-     (mapv (fn [r] (assoc r :conf (apply-fit (fits (fold-of (:id r))) (:kind r) (:class r) (:conf r)))) rows))))
+     (mapv (fn [r] (assoc r :conf (apply-fit (fits (fold-of (:id r))) (:kind r) (:class r) (get r :engine 1) (:conf r)))) rows))))
 
 (defn fit
   "`fit-base`, for the kinds whose HELD-OUT ECE beats the raw one: a map fitted on other documents that does not
@@ -230,35 +249,42 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
   "kin/calibdata.kin for `fit` ({[kind class] steps}); nil fit -> the identity table (no rows)."
   [fit]
   (let [codes (assoc (model-codes) "dropped" 100)
-        rows (for [[[kind class] steps] fit [lo cal _n] steps]
-               [(codes kind) (CLASS-CODE class) lo cal])
+        rows (for [[[kind class engine] steps] fit [lo cal _n] steps]
+               [(codes kind) (CLASS-CODE class) (or engine (if (#{"ocr" "fused"} class) 1 -1)) lo cal])
+        old-data (when (and *target-engine* (fs/exists? (fs/path ROOT "kin" "calibdata.kin")))
+                   (let [forms (rest (read-string (str "(do " (slurp (str (fs/path ROOT "kin" "calibdata.kin"))) ")")))
+                         table (first (filter #(and (seq? %) (= (first %) 'defdata)) forms))]
+                     (:data (apply hash-map (drop 2 table)))))
+        rows (if *target-engine*
+               (concat (remove #(= (nth % 2) *target-engine*) (mapv vec (partition 5 old-data)))
+                       (filter #(= (nth % 2) *target-engine*) rows)) rows)
         rows (sort rows)]
     (str ";; GENERATED by tools/calibration/calibration.clj (`bb calibration --fit`) -- do not edit.\n"
          ";;\n"
          ";; SPEC 9.6: the per-kind isotonic map from a rule's raw confidence to the calibrated one, fitted offline on the\n"
          ";; evaluation corpora (test/calibration/fit.edn holds the same rows with their counts, the reliability diagrams\n"
-         ";; and the numbers are test/calibration/*) and committed.  A row is [kind class raw-lo calibrated]: for the node\n"
+         ";; and the numbers are test/calibration/*) and committed.  A row is [kind class engine raw-lo calibrated]: for the node\n"
          ";; kind (`nk`, 100 the dropped ledger), the class of its source (0 text layer, 1 OCR, 2 both, 3 inferred, -1 any)\n"
          ";; and the step of raw confidences from raw-lo up (to the next row's), the calibrated confidence, per mille.\n"
-         ";; " (count rows) " rows.  Sorted by kind, class, raw-lo.  `emon.calib` reads it.\n"
+         ";; " (count rows) " rows.  Sorted by kind, class, engine, raw-lo.  `emon.calib` reads it.\n"
          "(ns emon.calibdata\n"
          "  (:require [emon.lang :refer [I32]]\n"
          "            [kin.lang :refer [defdata]]))\n\n"
          "(defdata ^:pub cd-rows\n"
          "  :emitter kin.lang/flat-array\n"
-         "  :stride 4\n"
+         "  :stride 5\n"
          "  :data [" (if (empty? rows)
-                       "0 0 0 0"
-                       (str/join "\n         " (map #(str/join " " %) (partition-all 4 (apply concat rows)))))
+                       "0 0 -1 0 0"
+                       (str/join "\n         " (map #(str/join " " %) rows)))
          "]\n"
          "  :accessors {^I32 cd-count [^I32 ignored]\n"
          "              ^I32 cd-at [^I32 ignored ^I32 row ^I32 field]})\n")))
 
 (defn- edn-of [fit]
-  (str ";; The fitted confidence calibration (P10.1, SPEC 9.6): [kind class raw-lo calibrated n] per step, per mille.\n"
+  (str ";; The fitted confidence calibration (P10.1, SPEC 9.6): [kind class engine raw-lo calibrated n] per step, per mille.\n"
        ";; `bb calibration --fit` writes it with kin/calibdata.kin, which is these rows without n.\n"
        "{:min-n " MIN-N " :smoothing :laplace\n :rows [\n"
-       (str/join "\n" (for [[[kind class] steps] fit [lo cal n] steps] (format "  [%s %s %d %d %d]" (pr-str kind) (pr-str class) lo cal n)))
+       (str/join "\n" (for [[[kind class engine] steps] fit [lo cal n] steps] (format "  [%s %s %d %d %d %d]" (pr-str kind) (pr-str class) (or engine (if (#{"ocr" "fused"} class) 1 -1)) lo cal n)))
        "]}\n"))
 
 ;; ------------------------------------------------------------------ report ----
@@ -275,23 +301,29 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
                        (if (and cc (pos? (C/unit-n cc u))) (fmt (C/ece cc u) 3) ""))))))
 
 (defn- write! [name s]
-  (fs/create-dirs OUT)
-  (spit (str (fs/path OUT name)) s)
-  (println "  wrote" (str (fs/relativize ROOT (fs/path OUT name)))))
+  (let [out (if *target-engine* (str (fs/path OUT "engines" (str *target-engine*))) OUT)]
+    (fs/create-dirs out)
+    (spit (str (fs/path out name)) s)
+    (println "  wrote" (str (fs/relativize ROOT (fs/path out name))))))
 
 (defn -main [& argv]
+  (binding [*target-engine* (some-> (second (drop-while #(not= % "--engine") argv)) parse-long)]
   (let [flags (set argv)
+        engine (some-> (second (drop-while #(not= % "--engine") argv)) parse-long)
+        rows-file (second (drop-while #(not= % "--rows") argv))
         refit? (flags "--refit")
         fit? (or (flags "--fit") refit?)
         write? (flags "--write")]
     (when refit?
       (spit (str (fs/path ROOT "kin" "calibdata.kin")) (kin-table nil))
       (let [r (proc/shell {:continue true} "bb" "emit")] (when-not (zero? (:exit r)) (System/exit 1))))
-    (let [hc (header-conf)
-          rows (collect)
+    (let [hc (if rows-file "uncalibrated" (header-conf))
+          collected (if rows-file (edn/read-string (slurp rows-file)) (collect))
+          rows (if engine (filterv #(= engine (:engine %)) collected) collected)
+          _ (when (and fit? (empty? rows)) (throw (ex-info "No qualified calibration rows for this engine; supply --rows with recorded-engine rows" {:engine engine})))
           ;; RAW: no map is applied (the Model says so, or the committed table is the identity one `--refit` writes)
-          raw? (or (= hc "uncalibrated")
-                   (str/includes? (slurp (str (fs/path ROOT "kin" "calibdata.kin"))) ":data [0 0 0 0]"))]
+          raw? (or rows-file (= hc "uncalibrated")
+                   (str/includes? (slurp (str (fs/path ROOT "kin" "calibdata.kin"))) ":data [0 0 -1 0 0]"))]
       (println (format "calibration: %d rows from %d documents; the Model's header says conf %s%s"
                        (count rows) (count (distinct (map (juxt :run :variant :id) rows))) (pr-str hc)
                        (if raw? " (RAW confidences)" " (calibrated confidences)")))
@@ -315,6 +347,8 @@ documents (by a hash of the id) left out and applied to it; `ece-cv` and `brier-
           (println "  kinds left as the rules wrote them:" (str/join ", " (sort (remove (set (map first (keys f))) (distinct (map :kind rows))))))
           (when refit?
             (let [r (proc/shell {:continue true} "bb" "emit")] (when-not (zero? (:exit r)) (System/exit 1)))))))))
+
+)
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

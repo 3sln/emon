@@ -43,10 +43,15 @@ export class Wasm {
     return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p) => this.x.emon_ocr_lang_first(p, rec.length));
   }
 
-  /** Canonical optional-engine trailer, through kin; absent in ordinary builds. */
+  /** Requested engine trailer, through kin, in every build. */
   ocrIdentityAt(rec) {
-    if (!this.x.emon_pp_identity_at) return -1;
-    return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p, n) => this.x.emon_pp_identity_at(p, n));
+    return this.withBytes(new Uint8Array(Int32Array.from(rec).buffer), (p, n) => this.x.emon_ocr_identity_at(p, rec.length));
+  }
+
+  ocrObserved(identity) {
+    const cps = Int32Array.from(Array.from(identity, ch => ch.codePointAt(0)));
+    const hash = this.withBytes(new Uint8Array(cps.buffer), p => this.x.emon_ocr_observed(p, cps.length));
+    return [Number(BigInt.asIntN(32, hash >> 32n)), Number(BigInt.asIntN(32, hash))];
   }
 
   /** Which of the `installed` model names read the request record: indices into `installed` (all of them when it names none). */

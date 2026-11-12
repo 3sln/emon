@@ -102,28 +102,6 @@ pub fn words(characters: &[Character]) -> Vec<Word> {
     out
 }
 
-/// Calibration is an explicit frozen lookup, never a direct CTC/Tesseract score
-/// conversion. Each bin stores measured source-word correctness in emon's 0..1000.
-#[derive(Debug, Clone)]
-pub struct Calibration {
-    pub bins: Vec<i32>,
-}
-impl Calibration {
-    pub fn new(bins: Vec<i32>) -> Result<Self, String> {
-        if bins.is_empty() || bins.iter().any(|v| !(0..=1000).contains(v)) {
-            return Err("invalid PP-OCR calibration".into());
-        }
-        Ok(Self { bins })
-    }
-    pub fn confidence(&self, posterior: i32) -> Result<i32, String> {
-        if !(0..=1_000_000).contains(&posterior) {
-            return Err("invalid posterior".into());
-        }
-        let index = ((posterior as usize * self.bins.len()) / 1_000_000).min(self.bins.len() - 1);
-        Ok(self.bins[index])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,14 +154,5 @@ mod tests {
         assert!(decode(&[f32::NAN; 4], 1, &vocabulary()).is_err());
         assert!(decode(&[f32::INFINITY; 4], 1, &vocabulary()).is_err());
         assert!(decode(&[-0.1; 4], 1, &vocabulary()).is_err());
-    }
-    #[test]
-    fn confidence_comes_from_the_calibration_bin() {
-        let c = Calibration::new(vec![25, 180, 500, 720, 830, 880, 915, 940, 960, 975]).unwrap();
-        assert_eq!(c.confidence(900000).unwrap(), 975);
-        assert_eq!(c.confidence(1000000).unwrap(), 975);
-        assert!(c.confidence(-1).is_err());
-        assert!(Calibration::new(vec![]).is_err());
-        assert!(Calibration::new(vec![1001]).is_err());
     }
 }

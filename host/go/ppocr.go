@@ -113,7 +113,7 @@ func (p *PpOcr) Fulfil(req port.PlanRequest, bitmaps port.PlanBitmaps, keep bool
 	for _, v := range req.Rec {
 		port.CellsPush(r, v)
 	}
-	if ocrport.OpIdentityAt(r) < 0 {
+	if ocrport.OpRequestEngine(r) != 2 {
 		if p.incumbent == nil {
 			return port.PlanAnswer{}, errors.New("ppocr-incumbent-missing")
 		}

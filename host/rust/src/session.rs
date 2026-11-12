@@ -136,17 +136,7 @@ impl Session {
 
     pub fn replay_end(&mut self) -> Result<(), Error> {
         let t = Transcript::from_files(&self.files).map_err(Error::Plan)?;
-        if self.ocr_engine == crate::engine::OcrEngine::Tesseract {
-            for entry in &t.entries {
-                if entry.req.get(1) == Some(&plan::KIND_OCR) && entry.req.contains(&-3100) {
-                    let mut request = Cells::new();
-                    for &v in &entry.req { crate::port::cells_push(&mut request, v); }
-                    if emon::ocrport::op_identity_at(&mut request) >= 0 {
-                        return Err(PlanError::TranscriptMiss(entry.req.clone()).into());
-                    }
-                }
-            }
-        }
+
         t.check_inputs(&[(self.idx as i32, self.cache.length() as i32)]).map_err(Error::Plan)?;
         self.replayer = Some(Replayer::new(&t));
         self.replay = true;
@@ -461,6 +451,14 @@ pub fn cells_vec(c: &Cells) -> Vec<i32> {
 
 // An `ocr` request's policy is kin's (`emon.ocrport`): the index of the argument its first language is at (after a kin-made view's
 // pixel hash). `req`: the request record `[len kind id arg...]`.
+pub fn ocr_observed(cps: &[i32]) -> i64 {
+    emon::oil::oil_obs_hash(&mut cells_of(cps), 0, cps.len() as i32)
+}
+
+pub fn ocr_identity_at(req: &[i32]) -> i32 {
+    emon::ocrport::op_identity_at(&mut cells_of(req))
+}
+
 pub fn ocr_lang_first(req: &[i32]) -> i32 {
     emon::ocrport::op_lang_first(&mut cells_of(req))
 }
@@ -471,18 +469,18 @@ pub fn ocr_models(req: &[i32], installed: &[i32]) -> (i32, Vec<i32>) {
     let mut req = cells_of(req);
     let mut inst = cells_of(installed);
     let mut out = Cells::new();
-    let n = emon::ocrport::op_models_configured(&mut req, &mut inst, 1, &mut out);
+    let n = emon::ocrtess::op_models_configured(&mut req, &mut inst, 1, &mut out);
     (n, cells_vec(&out))
 }
 
 // A line's type from the engine's block type (Tesseract's PolyBlockType).
 pub fn ocr_block_type(poly: i32) -> i32 {
-    emon::ocrport::op_block_type(poly)
+    emon::ocrtess::op_block_type(poly)
 }
 
 // The language the engine read a word in (the model's name as code points), as a request spells it: one packed cell.
 pub fn ocr_word_lang(req: &[i32]) -> i32 {
-    emon::ocrport::op_word_lang(&mut cells_of(req))
+    emon::ocrtess::op_word_lang(&mut cells_of(req))
 }
 
 // A panic's message (`internal`): a payload of a `String`, a `&str`, or none.

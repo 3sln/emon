@@ -89,6 +89,7 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
     return s || pool.reduce((a, b) => (a.busy <= b.busy ? a : b));
   };
   const port = async (req) => {
+    if (req.engine !== undefined && req.engine !== 1) return null;
     // which of the engine's models read the request is kin's (`emon.ocrport`): a language is its model, a script (`Cyrl`) the models that
     // read it, one with no model is dropped, none left is every model (D038, P10.7)
     const langs = req.models(languages).map((i) => languages[i]);
@@ -109,6 +110,6 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
     for (const pool of pools.values()) for (const s of pool) await (await s.promise).terminate();
     pools.clear();
   };
-  port.producer = { engine: 'tesseract.js', 'engine-mode': oem === 1 ? 'default (LSTM)' : String(oem), 'lstm-choice-mode': '2', models: languages.join(' '), host: 'host/js/src/tesseract.js' };
+  port.producer = { observed: `tesseract.js;oem=${oem};models=${languages.join('+')};core=${workerOptions.corePath ?? 'bundled'}`, engine: 'tesseract.js', 'engine-mode': oem === 1 ? 'default (LSTM)' : String(oem), 'lstm-choice-mode': '2', models: languages.join(' '), host: 'host/js/src/tesseract.js' };
   return port;
 }

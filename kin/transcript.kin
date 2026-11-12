@@ -22,10 +22,11 @@
 ;;   THE NAMES. `tk` is the kinds a transcript records, `tf` the keys it writes, `tb` what can be wrong with one. `tk` and `tf` have a finder (`^:parse`):
 ;;   a name is spelled once, by the writer and for the reader.
 (ns emon.transcript
-  (:require [emon.lang :refer [I32 Cells Text Blob defenum fd emit-ascii shl32 sar32]]
+  (:require [emon.lang :refer [I32 I64 i32 shr64 Cells Text Blob defenum fd emit-ascii shl32 sar32]]
+            [emon.oil :refer [oil-obs-hash oen-emit-name]]
             [emon.transcriptctx :refer [Tr]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
-            [kin.lang :refer [defn return let set while if do comment
+            [kin.lang :refer [defdata defn return let set while if do comment
                               + - * < > <= >= == != and or quot bit-and bit-or]]))
 
 ;; ----------------------------------------------------------------------------------------------- the names
@@ -527,6 +528,96 @@
   (emit-ascii out ".png")
   (return n))
 
+(defdata tw-web
+  :emitter kin.lang/flat-array
+  :data [32 114 117 110 116 105 109 101 61 79 82 84 32 87 101 98 32 49 46 50 50 46 48 32 119 97 115 109 32 83 73 77 68]
+  :accessors {^I32 tw-web-count [^I32 ignored]
+              ^I32 tw-web-at [^I32 ignored ^I32 i]})
+
+;; The engine census is derived from the actual requested/observed identities,
+;; not the conversion's selected option or an allocation slot.
+(defn ^I32 tw-marker [^Tr t ^I32 e]
+  (let [^I32 start (+ e 6) ^I32 end (+ start (cells-at (fd t ents) (+ e 5)))
+        ^:mut ^I32 k (+ start 10)]
+    (if (!= (cells-at (fd t ents) (+ start 1)) 3) (return -1))
+    (while (< (+ k 3) end)
+      (do (if (and (== (cells-at (fd t ents) k) -3100)
+                   (== (cells-at (fd t ents) (+ k 1)) 2)
+                   (== (cells-at (fd t ents) (+ k 3)) (- (- end k) 4))) (return k))
+          (set k (+ k 1)))))
+  (return -1))
+
+(defn ^I32 tw-answer [^Tr t ^I32 e]
+  (return (+ (+ e 6) (cells-at (fd t ents) (+ e 5)))))
+
+(defn ^I32 tw-same-engine [^Tr t ^I32 e ^I32 other]
+  (let [^I32 a (tw-marker t e) ^I32 b (tw-marker t other)
+        ^I32 aa (tw-answer t e) ^I32 ab (tw-answer t other) ^:mut ^I32 k 2]
+    (if (or (< a 0) (< b 0)) (return 0))
+    (if (< (- (+ other (cells-at (fd t ents) other)) ab) 28) (return 0))
+    (if (!= (cells-at (fd t ents) (+ a 3)) (cells-at (fd t ents) (+ b 3))) (return 0))
+    (if (or (!= (cells-at (fd t ents) (+ aa 6)) (cells-at (fd t ents) (+ ab 6)))
+            (!= (cells-at (fd t ents) (+ aa 7)) (cells-at (fd t ents) (+ ab 7)))) (return 0))
+    (while (< k (+ 4 (cells-at (fd t ents) (+ a 3))))
+      (do (if (!= (cells-at (fd t ents) (+ a k)) (cells-at (fd t ents) (+ b k))) (return 0))
+          (set k (+ k 1))))
+    (return 1)))
+
+(defn ^I32 tw-hash-matches [^Cells cps ^I32 start ^I32 n ^I32 hi ^I32 lo]
+  (let [^I64 hash (oil-obs-hash cps start n)]
+    (if (and (== (i32 (shr64 hash 32)) hi) (== (i32 hash) lo)) (return 1)))
+  (return 0))
+
+(defn ^I32 tw-observed [^Tr t ^Text out ^I32 marker ^I32 answer]
+  (let [^I32 hi (cells-at (fd t ents) (+ answer 6)) ^I32 lo (cells-at (fd t ents) (+ answer 7))
+        ^:mut ^I32 p 0 ^:mut ^I32 k 0]
+    (while (< p (cells-len (fd t prod)))
+      (let [^I32 kn (cells-at (fd t prod) p) ^I32 v (+ (+ p kn) 2)
+            ^I32 vn (cells-at (fd t prod) (- v 1))]
+        (if (== (tw-hash-matches (fd t prod) v vn hi lo) 1)
+          (do (tw-cps out (fd t prod) v vn 1) (return 1)))
+        (set p (+ v vn))))
+    (set p (cells-at (fd t ents) (+ marker 3)))
+    (if (== (tw-hash-matches (fd t ents) (+ marker 4) p hi lo) 1)
+      (do (tw-cps out (fd t ents) (+ marker 4) p 1) (return 1)))
+    ;; The sole qualified web runtime is a distinct observed identity (D900).
+    (cells-drop (fd t tmp) 0)
+    (while (< k p)
+      (do (cells-push (fd t tmp) (cells-at (fd t ents) (+ (+ marker 4) k))) (set k (+ k 1))))
+    (set k 0)
+    (while (< k (tw-web-count 0))
+      (do (cells-push (fd t tmp) (tw-web-at 0 k)) (set k (+ k 1))))
+    (let [^I32 n (cells-len (fd t tmp))]
+      (if (== (tw-hash-matches (fd t tmp) 0 n hi lo) 1)
+        (do (tw-cps out (fd t tmp) 0 n 1) (return 1)))))
+  (return 0))
+
+(defn ^I32 tw-engines [^Tr t ^Text out]
+  (let [^:mut ^I32 e 0 ^:mut ^I32 other 0 ^:mut ^I32 duplicate 0 ^:mut ^I32 count 0
+        ^:mut ^I32 marker 0 ^:mut ^I32 answer 0]
+    (while (< e (cells-len (fd t ents)))
+      (do (set marker (tw-marker t e)) (set answer (tw-answer t e))
+          (if (and (>= marker 0) (>= (- (+ e (cells-at (fd t ents) e)) answer) 28)
+                   (== (cells-at (fd t ents) (+ answer 3)) 0))
+            (do (set other 0) (set duplicate 0)
+                (while (< other e)
+                  (do (if (== (tw-same-engine t e other) 1) (set duplicate 1))
+                      (set other (+ other (cells-at (fd t ents) other)))))
+                (if (== duplicate 0)
+                  (do (if (== count 0) (emit-ascii out " :engines [") (emit-ascii out " "))
+                      (emit-ascii out "{:engine \"")
+                      (oen-emit-name out (cells-at (fd t ents) (+ marker 2)))
+                      (emit-ascii out "\" :config \"")
+                      (let [^I32 config-n (cells-at (fd t ents) (+ marker 3))]
+                        (tw-cps out (fd t ents) (+ marker 4) config-n 1))
+                      (emit-ascii out "\" :observed \"")
+                      (tw-observed t out marker answer)
+                      (emit-ascii out "\"}")
+                      (set count (+ count 1))))))
+          (set e (+ e (cells-at (fd t ents) e)))))
+    (if (> count 0) (do (emit-ascii out "]") (text-cp out 10))))
+  (return 0))
+
 (defn ^:pub ^I32 tr-write [^Tr t ^:mut ^Text out]
   (comment "Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.")
   (emit-ascii out "{:")
@@ -552,6 +643,7 @@
               (set pat (+ pat (+ kn (+ vn 2)))))))
         (emit-ascii out "}")
         (text-cp out 10)))
+  (tw-engines t out)
   (emit-ascii out " :")
   (tf-emit-name out (tf-inputs))
   (emit-ascii out " [")

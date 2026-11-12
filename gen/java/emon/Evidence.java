@@ -535,6 +535,9 @@ public final class Evidence {
     public static int oeCorrected() {
         return 32;
     }
+    public static int oeUncalibrated() {
+        return 64;
+    }
     public static int oeEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "dictionary");
@@ -558,6 +561,10 @@ public final class Evidence {
         }
         if (code == 32) {
             emon.Port.textAscii(t, "corrected");
+            return 1;
+        }
+        if (code == 64) {
+            emon.Port.textAscii(t, "uncalibrated");
             return 1;
         }
         return 0;
@@ -3046,7 +3053,7 @@ public final class Evidence {
         return 20;
     }
     public static int orStride() {
-        return 32;
+        return 34;
     }
     public static int obStride() {
         return 16;
@@ -4445,7 +4452,7 @@ public final class Evidence {
         283, 10
     };
     public static final int[] EV_STRIDES = {
-        12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 32, 16, 28,
+        12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 34, 16, 28,
         32, 20, 4, 12, 24, 20, 24, 20
     };
     public static final int[] EV_CK = {
@@ -4869,25 +4876,25 @@ public final class Evidence {
         return r;
     }
     public static int orCount(emon.Port.Cells c) {
-        return evCount(c, 32);
+        return evCount(c, 34);
     }
     public static int orGet(emon.Port.Cells c, int i, int f) {
-        return evGet(c, 32, i, f);
+        return evGet(c, 34, i, f);
     }
     public static int orSet(emon.Port.Cells c, int i, int f, int v) {
-        return evSet(c, 32, i, f, v);
+        return evSet(c, 34, i, f, v);
     }
     public static int orNew(emon.Port.Cells c, int vPage, int vView) {
         // Append a row of oruns: page view; every other field is its default.
-        int r = evPush(c, 32);
-        evSet(c, 32, r, 0, vPage);
-        evSet(c, 32, r, 1, vView);
-        evSet(c, 32, r, 2, -1);
-        evSet(c, 32, r, 3, -1);
-        evSet(c, 32, r, 11, -1);
-        evSet(c, 32, r, 17, -1);
-        evSet(c, 32, r, 19, -1);
-        evSet(c, 32, r, 20, -1);
+        int r = evPush(c, 34);
+        evSet(c, 34, r, 0, vPage);
+        evSet(c, 34, r, 1, vView);
+        evSet(c, 34, r, 2, -1);
+        evSet(c, 34, r, 3, -1);
+        evSet(c, 34, r, 11, -1);
+        evSet(c, 34, r, 17, -1);
+        evSet(c, 34, r, 19, -1);
+        evSet(c, 34, r, 20, -1);
         return r;
     }
     public static int obCount(emon.Port.Cells c) {
@@ -5679,7 +5686,7 @@ public final class Evidence {
             return emon.Port.cellsAt(images, (row * 20) + f);
         }
         if (ea == 14) {
-            return emon.Port.cellsAt(oruns, (row * 32) + f);
+            return emon.Port.cellsAt(oruns, (row * 34) + f);
         }
         if (ea == 15) {
             return emon.Port.cellsAt(oblocks, (row * 16) + f);
@@ -5768,7 +5775,7 @@ public final class Evidence {
             return 0;
         }
         if (ea == 14) {
-            emon.Port.cellsSet(oruns, (row * 32) + f, v);
+            emon.Port.cellsSet(oruns, (row * 34) + f, v);
             return 0;
         }
         if (ea == 15) {
@@ -6075,6 +6082,9 @@ public final class Evidence {
         return 31;
     }
     public static int owConfidence(emon.Port.Cells c, int word) {
+        if ((owGet(c, word, owfFlags()) & oeUncalibrated()) != 0) {
+            return 500;
+        }
         int p = owGet(c, word, owfPcal());
         if (p >= 0) {
             return p;
@@ -7047,5 +7057,11 @@ public final class Evidence {
         int s = evEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
         Json.jsClose(t, pretty, 0, s);
         return 0;
+    }
+    public static int orfObservedHi() {
+        return 32;
+    }
+    public static int orfObservedLo() {
+        return 33;
     }
 }

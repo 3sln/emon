@@ -3,29 +3,41 @@
 
 namespace emon;
 
+
 public static class Ocalib {
-    public static int OcalWord(int engine, int calibration, int raw) {
-        if (engine == 1) {
-            return raw;
-        }
-        if (engine != 2) {
+    public static int OcalProbability(int engine, int calibration, int kind, int raw) {
+        if (raw < 0) {
             return -1;
         }
-        if (raw < 400) {
-            return 0;
+        if ((engine == 1) && (calibration == 0) && (kind == 1)) {
+            return raw;
         }
-        if (raw < 500) {
-            return 42;
+        int i = 0;
+        int first = -1;
+        int hit = -1;
+        while (i < 9) {
+            if ((Ocalibdata.OcdRows[i * 5 + 0] == engine) && (Ocalibdata.OcdRows[i * 5 + 1] == calibration) && (Ocalibdata.OcdRows[i * 5 + 2] == kind)) {
+                if (first < 0) {
+                    first = Ocalibdata.OcdRows[i * 5 + 4];
+                }
+                if (raw >= Ocalibdata.OcdRows[i * 5 + 3]) {
+                    hit = Ocalibdata.OcdRows[i * 5 + 4];
+                }
+            }
+            i += 1;
         }
-        if (raw < 600) {
-            return 179;
+        if (hit >= 0) {
+            return hit;
         }
-        if (raw < 800) {
-            return 422;
+        return first;
+    }
+    public static int OcalWord(int engine, int calibration, int raw) {
+        return OcalProbability(engine, calibration, 1, raw);
+    }
+    public static int OcalOrPrior(int probability, int prior) {
+        if (probability < 0) {
+            return prior;
         }
-        if (raw < 900) {
-            return 521;
-        }
-        return 883;
+        return probability;
     }
 }

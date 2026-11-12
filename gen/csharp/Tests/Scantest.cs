@@ -84,7 +84,7 @@ public static class Scantest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 3, "psm 3");
         emon.Testport.AssertEq(Ocr.OcfDpi(Plan.RqArg(rq, 0, 2)), 150, "150 dpi");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 3 + (150 * 256), "symbols and OSD below it");
-        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), 8, "one language");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (8 + 4) + 112, "one language");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
     }
     internal static int ThreeLines(emon.Port.Cells an, int id) {

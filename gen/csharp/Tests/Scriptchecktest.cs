@@ -310,4 +310,31 @@ public static class Scriptchecktest {
         emon.Testport.AssertEq(emon.Port.CellsAt(text, 0), 1575, "Arabic scalar survives");
         emon.Testport.AssertEq(emon.Port.CellsAt(text, 1), 55, "value 7 survives");
     }
+    internal static int SkNoOsdTrial(int lang, int cp, int count) {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        int at = Oil.OilBegin(ans, 272, 3, 8448, 8448, 1, 1, lang, 2);
+        int i = 0;
+        while (i < count) {
+            int w = Oil.OilWord(ans, at, 10, 20, 60, 40, -1, 760, lang, 0, -1, 0);
+            Oil.OilWordCp(ans, at, w, cp);
+            Oil.OilWordCp(ans, at, w, cp);
+            i += 1;
+        }
+        Oil.OilEnd(ans, at);
+        return Scriptcheck.SkUnread(ans, at, emon.Port.NewCells());
+    }
+    [Xunit.Fact]
+    public static void TestNoOsdCensusComparesRecognizedScriptWithRequestedLanguage() {
+        emon.Testport.AssertEq(SkNoOsdTrial(1701734144, 1040, 3), 1, "Cyrillic text with an English model is unread");
+        emon.Testport.AssertEq(SkNoOsdTrial(1920299776, 1040, 3), 0, "Russian model reads Cyrillic");
+        emon.Testport.AssertEq(SkNoOsdTrial(1701734144, 65, 3), 0, "English model reads Latin");
+        emon.Testport.AssertEq(SkNoOsdTrial(0, 1040, 3), 0, "unknown model cannot establish a mismatch");
+        emon.Testport.AssertEq(SkNoOsdTrial(1701734144, 1040, 2), 0, "too few words");
+        emon.Testport.AssertEq(SkNoOsdTrial(1701734144, 49, 3), 0, "digits supply no script evidence");
+        emon.Testport.AssertEq(SkNoOsdTrial(2021160960, 1040, 3), 0, "unknown ISO language cannot accuse a reading");
+        emon.Testport.AssertEq(SkNoOsdTrial(2053664512, 19968, 3), 0, "canonical Chinese ISO code reads Han");
+        emon.Testport.AssertEq(SkNoOsdTrial(1634560000, 4608, 3), 0, "Amharic reads Ethiopic");
+        emon.Testport.AssertEq(SkNoOsdTrial(1701734144, 4608, 3), 1, "Ethiopic with English is unread");
+        emon.Testport.AssertEq(SkNoOsdTrial(1785753088, 65, 3), 0, "Latin output alone cannot accuse a non-Latin model");
+    }
 }

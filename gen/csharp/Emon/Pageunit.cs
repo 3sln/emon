@@ -550,7 +550,9 @@ public static class Pageunit {
         Pageink.PnFeatures(i + 1, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         if (((fuse & 8) == 8) && (Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot(2))) < 0)) {
             if (Ofuse.OfPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
+                int requestAt = emon.Port.CellsLen(rq);
                 Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot(2)), did, (dpi100 + 50) / 100, loc);
+                Ocrengine.OeSelect(rq, requestAt, 2);
                 ppasked = 1;
             }
         }

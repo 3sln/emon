@@ -313,3 +313,30 @@ fn test_conflicting_ocr_preserves_born_arabic_and_its_inline_value_on_the_same_p
     crate::testport::assert_eq(crate::port::cells_at(text, 0), 1575, "Arabic scalar survives");
     crate::testport::assert_eq(crate::port::cells_at(text, 1), 55, "value 7 survives");
 }
+pub(crate) fn sk_no_osd_trial(lang: i32, cp: i32, count: i32) -> i32 {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(ans, 272, 3, 8448, 8448, 1, 1, lang, 2);
+    let mut i: i32 = 0;
+    while i < count {
+        let w: i32 = oil_word(ans, at, 10, 20, 60, 40, -1, 760, lang, 0, -1, 0);
+        oil_word_cp(ans, at, w, cp);
+        oil_word_cp(ans, at, w, cp);
+        i += 1;
+    }
+    oil_end(ans, at);
+    return sk_unread(ans, at, &mut crate::port::Cells::new());
+}
+#[test]
+fn test_no_osd_census_compares_recognized_script_with_requested_language() {
+    crate::testport::assert_eq(sk_no_osd_trial(1701734144, 1040, 3), 1, "Cyrillic text with an English model is unread");
+    crate::testport::assert_eq(sk_no_osd_trial(1920299776, 1040, 3), 0, "Russian model reads Cyrillic");
+    crate::testport::assert_eq(sk_no_osd_trial(1701734144, 65, 3), 0, "English model reads Latin");
+    crate::testport::assert_eq(sk_no_osd_trial(0, 1040, 3), 0, "unknown model cannot establish a mismatch");
+    crate::testport::assert_eq(sk_no_osd_trial(1701734144, 1040, 2), 0, "too few words");
+    crate::testport::assert_eq(sk_no_osd_trial(1701734144, 49, 3), 0, "digits supply no script evidence");
+    crate::testport::assert_eq(sk_no_osd_trial(2021160960, 1040, 3), 0, "unknown ISO language cannot accuse a reading");
+    crate::testport::assert_eq(sk_no_osd_trial(2053664512, 19968, 3), 0, "canonical Chinese ISO code reads Han");
+    crate::testport::assert_eq(sk_no_osd_trial(1634560000, 4608, 3), 0, "Amharic reads Ethiopic");
+    crate::testport::assert_eq(sk_no_osd_trial(1701734144, 4608, 3), 1, "Ethiopic with English is unread");
+    crate::testport::assert_eq(sk_no_osd_trial(1785753088, 65, 3), 0, "Latin output alone cannot accuse a non-Latin model");
+}

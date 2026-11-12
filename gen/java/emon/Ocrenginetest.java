@@ -13,15 +13,15 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrengine.oeRequestSlot(1), -1, "incumbent has no extra slot");
         emon.Testport.assertEq(Ocrengine.oeRequestSlot(3), -1, "unregistered engine has no extra slot");
     }
-    public static void testDefaultOcrRequestIsUnchanged() {
+    public static void testEveryDefaultOcrRequestCarriesRequestedIdentity() {
         emon.Port.Cells r = emon.Port.newCells();
         emon.Port.Cells scratch = emon.Port.newCells();
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
         Ocrengine.oeTag(r, scratch, 0);
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 11, "legacy request length unchanged");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), 11, "record header unchanged");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 112, "default identity extends the key");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record header includes identity");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "one legacy language");
     }
     public static void testOptionalEngineIdentityIsInTheRequestNotTheLanguageList() {
@@ -31,10 +31,11 @@ public final class Ocrenginetest {
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
         Ocrengine.oeTag(r, scratch, 1);
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 14 + 74, "identity extends request key");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 74, "identity extends request key");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record length includes identity");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 11), -3100, "identity marker");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 12), 1, "PP-OCR engine");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 12), 2, "requested identity version");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 13), 2, "PP-OCR engine");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "identity is not a language");
         emon.Testport.assertEq(Ocrport.opLangAt(r, 0), 1701734144, "English language unchanged");
     }
@@ -46,14 +47,14 @@ public final class Ocrenginetest {
         Plan.rqOcrEnd(r, at);
         Ocrengine.oeTag(r, scratch, 1);
         Ocrengine.oeTag(r, scratch, 1);
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 14 + 74, "exactly one identity trailer");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 74, "exactly one identity trailer");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "canonical record length");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "English remains the only language");
     }
     public static void testMixedQueuedViewsKeepHashesAndExactlyOneTrailer() {
         emon.Port.Cells r = emon.Port.newCells();
         emon.Port.Cells scratch = emon.Port.newCells();
-        int first = 14 + 74;
+        int first = 15 + 74;
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
@@ -63,8 +64,8 @@ public final class Ocrenginetest {
         Ocrengine.oeTag(r, scratch, 1);
         Ocrengine.oeTag(r, scratch, 1);
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), first, "first request length");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, first), 16 + 74, "view request length");
-        emon.Testport.assertEq(emon.Port.cellsLen(r), (30 + 74) + 74, "two canonical records");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, first), 17 + 74, "view request length");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), (32 + 74) + 74, "two canonical records");
         emon.Testport.assertEq(emon.Port.cellsAt(r, first + 11), -3100, "hash cell is not a trailer marker");
         emon.Testport.assertEq(emon.Port.cellsAt(r, first + 13), -3100, "view trailer follows its language");
     }
@@ -80,7 +81,7 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrport.opLangCount(r), 0, "shared helper excludes the trailer");
         emon.Testport.assertEq(Ocrport.opPpLangFirst(r, 123, 456), 7, "compact layout");
         emon.Testport.assertEq(Ocrport.opPpLangCount(r, 7), 0, "identity is not parsed as language");
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 13 + 74, "one canonical trailer");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 14 + 74, "one canonical trailer");
     }
     public static void testActualViewHashDisambiguatesLanguageShapedHashCells() {
         emon.Port.Cells compact = emon.Port.newCells();
@@ -108,20 +109,15 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 0, 0, 2, 1, 883, 950), 1, "independent agreement can justify replacement");
         emon.Testport.assertEq(Ofuse.ofRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion");
     }
-    public static void testOptionalFusionTagsOnlyTheAdditionalReading() {
+    public static void testEngineSelectionDoesNotDependOnItsAllocationSlot() {
         emon.Port.Cells r = emon.Port.newCells();
-        emon.Port.Cells scratch = emon.Port.newCells();
-        int first = Plan.rqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0);
+        int first = Plan.rqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrEnd(r, first);
-        int extra = Plan.rqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0);
-        Plan.rqOcrEnd(r, extra);
-        Ocrengine.oeTag(r, scratch, 2);
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), 10, "Tesseract request key unchanged");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 10), 13 + 74, "only additional reading is tagged");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 20), -3100, "PP identity on additional reading");
-        Ocrengine.oeTag(r, scratch, 2);
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), 10, "repeated rounds preserve Tesseract");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 10), 13 + 74, "PP tag remains canonical");
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 1, "former PP slot stays Tesseract by default");
+        Ocrengine.oeSelect(r, first, 2);
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 2, "explicit PP configuration");
+        Ocrengine.oeSelect(r, first, 2);
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 14 + 74, "one canonical trailer");
     }
     public static void testAdditionalReadingCannotTruncateATextSlot() {
         emon.Port.Cells c = emon.Port.newCells();
@@ -232,5 +228,28 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ofuse.ofPpCode(year, 0, 7), 0, "source year range remains protected");
         emon.Testport.assertEq(Ofuse.ofPpCode(time, 0, 5), 0, "source time remains protected");
         emon.Testport.assertEq(Ofuse.ofPpCode(word, 0, 4), 0, "PAND/PANO failure band is not an identifier");
+    }
+    public static void testEngineTableSeparatesObservedIdentitiesAndDeduplicatesRuns() {
+        emon.Port.Cells table = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int a = Evidence.orNew(runs, 1, 0);
+        int b = Evidence.orNew(runs, 1, 0);
+        int c = Evidence.orNew(runs, 2, 0);
+        Evidence.orSet(runs, a, Evidence.orfEngine(), 2);
+        Evidence.orSet(runs, b, Evidence.orfEngine(), 2);
+        Evidence.orSet(runs, c, Evidence.orfEngine(), 2);
+        Evidence.orSet(runs, b, Evidence.orfObservedHi(), 1);
+        emon.Testport.assertEq(Ocrengine.oeRegister(table, runs, lines, words, 2, scratch), 0, "registered");
+        emon.Testport.assertEq(emon.Port.cellsLen(table), 14, "two identities, not three runs or engine-minus-one");
+        emon.Testport.assertEq(Evidence.orGet(runs, a, Evidence.orfEix()), 0, "first observed identity");
+        emon.Testport.assertEq(Evidence.orGet(runs, b, Evidence.orfEix()), 1, "different runtime or model");
+        emon.Testport.assertEq(Evidence.orGet(runs, c, Evidence.orfEix()), 0, "repeat identity deduplicates");
+    }
+    public static void testUncalibratedCandidateCanNeverInsertOrReplace() {
+        emon.Testport.assertEq(Ofuse.ofRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion");
+        emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
     }
 }

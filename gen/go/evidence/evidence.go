@@ -553,6 +553,9 @@ func OeRuleGhost() int32 {
 func OeCorrected() int32 {
 	return 32
 }
+func OeUncalibrated() int32 {
+	return 64
+}
 func OeEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "dictionary")
@@ -576,6 +579,10 @@ func OeEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 32 {
 		port.TextAscii(t, "corrected")
+		return 1
+	}
+	if code == 64 {
+		port.TextAscii(t, "uncalibrated")
 		return 1
 	}
 	return 0
@@ -3097,7 +3104,7 @@ func ImStride() int32 {
 }
 
 func OrStride() int32 {
-	return 32
+	return 34
 }
 
 func ObStride() int32 {
@@ -4856,7 +4863,7 @@ var EvFx [48]int32 = [48]int32{
 }
 
 var EvStrides [24]int32 = [24]int32{
-	12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 32, 16, 28,
+	12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 34, 16, 28,
 	32, 20, 4, 12, 24, 20, 24, 20,
 }
 
@@ -5332,28 +5339,28 @@ func ImNew(c *port.Cells, vPage int32, vX0 int32, vY0 int32, vX1 int32, vY1 int3
 }
 
 func OrCount(c *port.Cells) int32 {
-	return evCount(c, 32)
+	return evCount(c, 34)
 }
 
 func OrGet(c *port.Cells, i int32, f int32) int32 {
-	return evGet(c, 32, i, f)
+	return evGet(c, 34, i, f)
 }
 
 func OrSet(c *port.Cells, i int32, f int32, v int32) int32 {
-	return evSet(c, 32, i, f, v)
+	return evSet(c, 34, i, f, v)
 }
 
 func OrNew(c *port.Cells, vPage int32, vView int32) int32 {
 	// Append a row of oruns: page view; every other field is its default.
-	var r int32 = evPush(c, 32)
-	evSet(c, 32, r, 0, vPage)
-	evSet(c, 32, r, 1, vView)
-	evSet(c, 32, r, 2, -1)
-	evSet(c, 32, r, 3, -1)
-	evSet(c, 32, r, 11, -1)
-	evSet(c, 32, r, 17, -1)
-	evSet(c, 32, r, 19, -1)
-	evSet(c, 32, r, 20, -1)
+	var r int32 = evPush(c, 34)
+	evSet(c, 34, r, 0, vPage)
+	evSet(c, 34, r, 1, vView)
+	evSet(c, 34, r, 2, -1)
+	evSet(c, 34, r, 3, -1)
+	evSet(c, 34, r, 11, -1)
+	evSet(c, 34, r, 17, -1)
+	evSet(c, 34, r, 19, -1)
+	evSet(c, 34, r, 20, -1)
 	return r
 }
 
@@ -6213,7 +6220,7 @@ func EvPeek(ea int32, row int32, f int32, epages *port.Cells, views *port.Cells,
 		return port.CellsAt(images, (row*20)+f)
 	}
 	if ea == 14 {
-		return port.CellsAt(oruns, (row*32)+f)
+		return port.CellsAt(oruns, (row*34)+f)
 	}
 	if ea == 15 {
 		return port.CellsAt(oblocks, (row*16)+f)
@@ -6303,7 +6310,7 @@ func EvPoke(ea int32, row int32, f int32, v int32, epages *port.Cells, views *po
 		return 0
 	}
 	if ea == 14 {
-		port.CellsSet(oruns, (row*32)+f, v)
+		port.CellsSet(oruns, (row*34)+f, v)
 		return 0
 	}
 	if ea == 15 {
@@ -6634,6 +6641,9 @@ func OwfAlts() int32 {
 }
 
 func OwConfidence(c *port.Cells, word int32) int32 {
+	if (OwGet(c, word, OwfFlags()) & OeUncalibrated()) != 0 {
+		return 500
+	}
 	var p int32 = OwGet(c, word, OwfPcal())
 	if p >= 0 {
 		return p
@@ -7651,4 +7661,12 @@ func EvEmit(t *strings.Builder, pretty int32, epages *port.Cells, views *port.Ce
 	var s int32 = EvEmitOpen(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
 	json.JsClose(t, pretty, 0, s)
 	return 0
+}
+
+func OrfObservedHi() int32 {
+	return 32
+}
+
+func OrfObservedLo() int32 {
+	return 33
 }

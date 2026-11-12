@@ -247,7 +247,8 @@
           "struct-disagree",
           "tag-span-conflict",
           "in-table-image",
-          "script-unread"
+          "script-unread",
+          "uncalibrated-engine"
         ]
       }
     },

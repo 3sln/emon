@@ -14413,3 +14413,15 @@ and policy, not this unfinished final implementation.
 
 - [ ] **Signed off** (maintainer)
 
+
+### D902 — Every OCR key names its configuration; engine roles, calibration and provenance are kin policy
+
+Every OCR request carries the v2 `-3100 2 engine length code-points` identity trailer. Tesseract's requested pin covers the model catalogue, canonical adapter and kin wire/resolver policy; the request retains its language and flags. PP is selected at the planning site, independently of the allocated slot. Hybrid primary keys also name the challenger policy, so changing the composition yields an ordinary request-key miss. The D859/D867 host replay classifiers are removed. Tesseract model resolution lives in `emon.ocrtess`; neutral request framing remains in `emon.ocrport`.
+
+Observed hashes are retained on runs. A document table deduplicates requested and observed identities, assigns run indices and word/line provenance bits, and emits an `ocr-engines` vector. Evidence represents an observed hash as its two signed cells, losslessly. Transcript `:engines` is derived from successful requested/observed readings; full observed strings are checked against producer values or the canonical native/web policy identity. Native PP supplies its policy hash; the D900 web runtime remains distinct. The browser hashes its supplied observed string through kin. Native Tesseract's observed string includes actual Tesseract/Leptonica versions and installed model-file fingerprints; metadata calls its OEM `Init3 default`, rather than asserting LSTM. The embedder-owned Tesseract.js adapter reports its configured OEM, languages and core location without inventing unavailable model hashes.
+
+PP word calibration is generated in kin from the frozen D845 fit counts. Weighted isotonic pooling repairs bins 6/7 to 57 correct of 135, or 422 per mille. The historical fit report remains intact as source evidence; the unused host map and lookup are removed. Word maps include engine, calibration class and confidence kind; absent or unfitted scores remain -1. Tesseract's policy scale stays fixed during P13.2 under ruling 5. Node maps gain the engine column and exact-engine, any-engine, pooled fallback. Nodes carry their page's primary engine; the registered incumbent stays primary on seal and stamp pages. The fitter supports engine-labelled raw rows and preserves other engines' maps during a targeted fit. Unknown maps may corroborate but cannot insert or replace; their Model output is capped and flagged.
+
+An engine without the script capability is judged by the shared text-script census and ISO model script, without inventing OSD confidence. The fallback requires three words, three script-bearing characters and a 60% dominant script; an unknown model cannot establish mismatch. Present OSD retains its existing policy. The no-OSD and absent-score laws were observed failing before the fixes. Verification and live re-recording results belong to the OIL2 Round 10 report; this entry does not claim acceptance before those gates finish.
+
+- [ ] **Signed off** (maintainer)

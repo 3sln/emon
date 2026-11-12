@@ -11,13 +11,15 @@
 ;;   block of it `script-unread` and `low-conf` and holds its confidence at `sc-unread-conf`: the text is the engine's guess at a script it cannot read, kept (a
 ;;   reader may want it) and never presented as confident text.
 (ns emon.scriptcheck
-  (:require [emon.oil :refer [oil-find oil-first-word oil-sidecars oil-nwords oil-sconf oil-script oil-wlang oil-word oil-word-flags oil-word-next]]
+  (:require [emon.ocrscript :refer [os-census-of os-census-count os-census-code os-lang-script]]
+            [emon.oil :refer [oil-get oh-caps oh-lang oc-script oil-has oil-wlen oil-wcp oil-find oil-first-word oil-sidecars oil-nwords oil-sconf oil-script oil-wlang oil-word oil-word-flags oil-word-next]]
             [emon.oilsrc :refer [oxs-policy-value]]
             [emon.lang :refer [I32 Cells]]
-            [emon.port :refer [cells-drop cells-push cells-at]]
+            [emon.port :refer [cells-drop cells-push cells-at cells-set]]
             [emon.plan :refer [an-find an-ok rq-ocr rq-ocr-lang rq-ocr-end]]
             [emon.ocr :refer [ocw-dict ocf-symbols ocf-osd ocf-dpi-unit]]
-            [emon.ocrport :refer [op-model-script op-script-reads sc-latn sc-latf sc-arab]]
+            [emon.ocrport :refer [op-script-reads sc-latn sc-latf sc-arab]]
+            [emon.ocrtess :refer [op-model-script]]
             [emon.evidence :refer [or-count or-get ow-get hd-tstart hd-tlen orf-pass orf-script orf-sconf orf-wfirst orf-wcount orf-page op-first]]
             [emon.model :refer [node-count node-parent node-region-count node-region-head region-page region-next node-text-len node-src node-kind nk-is-inline sr-text sr-hidden-text sr-ocr node-conf node-set-conf node-add-flag fl-script-unread fl-low-conf]]
             [kin.lang :refer [defn return let set while if do comment
@@ -53,6 +55,46 @@
           (set i (+ i 1))))
     (return k)))
 
+
+(defn ^:pub ^I32 sk-census [^Cells an ^I32 at ^:mut ^Cells scr]
+  (comment "No-OSD fallback: at least three script-bearing characters and a 60% dominant script. Digits and punctuation do not vote. Never invent OSD confidence.")
+  (cells-drop scr 0)
+  (let [^:mut ^I32 k 0 ^:mut ^I32 i 0 ^:mut ^I32 j 0
+        ^:mut ^I32 total 0 ^:mut ^I32 best 0 ^:mut ^I32 winner -1
+        ^:mut ^I32 w (oil-first-word an at)]
+    (while (< k (os-census-count 0)) (do (cells-push scr 0) (set k (+ k 1))))
+    (while (< i (oil-nwords an at))
+      (do (set j 0)
+          (while (< j (oil-wlen an at w))
+            (do (set k (os-census-of (oil-wcp an at w j)))
+                (if (>= k 0)
+                  (do (cells-set scr k (+ (cells-at scr k) 1))
+                      (set total (+ total 1))))
+                (set j (+ j 1))))
+          (set w (oil-word-next an at w)) (set i (+ i 1))))
+    (set k 0)
+    (while (< k (os-census-count 0))
+      (do (if (> (cells-at scr k) best)
+            (do (set best (cells-at scr k)) (set winner k)))
+          (set k (+ k 1))))
+    (if (and (>= total 3) (>= (* best 1000) (* total 600))) (return (os-census-code 0 winner)))
+    (return 0)))
+
+(defn ^I32 sk-no-osd-unread [^Cells an ^I32 at ^:mut ^Cells scr]
+  (let [^I32 script (sk-census an at scr)
+        ^:mut ^I32 model (os-lang-script (oil-get an at (oh-lang)))
+        ^:mut ^I32 i 0 ^:mut ^I32 w (oil-first-word an at) ^:mut ^I32 known 0]
+    (if (== script 0) (return 0))
+    (if (or (== script (sc-latn)) (== script (sc-latf))) (return 0))
+    (if (> model 0)
+      (do (set known 1) (if (== (op-script-reads script model) 1) (return 0))))
+    (while (< i (oil-nwords an at))
+      (do (set model (os-lang-script (oil-wlang an at w)))
+          (if (> model 0)
+            (do (set known 1) (if (== (op-script-reads script model) 1) (return 0))))
+          (set w (oil-word-next an at w)) (set i (+ i 1))))
+    (return known)))
+
 (defn ^:pub ^I32 sk-unread [^Cells an ^I32 at ^:mut ^Cells scr]
   (comment "1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.")
   (let [^I32 ext (oil-find an at)
@@ -63,6 +105,9 @@
         ^:mut ^I32 n 0
         ^:mut ^I32 script 0 ^:mut ^I32 model -1 ^:mut ^I32 source-first 0]
     (if (< ext 0) (return 0))
+    (if (== (oil-has (oil-get an ext (oh-caps)) (oc-script)) 0)
+      (do (if (< nw (sk-min-words)) (return 0))
+          (return (sk-no-osd-unread an ext scr))))
     (set script (oil-script an ext))
     (if (<= script 0) (return 0))
     (if (== script (sc-latn)) (return 0))
@@ -93,7 +138,9 @@
   (if (== (sk-unread ans at scr) 0) (return at))
   (let [^I32 found (an-find ans id)
         ^I32 ext (oil-find ans at)
-        ^I32 script (oil-script ans ext)]
+        ^:mut ^I32 script (oil-script ans ext)]
+    (if (== (oil-has (oil-get ans ext (oh-caps)) (oc-script)) 0)
+      (set script (sk-census ans ext scr)))
     (if (>= found 0)
       (do (if (== (an-ok ans found) 1) (return found))
           (return at)))

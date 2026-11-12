@@ -5,7 +5,7 @@ package oil
 
 import (
 	"emon/ocalib"
-	"emon/ocrport"
+	"emon/ocrtess"
 	"emon/oilregistry"
 	"emon/port"
 	"strings"
@@ -1559,16 +1559,16 @@ func oilScCpsEqual(c *port.Cells, p int32, packed int32, tablekind int32) int32 
 	if (tablekind == 2) || ((packed == 1667789568) || (packed == 1667789824)) {
 		for i < 639 {
 			j = i + 1
-			for ocrport.OpNames[j] != 0 {
+			for ocrtess.OpNames[j] != 0 {
 				j += 1
 			}
-			if (ocrport.OpNames[i] == tablekind) && (ocrport.OpNames[j+1] == packed) {
+			if (ocrtess.OpNames[i] == tablekind) && (ocrtess.OpNames[j+1] == packed) {
 				if count != ((j - i) - 1) {
 					return 0
 				}
 				i += 1
 				for i < j {
-					if port.CellsAt(c, (p+1)+k) != ocrport.OpNames[i] {
+					if port.CellsAt(c, (p+1)+k) != ocrtess.OpNames[i] {
 						return 0
 					}
 					i += 1

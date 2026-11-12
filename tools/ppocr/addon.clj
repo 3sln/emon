@@ -70,7 +70,7 @@
     (spit (str dir "/src/emon.rs") (apply str (for [f (sort (fs/glob (str dir "/src/emon") "*.rs"))]
       (str "pub mod " (fs/strip-ext (fs/file-name f)) ";\n"))))
     (doseq [f ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "ppocr_native"
-              "ppocr" "ppocr_ctc" "ppocr_image" "ppocr_pipeline" "ppocr_runtime" "ppocr_calibration" "ppocr_abi" "ppocr_tess_drop"]]
+              "ppocr" "ppocr_ctc" "ppocr_image" "ppocr_pipeline" "ppocr_runtime" "ppocr_abi" "ppocr_tess_drop"]]
       (fs/copy (str "host/rust/src/" f ".rs") (str dir "/src/" f ".rs") {:replace-existing true}))
     (spit (str dir "/src/lib.rs") "\npub mod ppocr_abi;\n" :append true)
     (spit (str dir "/src/tess.rs") "\ninclude!(\"ppocr_tess_drop.rs\");\n" :append true)

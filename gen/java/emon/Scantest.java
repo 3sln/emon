@@ -80,7 +80,7 @@ public final class Scantest {
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 3, "psm 3");
         emon.Testport.assertEq(Ocr.ocfDpi(Plan.rqArg(rq, 0, 2)), 150, "150 dpi");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 2), 3 + (150 * 256), "symbols and OSD below it");
-        emon.Testport.assertEq(Plan.rqNargs(rq, 0), 8, "one language");
+        emon.Testport.assertEq(Plan.rqNargs(rq, 0), (8 + 4) + 112, "one language");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
     }
     public static int threeLines(emon.Port.Cells an, int id) {

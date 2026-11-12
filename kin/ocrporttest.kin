@@ -13,10 +13,8 @@
             [emon.evidence :refer [ev-emit-ocr-model]]
             [emon.ocr :refer [bt-text bt-table bt-image bt-line bt-other
                                      ]]
-            [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name zh-chs zh-cht zh-emit-name
-                                  pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation
-                                  op-lang-first op-lang-count op-lang-at op-model-selector op-models op-models-configured op-dropped op-find op-names-count op-names-at
-                                  op-word-lang op-osd-script op-block-type op-is-script op-pack-cells ]]
+            [emon.ocrport :refer [sc-latn sc-latf sc-cyrl sc-hani sc-jpan sc-cans sc-emit-name op-lang-first op-lang-count op-lang-at op-is-script op-pack-cells]]
+            [emon.ocrtess :refer [zh-chs zh-cht zh-emit-name pb-table pb-noise pb-flowing-text pb-heading-image pb-horz-line pb-equation op-model-selector op-models op-models-configured op-dropped op-find op-names-count op-names-at op-word-lang op-osd-script op-block-type]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot rem]]))
 

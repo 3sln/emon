@@ -64,7 +64,8 @@ SRC = [(1, "text"), (2, "hidden-text"), (4, "ocr"), (8, "trace"), (16, "vector")
        (32, "struct"), (64, "annot"), (128, "outline"), (256, "infer")]
 FLAGS = [(1, "low-conf"), (2, "ocr-only"), (4, "text-layer-suspect"),
          (8, "reconstructed"), (16, "dpi-unknown"), (32, "rotated"), (64, "vertical"),
-         (128, "struct-disagree"), (256, "tag-span-conflict"), (512, "in-table-image"), (1024, "script-unread")]
+         (128, "struct-disagree"), (256, "tag-span-conflict"), (512, "in-table-image"), (1024, "script-unread"),
+         (2048, "uncalibrated-engine")]
 STYLE = [(1, "bold"), (2, "italic"), (4, "underline"), (8, "strike"), (16, "sub"),
          (32, "sup"), (64, "mono"), (128, "smallcaps")]
 ALIGN = {1: "start", 2: "center", 3: "end", 4: "justify"}
@@ -89,16 +90,16 @@ class Cpt(int):
 
 # ------------------------------------------------------ the confidence map (P10.1)
 # SPEC 9.6: a node's `conf` is written CALIBRATED, from the fitted table test/calibration/fit.edn (the rows
-# [kind class raw-lo calibrated n], the same fit that kin/calibdata.kin was generated from): the steps of
-# (kind, the class of its source) if there are any, else the kind's `any` steps, else the raw score as it is;
+# [kind class engine raw-lo calibrated n], the same fit that kin/calibdata.kin was generated from): the steps of
+# (kind, source class, engine), then the class's any-engine steps, then the kind's pooled steps, else raw;
 # within the steps the last whose raw-lo is at most the raw score, below the first the first. Written from
 # the SPEC, not from kin/calib.kin.
 def _cal_table():
     import re
     rows = {}
     text = open(os.path.join(ROOT, "test", "calibration", "fit.edn"), encoding="utf-8").read()
-    for m in re.finditer(r'\["([a-z-]+)" "([a-z]+)" (\d+) (\d+) \d+\]', text):
-        rows.setdefault((m.group(1), m.group(2)), []).append((int(m.group(3)), int(m.group(4))))
+    for m in re.finditer(r'\["([a-z-]+)" "([a-z]+)" (-?\d+) (\d+) (\d+) \d+\]', text):
+        rows.setdefault((m.group(1), m.group(2), int(m.group(3))), []).append((int(m.group(4)), int(m.group(5))))
     return rows
 
 
@@ -114,10 +115,11 @@ def cal_class(src):
     return "text" if text else "infer"
 
 
-def calibrated(kind, src, raw):
+def calibrated(kind, src, raw, engine=1):
     if raw < 0:
         return raw
-    steps = CAL.get((kind, cal_class(src))) or CAL.get((kind, "any"))
+    steps = (CAL.get((kind, cal_class(src), engine))
+             or CAL.get((kind, cal_class(src), -1)) or CAL.get((kind, "any", -1)))
     if not steps:
         return raw
     best = steps[0][1]

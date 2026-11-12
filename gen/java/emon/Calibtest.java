@@ -38,16 +38,16 @@ public final class Calibtest {
         int i = 1;
         emon.Testport.assertThat(n > 0, "the table has a row (the identity table has one that no node matches)");
         while (i < n) {
-            int k0 = Calibdata.CD_ROWS[(i - 1) * 4 + 0];
-            int c0 = Calibdata.CD_ROWS[(i - 1) * 4 + 1];
-            int k1 = Calibdata.CD_ROWS[i * 4 + 0];
-            int c1 = Calibdata.CD_ROWS[i * 4 + 1];
+            int k0 = Calibdata.CD_ROWS[(i - 1) * 5 + 0];
+            int c0 = Calibdata.CD_ROWS[(i - 1) * 5 + 1];
+            int k1 = Calibdata.CD_ROWS[i * 5 + 0];
+            int c1 = Calibdata.CD_ROWS[i * 5 + 1];
             emon.Testport.assertThat((k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class");
             if ((k0 == k1) && (c0 == c1)) {
-                emon.Testport.assertThat(Calibdata.CD_ROWS[(i - 1) * 4 + 2] < Calibdata.CD_ROWS[i * 4 + 2], "raw-lo rises within a kind and class");
-                emon.Testport.assertThat(Calibdata.CD_ROWS[(i - 1) * 4 + 3] <= Calibdata.CD_ROWS[i * 4 + 3], "calibrated never falls with the raw score");
+                emon.Testport.assertThat(Calibdata.CD_ROWS[(i - 1) * 5 + 3] < Calibdata.CD_ROWS[i * 5 + 3], "raw-lo rises within a kind and class");
+                emon.Testport.assertThat(Calibdata.CD_ROWS[(i - 1) * 5 + 4] <= Calibdata.CD_ROWS[i * 5 + 4], "calibrated never falls with the raw score");
             }
-            emon.Testport.assertThat((Calibdata.CD_ROWS[i * 4 + 3] >= 0) && (Calibdata.CD_ROWS[i * 4 + 3] <= 1000), "a calibrated value is 0..1000");
+            emon.Testport.assertThat((Calibdata.CD_ROWS[i * 5 + 4] >= 0) && (Calibdata.CD_ROWS[i * 5 + 4] <= 1000), "a calibrated value is 0..1000");
             i += 1;
         }
     }
@@ -58,8 +58,8 @@ public final class Calibtest {
         int n = 30;
         int i = 0;
         while (i < n) {
-            if (Calibdata.CD_ROWS[i * 4 + 1] == -1) {
-                emon.Testport.assertEqAt(Calib.calLookup(Calibdata.CD_ROWS[i * 4 + 0], 9, Calibdata.CD_ROWS[i * 4 + 2]), Calibdata.CD_ROWS[i * 4 + 3], "an any-row at its raw-lo", i);
+            if (Calibdata.CD_ROWS[i * 5 + 1] == -1) {
+                emon.Testport.assertEqAt(Calib.calLookup(Calibdata.CD_ROWS[i * 5 + 0], 9, Calibdata.CD_ROWS[i * 5 + 3]), Calibdata.CD_ROWS[i * 5 + 4], "an any-row at its raw-lo", i);
             }
             i += 1;
         }
@@ -69,17 +69,17 @@ public final class Calibtest {
         int n = 30;
         int i = 0;
         while (i < n) {
-            if (Calibdata.CD_ROWS[i * 4 + 1] == -1) {
-                int kind = Calibdata.CD_ROWS[i * 4 + 0];
+            if (Calibdata.CD_ROWS[i * 5 + 1] == -1) {
+                int kind = Calibdata.CD_ROWS[i * 5 + 0];
                 int firstV = -1;
                 int lastV = -1;
                 int j = 0;
                 while (j < n) {
-                    if ((Calibdata.CD_ROWS[j * 4 + 0] == kind) && (Calibdata.CD_ROWS[j * 4 + 1] == -1)) {
+                    if ((Calibdata.CD_ROWS[j * 5 + 0] == kind) && (Calibdata.CD_ROWS[j * 5 + 1] == -1)) {
                         if (firstV < 0) {
-                            firstV = Calibdata.CD_ROWS[j * 4 + 3];
+                            firstV = Calibdata.CD_ROWS[j * 5 + 4];
                         }
-                        lastV = Calibdata.CD_ROWS[j * 4 + 3];
+                        lastV = Calibdata.CD_ROWS[j * 5 + 4];
                     }
                     j += 1;
                 }
@@ -117,7 +117,15 @@ public final class Calibtest {
         }
         emon.Testport.assertEq(Calib.calNodeConf(nodes, p1), want, "the flagged block: its raw score, when the map would give more");
         emon.Testport.assertThat(Calib.calNodeConf(nodes, p1) <= 100, "never above it");
+        Model.nodeAddFlag(nodes, p1, Model.flUncalibratedEngine());
+        emon.Testport.assertThat(Calib.calNodeConf(nodes, p1) <= 100, "uncalibrated prior never raises an unread cap");
         emon.Testport.assertThat(Calib.calNodeConf(nodes, t1) <= 100, "the text under it too");
         emon.Testport.assertEq(Calib.calNodeConf(nodes, p2), mapped, "a block no one flagged is calibrated as it was");
+    }
+    public static void testNodeMapIsEngineSpecificWithPooledFallback() {
+        emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 1, 508), Calib.calLookup(3, 1, 508), "Tesseract gets its fitted OCR map");
+        emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 2, 508), Calib.calLookup(3, 9, 508), "PP has no Tesseract-specific fit");
+        emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 100, 508), Calib.calLookup(3, 9, 508), "unknown engine uses pooled fallback");
+        emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 2, -1), -1, "absence survives engine lookup");
     }
 }

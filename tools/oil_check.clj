@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; D883: source policy is closed by the registry, with executable fallback laws.
-(require '[babashka.fs :as fs] '[clojure.edn :as edn] '[clojure.string :as str])
+(require '[babashka.fs :as fs] '[babashka.process :refer [process]] '[clojure.edn :as edn] '[clojure.string :as str])
 
 (def consumers
   {[1 3] {:site ['emon.scriptcheck 'sk-unread] :subject 3 :fallback 1
@@ -85,3 +85,10 @@
   (doseq [planted [unlisted direct unguarded missing-law wrong-registry bypass qualified wrong-fallback]]
     (assert (seq (problems planted)) "source audit missed a planted violation")))
 (println "  ok   OIL: two registered policy consumers, present/absent laws and registry fallbacks, guarded source reads; eight planted violations caught")
+
+;; Pin and fitted-word data are generated inputs to the wire contract. Keep
+;; their checks in the fast core, including when optional live OCR is absent.
+(doseq [script ["tools/tessdata/identity.clj" "tools/ppocr/identity.clj" "tools/calibration/ocr_words.clj"]]
+  (let [result @(process ["bb" script] {:inherit true :shutdown nil})]
+    (assert (zero? (:exit result)) (str "OIL generated policy data drift: " script))))
+(println "  ok   OIL requested pins and weighted word-calibration data are current")

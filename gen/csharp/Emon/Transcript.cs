@@ -3,6 +3,7 @@
 
 namespace emon;
 
+
 public static class Transcript {
     public static int TkRender() {
         return 1;
@@ -1187,6 +1188,143 @@ public static class Transcript {
         emon.Port.TextAscii(@out, ".png");
         return n;
     }
+    internal static readonly int[] TwWeb = new int[] {
+        32, 114, 117, 110, 116, 105, 109, 101, 61, 79, 82, 84, 32, 87, 101, 98,
+        32, 49, 46, 50, 50, 46, 48, 32, 119, 97, 115, 109, 32, 83, 73, 77,
+        68
+    };
+    internal static int TwMarker(emon.Transcriptctx.Tr t, int e) {
+        int start = e + 6;
+        int end = start + emon.Port.CellsAt(t.Ents, e + 5);
+        int k = start + 10;
+        if (emon.Port.CellsAt(t.Ents, start + 1) != 3) {
+            return -1;
+        }
+        while ((k + 3) < end) {
+            if ((emon.Port.CellsAt(t.Ents, k) == -3100) && (emon.Port.CellsAt(t.Ents, k + 1) == 2) && (emon.Port.CellsAt(t.Ents, k + 3) == ((end - k) - 4))) {
+                return k;
+            }
+            k += 1;
+        }
+        return -1;
+    }
+    internal static int TwAnswer(emon.Transcriptctx.Tr t, int e) {
+        return (e + 6) + emon.Port.CellsAt(t.Ents, e + 5);
+    }
+    internal static int TwSameEngine(emon.Transcriptctx.Tr t, int e, int other) {
+        int a = TwMarker(t, e);
+        int b = TwMarker(t, other);
+        int aa = TwAnswer(t, e);
+        int ab = TwAnswer(t, other);
+        int k = 2;
+        if ((a < 0) || (b < 0)) {
+            return 0;
+        }
+        if (((other + emon.Port.CellsAt(t.Ents, other)) - ab) < 28) {
+            return 0;
+        }
+        if (emon.Port.CellsAt(t.Ents, a + 3) != emon.Port.CellsAt(t.Ents, b + 3)) {
+            return 0;
+        }
+        if ((emon.Port.CellsAt(t.Ents, aa + 6) != emon.Port.CellsAt(t.Ents, ab + 6)) || (emon.Port.CellsAt(t.Ents, aa + 7) != emon.Port.CellsAt(t.Ents, ab + 7))) {
+            return 0;
+        }
+        while (k < (4 + emon.Port.CellsAt(t.Ents, a + 3))) {
+            if (emon.Port.CellsAt(t.Ents, a + k) != emon.Port.CellsAt(t.Ents, b + k)) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    internal static int TwHashMatches(emon.Port.Cells cps, int start, int n, int hi, int lo) {
+        long hash = Oil.OilObsHash(cps, start, n);
+        if ((((int) ((long)((ulong)(hash) >> 32))) == hi) && (((int) hash) == lo)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int TwObserved(emon.Transcriptctx.Tr t, System.Text.StringBuilder @out, int marker, int answer) {
+        int hi = emon.Port.CellsAt(t.Ents, answer + 6);
+        int lo = emon.Port.CellsAt(t.Ents, answer + 7);
+        int p = 0;
+        int k = 0;
+        while (p < emon.Port.CellsLen(t.Prod)) {
+            int kn = emon.Port.CellsAt(t.Prod, p);
+            int v = (p + kn) + 2;
+            int vn = emon.Port.CellsAt(t.Prod, v - 1);
+            if (TwHashMatches(t.Prod, v, vn, hi, lo) == 1) {
+                TwCps(@out, t.Prod, v, vn, 1);
+                return 1;
+            }
+            p = v + vn;
+        }
+        p = emon.Port.CellsAt(t.Ents, marker + 3);
+        if (TwHashMatches(t.Ents, marker + 4, p, hi, lo) == 1) {
+            TwCps(@out, t.Ents, marker + 4, p, 1);
+            return 1;
+        }
+        emon.Port.CellsDrop(t.Tmp, 0);
+        while (k < p) {
+            emon.Port.CellsPush(t.Tmp, emon.Port.CellsAt(t.Ents, (marker + 4) + k));
+            k += 1;
+        }
+        k = 0;
+        while (k < 33) {
+            emon.Port.CellsPush(t.Tmp, TwWeb[k]);
+            k += 1;
+        }
+        int n = emon.Port.CellsLen(t.Tmp);
+        if (TwHashMatches(t.Tmp, 0, n, hi, lo) == 1) {
+            TwCps(@out, t.Tmp, 0, n, 1);
+            return 1;
+        }
+        return 0;
+    }
+    internal static int TwEngines(emon.Transcriptctx.Tr t, System.Text.StringBuilder @out) {
+        int e = 0;
+        int other = 0;
+        int duplicate = 0;
+        int count = 0;
+        int marker = 0;
+        int answer = 0;
+        while (e < emon.Port.CellsLen(t.Ents)) {
+            marker = TwMarker(t, e);
+            answer = TwAnswer(t, e);
+            if ((marker >= 0) && (((e + emon.Port.CellsAt(t.Ents, e)) - answer) >= 28) && (emon.Port.CellsAt(t.Ents, answer + 3) == 0)) {
+                other = 0;
+                duplicate = 0;
+                while (other < e) {
+                    if (TwSameEngine(t, e, other) == 1) {
+                        duplicate = 1;
+                    }
+                    other += emon.Port.CellsAt(t.Ents, other);
+                }
+                if (duplicate == 0) {
+                    if (count == 0) {
+                        emon.Port.TextAscii(@out, " :engines [");
+                    } else {
+                        emon.Port.TextAscii(@out, " ");
+                    }
+                    emon.Port.TextAscii(@out, "{:engine \"");
+                    Oil.OenEmitName(@out, emon.Port.CellsAt(t.Ents, marker + 2));
+                    emon.Port.TextAscii(@out, "\" :config \"");
+                    int configN = emon.Port.CellsAt(t.Ents, marker + 3);
+                    TwCps(@out, t.Ents, marker + 4, configN, 1);
+                    emon.Port.TextAscii(@out, "\" :observed \"");
+                    TwObserved(t, @out, marker, answer);
+                    emon.Port.TextAscii(@out, "\"}");
+                    count += 1;
+                }
+            }
+            e += emon.Port.CellsAt(t.Ents, e);
+        }
+        if (count > 0) {
+            emon.Port.TextAscii(@out, "]");
+            emon.Port.TextCp(@out, 10);
+        }
+        return 0;
+    }
     public static int TrWrite(emon.Transcriptctx.Tr t, System.Text.StringBuilder @out) {
         // Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.
         emon.Port.TextAscii(@out, "{:");
@@ -1216,6 +1354,7 @@ public static class Transcript {
             emon.Port.TextAscii(@out, "}");
             emon.Port.TextCp(@out, 10);
         }
+        TwEngines(t, @out);
         emon.Port.TextAscii(@out, " :");
         TfEmitName(@out, TfInputs());
         emon.Port.TextAscii(@out, " [");

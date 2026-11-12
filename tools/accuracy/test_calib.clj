@@ -112,7 +112,7 @@ Every expected number is worked out by hand in a comment beside it."
   (let [f (sorted-map ["paragraph" "ocr"] [[500 500 10]] ["heading" "any"] [[500 900 8]] ["dropped" "any"] [[600 984 61]])
         s (CA/kin-table f)]
     ;; heading 3, paragraph 4 (kin/model.kin), the ledger 100; class any -1, ocr 1
-    (is (str/includes? s ":data [3 -1 500 900\n         4 1 500 500\n         100 -1 600 984]"))))
+    (is (str/includes? s ":data [3 -1 -1 500 900\n         4 1 1 500 500\n         100 -1 -1 600 984]"))))
 
 ;; ------------------------------------------------------------------ what 'right' is ----
 
@@ -181,6 +181,21 @@ Every expected number is worked out by hand in a comment beside it."
                                 {"reason" "page-number" "page" 2 "text" "2" "conf" 800 "src" ["text"]}]))]
     (is (= [["furniture" "text" 950 1000] ["furniture" "text" 800 0] ["dropped" "text" 800 1000] ["dropped" "text" 800 0]]
            (vec (filter #(#{"furniture" "dropped"} (first %)) (CR/rows p g)))))))
+
+(deftest engine-fits-never-pool-opposite-engine-outcomes
+  (let [rows (vec (concat (repeat 12 {:engine 1 :kind "paragraph" :class "ocr" :conf 500 :y 1000})
+                         (repeat 12 {:engine 2 :kind "paragraph" :class "ocr" :conf 500 :y 0})))
+        fit (CA/fit-base rows)]
+    (is (> (CA/apply-fit fit "paragraph" "ocr" 1 500) 900))
+    (is (< (CA/apply-fit fit "paragraph" "ocr" 2 500) 100))
+    (is (= (CA/apply-fit fit "paragraph" "any" 500)
+           (CA/apply-fit fit "paragraph" "ocr" 99 500)))))
+
+(deftest targeted-engine-fit-keeps-the-other-engine-map
+  (binding [CA/*target-engine* 2]
+    (let [table (CA/kin-table {["paragraph" "ocr" 2] [[500 111 12]]})]
+      (is (str/includes? table "4 1 2 500 111"))
+      (is (str/includes? table "3 1 1 508 500")))))
 
 (let [res (binding [clojure.test/*test-out* *err*] (run-tests (quote accuracy.test-calib)))]
   (if (zero? (+ (:fail res) (:error res)))

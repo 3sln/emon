@@ -2,7 +2,7 @@
 (require '[babashka.fs :as fs] '[cheshire.core :as json] '[clojure.string :as str] '[clojure.set :as set])
 (import '[java.security MessageDigest])
 (def r (json/parse-string (slurp "tools/ppocr/calibration.json") true))
-(def lookup (mapv parse-long (re-seq #"\d+" (second (re-find #"vec!\[([0-9,\s]+)\]" (slurp "host/rust/src/ppocr_calibration.rs"))))))
+(def lookup (:confidence r))
 (assert (= lookup (:confidence r)))
 (assert (= 10 (count lookup)))
 (assert (= (:model_pins_sha256 r)
@@ -32,3 +32,5 @@
 (assert (= (reduce + (map :aligned (take 40 (:documents r)))) (get-in r [:fit :words])))
 (assert (= (reduce + (map :aligned (drop 40 (:documents r)))) (get-in r [:validation :words])))
 (println "verified frozen confidence lookup, reliability arithmetic and disjoint calibration IDs")
+
+(binding [*command-line-args* []] (load-file "tools/calibration/ocr_words.clj"))

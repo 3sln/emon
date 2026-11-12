@@ -234,6 +234,7 @@ public static class Engine {
     }
     public static int EnPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         int status = EnPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+        Ocrengine.OeTag(rq, d.Pscr, 2 * c.Oengine);
         if (status == 0) {
             if (Oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0) {
                 return 2;
@@ -242,7 +243,6 @@ public static class Engine {
                 return 2;
             }
         }
-        Ocrengine.OeTag(rq, d.Pscr, 2 * c.Oengine);
         return status;
     }
     public static int EnAssetUnit(emon.Port.Src view, emon.Port.Src pw, emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.Pass p, int idx, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Buf payload) {
@@ -547,6 +547,9 @@ public static class Engine {
         if (kind == 0) {
             Inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw);
         }
+        if (Ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2 * c.Oengine, s.S0) < 0) {
+            return 2;
+        }
         Para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix);
         if (kind == 0) {
             EnFigures(m, s, d, c.Level);
@@ -555,11 +558,7 @@ public static class Engine {
             if (kind == 0) {
                 Figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence);
             }
-            if (c.Oengine != 0) {
-                if (EnOcrPlanned(c, d) == 1) {
-                    Ocrengine.OeEvidence(d.Evidence, c.Oengine);
-                }
-            }
+            Ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0);
             emon.Port.TextAscii(d.Evidence, "}");
         }
         Restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout);
@@ -623,6 +622,7 @@ public static class Engine {
                 EnAssetStage(c, m, s, d.Cand, d.Cbytes);
             }
         }
+        Scan.ScNodeEngines(m.Nodes, m.Regions, ev.Oruns);
         if (pending == 0) {
             w = EnSeal(m, s.Chk, s.Sealout, c.Level);
             if (w != 0) {

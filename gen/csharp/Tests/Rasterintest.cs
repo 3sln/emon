@@ -159,7 +159,7 @@ public static class Rasterintest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 3 + (300 * 256), "symbols, OSD, and the 300 dpi it assumed as a hint");
         emon.Testport.AssertEq(Ocr.OcfDpi(Plan.RqArg(rq, 0, 2)), 300, "read back");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 5), 0, "the whole bitmap");
-        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), 7, "and no language: no locale was given");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (7 + 4) + 112, "and no language: no locale was given");
     }
     [Xunit.Fact]
     public static void TestALocaleHintNamesTheLanguage() {
@@ -174,7 +174,7 @@ public static class Rasterintest {
         Plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1);
         emon.Testport.AssertEq(PagePol(0, ans, rq, 2, loc, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), Plan.UsRequests(), "it asks");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 2), 3 + (200 * 256), "the stated 200 dpi");
-        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), 8, "one language");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (8 + 4) + 112, "one language");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), 1684370688, "`de-CH` is `deu`");
     }
     [Xunit.Fact]

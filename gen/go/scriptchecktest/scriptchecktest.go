@@ -323,3 +323,31 @@ func TestConflictingOcrPreservesBornArabicAndItsInlineValueOnTheSamePage(emonT *
 	port.AssertEq(emonT, port.CellsAt(text, 0), 1575, "Arabic scalar survives")
 	port.AssertEq(emonT, port.CellsAt(text, 1), 55, "value 7 survives")
 }
+
+func skNoOsdTrial(lang int32, cp int32, count int32) int32 {
+	var ans *port.Cells = port.NewCells()
+	var at int32 = oil.OilBegin(ans, 272, 3, 8448, 8448, 1, 1, lang, 2)
+	var i int32 = 0
+	for i < count {
+		var w int32 = oil.OilWord(ans, at, 10, 20, 60, 40, -1, 760, lang, 0, -1, 0)
+		oil.OilWordCp(ans, at, w, cp)
+		oil.OilWordCp(ans, at, w, cp)
+		i += 1
+	}
+	oil.OilEnd(ans, at)
+	return scriptcheck.SkUnread(ans, at, port.NewCells())
+}
+
+func TestNoOsdCensusComparesRecognizedScriptWithRequestedLanguage(emonT *testing.T) {
+	port.AssertEq(emonT, skNoOsdTrial(1701734144, 1040, 3), 1, "Cyrillic text with an English model is unread")
+	port.AssertEq(emonT, skNoOsdTrial(1920299776, 1040, 3), 0, "Russian model reads Cyrillic")
+	port.AssertEq(emonT, skNoOsdTrial(1701734144, 65, 3), 0, "English model reads Latin")
+	port.AssertEq(emonT, skNoOsdTrial(0, 1040, 3), 0, "unknown model cannot establish a mismatch")
+	port.AssertEq(emonT, skNoOsdTrial(1701734144, 1040, 2), 0, "too few words")
+	port.AssertEq(emonT, skNoOsdTrial(1701734144, 49, 3), 0, "digits supply no script evidence")
+	port.AssertEq(emonT, skNoOsdTrial(2021160960, 1040, 3), 0, "unknown ISO language cannot accuse a reading")
+	port.AssertEq(emonT, skNoOsdTrial(2053664512, 19968, 3), 0, "canonical Chinese ISO code reads Han")
+	port.AssertEq(emonT, skNoOsdTrial(1634560000, 4608, 3), 0, "Amharic reads Ethiopic")
+	port.AssertEq(emonT, skNoOsdTrial(1701734144, 4608, 3), 1, "Ethiopic with English is unread")
+	port.AssertEq(emonT, skNoOsdTrial(1785753088, 65, 3), 0, "Latin output alone cannot accuse a non-Latin model")
+}

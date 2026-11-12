@@ -737,3 +737,7 @@ fn test_every_committed_transcript_is_read_and_written_again_byte_for_byte() {
     }
     crate::testport::assert_eq(row, 129, "the transcripts under test/");
 }
+#[test]
+fn test_requested_and_observed_engine_vector_roundtrips_and_deduplicates_readings() {
+    tt_roundtrip(0, &crate::testport::text_blob("{:emon-transcript 1\n :producer {:runtime \"obs\"}\n :engines [{:engine \"ppocr\" :config \"cfg\" :observed \"obs\"}]\n :inputs []\n :entries [\n  {:round 0 :kind :ocr :req [17 3 12 1 3 0 0 0 0 0 -3100 2 2 3 99 102 103] :ans [28 3 12 0 1 2 439459865 569200837 0 0 1 1 1000 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]}\n  {:round 0 :kind :ocr :req [17 3 12 1 3 0 0 0 0 0 -3100 2 2 3 99 102 103] :ans [28 3 12 0 1 2 439459865 569200837 0 0 1 1 1000 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0]}]}\n")[..], 0);
+}

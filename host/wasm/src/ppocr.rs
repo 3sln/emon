@@ -66,12 +66,12 @@ pub unsafe extern "C" fn emon_pp_check(p: u32, n: u32, bp: u32, bn: u32) -> i32 
     let mut r = Cells::new();
     for &v in &rec { cells_push(&mut r, v); }
     let marker = crate::emon::ocrport::op_identity_at(&mut r);
-    if marker < 0 { return 0; }
+    if crate::emon::ocrport::op_request_engine(&mut r) != 2 { return 0; }
     let marker = marker as usize;
     let identity = crate::emon::ocrengine::OE_IDENTITY;
-    if rec.get(marker) != Some(&-3100) || rec.get(marker + 1) != Some(&1)
-        || rec.get(marker + 2) != Some(&(identity.len() as i32))
-        || rec.get(marker + 3..) != Some(identity.as_slice()) { return -1; }
+    if rec.get(marker) != Some(&-3100) || rec.get(marker + 1) != Some(&2) || rec.get(marker + 2) != Some(&2)
+        || rec.get(marker + 3) != Some(&(identity.len() as i32))
+        || rec.get(marker + 4..) != Some(identity.as_slice()) { return -1; }
     let req = crate::plan::Request::new(rec);
     if req.field(crate::emon::plan::oc_flags()) & crate::emon::ocr::ocf_best() != 0 { return 2; }
     let mut hash = Cells::new(); cells_push(&mut hash, 0); cells_push(&mut hash, 0);

@@ -4,7 +4,9 @@
 package ocrenginetest
 
 import (
+	"emon/evidence"
 	"emon/ocrengine"
+	"emon/ocridentity"
 	"emon/ocrport"
 	"emon/ofuse"
 	"emon/plan"
@@ -21,15 +23,15 @@ func TestHybridRolesAndExtraSlotsAreEngineIndexed(emonT *testing.T) {
 	port.AssertEq(emonT, ocrengine.OeRequestSlot(3), -1, "unregistered engine has no extra slot")
 }
 
-func TestDefaultOcrRequestIsUnchanged(emonT *testing.T) {
+func TestEveryDefaultOcrRequestCarriesRequestedIdentity(emonT *testing.T) {
 	var r *port.Cells = port.NewCells()
 	var scratch *port.Cells = port.NewCells()
 	var at int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
 	plan.RqOcrLang(r, 101, 110, 103, 0)
 	plan.RqOcrEnd(r, at)
 	ocrengine.OeTag(r, scratch, 0)
-	port.AssertEq(emonT, port.CellsLen(r), 11, "legacy request length unchanged")
-	port.AssertEq(emonT, port.CellsAt(r, 0), 11, "record header unchanged")
+	port.AssertEq(emonT, port.CellsLen(r), 15+112, "default identity extends the key")
+	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "record header includes identity")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "one legacy language")
 }
 
@@ -40,10 +42,11 @@ func TestOptionalEngineIdentityIsInTheRequestNotTheLanguageList(emonT *testing.T
 	plan.RqOcrLang(r, 101, 110, 103, 0)
 	plan.RqOcrEnd(r, at)
 	ocrengine.OeTag(r, scratch, 1)
-	port.AssertEq(emonT, port.CellsLen(r), 14+74, "identity extends request key")
+	port.AssertEq(emonT, port.CellsLen(r), 15+74, "identity extends request key")
 	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "record length includes identity")
 	port.AssertEq(emonT, port.CellsAt(r, 11), -3100, "identity marker")
-	port.AssertEq(emonT, port.CellsAt(r, 12), 1, "PP-OCR engine")
+	port.AssertEq(emonT, port.CellsAt(r, 12), 2, "requested identity version")
+	port.AssertEq(emonT, port.CellsAt(r, 13), 2, "PP-OCR engine")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "identity is not a language")
 	port.AssertEq(emonT, ocrport.OpLangAt(r, 0), 1701734144, "English language unchanged")
 }
@@ -56,7 +59,7 @@ func TestQueuedOcrRequestsAreTaggedIdempotently(emonT *testing.T) {
 	plan.RqOcrEnd(r, at)
 	ocrengine.OeTag(r, scratch, 1)
 	ocrengine.OeTag(r, scratch, 1)
-	port.AssertEq(emonT, port.CellsLen(r), 14+74, "exactly one identity trailer")
+	port.AssertEq(emonT, port.CellsLen(r), 15+74, "exactly one identity trailer")
 	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "canonical record length")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "English remains the only language")
 }
@@ -64,7 +67,7 @@ func TestQueuedOcrRequestsAreTaggedIdempotently(emonT *testing.T) {
 func TestMixedQueuedViewsKeepHashesAndExactlyOneTrailer(emonT *testing.T) {
 	var r *port.Cells = port.NewCells()
 	var scratch *port.Cells = port.NewCells()
-	var first int32 = 14 + 74
+	var first int32 = 15 + 74
 	var at int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
 	plan.RqOcrLang(r, 101, 110, 103, 0)
 	plan.RqOcrEnd(r, at)
@@ -74,8 +77,8 @@ func TestMixedQueuedViewsKeepHashesAndExactlyOneTrailer(emonT *testing.T) {
 	ocrengine.OeTag(r, scratch, 1)
 	ocrengine.OeTag(r, scratch, 1)
 	port.AssertEq(emonT, port.CellsAt(r, 0), first, "first request length")
-	port.AssertEq(emonT, port.CellsAt(r, first), 16+74, "view request length")
-	port.AssertEq(emonT, port.CellsLen(r), (30+74)+74, "two canonical records")
+	port.AssertEq(emonT, port.CellsAt(r, first), 17+74, "view request length")
+	port.AssertEq(emonT, port.CellsLen(r), (32+74)+74, "two canonical records")
 	port.AssertEq(emonT, port.CellsAt(r, first+11), -3100, "hash cell is not a trailer marker")
 	port.AssertEq(emonT, port.CellsAt(r, first+13), -3100, "view trailer follows its language")
 }
@@ -92,7 +95,7 @@ func TestCompactCropsOverViewsHaveAnIndependentIdentityTail(emonT *testing.T) {
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 0, "shared helper excludes the trailer")
 	port.AssertEq(emonT, ocrport.OpPpLangFirst(r, 123, 456), 7, "compact layout")
 	port.AssertEq(emonT, ocrport.OpPpLangCount(r, 7), 0, "identity is not parsed as language")
-	port.AssertEq(emonT, port.CellsLen(r), 13+74, "one canonical trailer")
+	port.AssertEq(emonT, port.CellsLen(r), 14+74, "one canonical trailer")
 }
 
 func TestActualViewHashDisambiguatesLanguageShapedHashCells(emonT *testing.T) {
@@ -123,20 +126,15 @@ func TestPpCalibratedReadingObeysIncumbentGuards(emonT *testing.T) {
 	port.AssertEq(emonT, ofuse.OfRule(0, 1, 0, 1, 0, 1, 0, 883, 0), 3, "calibrated valid numeric insertion")
 }
 
-func TestOptionalFusionTagsOnlyTheAdditionalReading(emonT *testing.T) {
+func TestEngineSelectionDoesNotDependOnItsAllocationSlot(emonT *testing.T) {
 	var r *port.Cells = port.NewCells()
-	var scratch *port.Cells = port.NewCells()
-	var first int32 = plan.RqOcr(r, 272, 260, 3, 1, 0, 0, 0, 0)
+	var first int32 = plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0)
 	plan.RqOcrEnd(r, first)
-	var extra int32 = plan.RqOcr(r, 279, 260, 3, 1, 0, 0, 0, 0)
-	plan.RqOcrEnd(r, extra)
-	ocrengine.OeTag(r, scratch, 2)
-	port.AssertEq(emonT, port.CellsAt(r, 0), 10, "Tesseract request key unchanged")
-	port.AssertEq(emonT, port.CellsAt(r, 10), 13+74, "only additional reading is tagged")
-	port.AssertEq(emonT, port.CellsAt(r, 20), -3100, "PP identity on additional reading")
-	ocrengine.OeTag(r, scratch, 2)
-	port.AssertEq(emonT, port.CellsAt(r, 0), 10, "repeated rounds preserve Tesseract")
-	port.AssertEq(emonT, port.CellsAt(r, 10), 13+74, "PP tag remains canonical")
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 1, "former PP slot stays Tesseract by default")
+	ocrengine.OeSelect(r, first, 2)
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 2, "explicit PP configuration")
+	ocrengine.OeSelect(r, first, 2)
+	port.AssertEq(emonT, port.CellsLen(r), 14+74, "one canonical trailer")
 }
 
 func TestAdditionalReadingCannotTruncateATextSlot(emonT *testing.T) {
@@ -252,4 +250,29 @@ func TestRepeatedCodeGrammarDoesNotReclassifyProtectedFormats(emonT *testing.T) 
 	port.AssertEq(emonT, ofuse.OfPpCode(year, 0, 7), 0, "source year range remains protected")
 	port.AssertEq(emonT, ofuse.OfPpCode(time, 0, 5), 0, "source time remains protected")
 	port.AssertEq(emonT, ofuse.OfPpCode(word, 0, 4), 0, "PAND/PANO failure band is not an identifier")
+}
+
+func TestEngineTableSeparatesObservedIdentitiesAndDeduplicatesRuns(emonT *testing.T) {
+	var table *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var a int32 = evidence.OrNew(runs, 1, 0)
+	var b int32 = evidence.OrNew(runs, 1, 0)
+	var c int32 = evidence.OrNew(runs, 2, 0)
+	evidence.OrSet(runs, a, evidence.OrfEngine(), 2)
+	evidence.OrSet(runs, b, evidence.OrfEngine(), 2)
+	evidence.OrSet(runs, c, evidence.OrfEngine(), 2)
+	evidence.OrSet(runs, b, evidence.OrfObservedHi(), 1)
+	port.AssertEq(emonT, ocrengine.OeRegister(table, runs, lines, words, 2, scratch), 0, "registered")
+	port.AssertEq(emonT, port.CellsLen(table), 14, "two identities, not three runs or engine-minus-one")
+	port.AssertEq(emonT, evidence.OrGet(runs, a, evidence.OrfEix()), 0, "first observed identity")
+	port.AssertEq(emonT, evidence.OrGet(runs, b, evidence.OrfEix()), 1, "different runtime or model")
+	port.AssertEq(emonT, evidence.OrGet(runs, c, evidence.OrfEix()), 0, "repeat identity deduplicates")
+}
+
+func TestUncalibratedCandidateCanNeverInsertOrReplace(emonT *testing.T) {
+	port.AssertEq(emonT, ofuse.OfRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion")
+	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement")
 }

@@ -8,6 +8,7 @@ import (
 	"emon/model"
 	"emon/ocalib"
 	"emon/ocr"
+	"emon/ocrengine"
 	"emon/ocrledger"
 	"emon/oil"
 	"emon/pdfdoc"
@@ -688,6 +689,10 @@ func scEvWords(an *port.Cells, at int32, ext int32, view int32, run int32, page 
 				evidence.OwSet(owords, ow, evidence.OwfPsize(), ps*100)
 			}
 			evidence.OwSet(owords, ow, evidence.OwfFlags(), oil.OilWordFlags(an, ext, wx))
+			if evidence.OwGet(owords, ow, evidence.OwfPcal()) < 0 {
+				var flags int32 = evidence.OwGet(owords, ow, evidence.OwfFlags())
+				evidence.OwSet(owords, ow, evidence.OwfFlags(), flags|evidence.OeUncalibrated())
+			}
 			ns = oil.OilNsym(an, ext, wx)
 			evidence.OwSet(owords, ow, evidence.OwfSfirst(), evidence.OsCount(osyms))
 			evidence.OwSet(owords, ow, evidence.OwfScount(), ns)
@@ -768,6 +773,8 @@ func ScAnswer(an *port.Cells, at int32, page int32, view int32, request int32, l
 	var w int32 = 0
 	var rotmed int32 = 0
 	var ts int32 = 0
+	evidence.OrSet(oruns, run, evidence.OrfObservedHi(), oil.OilGet(an, at, oil.OhObsHi()))
+	evidence.OrSet(oruns, run, evidence.OrfObservedLo(), oil.OilGet(an, at, oil.OhObsLo()))
 	evidence.OrSet(oruns, run, evidence.OrfEngine(), oil.OilGet(an, at, oil.OhEngine()))
 	evidence.OrSet(oruns, run, evidence.OrfCaps(), oil.OilGet(an, at, oil.OhCaps()))
 	evidence.OrSet(oruns, run, evidence.OrfNative(), oil.OilGet(an, at, oil.OhNative()))
@@ -3386,4 +3393,40 @@ func ScWriteRejectedOcr(oruns *port.Cells, pages *port.Cells, nodes *port.Cells,
 		p += 1
 	}
 	return rows
+}
+
+func ScNodeEngines(nodes *port.Cells, regions *port.Cells, runs *port.Cells) int32 {
+	// The node map is keyed by the page's primary engine. A hybrid keeps the registered incumbent as primary, including seal and stamp pages.
+	var n int32 = 1
+	var r int32 = 0
+	var pg int32 = 0
+	var engine int32 = 0
+	var candidate int32 = 0
+	for n < model.NodeCount(nodes) {
+		if (model.NodeSrc(nodes, n) & model.SrOcr()) != 0 {
+			pg = scNodePage(nodes, regions, n)
+			engine = 0
+			r = 0
+			for r < evidence.OrCount(runs) {
+				if evidence.OrGet(runs, r, evidence.OrfPage()) == pg {
+					candidate = evidence.OrGet(runs, r, evidence.OrfEngine())
+					if (engine == 0) || ((ocrengine.OeRole(engine) != 1) && (ocrengine.OeRole(candidate) == 1)) {
+						engine = candidate
+					}
+				}
+				r += 1
+			}
+			if engine > 0 {
+				model.NodeSetEngine(nodes, n, engine)
+				if ocalib.OcalWord(engine, 0, 500) < 0 {
+					model.NodeAddFlag(nodes, n, model.FlUncalibratedEngine())
+					if model.NodeConf(nodes, n) > 500 {
+						model.NodeSetConf(nodes, n, 500)
+					}
+				}
+			}
+		}
+		n += 1
+	}
+	return 0
 }

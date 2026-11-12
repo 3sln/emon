@@ -7,6 +7,7 @@ import (
 	"emon/evidence"
 	"emon/ocr"
 	"emon/ocrport"
+	"emon/ocrtess"
 	"emon/oil"
 	"emon/plan"
 	"emon/port"
@@ -122,7 +123,7 @@ func tReq2(c *port.Cells, a int32, b int32, d int32, e int32, a2 int32, b2 int32
 
 func tModels(emonT *testing.T, req *port.Cells, inst *port.Cells, n int32, i0 int32, i1 int32, msg string) int32 {
 	var out *port.Cells = port.NewCells()
-	var got int32 = ocrport.OpModels(req, inst, out)
+	var got int32 = ocrtess.OpModels(req, inst, out)
 	port.AssertEq(emonT, got, n, msg)
 	port.AssertEq(emonT, port.CellsLen(out), n, msg)
 	if i0 >= 0 {
@@ -175,7 +176,7 @@ func tGone1(emonT *testing.T, kind int32, a int32, b int32, d int32, e int32, ce
 	var gone *port.Cells = port.NewCells()
 	tInst(inst, kind)
 	tReq1(r, a, b, d, e)
-	port.AssertEq(emonT, ocrport.OpDropped(r, inst, gone), 1, msg)
+	port.AssertEq(emonT, ocrtess.OpDropped(r, inst, gone), 1, msg)
 	port.AssertEq(emonT, port.CellsLen(gone), cells, msg)
 	port.AssertEq(emonT, port.CellsAt(gone, at), want, msg)
 	return 0
@@ -283,8 +284,8 @@ func TestTheScriptCodesAreTheirLettersPacked(emonT *testing.T) {
 	port.AssertEq(emonT, ocrport.ScHani(), tPack(72, 97, 110, 105), "Hani")
 	port.AssertEq(emonT, ocrport.ScJpan(), tPack(74, 112, 97, 110), "Jpan")
 	port.AssertEq(emonT, ocrport.ScCans(), tPack(67, 97, 110, 115), "Cans")
-	port.AssertEq(emonT, ocrport.ZhChs(), tPack(99, 104, 115, 0), "chs")
-	port.AssertEq(emonT, ocrport.ZhCht(), tPack(99, 104, 116, 0), "cht")
+	port.AssertEq(emonT, ocrtess.ZhChs(), tPack(99, 104, 115, 0), "chs")
+	port.AssertEq(emonT, ocrtess.ZhCht(), tPack(99, 104, 116, 0), "cht")
 }
 
 func tRows(emonT *testing.T) int32 {
@@ -297,16 +298,16 @@ func tRows(emonT *testing.T) int32 {
 	var t *strings.Builder = port.NewText()
 	for i < n {
 		j = i + 1
-		for ocrport.OpNames[j] != 0 {
+		for ocrtess.OpNames[j] != 0 {
 			j += 1
 		}
-		port.AssertThat(emonT, ocrport.OpNames[i] >= 1, "kind from 1")
-		port.AssertThat(emonT, ocrport.OpNames[i] <= 3, "to 3")
-		if ocrport.OpNames[i] == 3 {
-			port.AssertThat(emonT, (ocrport.OpNames[j+1] == ocrport.ZhChs()) || (ocrport.OpNames[j+1] == ocrport.ZhCht()), "a request name")
+		port.AssertThat(emonT, ocrtess.OpNames[i] >= 1, "kind from 1")
+		port.AssertThat(emonT, ocrtess.OpNames[i] <= 3, "to 3")
+		if ocrtess.OpNames[i] == 3 {
+			port.AssertThat(emonT, (ocrtess.OpNames[j+1] == ocrtess.ZhChs()) || (ocrtess.OpNames[j+1] == ocrtess.ZhCht()), "a request name")
 		}
-		if ocrport.OpNames[i] != 3 {
-			port.AssertEq(emonT, ocrport.ScEmitName(t, ocrport.OpNames[j+1]), 1, "an ISO 15924 code")
+		if ocrtess.OpNames[i] != 3 {
+			port.AssertEq(emonT, ocrport.ScEmitName(t, ocrtess.OpNames[j+1]), 1, "an ISO 15924 code")
 		}
 		port.AssertThat(emonT, j > (i+1), "a name")
 		rows += 1
@@ -328,7 +329,7 @@ func tWl(emonT *testing.T, p1 int32, p2 int32, want int32, msg string) int32 {
 	var m *port.Cells = port.NewCells()
 	tPushp(m, p1)
 	tPushp(m, p2)
-	port.AssertEq(emonT, ocrport.OpWordLang(m), want, msg)
+	port.AssertEq(emonT, ocrtess.OpWordLang(m), want, msg)
 	return 0
 }
 
@@ -340,14 +341,14 @@ func tOsd(emonT *testing.T, p1 int32, p2 int32, p3 int32, p4 int32, p5 int32, wa
 	tPushp(m, p3)
 	tPushp(m, p4)
 	tPushp(m, p5)
-	port.AssertEq(emonT, ocrport.OpOsdScript(m), want, msg)
+	port.AssertEq(emonT, ocrtess.OpOsdScript(m), want, msg)
 	return 0
 }
 
 func TestAWordIsReadInTheLanguageARequestCallsIt(emonT *testing.T) {
 	tWl(emonT, 1701734144, 0, 1701734144, "eng stays eng")
-	tWl(emonT, 1667787103, 1936289024, ocrport.ZhChs(), "chi_sim is chs")
-	tWl(emonT, 1667787103, 1953652992, ocrport.ZhCht(), "chi_tra is cht")
+	tWl(emonT, 1667787103, 1936289024, ocrtess.ZhChs(), "chi_sim is chs")
+	tWl(emonT, 1667787103, 1953652992, ocrtess.ZhCht(), "chi_tra is cht")
 	tWl(emonT, 1802859103, 1634885888, 1802859103, "kur_ara is cut to four")
 	tWl(emonT, 0, 0, 0, "no language")
 }
@@ -364,7 +365,7 @@ func TestTheOsdScriptIsItsIso15924Code(emonT *testing.T) {
 
 func TestAScriptCellIsFourLettersTheFirstUppercase(emonT *testing.T) {
 	port.AssertEq(emonT, ocrport.OpIsScript(ocrport.ScCyrl()), 1, "Cyrl")
-	port.AssertEq(emonT, ocrport.OpIsScript(ocrport.ZhChs()), 0, "chs: a language")
+	port.AssertEq(emonT, ocrport.OpIsScript(ocrtess.ZhChs()), 0, "chs: a language")
 	port.AssertEq(emonT, ocrport.OpIsScript(1701734144), 0, "eng: a language")
 	port.AssertEq(emonT, ocrport.OpIsScript(0), 0, "none")
 	port.AssertEq(emonT, ocrport.OpIsScript(1128942413), 1, "CJKM, four capitals")
@@ -372,17 +373,17 @@ func TestAScriptCellIsFourLettersTheFirstUppercase(emonT *testing.T) {
 }
 
 func TestABlocksTypeIsTextTableImageLineOrOther(emonT *testing.T) {
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbFlowingText()), ocr.BtText(), "flowing text")
-	port.AssertEq(emonT, ocrport.OpBlockType(2), ocr.BtText(), "heading text")
-	port.AssertEq(emonT, ocrport.OpBlockType(7), ocr.BtText(), "vertical text")
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbTable()), ocr.BtTable(), "a table")
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbHeadingImage()), ocr.BtImage(), "a heading image")
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbHorzLine()), ocr.BtLine(), "a rule")
-	port.AssertEq(emonT, ocrport.OpBlockType(13), ocr.BtLine(), "a vertical rule")
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbEquation()), ocr.BtOther(), "an equation")
-	port.AssertEq(emonT, ocrport.OpBlockType(0), ocr.BtOther(), "unknown")
-	port.AssertEq(emonT, ocrport.OpBlockType(ocrport.PbNoise()), ocr.BtOther(), "noise")
-	port.AssertEq(emonT, ocrport.OpBlockType(99), ocr.BtOther(), "anything else")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbFlowingText()), ocr.BtText(), "flowing text")
+	port.AssertEq(emonT, ocrtess.OpBlockType(2), ocr.BtText(), "heading text")
+	port.AssertEq(emonT, ocrtess.OpBlockType(7), ocr.BtText(), "vertical text")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbTable()), ocr.BtTable(), "a table")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbHeadingImage()), ocr.BtImage(), "a heading image")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbHorzLine()), ocr.BtLine(), "a rule")
+	port.AssertEq(emonT, ocrtess.OpBlockType(13), ocr.BtLine(), "a vertical rule")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbEquation()), ocr.BtOther(), "an equation")
+	port.AssertEq(emonT, ocrtess.OpBlockType(0), ocr.BtOther(), "unknown")
+	port.AssertEq(emonT, ocrtess.OpBlockType(ocrtess.PbNoise()), ocr.BtOther(), "noise")
+	port.AssertEq(emonT, ocrtess.OpBlockType(99), ocr.BtOther(), "anything else")
 }
 
 func tP2(c *port.Cells, a int32, b int32) int32 {
@@ -593,14 +594,14 @@ func TestExplicitProviderLanguagesAreNotReplacedByDiscovery(emonT *testing.T) {
 	var out *port.Cells = port.NewCells()
 	tReq1(r, 0, 0, 0, 0)
 	tInstEngJpn(inst)
-	port.AssertEq(emonT, ocrport.OpModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng")
+	port.AssertEq(emonT, ocrtess.OpModelsConfigured(r, inst, 1, out), 2, "explicit jpn+eng stays jpn+eng")
 	port.AssertEq(emonT, port.CellsAt(out, 1), 1, "the Japanese model is retained")
 	var auto *port.Cells = port.NewCells()
-	port.AssertEq(emonT, ocrport.OpModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model")
+	port.AssertEq(emonT, ocrtess.OpModelsConfigured(r, inst, 0, auto), 1, "an unconfigured inventory still uses one discovery model")
 	var named *port.Cells = port.NewCells()
 	var picked *port.Cells = port.NewCells()
 	tReq1(named, 101, 110, 103, 0)
-	port.AssertEq(emonT, ocrport.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults")
+	port.AssertEq(emonT, ocrtess.OpModelsConfigured(named, inst, 1, picked), 1, "a named request wins over provider defaults")
 }
 
 func tEngBest(c *port.Cells) int32 {
@@ -624,24 +625,24 @@ func TestBestModelIsExplicitAndNeverAnImplicitLanguage(emonT *testing.T) {
 	at = plan.RqOcr(req, 12, 4, 11, 1, 0, 0, 0, 0)
 	plan.RqOcrLang(req, 101, 110, 103, 0)
 	plan.RqOcrEnd(req, at)
-	port.AssertEq(emonT, ocrport.OpModelSelector(req), 0, "default English model")
-	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "one fast English model by default")
+	port.AssertEq(emonT, ocrtess.OpModelSelector(req), 0, "default English model")
+	port.AssertEq(emonT, ocrtess.OpModels(req, inst, out), 1, "one fast English model by default")
 	port.AssertEq(emonT, port.CellsAt(out, 0), 0, "eng_best is not taken merely because installed")
 	port.CellsDrop(req, 0)
 	port.CellsDrop(out, 0)
 	at = plan.RqOcr(req, 12, 4, 11, 5, 0, 0, 0, 0)
 	plan.RqOcrLang(req, 101, 110, 103, 0)
 	plan.RqOcrEnd(req, at)
-	port.AssertEq(emonT, ocrport.OpModelSelector(req), 1, "explicit crop model selector")
-	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "best English when explicitly requested")
+	port.AssertEq(emonT, ocrtess.OpModelSelector(req), 1, "explicit crop model selector")
+	port.AssertEq(emonT, ocrtess.OpModels(req, inst, out), 1, "best English when explicitly requested")
 	port.AssertEq(emonT, port.CellsAt(out, 0), 1, "eng_best is selected by its whole name")
 	port.CellsDrop(out, 0)
-	port.AssertEq(emonT, ocrport.OpDropped(req, inst, out), 0, "installed best model is not reported as a dropped language")
+	port.AssertEq(emonT, ocrtess.OpDropped(req, inst, out), 0, "installed best model is not reported as a dropped language")
 	port.CellsDrop(inst, 0)
 	port.CellsDrop(out, 0)
 	tEng(inst)
-	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read")
-	port.AssertEq(emonT, ocrport.OpDropped(req, inst, out), 1, "missing optional model is reported by model name")
+	port.AssertEq(emonT, ocrtess.OpModels(req, inst, out), 0, "missing best fails this optional request instead of mislabelling a fast read")
+	port.AssertEq(emonT, ocrtess.OpDropped(req, inst, out), 1, "missing optional model is reported by model name")
 	port.AssertEq(emonT, port.CellsLen(out), 9, "eng_best and its separator")
 	port.AssertEq(emonT, port.CellsAt(out, 3), 95, "eng_best, not eng")
 }
@@ -656,7 +657,7 @@ func TestBestDoesNotJoinDefaultScriptDiscovery(emonT *testing.T) {
 	tEng(inst)
 	port.CellsPush(req, ocrport.ScLatn())
 	plan.RqOcrEnd(req, at)
-	port.AssertEq(emonT, ocrport.OpModels(req, inst, out), 1, "default Latin discovery excludes optional variants")
+	port.AssertEq(emonT, ocrtess.OpModels(req, inst, out), 1, "default Latin discovery excludes optional variants")
 	port.AssertEq(emonT, port.CellsAt(out, 0), 1, "only the standard model is selected")
 }
 
@@ -672,5 +673,5 @@ func TestBestModelEvidenceIsAdditive(emonT *testing.T) {
 func TestOptionalBestModelKeepsTheEnglishWordLanguage(emonT *testing.T) {
 	var model *port.Cells = port.NewCells()
 	tEngBest(model)
-	port.AssertEq(emonT, ocrport.OpWordLang(model), 1701734144, "the selected model changes; the word language is still eng")
+	port.AssertEq(emonT, ocrtess.OpWordLang(model), 1701734144, "the selected model changes; the word language is still eng")
 }

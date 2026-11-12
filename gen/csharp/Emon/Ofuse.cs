@@ -24,6 +24,9 @@ public static class Ofuse {
         return 0;
     }
     public static int OfRule(int incumbent, int numeric, int incumbentValid, int candidateValid, int dictionary, int votes, int incumbentVotes, int confidence, int incumbentConfidence) {
+        if (confidence < 0) {
+            return 0;
+        }
         if (votes == 0) {
             return 0;
         }
@@ -1209,6 +1212,12 @@ public static class Ofuse {
         }
         return 1;
     }
+    internal static int OfScore(emon.Port.Cells words, int w) {
+        if ((Evidence.OwGet(words, w, Evidence.OwfFlags()) & Evidence.OeUncalibrated()) != 0) {
+            return -1;
+        }
+        return Evidence.OwConfidence(words, w);
+    }
     internal static int OfAddCandidate(emon.Port.Cells words, emon.Port.Cells text, int run, emon.Port.Cells seq, emon.Port.Cells c, emon.Port.Cells refs) {
         int n = emon.Port.CellsLen(seq);
         int r = emon.Port.CellsLen(c) / OfCstride();
@@ -1227,7 +1236,7 @@ public static class Ofuse {
         while (i < n) {
             w = emon.Port.CellsAt(seq, i);
             emon.Port.CellsPush(refs, w);
-            sum += (long) Evidence.OwConfidence(words, w);
+            sum += (long) OfScore(words, w);
             if ((Evidence.OwGet(words, w, Evidence.OwfFlags()) & Evidence.OeDictionary()) == 0) {
                 dictionary = 0;
             }
@@ -1344,7 +1353,7 @@ public static class Ofuse {
                 sum = (long) 0;
                 j = 0;
                 while (j < emon.Port.CellsLen(seq)) {
-                    sum += (long) Evidence.OwConfidence(words, emon.Port.CellsAt(seq, j));
+                    sum += (long) OfScore(words, emon.Port.CellsAt(seq, j));
                     j += 1;
                 }
                 confidence = (int) (sum / ((long) emon.Port.CellsLen(seq)));

@@ -567,7 +567,9 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
     if ((fuse & 8) == 8) && (an_find(ans, pu_id(i, oe_request_slot(2))) < 0) {
         if of_pp_complete(owords, etext, w0, nw, comps, i + 1) == 0 {
+            let request_at: i32 = crate::port::cells_len(rq);
             sc_request(rq, pu_id(i, oe_request_slot(2)), did, (dpi100 + 50) / 100, loc);
+            oe_select(rq, request_at, 2);
             ppasked = 1;
         }
     }

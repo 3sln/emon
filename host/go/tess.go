@@ -78,6 +78,7 @@ import (
 
 	"emon/ocr"
 	"emon/ocrport"
+	"emon/ocrtess"
 	"emon/oil"
 	"emon/plan"
 	"emon/port"
@@ -112,7 +113,7 @@ func takeText(p *C.char) string {
 	return s
 }
 
-// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D396): which installed models read
+// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrtess`, P10.7, D396): which installed models read
 // the request's languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This
 // file passes it cells and takes cells.
 func x10(f float32) int32 { return int32(math.Round(float64(f) * 10)) }
@@ -164,10 +165,11 @@ type tessBlock struct {
 
 // tess is the engine: initialised instances per language string, one goroutine at a time (TessOcr gives each reading an engine of its own).
 type tess struct {
-	tessdata string
-	apis     map[string]C.H
-	dpi      int32
-	notes    []string
+	tessdata         string
+	apis             map[string]C.H
+	dpi              int32
+	notes            []string
+	observedIdentity string
 }
 
 func (t *tess) installed() []string {
@@ -228,14 +230,16 @@ func (t *tess) producer() [][2]string {
 		}
 		models = append(models, fmt.Sprintf("%s:%d:fnv64=%016x", n, len(b), h))
 	}
+	t.observedIdentity = "tesseract;version=" + tessVersion() + ";leptonica=" + leptonicaVersion() + ";oem=Init3-default;choice=2;models=" + strings.Join(models, " ")
 	return [][2]string{
 		{"engine", "tesseract"},
 		{"version", tessVersion()},
 		{"leptonica", leptonicaVersion()},
-		{"engine-mode", "default (LSTM)"},
+		{"engine-mode", "Init3 default"},
 		{"lstm-choice-mode", "2"},
 		{"models", strings.Join(models, " ")},
 		{"host", "host/go/tess.go"},
+		{"observed", t.observedIdentity},
 	}
 }
 
@@ -289,6 +293,9 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 	// which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is
 	// one discovery model); the models go in as code points separated by 0
 	reqc := cellsOf(req.Rec)
+	if requested := ocrport.OpRequestEngine(reqc); requested > 0 && requested != 1 {
+		return failed(2)
+	}
 	inst := port.NewCells()
 	for i, m := range installed {
 		if i > 0 {
@@ -299,9 +306,9 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 		}
 	}
 	picked := port.NewCells()
-	ocrport.OpModelsConfigured(reqc, inst, 0, picked)
+	ocrtess.OpModelsConfigured(reqc, inst, 0, picked)
 	gone := port.NewCells()
-	ocrport.OpDropped(reqc, inst, gone)
+	ocrtess.OpDropped(reqc, inst, gone)
 	var dropped []rune
 	for i := int32(0); i < port.CellsLen(gone); i++ {
 		if cp := port.CellsAt(gone, i); cp == 0 {
@@ -369,7 +376,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 			oconf = x10(float32(oc))
 			sconf = x10(float32(sc))
 			osdName = cps(C.GoString(sn))
-			script = ocrport.OpOsdScript(cellsOf(osdName))
+			script = ocrtess.OpOsdScript(cellsOf(osdName))
 		} else {
 			t.notes = append(t.notes, "osd failed")
 		}
@@ -411,7 +418,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 				C.TessPageIteratorBoundingBox(pi, rilTextline, &l, &tp, &r, &bt)
 				var x1, y1, x2, y2 C.int
 				C.TessPageIteratorBaseline(pi, rilTextline, &x1, &y1, &x2, &y2)
-				btype := ocrport.OpBlockType(int32(C.TessPageIteratorBlockType(pi)))
+				btype := ocrtess.OpBlockType(int32(C.TessPageIteratorBlockType(pi)))
 				lines = append(lines, tessLine{bx: [4]int32{int32(l), int32(tp), int32(r - l), int32(bt - tp)}, base: [4]int32{int32(x1), int32(y1), int32(x2), int32(y2)},
 					block: block, par: par, btype: btype})
 			}
@@ -440,7 +447,7 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 					block:  block,
 					text:   cps(text),
 					flags:  fl,
-					lang:   ocrport.OpWordLang(cellsOf(cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))))),
+					lang:   ocrtess.OpWordLang(cellsOf(cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))))),
 					model:  cps(C.GoString(C.TessResultIteratorWordRecognitionLanguage(it))),
 					psize:  psize,
 					dflags: dfl,
@@ -506,7 +513,10 @@ func (t *tess) fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool
 	}
 	at := oil.OilTessBegin(c, id, psm, flags&1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, bin)
 	observed := port.NewCells()
-	for _, ch := range tessVersion() {
+	if t.observedIdentity == "" {
+		t.producer()
+	}
+	for _, ch := range t.observedIdentity {
 		port.CellsPush(observed, int32(ch))
 	}
 	oil.OilObserved(c, at, observed, 0, port.CellsLen(observed))

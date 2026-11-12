@@ -1213,12 +1213,13 @@ fn optional_ocr_engine_identity_separates_transcripts_and_replay_never_calls_a_p
     let default = Options::default();
     let optional = Options { ocr_engine: emon::OcrEngine::PpOcr, ..Options::default() };
     let (expected, transcript) = with_ocr().record(Input::bytes(bytes.clone()), &optional).unwrap();
-    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && e.req.contains(&-3100)));
-    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && !e.req.contains(&-3100)));
+    let requested = |r: &[i32]| { let mut c = emon::port::Cells::new(); for &v in r { emon::port::cells_push(&mut c, v); } emon::emon::ocrport::op_request_engine(&mut c) };
+    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && requested(&e.req) == 2));
+    assert!(transcript.entries.iter().any(|e| e.req[1] == 3 && requested(&e.req) == 1));
     let replay = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &transcript).unwrap();
     assert_eq!(json(&expected), json(&replay));
     let mut other_model = transcript.clone();
-    let entry = other_model.entries.iter_mut().find(|e| e.req[1] == 3 && e.req.contains(&-3100)).unwrap();
+    let entry = other_model.entries.iter_mut().find(|e| e.req[1] == 3 && requested(&e.req) == 2).unwrap();
     *entry.req.last_mut().unwrap() ^= 1;
     let miss = Engine::new(Config::default()).replay(Input::bytes(bytes.clone()), &optional, &other_model).err().unwrap();
     assert_eq!(miss.name(), "transcript-miss");

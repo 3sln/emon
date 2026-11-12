@@ -588,7 +588,9 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
 	if ((fuse & 8) == 8) && (plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot(2))) < 0) {
 		if ofuse.OfPpComplete(owords, etext, w0, nw, comps, i+1) == 0 {
+			var requestAt int32 = port.CellsLen(rq)
 			scan.ScRequest(rq, plan.PuId(i, ocrengine.OeRequestSlot(2)), did, (dpi100+50)/100, loc)
+			ocrengine.OeSelect(rq, requestAt, 2)
 			ppasked = 1
 		}
 	}

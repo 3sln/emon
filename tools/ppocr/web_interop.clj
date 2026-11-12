@@ -40,7 +40,7 @@
       (run! ["node" "--experimental-wasm-exnref" "tools/ppocr/web_replay.mjs" "record" input recording bundle] "js-record" env)
       (spit bundle (run! [native "--ocr-engine=ppocr" "--out=bundle" (str "--record=" recording) input] "native-record" env)))
     (let [transcript (edn/read-string (slurp (str recording "/transcript.edn")))]
-      (assert (some #(some #{-3100} (:req %)) (:entries transcript)) "fixture did not request PP"))
+      (assert (some #(= "ppocr" (:engine %)) (:engines transcript)) "fixture did not request PP"))
     (without-models (fn []
     (let [replay (str out "/" host "-js-replay.bundle")
           native-replay (run! [native "--ocr-engine=ppocr" "--out=bundle" (str "--replay=" recording) input]

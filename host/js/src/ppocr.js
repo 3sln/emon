@@ -160,7 +160,7 @@ export function ppocrPort({ incumbent, ...options }) {
   const read = ppocrAdapter(options);
   const port = async req => {
     // kin identified the canonical trailer. A view hash may contain any cell.
-    if (!req.record) return incumbent(req);
+    if (req.engine !== 2) return incumbent(req);
     const answer = await read({ png: req.bitmap(), id: req.id, rect: req.rect, record: req.record });
     return answer === null ? null : { [canonicalOcr]: answer };
   };

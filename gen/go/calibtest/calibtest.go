@@ -48,16 +48,16 @@ func TestTheTableIsSortedAndMonotoneInTheRawScore(emonT *testing.T) {
 	var i int32 = 1
 	port.AssertThat(emonT, n > 0, "the table has a row (the identity table has one that no node matches)")
 	for i < n {
-		var k0 int32 = calibdata.CdRows[(i-1)*4+0]
-		var c0 int32 = calibdata.CdRows[(i-1)*4+1]
-		var k1 int32 = calibdata.CdRows[i*4+0]
-		var c1 int32 = calibdata.CdRows[i*4+1]
+		var k0 int32 = calibdata.CdRows[(i-1)*5+0]
+		var c0 int32 = calibdata.CdRows[(i-1)*5+1]
+		var k1 int32 = calibdata.CdRows[i*5+0]
+		var c1 int32 = calibdata.CdRows[i*5+1]
 		port.AssertThat(emonT, (k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class")
 		if (k0 == k1) && (c0 == c1) {
-			port.AssertThat(emonT, calibdata.CdRows[(i-1)*4+2] < calibdata.CdRows[i*4+2], "raw-lo rises within a kind and class")
-			port.AssertThat(emonT, calibdata.CdRows[(i-1)*4+3] <= calibdata.CdRows[i*4+3], "calibrated never falls with the raw score")
+			port.AssertThat(emonT, calibdata.CdRows[(i-1)*5+3] < calibdata.CdRows[i*5+3], "raw-lo rises within a kind and class")
+			port.AssertThat(emonT, calibdata.CdRows[(i-1)*5+4] <= calibdata.CdRows[i*5+4], "calibrated never falls with the raw score")
 		}
-		port.AssertThat(emonT, (calibdata.CdRows[i*4+3] >= 0) && (calibdata.CdRows[i*4+3] <= 1000), "a calibrated value is 0..1000")
+		port.AssertThat(emonT, (calibdata.CdRows[i*5+4] >= 0) && (calibdata.CdRows[i*5+4] <= 1000), "a calibrated value is 0..1000")
 		i += 1
 	}
 }
@@ -69,8 +69,8 @@ func TestEveryStepOfTheTableAnswersWithItsOwnValue(emonT *testing.T) {
 	var n int32 = 30
 	var i int32 = 0
 	for i < n {
-		if calibdata.CdRows[i*4+1] == -1 {
-			port.AssertEqAt(emonT, calib.CalLookup(calibdata.CdRows[i*4+0], 9, calibdata.CdRows[i*4+2]), calibdata.CdRows[i*4+3], "an any-row at its raw-lo", i)
+		if calibdata.CdRows[i*5+1] == -1 {
+			port.AssertEqAt(emonT, calib.CalLookup(calibdata.CdRows[i*5+0], 9, calibdata.CdRows[i*5+3]), calibdata.CdRows[i*5+4], "an any-row at its raw-lo", i)
 		}
 		i += 1
 	}
@@ -81,17 +81,17 @@ func TestTheLookupClampsAtBothEndsOfAStepFunction(emonT *testing.T) {
 	var n int32 = 30
 	var i int32 = 0
 	for i < n {
-		if calibdata.CdRows[i*4+1] == -1 {
-			var kind int32 = calibdata.CdRows[i*4+0]
+		if calibdata.CdRows[i*5+1] == -1 {
+			var kind int32 = calibdata.CdRows[i*5+0]
 			var firstV int32 = -1
 			var lastV int32 = -1
 			var j int32 = 0
 			for j < n {
-				if (calibdata.CdRows[j*4+0] == kind) && (calibdata.CdRows[j*4+1] == -1) {
+				if (calibdata.CdRows[j*5+0] == kind) && (calibdata.CdRows[j*5+1] == -1) {
 					if firstV < 0 {
-						firstV = calibdata.CdRows[j*4+3]
+						firstV = calibdata.CdRows[j*5+4]
 					}
-					lastV = calibdata.CdRows[j*4+3]
+					lastV = calibdata.CdRows[j*5+4]
 				}
 				j += 1
 			}
@@ -130,6 +130,15 @@ func TestABlockFlaggedScriptUnreadIsWrittenAtItsRawScore(emonT *testing.T) {
 	}
 	port.AssertEq(emonT, calib.CalNodeConf(nodes, p1), want, "the flagged block: its raw score, when the map would give more")
 	port.AssertThat(emonT, calib.CalNodeConf(nodes, p1) <= 100, "never above it")
+	model.NodeAddFlag(nodes, p1, model.FlUncalibratedEngine())
+	port.AssertThat(emonT, calib.CalNodeConf(nodes, p1) <= 100, "uncalibrated prior never raises an unread cap")
 	port.AssertThat(emonT, calib.CalNodeConf(nodes, t1) <= 100, "the text under it too")
 	port.AssertEq(emonT, calib.CalNodeConf(nodes, p2), mapped, "a block no one flagged is calibrated as it was")
+}
+
+func TestNodeMapIsEngineSpecificWithPooledFallback(emonT *testing.T) {
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 1, 508), calib.CalLookup(3, 1, 508), "Tesseract gets its fitted OCR map")
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 2, 508), calib.CalLookup(3, 9, 508), "PP has no Tesseract-specific fit")
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 100, 508), calib.CalLookup(3, 9, 508), "unknown engine uses pooled fallback")
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 2, -1), -1, "absence survives engine lookup")
 }

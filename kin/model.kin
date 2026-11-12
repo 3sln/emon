@@ -6,7 +6,7 @@
 ;; host allocates and this module fills. A node is its index; four languages
 ;; cannot disagree about an index.
 ;;
-;;   nodes    stride 16   the tree
+;;   nodes    stride 17   the tree
 ;;   attrs    stride 5    kind-specific fields that are not one integer
 ;;   regions  stride 6    where a node is: page, x0, y0, x1, y1 (centipoints)
 ;;   text     stride 1    one Unicode scalar value per cell; EVERY string in the
@@ -218,7 +218,8 @@
    [fl-struct-disagree 128 "struct-disagree"]
    [fl-tag-span-conflict 256 "tag-span-conflict"]
    [fl-in-table-image 512 "in-table-image"]
-   [fl-script-unread 1024 "script-unread"]])
+   [fl-script-unread 1024 "script-unread"]
+   [fl-uncalibrated-engine 2048 "uncalibrated-engine"]])
 
 ;; A span's `style` bits, stored in its `sub`.
 (defenum ^:pub sy
@@ -390,7 +391,7 @@
 (defn ^:pub ^I32 av-bool [] (return 3))
 
 ;; Strides.
-(defn ^:pub ^I32 nodes-stride [] (return 16))
+(defn ^:pub ^I32 nodes-stride [] (return 17))
 (defn ^:pub ^I32 attrs-stride [] (return 5))
 (defn ^:pub ^I32 regions-stride [] (return 6))
 (defn ^:pub ^I32 pages-stride [] (return 16))
@@ -406,13 +407,13 @@
 ;; ----------------------------------------------------------- node fields
 
 (defn ^I32 nget [^Cells nodes ^I32 n ^I32 f]
-  (return (cells-at nodes (+ (* n 16) f))))
+  (return (cells-at nodes (+ (* n 17) f))))
 
 (defn ^I32 nput [^:mut ^Cells nodes ^I32 n ^I32 f ^I32 v]
-  (cells-set nodes (+ (* n 16) f) v)
+  (cells-set nodes (+ (* n 17) f) v)
   (return 0))
 
-(defn ^:pub ^I32 node-count [^Cells nodes] (return (quot (cells-len nodes) 16)))
+(defn ^:pub ^I32 node-count [^Cells nodes] (return (quot (cells-len nodes) 17)))
 (defn ^:pub ^I32 node-kind [^Cells nodes ^I32 n] (return (nget nodes n 0)))
 (defn ^:pub ^I32 node-parent [^Cells nodes ^I32 n] (return (nget nodes n 1)))
 (defn ^:pub ^I32 node-first-child [^Cells nodes ^I32 n] (return (nget nodes n 2)))
@@ -429,6 +430,9 @@
 (defn ^:pub ^I32 node-flags [^Cells nodes ^I32 n] (return (nget nodes n 13)))
 (defn ^:pub ^I32 node-sub [^Cells nodes ^I32 n] (return (nget nodes n 14)))
 (defn ^:pub ^I32 node-aux [^Cells nodes ^I32 n] (return (nget nodes n 15)))
+
+(defn ^:pub ^I32 node-engine [^Cells nodes ^I32 n] (return (nget nodes n 16)))
+(defn ^:pub ^I32 node-set-engine [^:mut ^Cells nodes ^I32 n ^I32 engine] (return (nput nodes n 16 engine)))
 
 (defn ^:pub ^I32 node-has-text [^Cells nodes ^I32 n]
   (comment "1 when the node carries a text run (even an empty one).")
@@ -503,7 +507,7 @@
   (comment "unknown, or the node would nest deeper than `max-depth`. A new")
   (comment "node has no text, no regions, no attributes, `src` 0, `conf` -1")
   (comment "(absent), `flags` 0, `sub` 0, `aux` 0.")
-  (let [^I32 n (quot (cells-len nodes) 16)
+  (let [^I32 n (quot (cells-len nodes) 17)
         ^:mut ^I32 last -1]
     (if (or (< kind 1) (> kind 26)) (return -1))
     (if (< parent -1) (return -1))
@@ -527,6 +531,7 @@
     (cells-push nodes 0)
     (cells-push nodes 0)
     (cells-push nodes 0)
+    (cells-push nodes 0) ;; primary OCR engine; zero for nodes with no OCR provenance
     (if (>= parent 0)
       (do (if (< last 0)
             (nput nodes parent 2 n)
@@ -557,7 +562,9 @@
 
 (defn ^:pub ^I32 node-set-sub [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 14 v)))
 (defn ^:pub ^I32 node-set-aux [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 15 v)))
-(defn ^:pub ^I32 node-set-src [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 11 v)))
+(defn ^:pub ^I32 node-set-src [^:mut ^Cells nodes ^I32 n ^I32 v]
+  (if (and (!= (bit-and v (sr-ocr)) 0) (== (node-engine nodes n) 0)) (node-set-engine nodes n 1))
+  (return (nput nodes n 11 v)))
 (defn ^:pub ^I32 node-set-flags [^:mut ^Cells nodes ^I32 n ^I32 v] (return (nput nodes n 13 v)))
 
 (defn ^:pub ^I32 node-set-conf [^:mut ^Cells nodes ^I32 n ^I32 v]
@@ -568,7 +575,7 @@
 
 (defn ^:pub ^I32 node-add-src [^:mut ^Cells nodes ^I32 n ^I32 bits]
   (let [^I32 old (nget nodes n 11)]
-    (return (nput nodes n 11 (bit-or old bits)))))
+    (return (node-set-src nodes n (bit-or old bits)))))
 
 (defn ^:pub ^I32 node-add-flag [^:mut ^Cells nodes ^I32 n ^I32 bits]
   (let [^I32 old (nget nodes n 13)]
@@ -1051,7 +1058,7 @@
 
 (defn ^:pub ^I32 model-check [^Cells nodes ^Cells attrs ^Cells regions ^Cells text
                               ^Cells pages ^Cells ledger ^Cells layout ^:mut ^Cells st]
-  (let [^I32 nn (quot (cells-len nodes) 16)
+  (let [^I32 nn (quot (cells-len nodes) 17)
         ^I32 nlay (quot (cells-len layout) 8)
         ^:mut ^I32 j 0
         ^:mut ^I32 i 0
@@ -1062,7 +1069,7 @@
         ^I32 tl (cells-len text)]
     (cells-drop st 0)
     (cells-push st 0)
-    (if (!= (rem (cells-len nodes) 16) 0) (return (mc-fail st (mc-bad-stride) 0)))
+    (if (!= (rem (cells-len nodes) 17) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (!= (rem (cells-len attrs) 5) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (!= (rem (cells-len regions) 6) 0) (return (mc-fail st (mc-bad-stride) 0)))
     (if (!= (rem (cells-len pages) 16) 0) (return (mc-fail st (mc-bad-stride) 0)))
@@ -1269,7 +1276,7 @@
   (comment "`st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.")
   (let [^I32 na (quot (cells-len assets) 24)
         ^I32 nu (quot (cells-len uses) 8)
-        ^I32 nn (quot (cells-len nodes) 16)
+        ^I32 nn (quot (cells-len nodes) 17)
         ^I32 bl (buf-len abytes)
         ^:mut ^I32 i 0
         ^:mut ^I32 u 0

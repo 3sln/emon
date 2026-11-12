@@ -165,7 +165,7 @@ impl Ocr for PpOcr {
         for &v in &req.rec {
             crate::port::cells_push(&mut r, v);
         }
-        if crate::emon::ocrport::op_identity_at(&mut r) < 0 {
+        if crate::emon::ocrport::op_request_engine(&mut r) != 2 {
             return self
                 .incumbent
                 .as_ref()

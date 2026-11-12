@@ -72,6 +72,7 @@ type EvArenas struct {
 	Ofuse   *port.Cells
 	Oarb    *port.Cells
 	Oxs     *port.Cells
+	Oet     *port.Cells
 }
 
 func NewEvArenas() *EvArenas {
@@ -97,6 +98,7 @@ func NewEvArenas() *EvArenas {
 		Ofuse:   port.NewCells(),
 		Oarb:    port.NewCells(),
 		Oxs:     port.NewCells(),
+		Oet:     port.NewCells(),
 	}
 }
 func (d *EvArenas) Clone() *EvArenas {
@@ -122,6 +124,7 @@ func (d *EvArenas) Clone() *EvArenas {
 	port.CellsCopyInto(c.Ofuse, d.Ofuse)
 	port.CellsCopyInto(c.Oarb, d.Oarb)
 	port.CellsCopyInto(c.Oxs, d.Oxs)
+	port.CellsCopyInto(c.Oet, d.Oet)
 	return c
 }
 

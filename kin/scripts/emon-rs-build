@@ -123,7 +123,7 @@ rm -f "$crate/Cargo.toml.new"
 ppocr_mode="${EMON_RS_PPOCR:-}"
 if [ "$ppocr_mode" = 1 ]; then
   EMON_CS_SHARED_COMPILATION=false bb tools/ppocr/check.clj >&2
-  for f in ppocr ppocr_ctc ppocr_image ppocr_pipeline ppocr_runtime ppocr_calibration; do
+  for f in ppocr ppocr_ctc ppocr_image ppocr_pipeline ppocr_runtime; do
     put "host/rust/src/$f.rs" "$crate/src/$f.rs"
   done
   put tools/ppocr/en-dictionary.txt "$crate/src/ppocr_dictionary.txt"

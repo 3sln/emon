@@ -11,7 +11,7 @@
 ;;
 ;;   shared   epages 12   views 24   pts 3   refs 2   etext 1   feats 32
 ;;   text     glyphs 32   words 24   lines 16   marks 24   fonts 16   paths 24   images 20
-;;   ocr      oruns 32   oblocks 16   olines 28   owords 32   osyms 20   oalts 4
+;;   ocr      oruns 34   oblocks 16   olines 28   owords 32   osyms 20   oalts 4
 ;;   trace    inks 12   components 24   rules 20   prims 24   tlines 20
 ;;
 ;; `evs-init evt-init evo-init evr-init` empty a bundle, `ev-init` all of them, `ev-check` verifies all of
@@ -174,7 +174,8 @@
    [oe-fallback 4 "fallback"]
    [oe-garbage 8 "garbage"]
    [oe-rule-ghost 16 "rule-ghost"]
-   [oe-corrected 32 "corrected"]])
+   [oe-corrected 32 "corrected"]
+   [oe-uncalibrated 64 "uncalibrated"]])
 
 (defenum ^:pub os
   [[os-superscript 1 "superscript"]
@@ -581,7 +582,7 @@
 (defn ^:pub ^I32 fo-stride [] (return 16))
 (defn ^:pub ^I32 pa-stride [] (return 24))
 (defn ^:pub ^I32 im-stride [] (return 20))
-(defn ^:pub ^I32 or-stride [] (return 32))
+(defn ^:pub ^I32 or-stride [] (return 34))
 (defn ^:pub ^I32 ob-stride [] (return 16))
 (defn ^:pub ^I32 ol-stride [] (return 28))
 (defn ^:pub ^I32 ow-stride [] (return 32))
@@ -817,7 +818,7 @@
 (defn ^:pub ^I32 mf-vchk [] (return 18))
 (defn ^:pub ^I32 mf-placement [] (return 19))   ;; P3.13: the placement's orientation (`pi-orient`: 0 upright, 1..7, 8 transformed)
 
-;; oruns (stride 32)
+;; oruns (stride 34)
 (defn ^:pub ^I32 orf-page [] (return 0))
 (defn ^:pub ^I32 orf-view [] (return 1))
 (defn ^:pub ^I32 orf-bview [] (return 2))
@@ -1332,7 +1333,7 @@
 ;; every arena's stride, index = ea - 1
 (defdata ^:pub ev-strides
   :emitter kin.lang/flat-array
-  :data [12 24 3 2 1 32 32 24 16 24 16 24 20 32 16 28 32 20 4 12 24 20 24 20]
+  :data [12 24 3 2 1 32 32 24 16 24 16 24 20 34 16 28 32 20 4 12 24 20 24 20]
   :accessors {^I32 ev-strides-count [^I32 ignored]
               ^I32 ev-strides-at [^I32 ignored ^I32 i]})
 
@@ -1721,20 +1722,20 @@
     (ev-set c 20 r 17 -1)
     (return r)))
 
-(defn ^:pub ^I32 or-count [^Cells c] (return (ev-count c 32)))
-(defn ^:pub ^I32 or-get [^Cells c ^I32 i ^I32 f] (return (ev-get c 32 i f)))
-(defn ^:pub ^I32 or-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (return (ev-set c 32 i f v)))
+(defn ^:pub ^I32 or-count [^Cells c] (return (ev-count c 34)))
+(defn ^:pub ^I32 or-get [^Cells c ^I32 i ^I32 f] (return (ev-get c 34 i f)))
+(defn ^:pub ^I32 or-set [^:mut ^Cells c ^I32 i ^I32 f ^I32 v] (return (ev-set c 34 i f v)))
 (defn ^:pub ^I32 or-new [^:mut ^Cells c ^I32 v-page ^I32 v-view]
   (comment "Append a row of oruns: page view; every other field is its default.")
-  (let [^I32 r (ev-push c 32)]
-    (ev-set c 32 r 0 v-page)
-    (ev-set c 32 r 1 v-view)
-    (ev-set c 32 r 2 -1)
-    (ev-set c 32 r 3 -1)
-    (ev-set c 32 r 11 -1)
-    (ev-set c 32 r 17 -1)
-    (ev-set c 32 r 19 -1)
-    (ev-set c 32 r 20 -1)
+  (let [^I32 r (ev-push c 34)]
+    (ev-set c 34 r 0 v-page)
+    (ev-set c 34 r 1 v-view)
+    (ev-set c 34 r 2 -1)
+    (ev-set c 34 r 3 -1)
+    (ev-set c 34 r 11 -1)
+    (ev-set c 34 r 17 -1)
+    (ev-set c 34 r 19 -1)
+    (ev-set c 34 r 20 -1)
     (return r)))
 
 (defn ^:pub ^I32 ob-count [^Cells c] (return (ev-count c 16)))
@@ -2285,7 +2286,7 @@
   (if (== ea 11) (return (cells-at fonts (+ (* row 16) f))))
   (if (== ea 12) (return (cells-at paths (+ (* row 24) f))))
   (if (== ea 13) (return (cells-at images (+ (* row 20) f))))
-  (if (== ea 14) (return (cells-at oruns (+ (* row 32) f))))
+  (if (== ea 14) (return (cells-at oruns (+ (* row 34) f))))
   (if (== ea 15) (return (cells-at oblocks (+ (* row 16) f))))
   (if (== ea 16) (return (cells-at olines (+ (* row 28) f))))
   (if (== ea 17) (return (cells-at owords (+ (* row 32) f))))
@@ -2313,7 +2314,7 @@
   (if (== ea 11) (do (cells-set fonts (+ (* row 16) f) v) (return 0)))
   (if (== ea 12) (do (cells-set paths (+ (* row 24) f) v) (return 0)))
   (if (== ea 13) (do (cells-set images (+ (* row 20) f) v) (return 0)))
-  (if (== ea 14) (do (cells-set oruns (+ (* row 32) f) v) (return 0)))
+  (if (== ea 14) (do (cells-set oruns (+ (* row 34) f) v) (return 0)))
   (if (== ea 15) (do (cells-set oblocks (+ (* row 16) f) v) (return 0)))
   (if (== ea 16) (do (cells-set olines (+ (* row 28) f) v) (return 0)))
   (if (== ea 17) (do (cells-set owords (+ (* row 32) f) v) (return 0)))
@@ -2506,6 +2507,7 @@
 (defn ^:pub ^I32 owf-alts [] (return 31))
 
 (defn ^:pub ^I32 ow-confidence [^Cells c ^I32 word]
+  (if (!= (bit-and (ow-get c word (owf-flags)) (oe-uncalibrated)) 0) (return 500))
   (let [^I32 p (ow-get c word (owf-pcal))]
     (if (>= p 0) (return p))
     (return (ow-get c word (hd-conf)))))
@@ -3253,3 +3255,6 @@
                              oruns oblocks olines owords osyms oalts inks components rules prims tlines)]
     (js-close t pretty 0 s)
     (return 0)))
+
+(defn ^:pub ^I32 orf-observed-hi [] (return 32))
+(defn ^:pub ^I32 orf-observed-lo [] (return 33))

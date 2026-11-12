@@ -97,7 +97,7 @@ geometry, then aligns ordered NFC/casefolded tokens within that line. It does
 not invent individual gold word boxes. `calibration.json` contains the IDs,
 reliability bins and Brier/ECE values; source-bearing labels and probes stay in
 external scratch. The frozen ten-bin integer lookup is in
-`host/rust/src/ppocr_calibration.rs`. Empty low-score bins conservatively map to
+`kin/ocalibdata.kin` (weighted isotonic repair by `bb tools/calibration/ocr_words.clj --write`). Empty low-score bins conservatively map to
 zero. Annotation errors and source-line rather than individual-word gold are
 limitations; this is not the 40-line changed-control source audit. Raw CTC
 posteriors are never used as Tesseract confidence.

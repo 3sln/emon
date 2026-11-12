@@ -5,6 +5,8 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrport::*;
+use crate::emon::ocrscript::*;
+use crate::emon::ocrtess::*;
 use crate::emon::oil::*;
 use crate::emon::oilsrc::*;
 use crate::emon::plan::*;
@@ -55,6 +57,77 @@ pub(crate) fn sk_dict(nw: i32, an: &mut crate::port::Cells, ext: i32) -> i32 {
     }
     return k;
 }
+pub fn sk_census(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port::Cells) -> i32 {
+    // No-OSD fallback: at least three script-bearing characters and a 60% dominant script. Digits and punctuation do not vote. Never invent OSD confidence.
+    crate::port::cells_drop(scr, 0);
+    let mut k: i32 = 0;
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut total: i32 = 0;
+    let mut best: i32 = 0;
+    let mut winner: i32 = -1;
+    let mut w: i32 = oil_first_word(an, at);
+    while k < 30 {
+        crate::port::cells_push(scr, 0);
+        k += 1;
+    }
+    while i < oil_nwords(an, at) {
+        j = 0;
+        while j < oil_wlen(an, at, w) {
+            k = os_census_of(oil_wcp(an, at, w, j));
+            if k >= 0 {
+                crate::port::cells_set(scr, k, crate::port::cells_at(scr, k) + 1);
+                total += 1;
+            }
+            j += 1;
+        }
+        w = oil_word_next(an, at, w);
+        i += 1;
+    }
+    k = 0;
+    while k < 30 {
+        if crate::port::cells_at(scr, k) > best {
+            best = crate::port::cells_at(scr, k);
+            winner = k;
+        }
+        k += 1;
+    }
+    if (total >= 3) && ((best * 1000) >= (total * 600)) {
+        return OS_CENSUS_SCRIPTS[(winner) as usize];
+    }
+    return 0;
+}
+pub(crate) fn sk_no_osd_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port::Cells) -> i32 {
+    let script: i32 = sk_census(an, at, scr);
+    let mut model: i32 = os_lang_script(oil_get(an, at, oh_lang()));
+    let mut i: i32 = 0;
+    let mut w: i32 = oil_first_word(an, at);
+    let mut known: i32 = 0;
+    if script == 0 {
+        return 0;
+    }
+    if (script == sc_latn()) || (script == sc_latf()) {
+        return 0;
+    }
+    if model > 0 {
+        known = 1;
+        if op_script_reads(script, model) == 1 {
+            return 0;
+        }
+    }
+    while i < oil_nwords(an, at) {
+        model = os_lang_script(oil_wlang(an, at, w));
+        if model > 0 {
+            known = 1;
+            if op_script_reads(script, model) == 1 {
+                return 0;
+            }
+        }
+        w = oil_word_next(an, at, w);
+        i += 1;
+    }
+    return known;
+}
 pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port::Cells) -> i32 {
     // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
     let ext: i32 = oil_find(an, at);
@@ -68,6 +141,12 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     let mut source_first: i32 = 0;
     if ext < 0 {
         return 0;
+    }
+    if oil_has(oil_get(an, ext, oh_caps()), oc_script()) == 0 {
+        if nw < sk_min_words() {
+            return 0;
+        }
+        return sk_no_osd_unread(an, ext, scr);
     }
     script = oil_script(an, ext);
     if script <= 0 {
@@ -122,7 +201,10 @@ pub fn sk_route(ans: &mut crate::port::Cells, at: i32, id: i32, bitmap: i32, dpi
     }
     let found: i32 = an_find(ans, id);
     let ext: i32 = oil_find(ans, at);
-    let script: i32 = oil_script(ans, ext);
+    let mut script: i32 = oil_script(ans, ext);
+    if oil_has(oil_get(ans, ext, oh_caps()), oc_script()) == 0 {
+        script = sk_census(ans, ext, scr);
+    }
     if found >= 0 {
         if an_ok(ans, found) == 1 {
             return found;

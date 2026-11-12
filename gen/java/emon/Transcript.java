@@ -3,6 +3,7 @@
 
 package emon;
 
+
 public final class Transcript {
     public static int tkRender() {
         return 1;
@@ -1187,6 +1188,143 @@ public final class Transcript {
         emon.Port.textAscii(out, ".png");
         return n;
     }
+    public static final int[] TW_WEB = {
+        32, 114, 117, 110, 116, 105, 109, 101, 61, 79, 82, 84, 32, 87, 101, 98,
+        32, 49, 46, 50, 50, 46, 48, 32, 119, 97, 115, 109, 32, 83, 73, 77,
+        68
+    };
+    public static int twMarker(emon.Transcriptctx.Tr t, int e) {
+        int start = e + 6;
+        int end = start + emon.Port.cellsAt(t.ents, e + 5);
+        int k = start + 10;
+        if (emon.Port.cellsAt(t.ents, start + 1) != 3) {
+            return -1;
+        }
+        while ((k + 3) < end) {
+            if ((emon.Port.cellsAt(t.ents, k) == -3100) && (emon.Port.cellsAt(t.ents, k + 1) == 2) && (emon.Port.cellsAt(t.ents, k + 3) == ((end - k) - 4))) {
+                return k;
+            }
+            k += 1;
+        }
+        return -1;
+    }
+    public static int twAnswer(emon.Transcriptctx.Tr t, int e) {
+        return (e + 6) + emon.Port.cellsAt(t.ents, e + 5);
+    }
+    public static int twSameEngine(emon.Transcriptctx.Tr t, int e, int other) {
+        int a = twMarker(t, e);
+        int b = twMarker(t, other);
+        int aa = twAnswer(t, e);
+        int ab = twAnswer(t, other);
+        int k = 2;
+        if ((a < 0) || (b < 0)) {
+            return 0;
+        }
+        if (((other + emon.Port.cellsAt(t.ents, other)) - ab) < 28) {
+            return 0;
+        }
+        if (emon.Port.cellsAt(t.ents, a + 3) != emon.Port.cellsAt(t.ents, b + 3)) {
+            return 0;
+        }
+        if ((emon.Port.cellsAt(t.ents, aa + 6) != emon.Port.cellsAt(t.ents, ab + 6)) || (emon.Port.cellsAt(t.ents, aa + 7) != emon.Port.cellsAt(t.ents, ab + 7))) {
+            return 0;
+        }
+        while (k < (4 + emon.Port.cellsAt(t.ents, a + 3))) {
+            if (emon.Port.cellsAt(t.ents, a + k) != emon.Port.cellsAt(t.ents, b + k)) {
+                return 0;
+            }
+            k += 1;
+        }
+        return 1;
+    }
+    public static int twHashMatches(emon.Port.Cells cps, int start, int n, int hi, int lo) {
+        long hash = Oil.oilObsHash(cps, start, n);
+        if ((((int) (hash >>> 32)) == hi) && (((int) hash) == lo)) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int twObserved(emon.Transcriptctx.Tr t, StringBuilder out, int marker, int answer) {
+        int hi = emon.Port.cellsAt(t.ents, answer + 6);
+        int lo = emon.Port.cellsAt(t.ents, answer + 7);
+        int p = 0;
+        int k = 0;
+        while (p < emon.Port.cellsLen(t.prod)) {
+            int kn = emon.Port.cellsAt(t.prod, p);
+            int v = (p + kn) + 2;
+            int vn = emon.Port.cellsAt(t.prod, v - 1);
+            if (twHashMatches(t.prod, v, vn, hi, lo) == 1) {
+                twCps(out, t.prod, v, vn, 1);
+                return 1;
+            }
+            p = v + vn;
+        }
+        p = emon.Port.cellsAt(t.ents, marker + 3);
+        if (twHashMatches(t.ents, marker + 4, p, hi, lo) == 1) {
+            twCps(out, t.ents, marker + 4, p, 1);
+            return 1;
+        }
+        emon.Port.cellsDrop(t.tmp, 0);
+        while (k < p) {
+            emon.Port.cellsPush(t.tmp, emon.Port.cellsAt(t.ents, (marker + 4) + k));
+            k += 1;
+        }
+        k = 0;
+        while (k < 33) {
+            emon.Port.cellsPush(t.tmp, TW_WEB[k]);
+            k += 1;
+        }
+        int n = emon.Port.cellsLen(t.tmp);
+        if (twHashMatches(t.tmp, 0, n, hi, lo) == 1) {
+            twCps(out, t.tmp, 0, n, 1);
+            return 1;
+        }
+        return 0;
+    }
+    public static int twEngines(emon.Transcriptctx.Tr t, StringBuilder out) {
+        int e = 0;
+        int other = 0;
+        int duplicate = 0;
+        int count = 0;
+        int marker = 0;
+        int answer = 0;
+        while (e < emon.Port.cellsLen(t.ents)) {
+            marker = twMarker(t, e);
+            answer = twAnswer(t, e);
+            if ((marker >= 0) && (((e + emon.Port.cellsAt(t.ents, e)) - answer) >= 28) && (emon.Port.cellsAt(t.ents, answer + 3) == 0)) {
+                other = 0;
+                duplicate = 0;
+                while (other < e) {
+                    if (twSameEngine(t, e, other) == 1) {
+                        duplicate = 1;
+                    }
+                    other += emon.Port.cellsAt(t.ents, other);
+                }
+                if (duplicate == 0) {
+                    if (count == 0) {
+                        emon.Port.textAscii(out, " :engines [");
+                    } else {
+                        emon.Port.textAscii(out, " ");
+                    }
+                    emon.Port.textAscii(out, "{:engine \"");
+                    Oil.oenEmitName(out, emon.Port.cellsAt(t.ents, marker + 2));
+                    emon.Port.textAscii(out, "\" :config \"");
+                    int configN = emon.Port.cellsAt(t.ents, marker + 3);
+                    twCps(out, t.ents, marker + 4, configN, 1);
+                    emon.Port.textAscii(out, "\" :observed \"");
+                    twObserved(t, out, marker, answer);
+                    emon.Port.textAscii(out, "\"}");
+                    count += 1;
+                }
+            }
+            e += emon.Port.cellsAt(t.ents, e);
+        }
+        if (count > 0) {
+            emon.Port.textAscii(out, "]");
+            emon.Port.textCp(out, 10);
+        }
+        return 0;
+    }
     public static int trWrite(emon.Transcriptctx.Tr t, StringBuilder out) {
         // Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.
         emon.Port.textAscii(out, "{:");
@@ -1216,6 +1354,7 @@ public final class Transcript {
             emon.Port.textAscii(out, "}");
             emon.Port.textCp(out, 10);
         }
+        twEngines(t, out);
         emon.Port.textAscii(out, " :");
         tfEmitName(out, tfInputs());
         emon.Port.textAscii(out, " [");

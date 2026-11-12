@@ -3,27 +3,44 @@
 
 package ocalib
 
-func OcalWord(engine int32, calibration int32, raw int32) int32 {
-	if engine == 1 {
-		return raw
-	}
-	if engine != 2 {
+import (
+	"emon/ocalibdata"
+)
+
+func OcalProbability(engine int32, calibration int32, kind int32, raw int32) int32 {
+	if raw < 0 {
 		return -1
 	}
-	if raw < 400 {
-		return 0
+	if (engine == 1) && (calibration == 0) && (kind == 1) {
+		return raw
 	}
-	if raw < 500 {
-		return 42
+	var i int32 = 0
+	var first int32 = -1
+	var hit int32 = -1
+	for i < 9 {
+		if (ocalibdata.OcdRows[i*5+0] == engine) && (ocalibdata.OcdRows[i*5+1] == calibration) && (ocalibdata.OcdRows[i*5+2] == kind) {
+			if first < 0 {
+				first = ocalibdata.OcdRows[i*5+4]
+			}
+			if raw >= ocalibdata.OcdRows[i*5+3] {
+				hit = ocalibdata.OcdRows[i*5+4]
+			}
+		}
+		i += 1
 	}
-	if raw < 600 {
-		return 179
+	if hit >= 0 {
+		return hit
 	}
-	if raw < 800 {
-		return 422
+	return first
+}
+
+func OcalWord(engine int32, calibration int32, raw int32) int32 {
+	return OcalProbability(engine, calibration, 1, raw)
+}
+
+func OcalOrPrior(probability int32, prior int32) int32 {
+	if probability < 0 {
+		return prior
 	}
-	if raw < 900 {
-		return 521
-	}
-	return 883
+	return probability
 }

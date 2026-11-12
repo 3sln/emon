@@ -550,7 +550,9 @@ public final class Pageunit {
         Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
         if (((fuse & 8) == 8) && (Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot(2))) < 0)) {
             if (Ofuse.ofPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
+                int requestAt = emon.Port.cellsLen(rq);
                 Scan.scRequest(rq, Plan.puId(i, Ocrengine.oeRequestSlot(2)), did, (dpi100 + 50) / 100, loc);
+                Ocrengine.oeSelect(rq, requestAt, 2);
                 ppasked = 1;
             }
         }

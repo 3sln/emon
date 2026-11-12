@@ -60,6 +60,7 @@ const optionLines = (o, chunk, record) => {
   for (const [k, v] of Object.entries(o.producer || {})) put(`producer.${k}`, v);
   // what the renderer says produced its pixels (`pdfium.js`'s `producer`), after the embedder's own
   for (const [k, v] of Object.entries((o.ports && o.ports.render && o.ports.render.producer) || {})) put(`producer.${k}`, v);
+  for (const [k, v] of Object.entries(o.ports?.ocr?.producer || {})) put(`producer.${k}`, v);
   if (o.ports && o.ports.ocr) put('js-ocr', 1);
   if (o.ports && o.ports.render) put('js-render', 1);
   return L.join('\n');
@@ -326,6 +327,8 @@ export class Emon {
             return;
           }
           const cells = encodeOcr(result, w.ocrWord);
+          const observed = w.ocrObserved(result.observed ?? ports.ocr.producer?.observed ?? ports.ocr.producer?.engine ?? 'external');
+          cells[2] = observed[0]; cells[3] = observed[1];
           const rc = w.withBytes(new Uint8Array(cells.buffer), (p) => w.x.emon_answer_ocr(h, rec[2], p, cells.length));
           if (rc < 0) throw this._error(rc);
           return;

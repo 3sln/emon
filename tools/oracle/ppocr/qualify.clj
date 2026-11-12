@@ -34,7 +34,7 @@
 (def policy (apply str (map #(char (parse-long %))
                            (str/split (second (re-find #":data \[([0-9 ]+)\]" (slurp "kin/ocrengine.kin"))) #" "))))
 (def sources ["kin/ocrengine.kin" "kin/ofuse.kin" "kin/pageunit.kin" "kin/ocrenginetest.kin"
-              "kin/ofusetest.kin" "host/rust/src/ppocr.rs" "host/rust/src/ppocr_calibration.rs"])
+              "kin/ofusetest.kin" "host/rust/src/ppocr.rs" "kin/ocalibdata.kin"])
 (def frozen {:policy policy :thresholds {:insertion-confidence 700 :replacement-margin 300}
                              :calibration "D845 unchanged; finer fit-only calibration rejected before receipt measurements"
                              :source-sha256 (into {} (map (fn [p] [(keyword p) (sha p)]) sources))})

@@ -8,6 +8,7 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
+	"emon/ocridentity"
 	"emon/oil"
 	"emon/pdfdoc"
 	"emon/plan"
@@ -95,7 +96,7 @@ func TestTheRequestCarriesTheResolutionAndTheLanguage(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 3, "psm 3")
 	port.AssertEq(emonT, ocr.OcfDpi(plan.RqArg(rq, 0, 2)), 150, "150 dpi")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 3+(150*256), "symbols and OSD below it")
-	port.AssertEq(emonT, plan.RqNargs(rq, 0), 8, "one language")
+	port.AssertEq(emonT, plan.RqNargs(rq, 0), (8+4)+112, "one language")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`")
 }
 

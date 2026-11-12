@@ -991,6 +991,9 @@ public static class Model {
     public static int FlScriptUnread() {
         return 1024;
     }
+    public static int FlUncalibratedEngine() {
+        return 2048;
+    }
     public static int FlEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "low-conf");
@@ -1034,6 +1037,10 @@ public static class Model {
         }
         if (code == 1024) {
             emon.Port.TextAscii(t, "script-unread");
+            return 1;
+        }
+        if (code == 2048) {
+            emon.Port.TextAscii(t, "uncalibrated-engine");
             return 1;
         }
         return 0;
@@ -1883,7 +1890,7 @@ public static class Model {
         return 3;
     }
     public static int NodesStride() {
-        return 16;
+        return 17;
     }
     public static int AttrsStride() {
         return 5;
@@ -1910,14 +1917,14 @@ public static class Model {
         return 200;
     }
     internal static int Nget(emon.Port.Cells nodes, int n, int f) {
-        return emon.Port.CellsAt(nodes, (n * 16) + f);
+        return emon.Port.CellsAt(nodes, (n * 17) + f);
     }
     internal static int Nput(emon.Port.Cells nodes, int n, int f, int v) {
-        emon.Port.CellsSet(nodes, (n * 16) + f, v);
+        emon.Port.CellsSet(nodes, (n * 17) + f, v);
         return 0;
     }
     public static int NodeCount(emon.Port.Cells nodes) {
-        return emon.Port.CellsLen(nodes) / 16;
+        return emon.Port.CellsLen(nodes) / 17;
     }
     public static int NodeKind(emon.Port.Cells nodes, int n) {
         return Nget(nodes, n, 0);
@@ -1966,6 +1973,12 @@ public static class Model {
     }
     public static int NodeAux(emon.Port.Cells nodes, int n) {
         return Nget(nodes, n, 15);
+    }
+    public static int NodeEngine(emon.Port.Cells nodes, int n) {
+        return Nget(nodes, n, 16);
+    }
+    public static int NodeSetEngine(emon.Port.Cells nodes, int n, int engine) {
+        return Nput(nodes, n, 16, engine);
     }
     public static int NodeHasText(emon.Port.Cells nodes, int n) {
         // 1 when the node carries a text run (even an empty one).
@@ -2073,7 +2086,7 @@ public static class Model {
         // unknown, or the node would nest deeper than `max-depth`. A new
         // node has no text, no regions, no attributes, `src` 0, `conf` -1
         // (absent), `flags` 0, `sub` 0, `aux` 0.
-        int n = emon.Port.CellsLen(nodes) / 16;
+        int n = emon.Port.CellsLen(nodes) / 17;
         int last = -1;
         if ((kind < 1) || (kind > 26)) {
             return -1;
@@ -2103,6 +2116,7 @@ public static class Model {
         emon.Port.CellsPush(nodes, 0);
         emon.Port.CellsPush(nodes, 0);
         emon.Port.CellsPush(nodes, -1);
+        emon.Port.CellsPush(nodes, 0);
         emon.Port.CellsPush(nodes, 0);
         emon.Port.CellsPush(nodes, 0);
         emon.Port.CellsPush(nodes, 0);
@@ -2141,6 +2155,9 @@ public static class Model {
         return Nput(nodes, n, 15, v);
     }
     public static int NodeSetSrc(emon.Port.Cells nodes, int n, int v) {
+        if (((v & SrOcr()) != 0) && (NodeEngine(nodes, n) == 0)) {
+            NodeSetEngine(nodes, n, 1);
+        }
         return Nput(nodes, n, 11, v);
     }
     public static int NodeSetFlags(emon.Port.Cells nodes, int n, int v) {
@@ -2158,7 +2175,7 @@ public static class Model {
     }
     public static int NodeAddSrc(emon.Port.Cells nodes, int n, int bits) {
         int old = Nget(nodes, n, 11);
-        return Nput(nodes, n, 11, old | bits);
+        return NodeSetSrc(nodes, n, old | bits);
     }
     public static int NodeAddFlag(emon.Port.Cells nodes, int n, int bits) {
         int old = Nget(nodes, n, 13);
@@ -2823,7 +2840,7 @@ public static class Model {
         return 0;
     }
     public static int ModelCheck(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells ledger, emon.Port.Cells layout, emon.Port.Cells st) {
-        int nn = emon.Port.CellsLen(nodes) / 16;
+        int nn = emon.Port.CellsLen(nodes) / 17;
         int nlay = emon.Port.CellsLen(layout) / 8;
         int j = 0;
         int i = 0;
@@ -2834,7 +2851,7 @@ public static class Model {
         int tl = emon.Port.CellsLen(text);
         emon.Port.CellsDrop(st, 0);
         emon.Port.CellsPush(st, 0);
-        if ((emon.Port.CellsLen(nodes) % 16) != 0) {
+        if ((emon.Port.CellsLen(nodes) % 17) != 0) {
             return McFail(st, McBadStride(), 0);
         }
         if ((emon.Port.CellsLen(attrs) % 5) != 0) {
@@ -3114,7 +3131,7 @@ public static class Model {
         // `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
         int na = emon.Port.CellsLen(assets) / 24;
         int nu = emon.Port.CellsLen(uses) / 8;
-        int nn = emon.Port.CellsLen(nodes) / 16;
+        int nn = emon.Port.CellsLen(nodes) / 17;
         int bl = emon.Port.BufLen(abytes);
         int i = 0;
         int u = 0;

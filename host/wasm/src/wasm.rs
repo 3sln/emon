@@ -331,6 +331,17 @@ pub unsafe extern "C" fn emon_ocr_lang_first(ptr: u32, ncells: u32) -> i32 {
     guard(|| shared::ocr_lang_first(&ints_from(ptr, ncells)))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_observed(ptr: u32, ncells: u32) -> i64 {
+    shared::ocr_observed(&ints_from(ptr, ncells))
+}
+
+// Requested identity framing is available in every build.
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_identity_at(ptr: u32, ncells: u32) -> i32 {
+    guard(|| shared::ocr_identity_at(&ints_from(ptr, ncells)))
+}
+
 // The installed models that read the request: `inst` holds their names as code points separated by 0; OUT is the i32 indices into
 // that list (see `op-models`). Answers how many.
 #[no_mangle]

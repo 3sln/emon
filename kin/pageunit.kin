@@ -37,7 +37,7 @@
                                    ev-page-row ep-get epf-width epf-height
                                    or-count op-region op-first op-upscaled]]
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
-            [emon.ocrengine :refer [oe-request-slot]]
+            [emon.ocrengine :refer [oe-select oe-request-slot]]
             [emon.oapp :refer [pp-sums]]
             [emon.ofuse :refer [of-fuse of-pp-complete]]
             [emon.oaline :refer [oa-line-fuse]]
@@ -508,8 +508,10 @@
     ;; Share the retarget round; keep the original bitmap/scale for PP.
     (if (and (== (bit-and fuse 8) 8) (< (an-find ans (pu-id i (oe-request-slot 2))) 0))
       (if (== (of-pp-complete owords etext w0 nw comps (+ i 1)) 0)
-        (do (sc-request rq (pu-id i (oe-request-slot 2)) did (quot (+ dpi100 50) 100) loc)
-            (set ppasked 1))))
+        (let [^I32 request-at (cells-len rq)]
+          (sc-request rq (pu-id i (oe-request-slot 2)) did (quot (+ dpi100 50) 100) loc)
+          (oe-select rq request-at 2)
+          (set ppasked 1))))
     (rt-prep rtp)
     (rt-receipt-source rtp maskv)
     (set asked (rt-plan i input 0 0 rid hint loc ans bms (pn-k-text) (bms-get bms rid) ws oruns run olines owords rules tlines rtp rq scr comps inks s6))

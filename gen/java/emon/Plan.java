@@ -3,6 +3,7 @@
 
 package emon;
 
+
 public final class Plan {
     public static int pkRender() {
         return 1;
@@ -285,6 +286,7 @@ public final class Plan {
         return 0;
     }
     public static int rqOcrEnd(emon.Port.Cells c, int at) {
+        Ocridentity.oiDefault(c);
         return recEnd(c, at);
     }
     public static int rqBytes(emon.Port.Cells c, int id, int input, int offset, int length) {

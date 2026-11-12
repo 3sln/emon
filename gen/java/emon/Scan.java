@@ -664,6 +664,10 @@ public final class Scan {
                     Evidence.owSet(owords, ow, Evidence.owfPsize(), ps * 100);
                 }
                 Evidence.owSet(owords, ow, Evidence.owfFlags(), Oil.oilWordFlags(an, ext, wx));
+                if (Evidence.owGet(owords, ow, Evidence.owfPcal()) < 0) {
+                    int flags = Evidence.owGet(owords, ow, Evidence.owfFlags());
+                    Evidence.owSet(owords, ow, Evidence.owfFlags(), flags | Evidence.oeUncalibrated());
+                }
                 ns = Oil.oilNsym(an, ext, wx);
                 Evidence.owSet(owords, ow, Evidence.owfSfirst(), Evidence.osCount(osyms));
                 Evidence.owSet(owords, ow, Evidence.owfScount(), ns);
@@ -743,6 +747,8 @@ public final class Scan {
         int w = 0;
         int rotmed = 0;
         int ts = 0;
+        Evidence.orSet(oruns, run, Evidence.orfObservedHi(), Oil.oilGet(an, at, Oil.ohObsHi()));
+        Evidence.orSet(oruns, run, Evidence.orfObservedLo(), Oil.oilGet(an, at, Oil.ohObsLo()));
         Evidence.orSet(oruns, run, Evidence.orfEngine(), Oil.oilGet(an, at, Oil.ohEngine()));
         Evidence.orSet(oruns, run, Evidence.orfCaps(), Oil.oilGet(an, at, Oil.ohCaps()));
         Evidence.orSet(oruns, run, Evidence.orfNative(), Oil.oilGet(an, at, Oil.ohNative()));
@@ -3274,5 +3280,40 @@ public final class Scan {
             p += 1;
         }
         return rows;
+    }
+    public static int scNodeEngines(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells runs) {
+        // The node map is keyed by the page's primary engine. A hybrid keeps the registered incumbent as primary, including seal and stamp pages.
+        int n = 1;
+        int r = 0;
+        int pg = 0;
+        int engine = 0;
+        int candidate = 0;
+        while (n < Model.nodeCount(nodes)) {
+            if ((Model.nodeSrc(nodes, n) & Model.srOcr()) != 0) {
+                pg = scNodePage(nodes, regions, n);
+                engine = 0;
+                r = 0;
+                while (r < Evidence.orCount(runs)) {
+                    if (Evidence.orGet(runs, r, Evidence.orfPage()) == pg) {
+                        candidate = Evidence.orGet(runs, r, Evidence.orfEngine());
+                        if ((engine == 0) || ((Ocrengine.oeRole(engine) != 1) && (Ocrengine.oeRole(candidate) == 1))) {
+                            engine = candidate;
+                        }
+                    }
+                    r += 1;
+                }
+                if (engine > 0) {
+                    Model.nodeSetEngine(nodes, n, engine);
+                    if (Ocalib.ocalWord(engine, 0, 500) < 0) {
+                        Model.nodeAddFlag(nodes, n, Model.flUncalibratedEngine());
+                        if (Model.nodeConf(nodes, n) > 500) {
+                            Model.nodeSetConf(nodes, n, 500);
+                        }
+                    }
+                }
+            }
+            n += 1;
+        }
+        return 0;
     }
 }

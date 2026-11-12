@@ -2,9 +2,9 @@
 ;; Policy identity is a hash of exact file names, NUL separators and bytes.
 (require '[babashka.fs :as fs] '[clojure.string :as str])
 (import '[java.security MessageDigest])
-(def names ["host/rust/src/tess.rs" "tools/tessdata/models.edn" "host/rust/src/ppocr.rs" "host/rust/src/ppocr_runtime.rs" "tools/ppocr/assets.edn"
+(def names ["host/rust/src/ppocr.rs" "host/rust/src/ppocr_runtime.rs" "tools/ppocr/assets.edn"
             "host/rust/src/ppocr_image.rs" "host/rust/src/ppocr_ctc.rs" "host/rust/src/ppocr_pipeline.rs"
-            "host/rust/src/ppocr_ort.c" "host/rust/src/ppocr_calibration.rs" "kin/ocrport.kin" "kin/ocrengine.kin"
+            "host/rust/src/ppocr_ort.c" "kin/oil.kin" "kin/oilsrc.kin" "kin/evidence.kin" "kin/ocrscript.kin" "kin/ocalib.kin" "kin/ocalibdata.kin" "kin/ocrport.kin" "kin/ocrengine.kin"
             "kin/scan.kin" "kin/pageunit.kin" "kin/ofuse.kin" "kin/oapp.kin" "kin/oarb.kin"])
 (def h (MessageDigest/getInstance "SHA-256"))
 (doseq [name names]

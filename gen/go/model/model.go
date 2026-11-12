@@ -998,6 +998,9 @@ func FlInTableImage() int32 {
 func FlScriptUnread() int32 {
 	return 1024
 }
+func FlUncalibratedEngine() int32 {
+	return 2048
+}
 func FlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "low-conf")
@@ -1041,6 +1044,10 @@ func FlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 1024 {
 		port.TextAscii(t, "script-unread")
+		return 1
+	}
+	if code == 2048 {
+		port.TextAscii(t, "uncalibrated-engine")
 		return 1
 	}
 	return 0
@@ -1911,7 +1918,7 @@ func AvBool() int32 {
 }
 
 func NodesStride() int32 {
-	return 16
+	return 17
 }
 
 func AttrsStride() int32 {
@@ -1947,16 +1954,16 @@ func MaxDepth() int32 {
 }
 
 func nget(nodes *port.Cells, n int32, f int32) int32 {
-	return port.CellsAt(nodes, (n*16)+f)
+	return port.CellsAt(nodes, (n*17)+f)
 }
 
 func nput(nodes *port.Cells, n int32, f int32, v int32) int32 {
-	port.CellsSet(nodes, (n*16)+f, v)
+	port.CellsSet(nodes, (n*17)+f, v)
 	return 0
 }
 
 func NodeCount(nodes *port.Cells) int32 {
-	return port.CellsLen(nodes) / 16
+	return port.CellsLen(nodes) / 17
 }
 
 func NodeKind(nodes *port.Cells, n int32) int32 {
@@ -2021,6 +2028,14 @@ func NodeSub(nodes *port.Cells, n int32) int32 {
 
 func NodeAux(nodes *port.Cells, n int32) int32 {
 	return nget(nodes, n, 15)
+}
+
+func NodeEngine(nodes *port.Cells, n int32) int32 {
+	return nget(nodes, n, 16)
+}
+
+func NodeSetEngine(nodes *port.Cells, n int32, engine int32) int32 {
+	return nput(nodes, n, 16, engine)
 }
 
 func NodeHasText(nodes *port.Cells, n int32) int32 {
@@ -2134,7 +2149,7 @@ func NodeNew(nodes *port.Cells, kind int32, parent int32) int32 {
 	// unknown, or the node would nest deeper than `max-depth`. A new
 	// node has no text, no regions, no attributes, `src` 0, `conf` -1
 	// (absent), `flags` 0, `sub` 0, `aux` 0.
-	var n int32 = port.CellsLen(nodes) / 16
+	var n int32 = port.CellsLen(nodes) / 17
 	var last int32 = -1
 	if (kind < 1) || (kind > 26) {
 		return -1
@@ -2164,6 +2179,7 @@ func NodeNew(nodes *port.Cells, kind int32, parent int32) int32 {
 	port.CellsPush(nodes, 0)
 	port.CellsPush(nodes, 0)
 	port.CellsPush(nodes, -1)
+	port.CellsPush(nodes, 0)
 	port.CellsPush(nodes, 0)
 	port.CellsPush(nodes, 0)
 	port.CellsPush(nodes, 0)
@@ -2207,6 +2223,9 @@ func NodeSetAux(nodes *port.Cells, n int32, v int32) int32 {
 }
 
 func NodeSetSrc(nodes *port.Cells, n int32, v int32) int32 {
+	if ((v & SrOcr()) != 0) && (NodeEngine(nodes, n) == 0) {
+		NodeSetEngine(nodes, n, 1)
+	}
 	return nput(nodes, n, 11, v)
 }
 
@@ -2227,7 +2246,7 @@ func NodeSetConf(nodes *port.Cells, n int32, v int32) int32 {
 
 func NodeAddSrc(nodes *port.Cells, n int32, bits int32) int32 {
 	var old int32 = nget(nodes, n, 11)
-	return nput(nodes, n, 11, old|bits)
+	return NodeSetSrc(nodes, n, old|bits)
 }
 
 func NodeAddFlag(nodes *port.Cells, n int32, bits int32) int32 {
@@ -2979,7 +2998,7 @@ func mcCheckOrder(nodes *port.Cells, nn int32, st *port.Cells) int32 {
 }
 
 func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, pages *port.Cells, ledger *port.Cells, layout *port.Cells, st *port.Cells) int32 {
-	var nn int32 = port.CellsLen(nodes) / 16
+	var nn int32 = port.CellsLen(nodes) / 17
 	var nlay int32 = port.CellsLen(layout) / 8
 	var j int32 = 0
 	var i int32 = 0
@@ -2990,7 +3009,7 @@ func ModelCheck(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text 
 	var tl int32 = port.CellsLen(text)
 	port.CellsDrop(st, 0)
 	port.CellsPush(st, 0)
-	if (port.CellsLen(nodes) % 16) != 0 {
+	if (port.CellsLen(nodes) % 17) != 0 {
 		return mcFail(st, McBadStride(), 0)
 	}
 	if (port.CellsLen(attrs) % 5) != 0 {
@@ -3305,7 +3324,7 @@ func ModelCheckAssets(nodes *port.Cells, attrs *port.Cells, assets *port.Cells, 
 	// `st[0]`: the asset, the use or the node). Run it after `model-check` when `assets` is on.
 	var na int32 = port.CellsLen(assets) / 24
 	var nu int32 = port.CellsLen(uses) / 8
-	var nn int32 = port.CellsLen(nodes) / 16
+	var nn int32 = port.CellsLen(nodes) / 17
 	var bl int32 = port.BufLen(abytes)
 	var i int32 = 0
 	var u int32 = 0

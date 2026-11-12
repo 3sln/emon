@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 290" font-family="sans-serif" font-size="11">
+<title>PP word calibration, weighted isotonic D845 fit</title>
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="10" y="22" font-size="14" font-weight="bold">PP word calibration, weighted isotonic D845 fit</text>
+<g>
+<rect x="34" y="64" width="152" height="152" fill="none" stroke="#999"/>
+<line x1="34" y1="216.0" x2="186" y2="64.0" stroke="#bbb" stroke-dasharray="4 3"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="36.5,212.9 61.2,182.2 98.1,147.6 113.2,136.9 168.2,82.1"/>
+<circle cx="36.5" cy="212.9" r="3.2" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="61.2" cy="182.2" r="2.9" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="98.1" cy="147.6" r="3.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="113.2" cy="136.9" r="3.9" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="168.2" cy="82.1" r="8.2" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="34" y="52" font-weight="bold">word  n=8230</text>
+<text x="34" y="230">ECE 0.003  Brier 0.117</text>
+<text x="34" y="242" fill="#666">confidence (x) vs accuracy (y)</text>
+</g>
+<g>
+<rect x="254" y="64" width="152" height="152" fill="none" stroke="#999"/>
+<line x1="254" y1="216.0" x2="406" y2="64.0" stroke="#bbb" stroke-dasharray="4 3"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="256.5,212.9 281.2,182.2 318.1,147.6 333.2,136.9 388.2,82.1"/>
+<circle cx="256.5" cy="212.9" r="3.2" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="281.2" cy="182.2" r="2.9" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="318.1" cy="147.6" r="3.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="333.2" cy="136.9" r="3.9" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="388.2" cy="82.1" r="8.2" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="254" y="52" font-weight="bold">all  n=8230</text>
+<text x="254" y="230">ECE 0.003  Brier 0.117</text>
+<text x="254" y="242" fill="#666">confidence (x) vs accuracy (y)</text>
+</g>
+</svg>

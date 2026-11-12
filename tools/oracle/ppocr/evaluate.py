@@ -68,7 +68,7 @@ def controls(a,env):
                 assert row[engine]['sha256']==hashlib.sha256(read_bytes(stem.with_suffix('.bundle'))).hexdigest()
                 assert (stem.with_suffix('.replay')/'transcript.edn').is_file()
                 if engine=='ppocr':
-                    recorded=json.loads(read_text(stem.with_suffix('.evidence')))['ocr-engine']['model']
+                    recorded=next(row['config'] for row in json.loads(read_text(stem.with_suffix('.evidence')))['ocr-engines'] if row['engine']=='ppocr')
                     identity=''.join(map(chr,map(int,re.search(r':data \[([0-9 ]+)\]',(ROOT/'kin/ocrengine.kin').read_text()).group(1).split())))
                     assert recorded==identity,'cannot reuse controls from a different policy identity'
             rows.append(row);print('control',i,'reused verified candidate run',flush=True);continue

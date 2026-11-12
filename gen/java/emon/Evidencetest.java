@@ -390,7 +390,7 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.EV_STRIDES[10], 16, "fonts");
         emon.Testport.assertEq(Evidence.EV_STRIDES[11], 24, "paths");
         emon.Testport.assertEq(Evidence.EV_STRIDES[12], 20, "images");
-        emon.Testport.assertEq(Evidence.EV_STRIDES[13], 32, "oruns");
+        emon.Testport.assertEq(Evidence.EV_STRIDES[13], 34, "oruns");
         emon.Testport.assertEq(Evidence.EV_STRIDES[14], 16, "oblocks");
         emon.Testport.assertEq(Evidence.EV_STRIDES[15], 28, "olines");
         emon.Testport.assertEq(Evidence.EV_STRIDES[16], 32, "owords");
@@ -588,7 +588,7 @@ public final class Evidencetest {
         emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfZ()), -1, "no paint number");
         emon.Testport.assertEq(Evidence.imGet(images, 0, Evidence.mfVby()), -1, "no occluder");
         emon.Testport.assertEq(Evidence.orNew(oruns, 3, 0), 0, "first run");
-        emon.Testport.assertEq(emon.Port.cellsLen(oruns), 32, "32 cells");
+        emon.Testport.assertEq(emon.Port.cellsLen(oruns), 34, "34 cells");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfBview()), -1, "no binarised view");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfRequest()), -1, "no request");
         emon.Testport.assertEq(Evidence.orGet(oruns, 0, Evidence.orfLang()), -1, "no languages");

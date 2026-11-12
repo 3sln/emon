@@ -4,6 +4,7 @@
 package plan
 
 import (
+	"emon/ocridentity"
 	"emon/port"
 )
 
@@ -339,6 +340,7 @@ func RqOcrLang(c *port.Cells, a int32, b int32, d int32, e int32) int32 {
 }
 
 func RqOcrEnd(c *port.Cells, at int32) int32 {
+	ocridentity.OiDefault(c)
 	return RecEnd(c, at)
 }
 

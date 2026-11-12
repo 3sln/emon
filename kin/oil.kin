@@ -3,7 +3,7 @@
 ;; followed by the 24-cell header, blocks, lines, variable words and sidecars.
 ;; Optional groups occupy no cells when their capability is clear.
 (ns emon.oil
-  (:require [emon.ocrport :refer [op-names-count op-names-at]] [emon.oilregistry :refer [oil-key-find oil-key-field]] [emon.ocalib :refer [ocal-word]]
+  (:require [emon.ocrtess :refer [op-names-count op-names-at]] [emon.oilregistry :refer [oil-key-find oil-key-field]] [emon.ocalib :refer [ocal-word]]
             [emon.lang :refer [I32 I64 Cells defenum i64 i32 mul64 shr64]]
             [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
             [kin.lang :refer [defn return let set while if do comment

@@ -29,4 +29,9 @@ public final class Ocalibtest {
         emon.Testport.assertEq(Ocalib.ocalWord(2, 0, 800), 521, "next frozen bin");
         emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 1000), -1, "unfitted engine is not a zero probability");
     }
+    public static void testWordCalibrationPreservesAbsenceAndRefusesUnknownClass() {
+        emon.Testport.assertEq(Ocalib.ocalWord(2, 0, -1), -1, "absent PP raw score remains absent");
+        emon.Testport.assertEq(Ocalib.ocalWord(1, 9, 800), -1, "unknown Tesseract calibration class is unfitted");
+        emon.Testport.assertEq(Ocalib.ocalWord(2, 9, 800), -1, "unknown PP calibration class is unfitted");
+    }
 }

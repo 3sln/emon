@@ -5,6 +5,7 @@ use crate::emon::calib::*;
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::ocridentity::*;
 use crate::emon::oil::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
@@ -89,7 +90,7 @@ fn test_the_request_carries_the_resolution_and_the_language() {
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 3, "psm 3");
     crate::testport::assert_eq(ocf_dpi(rq_arg(rq, 0, 2)), 150, "150 dpi");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 3 + (150 * 256), "symbols and OSD below it");
-    crate::testport::assert_eq(rq_nargs(rq, 0), 8, "one language");
+    crate::testport::assert_eq(rq_nargs(rq, 0), (8 + 4) + 112, "one language");
     crate::testport::assert_eq(rq_arg(rq, 0, 7), 1718771968, "fra, packed `f r a 0`");
 }
 pub(crate) fn three_lines(an: &mut crate::port::Cells, id: i32) -> i32 {

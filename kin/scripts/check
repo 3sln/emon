@@ -56,7 +56,7 @@ want4='0=? 1=document 2=? 3=paragraph 4=text 5=? 6=? 7=break 8=? sum:15'
 # P1.1: FNV-1a over the six arenas of the model `test/json/probe.model` builds
 # (kin/modelprobe.kin), as the two signed halves. Worked out independently in
 # Python from the arena layout in kin/model.kin, not printed by a target.
-want5='model: 1538303818 -13163675'
+want5='model: 97504296 -769426021'
 # P1.2: that model's canonical JSON, from the committed golden (the reference
 # serializer `kin/scripts/json-check.py` agrees with it, and so must every target).
 want6=$(cat test/json/probe.json)

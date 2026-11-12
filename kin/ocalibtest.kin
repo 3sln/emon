@@ -26,3 +26,8 @@
   (assert-eq (ocal-word 2 0 799) 422 "same pooled bin")
   (assert-eq (ocal-word 2 0 800) 521 "next frozen bin")
   (assert-eq (ocal-word 3 0 1000) -1 "unfitted engine is not a zero probability"))
+
+(deftest test-word-calibration-preserves-absence-and-refuses-unknown-class
+  (assert-eq (ocal-word 2 0 -1) -1 "absent PP raw score remains absent")
+  (assert-eq (ocal-word 1 9 800) -1 "unknown Tesseract calibration class is unfitted")
+  (assert-eq (ocal-word 2 9 800) -1 "unknown PP calibration class is unfitted"))

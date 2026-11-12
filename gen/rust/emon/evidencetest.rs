@@ -390,7 +390,7 @@ fn test_every_arena_has_the_stride_the_spec_gives() {
     crate::testport::assert_eq(EV_STRIDES[(10) as usize], 16, "fonts");
     crate::testport::assert_eq(EV_STRIDES[(11) as usize], 24, "paths");
     crate::testport::assert_eq(EV_STRIDES[(12) as usize], 20, "images");
-    crate::testport::assert_eq(EV_STRIDES[(13) as usize], 32, "oruns");
+    crate::testport::assert_eq(EV_STRIDES[(13) as usize], 34, "oruns");
     crate::testport::assert_eq(EV_STRIDES[(14) as usize], 16, "oblocks");
     crate::testport::assert_eq(EV_STRIDES[(15) as usize], 28, "olines");
     crate::testport::assert_eq(EV_STRIDES[(16) as usize], 32, "owords");
@@ -591,7 +591,7 @@ fn test_builders_set_the_layout_and_its_defaults() {
     crate::testport::assert_eq(im_get(images, 0, mf_z()), -1, "no paint number");
     crate::testport::assert_eq(im_get(images, 0, mf_vby()), -1, "no occluder");
     crate::testport::assert_eq(or_new(oruns, 3, 0), 0, "first run");
-    crate::testport::assert_eq(crate::port::cells_len(oruns), 32, "32 cells");
+    crate::testport::assert_eq(crate::port::cells_len(oruns), 34, "34 cells");
     crate::testport::assert_eq(or_get(oruns, 0, orf_bview()), -1, "no binarised view");
     crate::testport::assert_eq(or_get(oruns, 0, orf_request()), -1, "no request");
     crate::testport::assert_eq(or_get(oruns, 0, orf_lang()), -1, "no languages");

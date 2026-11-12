@@ -296,6 +296,7 @@ func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
 
 func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
 	var status int32 = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms)
+	ocrengine.OeTag(rq, d.Pscr, 2*c.Oengine)
 	if status == 0 {
 		if oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0 {
 			return 2
@@ -304,7 +305,6 @@ func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, 
 			return 2
 		}
 	}
-	ocrengine.OeTag(rq, d.Pscr, 2*c.Oengine)
 	return status
 }
 
@@ -617,6 +617,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	if kind == 0 {
 		inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw)
 	}
+	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2*c.Oengine, s.S0) < 0 {
+		return 2
+	}
 	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
 	if kind == 0 {
 		enFigures(m, s, d, c.Level)
@@ -625,11 +628,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 		if kind == 0 {
 			figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence)
 		}
-		if c.Oengine != 0 {
-			if enOcrPlanned(c, d) == 1 {
-				ocrengine.OeEvidence(d.Evidence, c.Oengine)
-			}
-		}
+		ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0)
 		port.TextAscii(d.Evidence, "}")
 	}
 	restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout)
@@ -693,6 +692,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 			enAssetStage(c, m, s, d.Cand, d.Cbytes)
 		}
 	}
+	scan.ScNodeEngines(m.Nodes, m.Regions, ev.Oruns)
 	if pending == 0 {
 		w = EnSeal(m, s.Chk, s.Sealout, c.Level)
 		if w != 0 {

@@ -16,6 +16,7 @@
 
 package emon.ffi;
 
+import emon.Ocrtess;
 import emon.Ocrport;
 import emon.Plan;
 import emon.Planrun;
@@ -209,7 +210,7 @@ public final class Tess implements Ocr {
         }
     }
 
-    // WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D396): which installed models read the request's
+    // WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrtess`, P10.7, D396): which installed models read the request's
     // languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This file passes it cells and takes
     // cells; the packed four-letter languages, the model and script tables and the block-type switch of the first Java host are gone.
     private static Port.Cells cellsOf(int[] v) {
@@ -327,10 +328,11 @@ public final class Tess implements Ocr {
         out.add(new String[] {"engine", "tesseract"});
         out.add(new String[] {"version", tessVersion()});
         out.add(new String[] {"leptonica", leptonicaVersion()});
-        out.add(new String[] {"engine-mode", "default (LSTM)"});
+        out.add(new String[] {"engine-mode", "Init3 default"});
         out.add(new String[] {"lstm-choice-mode", "2"});
         out.add(new String[] {"models", String.join(" ", models)});
         out.add(new String[] {"host", "host/java/emon/ffi/Tess.java"});
+        out.add(new String[] {"observed", "tesseract;version=" + tessVersion() + ";leptonica=" + leptonicaVersion() + ";oem=Init3-default;choice=2;models=" + String.join(" ", models)});
         return out;
     }
 
@@ -407,6 +409,8 @@ public final class Tess implements Ocr {
         // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is one discovery model);
         // the models go in as code points separated by 0
         Port.Cells reqc = cellsOf(req.rec);
+        int requested = Ocrport.opRequestEngine(reqc);
+        if (requested > 0 && requested != 1) return failed(id, 2);
         Port.Cells inst = Port.newCells();
         for (int i = 0; i < installed.size(); i++) {
             if (i > 0) {
@@ -415,9 +419,9 @@ public final class Tess implements Ocr {
             installed.get(i).codePoints().forEach(cp -> Port.cellsPush(inst, cp));
         }
         Port.Cells picked = Port.newCells();
-        Ocrport.opModelsConfigured(reqc, inst, 0, picked);
+        Ocrtess.opModelsConfigured(reqc, inst, 0, picked);
         Port.Cells gone = Port.newCells();
-        Ocrport.opDropped(reqc, inst, gone);
+        Ocrtess.opDropped(reqc, inst, gone);
         StringBuilder dropped = new StringBuilder();
         for (int i = 0; i < Port.cellsLen(gone); i++) {
             int cp = Port.cellsAt(gone, i);
@@ -492,7 +496,7 @@ public final class Tess implements Ocr {
                     oconf = x10(oc.get(FLT, 0));
                     sconf = x10(sc.get(FLT, 0));
                     osdName = cps(cstr(sn.get(PTR, 0)));
-                    script = Ocrport.opOsdScript(cellsOf(osdName));
+                    script = Ocrtess.opOsdScript(cellsOf(osdName));
                 } else {
                     eng.notes.add("osd failed");
                 }
@@ -544,7 +548,7 @@ public final class Tess implements Ocr {
         Port.Cells c = Port.newCells();
         int at = emon.Oil.oilTessBegin(c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, hasBinary ? 1 : 0);
         Port.Cells observed = Port.newCells();
-        tessVersion().codePoints().forEach(cp -> Port.cellsPush(observed, cp));
+        for (String[] pair : producer) if (pair[0].equals("observed")) pair[1].codePoints().forEach(cp -> Port.cellsPush(observed, cp));
         emon.Oil.oilObserved(c, at, observed, 0, Port.cellsLen(observed));
         for (int bi = 0; bi < blocks.size(); bi++) {
             Block ob = blocks.get(bi);
@@ -629,7 +633,7 @@ public final class Tess implements Ocr {
                 MemorySegment x1 = ar.allocate(4), y1 = ar.allocate(4), x2 = ar.allocate(4), y2 = ar.allocate(4);
                 piBaseline.invoke(pi, RIL_TEXTLINE, x1, y1, x2, y2);
                 ln.base = new int[] {x1.get(INT, 0), y1.get(INT, 0), x2.get(INT, 0), y2.get(INT, 0)};
-                ln.btype = Ocrport.opBlockType((int) piBlockType.invoke(pi));
+                ln.btype = Ocrtess.opBlockType((int) piBlockType.invoke(pi));
                 ln.block = block;
                 ln.par = par;
                 lines.add(ln);
@@ -655,7 +659,7 @@ public final class Tess implements Ocr {
                 wd.line = line;
                 wd.block = block;
                 wd.text = cps(text);
-                wd.lang = Ocrport.opWordLang(cellsOf(cps(cstr((MemorySegment) itWordLang.invoke(it)))));
+                wd.lang = Ocrtess.opWordLang(cellsOf(cps(cstr((MemorySegment) itWordLang.invoke(it)))));
                 wd.model = cps(cstr((MemorySegment) itWordLang.invoke(it)));
                 wd.dflags = dfl;
                 if (wantSyms) {

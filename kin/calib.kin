@@ -23,7 +23,7 @@
 (ns emon.calib
   (:require [emon.lang :refer [I32 Cells]]
             [emon.calibdata :refer [cd-count cd-at]]
-            [emon.model :refer [sr-text sr-hidden-text sr-ocr node-conf node-src node-kind node-flags node-parent fl-script-unread fl-low-conf]]
+            [emon.model :refer [sr-text sr-hidden-text sr-ocr node-conf node-engine node-src node-kind node-flags node-parent fl-script-unread fl-low-conf fl-uncalibrated-engine]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or bit-and bit-or]]))
 
@@ -38,29 +38,26 @@
     (if (!= tl 0) (return 0))
     (return 3)))
 
-(defn ^:pub ^I32 cal-lookup [^I32 kind ^I32 cls ^I32 raw]
-  (comment "`cal-conf` for a class code: a code the table has no row for (9 is none) reads the kind's `any` rows.")
+(defn ^:pub ^I32 cal-lookup-engine [^I32 kind ^I32 cls ^I32 engine ^I32 raw]
   (if (< raw 0) (return raw))
-  (let [^I32 n (cd-count 0)
-        ^:mut ^I32 i 0
-        ^:mut ^I32 hit-c -1
-        ^:mut ^I32 first-c -1
-        ^:mut ^I32 hit-a -1
-        ^:mut ^I32 first-a -1]
-    (while (< i n)
-      (do (if (== (cd-at 0 i 0) kind)
-            (do (if (== (cd-at 0 i 1) cls)
-                  (do (if (< first-c 0) (set first-c (cd-at 0 i 3)))
-                      (if (<= (cd-at 0 i 2) raw) (set hit-c (cd-at 0 i 3)))))
-                (if (== (cd-at 0 i 1) -1)
-                  (do (if (< first-a 0) (set first-a (cd-at 0 i 3)))
-                      (if (<= (cd-at 0 i 2) raw) (set hit-a (cd-at 0 i 3)))))))
-          (set i (+ i 1))))
-    (if (>= hit-c 0) (return hit-c))
-    (if (>= first-c 0) (return first-c))
-    (if (>= hit-a 0) (return hit-a))
-    (if (>= first-a 0) (return first-a))
+  (let [^:mut ^I32 tier 0 ^:mut ^I32 i 0 ^:mut ^I32 first -1 ^:mut ^I32 hit -1
+        ^:mut ^I32 want-class cls ^:mut ^I32 want-engine engine]
+    (while (< tier 3)
+      (do (if (== tier 1) (set want-engine -1))
+          (if (== tier 2) (set want-class -1))
+          (set i 0) (set first -1) (set hit -1)
+          (while (< i (cd-count 0))
+            (do (if (and (== (cd-at 0 i 0) kind) (== (cd-at 0 i 1) want-class) (== (cd-at 0 i 2) want-engine))
+                  (do (if (< first 0) (set first (cd-at 0 i 4)))
+                      (if (<= (cd-at 0 i 3) raw) (set hit (cd-at 0 i 4)))))
+                (set i (+ i 1))))
+          (if (>= hit 0) (return hit))
+          (if (>= first 0) (return first))
+          (set tier (+ tier 1))))
     (return raw)))
+
+(defn ^:pub ^I32 cal-lookup [^I32 kind ^I32 cls ^I32 raw]
+  (return (cal-lookup-engine kind cls 1 raw)))
 
 (defn ^:pub ^I32 cal-conf [^I32 kind ^I32 src ^I32 raw]
   (comment "The calibrated confidence (per mille) of a raw one for a node kind and source; -1 stays -1.")
@@ -72,8 +69,10 @@
   (comment "step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess")
   (comment "at a script it cannot read would carry the confidence of what it can.")
   (let [^I32 raw (node-conf nodes n)
-        ^I32 cf (cal-conf (node-kind nodes n) (node-src nodes n) raw)
+        ^I32 cf (cal-lookup-engine (node-kind nodes n) (cal-class (node-src nodes n)) (node-engine nodes n) raw)
         ^:mut ^I32 a n]
+    (if (and (!= (bit-and (node-flags nodes n) (fl-uncalibrated-engine)) 0) (> cf 500))
+      (do (if (< raw 500) (return raw)) (return 500)))
     (if (< raw 0) (return cf))
     (if (<= cf raw) (return cf))
     (while (>= a 0)

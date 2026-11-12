@@ -68,7 +68,7 @@ public final class PpOcr implements Ocr, AutoCloseable {
     }
     public synchronized Planrun.Answer fulfil(Planrun.Request req, Map<Integer,Port.Bitmap> bitmaps, boolean keep) {
         var r=Port.newCells(); for(int v:req.rec) Port.cellsPush(r,v);
-        if(Ocrport.opIdentityAt(r)<0) {
+        if(Ocrport.opRequestEngine(r)!=2) {
             if(incumbent==null) throw Planrun.fulfilFailed("ppocr-incumbent-missing");
             return incumbent.fulfil(req,bitmaps,keep);
         }

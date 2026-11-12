@@ -30,51 +30,50 @@ func CalClass(src int32) int32 {
 	return 3
 }
 
-func CalLookup(kind int32, cls int32, raw int32) int32 {
-	// `cal-conf` for a class code: a code the table has no row for (9 is none) reads the kind's `any` rows.
+func CalLookupEngine(kind int32, cls int32, engine int32, raw int32) int32 {
 	if raw < 0 {
 		return raw
 	}
-	var n int32 = 30
+	var tier int32 = 0
 	var i int32 = 0
-	var hitC int32 = -1
-	var firstC int32 = -1
-	var hitA int32 = -1
-	var firstA int32 = -1
-	for i < n {
-		if calibdata.CdRows[i*4+0] == kind {
-			if calibdata.CdRows[i*4+1] == cls {
-				if firstC < 0 {
-					firstC = calibdata.CdRows[i*4+3]
-				}
-				if calibdata.CdRows[i*4+2] <= raw {
-					hitC = calibdata.CdRows[i*4+3]
-				}
-			}
-			if calibdata.CdRows[i*4+1] == -1 {
-				if firstA < 0 {
-					firstA = calibdata.CdRows[i*4+3]
-				}
-				if calibdata.CdRows[i*4+2] <= raw {
-					hitA = calibdata.CdRows[i*4+3]
-				}
-			}
+	var first int32 = -1
+	var hit int32 = -1
+	var wantClass int32 = cls
+	var wantEngine int32 = engine
+	for tier < 3 {
+		if tier == 1 {
+			wantEngine = -1
 		}
-		i += 1
-	}
-	if hitC >= 0 {
-		return hitC
-	}
-	if firstC >= 0 {
-		return firstC
-	}
-	if hitA >= 0 {
-		return hitA
-	}
-	if firstA >= 0 {
-		return firstA
+		if tier == 2 {
+			wantClass = -1
+		}
+		i = 0
+		first = -1
+		hit = -1
+		for i < 30 {
+			if (calibdata.CdRows[i*5+0] == kind) && (calibdata.CdRows[i*5+1] == wantClass) && (calibdata.CdRows[i*5+2] == wantEngine) {
+				if first < 0 {
+					first = calibdata.CdRows[i*5+4]
+				}
+				if calibdata.CdRows[i*5+3] <= raw {
+					hit = calibdata.CdRows[i*5+4]
+				}
+			}
+			i += 1
+		}
+		if hit >= 0 {
+			return hit
+		}
+		if first >= 0 {
+			return first
+		}
+		tier += 1
 	}
 	return raw
+}
+
+func CalLookup(kind int32, cls int32, raw int32) int32 {
+	return CalLookupEngine(kind, cls, 1, raw)
 }
 
 func CalConf(kind int32, src int32, raw int32) int32 {
@@ -88,8 +87,14 @@ func CalNodeConf(nodes *port.Cells, n int32) int32 {
 	// step function clamped at its ends, and the lowest step of OCR text is a text the engine read: a raw 100 would be written as that, and the engine's guess
 	// at a script it cannot read would carry the confidence of what it can.
 	var raw int32 = model.NodeConf(nodes, n)
-	var cf int32 = CalConf(model.NodeKind(nodes, n), model.NodeSrc(nodes, n), raw)
+	var cf int32 = CalLookupEngine(model.NodeKind(nodes, n), CalClass(model.NodeSrc(nodes, n)), model.NodeEngine(nodes, n), raw)
 	var a int32 = n
+	if ((model.NodeFlags(nodes, n) & model.FlUncalibratedEngine()) != 0) && (cf > 500) {
+		if raw < 500 {
+			return raw
+		}
+		return 500
+	}
 	if raw < 0 {
 		return cf
 	}

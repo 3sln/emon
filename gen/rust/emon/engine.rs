@@ -270,6 +270,7 @@ pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emo
 }
 pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, i: i32, idx: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
     let status: i32 = en_page_inner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+    oe_tag(rq, &mut d.pscr, 2 * c.oengine);
     if status == 0 {
         if oxs_collect(ans, &mut ev.views, &mut ev.oruns, &mut ev.olines, &mut ev.oxs) < 0 {
             return 2;
@@ -278,7 +279,6 @@ pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc,
             return 2;
         }
     }
-    oe_tag(rq, &mut d.pscr, 2 * c.oengine);
     return status;
 }
 pub fn en_asset_unit(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, p: &mut crate::emon::enctx::Pass, idx: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut payload: &mut crate::port::Buf) -> i32 {
@@ -583,6 +583,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     if kind == 0 {
         il_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut d.ift, &mut s.sf, &mut d.an, &mut d.txt, &mut d.pg, &mut m.pages, np, &mut m.text, &mut s.hc, &mut s.isw);
     }
+    if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, 2 * c.oengine, &mut s.s0) < 0 {
+        return 2;
+    }
     pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);
     if kind == 0 {
         en_figures(m, s, d, c.level);
@@ -591,11 +594,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
         if kind == 0 {
             fc_emit_budget(&mut s.fcand, &mut s.ffd, &mut d.evidence);
         }
-        if c.oengine != 0 {
-            if en_ocr_planned(c, d) == 1 {
-                oe_evidence(&mut d.evidence, c.oengine);
-            }
-        }
+        oe_evidence(&mut d.evidence, &mut ev.oet, &mut s.s0);
         crate::port::text_ascii(&mut d.evidence, "}");
     }
     rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.rn, &mut s.ra, &mut s.rr, &mut s.rnm, &mut s.rstk, &mut s.rused, &mut s.rout, &mut m.layout);
@@ -659,6 +658,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
             en_asset_stage(c, m, s, &mut d.cand, &mut d.cbytes);
         }
     }
+    sc_node_engines(&mut m.nodes, &mut m.regions, &mut ev.oruns);
     if pending == 0 {
         w = en_seal(m, &mut s.chk, &mut s.sealout, c.level);
         if w != 0 {

@@ -1,17 +1,25 @@
-;; D883 ruling 6: frozen word calibration belongs to kin. The adjacent
-;; PP bins 6 and 7 pool 18+39 correct / 41+94 observations (weighted PAVA).
+;; D883: word probability belongs to kin, keyed by engine/configuration/kind.
 (ns emon.ocalib
   (:require [emon.lang :refer [I32]]
-            [kin.lang :refer [defn return if < > == !=]]))
+            [emon.ocalibdata :refer [ocd-count ocd-at]]
+            [kin.lang :refer [defn return let set while if do + < >= == != and]]))
+
+(defn ^:pub ^I32 ocal-probability [^I32 engine ^I32 calibration ^I32 kind ^I32 raw]
+  (if (< raw 0) (return -1))
+  ;; Hold Tesseract's policy scale during P13.2; threshold refits are P13.5.
+  (if (and (== engine 1) (== calibration 0) (== kind 1)) (return raw))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 first -1 ^:mut ^I32 hit -1]
+    (while (< i (ocd-count 0))
+      (do (if (and (== (ocd-at 0 i 0) engine) (== (ocd-at 0 i 1) calibration) (== (ocd-at 0 i 2) kind))
+            (do (if (< first 0) (set first (ocd-at 0 i 4)))
+                (if (>= raw (ocd-at 0 i 3)) (set hit (ocd-at 0 i 4)))))
+          (set i (+ i 1))))
+    (if (>= hit 0) (return hit))
+    (return first)))
 
 (defn ^:pub ^I32 ocal-word [^I32 engine ^I32 calibration ^I32 raw]
-  ;; Tesseract's existing policy scale is held during P13.2; threshold refits
-  ;; remain P13.5. Unknown configurations have no fitted probability.
-  (if (== engine 1) (return raw))
-  (if (!= engine 2) (return -1))
-  (if (< raw 400) (return 0))
-  (if (< raw 500) (return 42))
-  (if (< raw 600) (return 179))
-  (if (< raw 800) (return 422))
-  (if (< raw 900) (return 521))
-  (return 883))
+  (return (ocal-probability engine calibration 1 raw)))
+
+(defn ^:pub ^I32 ocal-or-prior [^I32 probability ^I32 prior]
+  (if (< probability 0) (return prior))
+  (return probability))

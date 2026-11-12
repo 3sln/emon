@@ -198,7 +198,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         }
     }
 
-    // WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D396): which installed models read the request's
+    // WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrtess`, P10.7, D396): which installed models read the request's
     // languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This file passes it cells and takes
     // cells; the packed four-letter languages, the model and script tables and the block-type switch of the first C# host are gone.
     private static Port.Cells CellsOf(int[] v) {
@@ -326,10 +326,11 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         output.Add(new[] { "engine", "tesseract" });
         output.Add(new[] { "version", TessVersion() });
         output.Add(new[] { "leptonica", LeptonicaVersion() });
-        output.Add(new[] { "engine-mode", "default (LSTM)" });
+        output.Add(new[] { "engine-mode", "Init3 default" });
         output.Add(new[] { "lstm-choice-mode", "2" });
         output.Add(new[] { "models", string.Join(" ", models) });
         output.Add(new[] { "host", "host/csharp/Emon/Ffi/Tess.cs" });
+        output.Add(new[] { "observed", "tesseract;version=" + TessVersion() + ";leptonica=" + LeptonicaVersion() + ";oem=Init3-default;choice=2;models=" + string.Join(" ", models) });
         return output;
     }
 
@@ -414,6 +415,8 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         // which installed models read the request is kin's (`op-models`: languages, scripts, the ones not installed dropped, unconfigured fallback is one discovery model);
         // the models go in as code points separated by 0
         Port.Cells reqc = CellsOf(req.Rec);
+        int requested = emon.Ocrport.OpRequestEngine(reqc);
+        if (requested > 0 && requested != 1) return Failed(id, 2);
         Port.Cells inst = Port.NewCells();
         for (int i = 0; i < installed.Count; i++) {
             if (i > 0) {
@@ -424,9 +427,9 @@ public sealed unsafe class Tess : emon.Api.IOcr {
             }
         }
         Port.Cells picked = Port.NewCells();
-        emon.Ocrport.OpModelsConfigured(reqc, inst, 0, picked);
+        emon.Ocrtess.OpModelsConfigured(reqc, inst, 0, picked);
         Port.Cells gone = Port.NewCells();
-        emon.Ocrport.OpDropped(reqc, inst, gone);
+        emon.Ocrtess.OpDropped(reqc, inst, gone);
         var dropped = new System.Text.StringBuilder();
         for (int i = 0; i < Port.CellsLen(gone); i++) {
             int cp = Port.CellsAt(gone, i);
@@ -488,7 +491,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                     oconf = X10(*(float*) oc);
                     sconf = X10(*(float*) sc);
                     osdName = Cps(CStr(*(nint*) sn));
-                    script = emon.Ocrport.OpOsdScript(CellsOf(osdName));
+                    script = emon.Ocrtess.OpOsdScript(CellsOf(osdName));
                 } else {
                     eng.Notes.Add("osd failed");
                 }
@@ -540,7 +543,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
         Port.Cells c = Port.NewCells();
         int at = emon.Oil.OilTessBegin(c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, hasBinary ? 1 : 0);
         Port.Cells observed = Port.NewCells();
-        foreach (char versionChar in TessVersion()) Port.CellsPush(observed, versionChar);
+        foreach (var pair in producer) if (pair[0] == "observed") foreach (int cp in Cps(pair[1])) Port.CellsPush(observed, cp);
         emon.Oil.OilObserved(c, at, observed, 0, Port.CellsLen(observed));
         for (int bi = 0; bi < blocks.Count; bi++) {
             Block ob = blocks[bi];
@@ -626,7 +629,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                 nint x1 = ar.Alloc(4), y1 = ar.Alloc(4), x2 = ar.Alloc(4), y2 = ar.Alloc(4);
                 piBaseline(pi, RilTextline, x1, y1, x2, y2);
                 ln.Base = new[] { *(int*) x1, *(int*) y1, *(int*) x2, *(int*) y2 };
-                ln.Btype = emon.Ocrport.OpBlockType(piBlockType(pi));
+                ln.Btype = emon.Ocrtess.OpBlockType(piBlockType(pi));
                 ln.Block = block;
                 ln.Par = par;
                 lines.Add(ln);
@@ -652,7 +655,7 @@ public sealed unsafe class Tess : emon.Api.IOcr {
                 wd.Line = line;
                 wd.Block = block;
                 wd.Text = Cps(text);
-                wd.Lang = emon.Ocrport.OpWordLang(CellsOf(Cps(CStr(itWordLang(it)))));
+                wd.Lang = emon.Ocrtess.OpWordLang(CellsOf(Cps(CStr(itWordLang(it)))));
                 wd.Model = Cps(CStr(itWordLang(it)));
                 wd.Dflags = dfl;
                 if (wantSyms) {

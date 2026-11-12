@@ -664,6 +664,10 @@ public static class Scan {
                     Evidence.OwSet(owords, ow, Evidence.OwfPsize(), ps * 100);
                 }
                 Evidence.OwSet(owords, ow, Evidence.OwfFlags(), Oil.OilWordFlags(an, ext, wx));
+                if (Evidence.OwGet(owords, ow, Evidence.OwfPcal()) < 0) {
+                    int flags = Evidence.OwGet(owords, ow, Evidence.OwfFlags());
+                    Evidence.OwSet(owords, ow, Evidence.OwfFlags(), flags | Evidence.OeUncalibrated());
+                }
                 ns = Oil.OilNsym(an, ext, wx);
                 Evidence.OwSet(owords, ow, Evidence.OwfSfirst(), Evidence.OsCount(osyms));
                 Evidence.OwSet(owords, ow, Evidence.OwfScount(), ns);
@@ -743,6 +747,8 @@ public static class Scan {
         int w = 0;
         int rotmed = 0;
         int ts = 0;
+        Evidence.OrSet(oruns, run, Evidence.OrfObservedHi(), Oil.OilGet(an, at, Oil.OhObsHi()));
+        Evidence.OrSet(oruns, run, Evidence.OrfObservedLo(), Oil.OilGet(an, at, Oil.OhObsLo()));
         Evidence.OrSet(oruns, run, Evidence.OrfEngine(), Oil.OilGet(an, at, Oil.OhEngine()));
         Evidence.OrSet(oruns, run, Evidence.OrfCaps(), Oil.OilGet(an, at, Oil.OhCaps()));
         Evidence.OrSet(oruns, run, Evidence.OrfNative(), Oil.OilGet(an, at, Oil.OhNative()));
@@ -3274,5 +3280,40 @@ public static class Scan {
             p += 1;
         }
         return rows;
+    }
+    public static int ScNodeEngines(emon.Port.Cells nodes, emon.Port.Cells regions, emon.Port.Cells runs) {
+        // The node map is keyed by the page's primary engine. A hybrid keeps the registered incumbent as primary, including seal and stamp pages.
+        int n = 1;
+        int r = 0;
+        int pg = 0;
+        int engine = 0;
+        int candidate = 0;
+        while (n < Model.NodeCount(nodes)) {
+            if ((Model.NodeSrc(nodes, n) & Model.SrOcr()) != 0) {
+                pg = ScNodePage(nodes, regions, n);
+                engine = 0;
+                r = 0;
+                while (r < Evidence.OrCount(runs)) {
+                    if (Evidence.OrGet(runs, r, Evidence.OrfPage()) == pg) {
+                        candidate = Evidence.OrGet(runs, r, Evidence.OrfEngine());
+                        if ((engine == 0) || ((Ocrengine.OeRole(engine) != 1) && (Ocrengine.OeRole(candidate) == 1))) {
+                            engine = candidate;
+                        }
+                    }
+                    r += 1;
+                }
+                if (engine > 0) {
+                    Model.NodeSetEngine(nodes, n, engine);
+                    if (Ocalib.OcalWord(engine, 0, 500) < 0) {
+                        Model.NodeAddFlag(nodes, n, Model.FlUncalibratedEngine());
+                        if (Model.NodeConf(nodes, n) > 500) {
+                            Model.NodeSetConf(nodes, n, 500);
+                        }
+                    }
+                }
+            }
+            n += 1;
+        }
+        return 0;
     }
 }

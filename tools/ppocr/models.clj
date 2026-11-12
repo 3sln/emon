@@ -67,7 +67,7 @@
                        {"EMON_PPOCR_MODELS" "/nonexistent/op2a-models" "EMON_PPOCR_LIB" "/nonexistent/op2a-runtime"})]
   (assert (= (model-json bundle) (model-json unrecorded)) (str "Rust recording changed the Model: " file))
   (assert (bytes= bundle self-replay) (str "Rust replay differs: " file))
-  (when (some #(some #{-3100} (:req %)) (:entries (edn/read-string (slurp (str dir "/transcript.edn")))))
+  (when (some #(= "ppocr" (:engine %)) (:engines (edn/read-string (slurp (str dir "/transcript.edn")))))
     (swap! pp-recordings inc)
     (doseq [[host bin] hosts :when (not= host "pod")]
       (let [r @(process [bin "--ocr-engine=tesseract" "--out=json" (str "--replay=" dir) file]

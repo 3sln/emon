@@ -25,6 +25,9 @@ pub fn of_active(image: i32, trigger: i32, keyword: i32) -> i32 {
     return 0;
 }
 pub fn of_rule(incumbent: i32, numeric: i32, incumbent_valid: i32, candidate_valid: i32, dictionary: i32, votes: i32, incumbent_votes: i32, confidence: i32, incumbent_confidence: i32) -> i32 {
+    if confidence < 0 {
+        return 0;
+    }
     if votes == 0 {
         return 0;
     }
@@ -1210,6 +1213,12 @@ pub(crate) fn of_seq_same(words: &mut crate::port::Cells, text: &mut crate::port
     }
     return 1;
 }
+pub(crate) fn of_score(words: &mut crate::port::Cells, w: i32) -> i32 {
+    if (ow_get(words, w, owf_flags()) & oe_uncalibrated()) != 0 {
+        return -1;
+    }
+    return ow_confidence(words, w);
+}
 pub(crate) fn of_add_candidate(words: &mut crate::port::Cells, text: &mut crate::port::Cells, run: i32, seq: &mut crate::port::Cells, mut c: &mut crate::port::Cells, mut refs: &mut crate::port::Cells) -> i32 {
     let n: i32 = crate::port::cells_len(seq);
     let r: i32 = crate::port::cells_len(c) / of_cstride();
@@ -1228,7 +1237,7 @@ pub(crate) fn of_add_candidate(words: &mut crate::port::Cells, text: &mut crate:
     while i < n {
         w = crate::port::cells_at(seq, i);
         crate::port::cells_push(refs, w);
-        sum += ow_confidence(words, w) as i64;
+        sum += of_score(words, w) as i64;
         if (ow_get(words, w, owf_flags()) & oe_dictionary()) == 0 {
             dictionary = 0;
         }
@@ -1345,7 +1354,7 @@ pub fn of_candidates(words: &mut crate::port::Cells, text: &mut crate::port::Cel
             sum = 0 as i64;
             j = 0;
             while j < crate::port::cells_len(seq) {
-                sum += ow_confidence(words, crate::port::cells_at(seq, j)) as i64;
+                sum += of_score(words, crate::port::cells_at(seq, j)) as i64;
                 j += 1;
             }
             confidence = (sum / (crate::port::cells_len(seq) as i64)) as i32;

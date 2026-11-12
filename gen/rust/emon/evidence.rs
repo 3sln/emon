@@ -535,6 +535,9 @@ pub fn oe_rule_ghost() -> i32 {
 pub fn oe_corrected() -> i32 {
     return 32;
 }
+pub fn oe_uncalibrated() -> i32 {
+    return 64;
+}
 pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "dictionary");
@@ -558,6 +561,10 @@ pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 32 {
         crate::port::text_ascii(t, "corrected");
+        return 1;
+    }
+    if code == 64 {
+        crate::port::text_ascii(t, "uncalibrated");
         return 1;
     }
     return 0;
@@ -3046,7 +3053,7 @@ pub fn im_stride() -> i32 {
     return 20;
 }
 pub fn or_stride() -> i32 {
-    return 32;
+    return 34;
 }
 pub fn ob_stride() -> i32 {
     return 16;
@@ -4445,7 +4452,7 @@ pub static EV_FX: [i32; 48] = [
     283, 10
 ];
 pub static EV_STRIDES: [i32; 24] = [
-    12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 32, 16, 28,
+    12, 24, 3, 2, 1, 32, 32, 24, 16, 24, 16, 24, 20, 34, 16, 28,
     32, 20, 4, 12, 24, 20, 24, 20
 ];
 pub static EV_CK: [i32; 528] = [
@@ -4869,25 +4876,25 @@ pub fn im_new(mut c: &mut crate::port::Cells, v_page: i32, v_x0: i32, v_y0: i32,
     return r;
 }
 pub fn or_count(c: &mut crate::port::Cells) -> i32 {
-    return ev_count(c, 32);
+    return ev_count(c, 34);
 }
 pub fn or_get(c: &mut crate::port::Cells, i: i32, f: i32) -> i32 {
-    return ev_get(c, 32, i, f);
+    return ev_get(c, 34, i, f);
 }
 pub fn or_set(mut c: &mut crate::port::Cells, i: i32, f: i32, v: i32) -> i32 {
-    return ev_set(c, 32, i, f, v);
+    return ev_set(c, 34, i, f, v);
 }
 pub fn or_new(mut c: &mut crate::port::Cells, v_page: i32, v_view: i32) -> i32 {
     // Append a row of oruns: page view; every other field is its default.
-    let r: i32 = ev_push(c, 32);
-    ev_set(c, 32, r, 0, v_page);
-    ev_set(c, 32, r, 1, v_view);
-    ev_set(c, 32, r, 2, -1);
-    ev_set(c, 32, r, 3, -1);
-    ev_set(c, 32, r, 11, -1);
-    ev_set(c, 32, r, 17, -1);
-    ev_set(c, 32, r, 19, -1);
-    ev_set(c, 32, r, 20, -1);
+    let r: i32 = ev_push(c, 34);
+    ev_set(c, 34, r, 0, v_page);
+    ev_set(c, 34, r, 1, v_view);
+    ev_set(c, 34, r, 2, -1);
+    ev_set(c, 34, r, 3, -1);
+    ev_set(c, 34, r, 11, -1);
+    ev_set(c, 34, r, 17, -1);
+    ev_set(c, 34, r, 19, -1);
+    ev_set(c, 34, r, 20, -1);
     return r;
 }
 pub fn ob_count(c: &mut crate::port::Cells) -> i32 {
@@ -5679,7 +5686,7 @@ pub fn ev_peek(ea: i32, row: i32, f: i32, mut epages: &mut crate::port::Cells, m
         return crate::port::cells_at(images, (row * 20) + f);
     }
     if ea == 14 {
-        return crate::port::cells_at(oruns, (row * 32) + f);
+        return crate::port::cells_at(oruns, (row * 34) + f);
     }
     if ea == 15 {
         return crate::port::cells_at(oblocks, (row * 16) + f);
@@ -5768,7 +5775,7 @@ pub fn ev_poke(ea: i32, row: i32, f: i32, v: i32, mut epages: &mut crate::port::
         return 0;
     }
     if ea == 14 {
-        crate::port::cells_set(oruns, (row * 32) + f, v);
+        crate::port::cells_set(oruns, (row * 34) + f, v);
         return 0;
     }
     if ea == 15 {
@@ -6075,6 +6082,9 @@ pub fn owf_alts() -> i32 {
     return 31;
 }
 pub fn ow_confidence(c: &mut crate::port::Cells, word: i32) -> i32 {
+    if (ow_get(c, word, owf_flags()) & oe_uncalibrated()) != 0 {
+        return 500;
+    }
     let p: i32 = ow_get(c, word, owf_pcal());
     if p >= 0 {
         return p;
@@ -7047,4 +7057,10 @@ pub fn ev_emit(mut t: &mut String, pretty: i32, mut epages: &mut crate::port::Ce
     let s: i32 = ev_emit_open(t, pretty, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
     js_close(t, pretty, 0, s);
     return 0;
+}
+pub fn orf_observed_hi() -> i32 {
+    return 32;
+}
+pub fn orf_observed_lo() -> i32 {
+    return 33;
 }

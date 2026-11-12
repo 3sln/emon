@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::health::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
+use crate::emon::ocrscript::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
 use crate::emon::player::*;
@@ -91,83 +92,7 @@ pub fn ri_none() -> i32 {
     return 250;
 }
 pub fn rp_script_of(cp: i32) -> i32 {
-    // The script of a letter, as an index 0-9 (Latn Cyrl Grek Arab Hebr Deva Hani Hang Jpan Thai); -1 for a code point that is not a letter of one.
-    if cp < 65 {
-        return -1;
-    }
-    if cp <= 90 {
-        return 0;
-    }
-    if cp < 97 {
-        return -1;
-    }
-    if cp <= 122 {
-        return 0;
-    }
-    if cp < 170 {
-        return -1;
-    }
-    if cp <= 591 {
-        if cp == 215 {
-            return -1;
-        }
-        if cp == 247 {
-            return -1;
-        }
-        return 0;
-    }
-    if (cp >= 880) && (cp <= 1023) {
-        return 2;
-    }
-    if (cp >= 1024) && (cp <= 1327) {
-        return 1;
-    }
-    if (cp >= 1424) && (cp <= 1535) {
-        return 4;
-    }
-    if (cp >= 1536) && (cp <= 1791) {
-        return 3;
-    }
-    if (cp >= 1872) && (cp <= 1919) {
-        return 3;
-    }
-    if (cp >= 2304) && (cp <= 2431) {
-        return 5;
-    }
-    if (cp >= 3584) && (cp <= 3711) {
-        return 9;
-    }
-    if (cp >= 4352) && (cp <= 4607) {
-        return 7;
-    }
-    if (cp >= 12352) && (cp <= 12543) {
-        return 8;
-    }
-    if (cp >= 12593) && (cp <= 12687) {
-        return 7;
-    }
-    if (cp >= 12784) && (cp <= 12799) {
-        return 8;
-    }
-    if (cp >= 13312) && (cp <= 19903) {
-        return 6;
-    }
-    if (cp >= 19968) && (cp <= 40959) {
-        return 6;
-    }
-    if (cp >= 44032) && (cp <= 55215) {
-        return 7;
-    }
-    if (cp >= 63744) && (cp <= 64255) {
-        return 6;
-    }
-    if (cp >= 64336) && (cp <= 65023) {
-        return 3;
-    }
-    if (cp >= 65136) && (cp <= 65279) {
-        return 3;
-    }
-    return -1;
+    return os_script_of(cp);
 }
 pub(crate) fn rp_bit(k: i32) -> i32 {
     // 2 to the k, k < 10.
@@ -180,35 +105,7 @@ pub(crate) fn rp_bit(k: i32) -> i32 {
     return v;
 }
 pub fn rp_script_code(k: i32) -> i32 {
-    // The ISO 15924 code of script `k` as four ASCII bytes packed big-endian (an uppercase first letter: a request's language cell that starts with one names a SCRIPT).
-    if k == 0 {
-        return ((76 * 16777216) + (97 * 65536)) + ((116 * 256) + 110);
-    }
-    if k == 1 {
-        return ((67 * 16777216) + (121 * 65536)) + ((114 * 256) + 108);
-    }
-    if k == 2 {
-        return ((71 * 16777216) + (114 * 65536)) + ((101 * 256) + 107);
-    }
-    if k == 3 {
-        return ((65 * 16777216) + (114 * 65536)) + ((97 * 256) + 98);
-    }
-    if k == 4 {
-        return ((72 * 16777216) + (101 * 65536)) + ((98 * 256) + 114);
-    }
-    if k == 5 {
-        return ((68 * 16777216) + (101 * 65536)) + ((118 * 256) + 97);
-    }
-    if k == 6 {
-        return ((72 * 16777216) + (97 * 65536)) + ((110 * 256) + 105);
-    }
-    if k == 7 {
-        return ((72 * 16777216) + (97 * 65536)) + ((110 * 256) + 103);
-    }
-    if k == 8 {
-        return ((74 * 16777216) + (112 * 65536)) + ((97 * 256) + 110);
-    }
-    return ((84 * 16777216) + (104 * 65536)) + ((97 * 256) + 105);
+    return os_script_code(k);
 }
 pub(crate) fn rp_scripts_mask(mut scr: &mut crate::port::Cells) -> i32 {
     // The scripts that hold `rp-script-share` per mille of the letters tallied in scr[0..9] (and at least `rp-script-min`), one bit each.

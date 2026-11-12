@@ -5,6 +5,7 @@ use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocalib::*;
 use crate::emon::ocr::*;
+use crate::emon::ocrengine::*;
 use crate::emon::ocrledger::*;
 use crate::emon::oil::*;
 use crate::emon::pdfdoc::*;
@@ -671,6 +672,10 @@ pub(crate) fn sc_ev_words(an: &mut crate::port::Cells, at: i32, ext: i32, view: 
                 ow_set(owords, ow, owf_psize(), ps * 100);
             }
             ow_set(owords, ow, owf_flags(), oil_word_flags(an, ext, wx));
+            if ow_get(owords, ow, owf_pcal()) < 0 {
+                let flags: i32 = ow_get(owords, ow, owf_flags());
+                ow_set(owords, ow, owf_flags(), flags | oe_uncalibrated());
+            }
             ns = oil_nsym(an, ext, wx);
             ow_set(owords, ow, owf_sfirst(), os_count(osyms));
             ow_set(owords, ow, owf_scount(), ns);
@@ -750,6 +755,8 @@ pub fn sc_answer(an: &mut crate::port::Cells, at: i32, page: i32, view: i32, req
     let mut w: i32 = 0;
     let mut rotmed: i32 = 0;
     let mut ts: i32 = 0;
+    or_set(oruns, run, orf_observed_hi(), oil_get(an, at, oh_obs_hi()));
+    or_set(oruns, run, orf_observed_lo(), oil_get(an, at, oh_obs_lo()));
     or_set(oruns, run, orf_engine(), oil_get(an, at, oh_engine()));
     or_set(oruns, run, orf_caps(), oil_get(an, at, oh_caps()));
     or_set(oruns, run, orf_native(), oil_get(an, at, oh_native()));
@@ -3281,4 +3288,39 @@ pub fn sc_write_rejected_ocr(oruns: &mut crate::port::Cells, pages: &mut crate::
         p += 1;
     }
     return rows;
+}
+pub fn sc_node_engines(mut nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, runs: &mut crate::port::Cells) -> i32 {
+    // The node map is keyed by the page's primary engine. A hybrid keeps the registered incumbent as primary, including seal and stamp pages.
+    let mut n: i32 = 1;
+    let mut r: i32 = 0;
+    let mut pg: i32 = 0;
+    let mut engine: i32 = 0;
+    let mut candidate: i32 = 0;
+    while n < node_count(nodes) {
+        if (node_src(nodes, n) & sr_ocr()) != 0 {
+            pg = sc_node_page(nodes, regions, n);
+            engine = 0;
+            r = 0;
+            while r < or_count(runs) {
+                if or_get(runs, r, orf_page()) == pg {
+                    candidate = or_get(runs, r, orf_engine());
+                    if (engine == 0) || ((oe_role(engine) != 1) && (oe_role(candidate) == 1)) {
+                        engine = candidate;
+                    }
+                }
+                r += 1;
+            }
+            if engine > 0 {
+                node_set_engine(nodes, n, engine);
+                if ocal_word(engine, 0, 500) < 0 {
+                    node_add_flag(nodes, n, fl_uncalibrated_engine());
+                    if node_conf(nodes, n) > 500 {
+                        node_set_conf(nodes, n, 500);
+                    }
+                }
+            }
+        }
+        n += 1;
+    }
+    return 0;
 }

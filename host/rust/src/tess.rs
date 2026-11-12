@@ -139,7 +139,7 @@ fn borrowed(p: *const c_char) -> String {
     }
 }
 
-// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrport`, P10.7, D396): which installed models read
+// WHAT A REQUEST ASKS FOR AND HOW THE ENGINE'S ANSWER IS NAMED is kin's (`emon.ocrtess`, P10.7, D396): which installed models read
 // the request's languages and scripts, a model's name as a request spells it, the OSD's script as ISO 15924, a block's type. This
 // file passes it cells and takes cells.
 fn x10(f: f32) -> i32 {
@@ -201,6 +201,7 @@ struct Block {
 pub struct Tess {
     tessdata: String,
     apis: HashMap<String, Api>,
+    observed: Option<String>,
     // The resolution of the bitmaps when a request does not say (a hint to the engine: font-size heuristics).
     pub dpi: i32,
     // Oddities worth reporting (stderr of the driver).
@@ -215,7 +216,7 @@ unsafe impl Send for Tess {}
 
 impl Tess {
     pub fn new(tessdata: &str, dpi: i32) -> Tess {
-        Tess { tessdata: tessdata.to_string(), apis: HashMap::new(), dpi, notes: Vec::new(), only: None }
+        Tess { tessdata: tessdata.to_string(), apis: HashMap::new(), observed: None, dpi, notes: Vec::new(), only: None }
     }
 
     #[cfg(ppocr)]
@@ -289,10 +290,11 @@ impl Tess {
             ("engine".to_string(), "tesseract".to_string()),
             ("version".to_string(), version()),
             ("leptonica".to_string(), leptonica_version()),
-            ("engine-mode".to_string(), "default (LSTM)".to_string()),
+            ("engine-mode".to_string(), "Init3 default".to_string()),
             ("lstm-choice-mode".to_string(), "2".to_string()),
             ("models".to_string(), models.join(" ")),
             ("host".to_string(), "host/rust/src/tess.rs".to_string()),
+            ("observed".to_string(), format!("tesseract;version={};leptonica={};oem=Init3-default;choice=2;models={}", version(), leptonica_version(), models.join(" "))),
         ]
     }
 
@@ -344,6 +346,8 @@ impl Tess {
         // Kin selects the models. Pass whether this is the caller's explicit filtered set (--lang), not an unfiltered inventory.
         // Model names are code points separated by 0.
         let mut reqc = cells_of(req.rec.iter().copied());
+        let requested = emon::ocrport::op_request_engine(&mut reqc);
+        if requested > 0 && requested != 1 { return failed(2); }
         let mut inst = Cells::new();
         for (i, m) in installed.iter().enumerate() {
             if i > 0 {
@@ -354,9 +358,9 @@ impl Tess {
             }
         }
         let mut picked = Cells::new();
-        emon::ocrport::op_models_configured(&mut reqc, &mut inst, self.only.is_some() as i32, &mut picked);
+        emon::ocrtess::op_models_configured(&mut reqc, &mut inst, self.only.is_some() as i32, &mut picked);
         let mut gone = Cells::new();
-        emon::ocrport::op_dropped(&mut reqc, &mut inst, &mut gone);
+        emon::ocrtess::op_dropped(&mut reqc, &mut inst, &mut gone);
         let mut name = String::new();
         for i in 0..cells_len(&gone) {
             match cells_at(&gone, i) {
@@ -402,7 +406,7 @@ impl Tess {
                     oconf = x10(oc);
                     sconf = x10(sc);
                     osd_name = cps(&borrowed(sn));
-                    script = emon::ocrport::op_osd_script(&mut cells_of(osd_name.clone()));
+                    script = emon::ocrtess::op_osd_script(&mut cells_of(osd_name.clone()));
                 } else {
                     self.notes.push("osd failed".into());
                 }
@@ -443,7 +447,7 @@ impl Tess {
                         TessPageIteratorBoundingBox(pi, RIL_TEXTLINE, &mut l, &mut t, &mut r, &mut bt);
                         let (mut x1, mut y1, mut x2, mut y2) = (0, 0, 0, 0);
                         TessPageIteratorBaseline(pi, RIL_TEXTLINE, &mut x1, &mut y1, &mut x2, &mut y2);
-                        let btype = emon::ocrport::op_block_type(TessPageIteratorBlockType(pi));
+                        let btype = emon::ocrtess::op_block_type(TessPageIteratorBlockType(pi));
                         lines.push(Line { bx: [l, t, r - l, bt - t], base: [x1, y1, x2, y2], block, par, btype });
                     }
                     let text = take(TessResultIteratorGetUTF8Text(it, RIL_WORD));
@@ -468,7 +472,7 @@ impl Tess {
                             block,
                             text: cps(&text),
                             flags: fl,
-                            lang: emon::ocrport::op_word_lang(&mut cells_of(cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))))),
+                            lang: emon::ocrtess::op_word_lang(&mut cells_of(cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))))),
                             model: cps(&borrowed(TessResultIteratorWordRecognitionLanguage(it))),
                             psize: if sz > 0 { sz } else { -1 },
                             dflags: dfl,
@@ -541,7 +545,10 @@ impl Tess {
         let (orient, wdir, tlo, deskew) = blocks.first().map(|b| (b.orient, b.wdir, b.tlo, b.deskew)).unwrap_or((0, 0, 0, 0));
         let at = emon::oil::oil_tess_begin(&mut c, id, psm, flags & 1, orient, wdir, tlo, deskew, osd, script, sconf, oconf, has_binary as i32);
         let mut observed = Cells::new();
-        for ch in version().chars() { cells_push(&mut observed, ch as i32); }
+        if self.observed.is_none() {
+            self.observed = self.producer().into_iter().find(|(key, _)| key == "observed").map(|(_, value)| value);
+        }
+        for ch in self.observed.as_deref().unwrap_or("").chars() { cells_push(&mut observed, ch as i32); }
         let observed_len = cells_len(&observed);
         emon::oil::oil_observed(&mut c, at, &mut observed, 0, observed_len);
         for b in &blocks {

@@ -43,16 +43,16 @@ fn test_the_table_is_sorted_and_monotone_in_the_raw_score() {
     let mut i: i32 = 1;
     crate::testport::assert_that(n > 0, "the table has a row (the identity table has one that no node matches)");
     while i < n {
-        let k0: i32 = CD_ROWS[((i - 1) * 4 + 0) as usize];
-        let c0: i32 = CD_ROWS[((i - 1) * 4 + 1) as usize];
-        let k1: i32 = CD_ROWS[(i * 4 + 0) as usize];
-        let c1: i32 = CD_ROWS[(i * 4 + 1) as usize];
+        let k0: i32 = CD_ROWS[((i - 1) * 5 + 0) as usize];
+        let c0: i32 = CD_ROWS[((i - 1) * 5 + 1) as usize];
+        let k1: i32 = CD_ROWS[(i * 5 + 0) as usize];
+        let c1: i32 = CD_ROWS[(i * 5 + 1) as usize];
         crate::testport::assert_that((k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class");
         if (k0 == k1) && (c0 == c1) {
-            crate::testport::assert_that(CD_ROWS[((i - 1) * 4 + 2) as usize] < CD_ROWS[(i * 4 + 2) as usize], "raw-lo rises within a kind and class");
-            crate::testport::assert_that(CD_ROWS[((i - 1) * 4 + 3) as usize] <= CD_ROWS[(i * 4 + 3) as usize], "calibrated never falls with the raw score");
+            crate::testport::assert_that(CD_ROWS[((i - 1) * 5 + 3) as usize] < CD_ROWS[(i * 5 + 3) as usize], "raw-lo rises within a kind and class");
+            crate::testport::assert_that(CD_ROWS[((i - 1) * 5 + 4) as usize] <= CD_ROWS[(i * 5 + 4) as usize], "calibrated never falls with the raw score");
         }
-        crate::testport::assert_that((CD_ROWS[(i * 4 + 3) as usize] >= 0) && (CD_ROWS[(i * 4 + 3) as usize] <= 1000), "a calibrated value is 0..1000");
+        crate::testport::assert_that((CD_ROWS[(i * 5 + 4) as usize] >= 0) && (CD_ROWS[(i * 5 + 4) as usize] <= 1000), "a calibrated value is 0..1000");
         i += 1;
     }
 }
@@ -64,8 +64,8 @@ fn test_every_step_of_the_table_answers_with_its_own_value() {
     let n: i32 = 30;
     let mut i: i32 = 0;
     while i < n {
-        if CD_ROWS[(i * 4 + 1) as usize] == -1 {
-            crate::testport::assert_eq_at(cal_lookup(CD_ROWS[(i * 4 + 0) as usize], 9, CD_ROWS[(i * 4 + 2) as usize]), CD_ROWS[(i * 4 + 3) as usize], "an any-row at its raw-lo", i);
+        if CD_ROWS[(i * 5 + 1) as usize] == -1 {
+            crate::testport::assert_eq_at(cal_lookup(CD_ROWS[(i * 5 + 0) as usize], 9, CD_ROWS[(i * 5 + 3) as usize]), CD_ROWS[(i * 5 + 4) as usize], "an any-row at its raw-lo", i);
         }
         i += 1;
     }
@@ -76,17 +76,17 @@ fn test_the_lookup_clamps_at_both_ends_of_a_step_function() {
     let n: i32 = 30;
     let mut i: i32 = 0;
     while i < n {
-        if CD_ROWS[(i * 4 + 1) as usize] == -1 {
-            let kind: i32 = CD_ROWS[(i * 4 + 0) as usize];
+        if CD_ROWS[(i * 5 + 1) as usize] == -1 {
+            let kind: i32 = CD_ROWS[(i * 5 + 0) as usize];
             let mut first_v: i32 = -1;
             let mut last_v: i32 = -1;
             let mut j: i32 = 0;
             while j < n {
-                if (CD_ROWS[(j * 4 + 0) as usize] == kind) && (CD_ROWS[(j * 4 + 1) as usize] == -1) {
+                if (CD_ROWS[(j * 5 + 0) as usize] == kind) && (CD_ROWS[(j * 5 + 1) as usize] == -1) {
                     if first_v < 0 {
-                        first_v = CD_ROWS[(j * 4 + 3) as usize];
+                        first_v = CD_ROWS[(j * 5 + 4) as usize];
                     }
-                    last_v = CD_ROWS[(j * 4 + 3) as usize];
+                    last_v = CD_ROWS[(j * 5 + 4) as usize];
                 }
                 j += 1;
             }
@@ -125,6 +125,15 @@ fn test_a_block_flagged_script_unread_is_written_at_its_raw_score() {
     }
     crate::testport::assert_eq(cal_node_conf(nodes, p1), want, "the flagged block: its raw score, when the map would give more");
     crate::testport::assert_that(cal_node_conf(nodes, p1) <= 100, "never above it");
+    node_add_flag(nodes, p1, fl_uncalibrated_engine());
+    crate::testport::assert_that(cal_node_conf(nodes, p1) <= 100, "uncalibrated prior never raises an unread cap");
     crate::testport::assert_that(cal_node_conf(nodes, t1) <= 100, "the text under it too");
     crate::testport::assert_eq(cal_node_conf(nodes, p2), mapped, "a block no one flagged is calibrated as it was");
+}
+#[test]
+fn test_node_map_is_engine_specific_with_pooled_fallback() {
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 1, 508), cal_lookup(3, 1, 508), "Tesseract gets its fitted OCR map");
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 2, 508), cal_lookup(3, 9, 508), "PP has no Tesseract-specific fit");
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 100, 508), cal_lookup(3, 9, 508), "unknown engine uses pooled fallback");
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 2, -1), -1, "absence survives engine lookup");
 }

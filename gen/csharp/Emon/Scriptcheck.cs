@@ -51,6 +51,77 @@ public static class Scriptcheck {
         }
         return k;
     }
+    public static int SkCensus(emon.Port.Cells an, int at, emon.Port.Cells scr) {
+        // No-OSD fallback: at least three script-bearing characters and a 60% dominant script. Digits and punctuation do not vote. Never invent OSD confidence.
+        emon.Port.CellsDrop(scr, 0);
+        int k = 0;
+        int i = 0;
+        int j = 0;
+        int total = 0;
+        int best = 0;
+        int winner = -1;
+        int w = Oil.OilFirstWord(an, at);
+        while (k < 30) {
+            emon.Port.CellsPush(scr, 0);
+            k += 1;
+        }
+        while (i < Oil.OilNwords(an, at)) {
+            j = 0;
+            while (j < Oil.OilWlen(an, at, w)) {
+                k = Ocrscript.OsCensusOf(Oil.OilWcp(an, at, w, j));
+                if (k >= 0) {
+                    emon.Port.CellsSet(scr, k, emon.Port.CellsAt(scr, k) + 1);
+                    total += 1;
+                }
+                j += 1;
+            }
+            w = Oil.OilWordNext(an, at, w);
+            i += 1;
+        }
+        k = 0;
+        while (k < 30) {
+            if (emon.Port.CellsAt(scr, k) > best) {
+                best = emon.Port.CellsAt(scr, k);
+                winner = k;
+            }
+            k += 1;
+        }
+        if ((total >= 3) && ((best * 1000) >= (total * 600))) {
+            return Ocrscript.OsCensusScripts[winner];
+        }
+        return 0;
+    }
+    internal static int SkNoOsdUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
+        int script = SkCensus(an, at, scr);
+        int model = Ocrscript.OsLangScript(Oil.OilGet(an, at, Oil.OhLang()));
+        int i = 0;
+        int w = Oil.OilFirstWord(an, at);
+        int known = 0;
+        if (script == 0) {
+            return 0;
+        }
+        if ((script == Ocrport.ScLatn()) || (script == Ocrport.ScLatf())) {
+            return 0;
+        }
+        if (model > 0) {
+            known = 1;
+            if (Ocrport.OpScriptReads(script, model) == 1) {
+                return 0;
+            }
+        }
+        while (i < Oil.OilNwords(an, at)) {
+            model = Ocrscript.OsLangScript(Oil.OilWlang(an, at, w));
+            if (model > 0) {
+                known = 1;
+                if (Ocrport.OpScriptReads(script, model) == 1) {
+                    return 0;
+                }
+            }
+            w = Oil.OilWordNext(an, at, w);
+            i += 1;
+        }
+        return known;
+    }
     public static int SkUnread(emon.Port.Cells an, int at, emon.Port.Cells scr) {
         // 1 when the page the OCR answer at `at` read is in a script the engine had no model for (see the head of this file), else 0. `scr` is scratch.
         int ext = Oil.OilFind(an, at);
@@ -64,6 +135,12 @@ public static class Scriptcheck {
         int sourceFirst = 0;
         if (ext < 0) {
             return 0;
+        }
+        if (Oil.OilHas(Oil.OilGet(an, ext, Oil.OhCaps()), Oil.OcScript()) == 0) {
+            if (nw < SkMinWords()) {
+                return 0;
+            }
+            return SkNoOsdUnread(an, ext, scr);
         }
         script = Oil.OilScript(an, ext);
         if (script <= 0) {
@@ -93,14 +170,14 @@ public static class Scriptcheck {
         while (i < nw) {
             model = Oilsrc.OxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr);
             if (model >= 0) {
-                if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, model + 1, (model + 1) + emon.Port.CellsAt(scr, model))) == 1) {
+                if (Ocrport.OpScriptReads(script, Ocrtess.OpModelScript(scr, model + 1, (model + 1) + emon.Port.CellsAt(scr, model))) == 1) {
                     return 0;
                 }
             } else {
                 lang = Oil.OilWlang(an, ext, w);
                 if (lang > 0) {
                     n = SkUnpack(lang, scr);
-                    if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, 0, n)) == 1) {
+                    if (Ocrport.OpScriptReads(script, Ocrtess.OpModelScript(scr, 0, n)) == 1) {
                         return 0;
                     }
                 }
@@ -119,6 +196,9 @@ public static class Scriptcheck {
         int found = Plan.AnFind(ans, id);
         int ext = Oil.OilFind(ans, at);
         int script = Oil.OilScript(ans, ext);
+        if (Oil.OilHas(Oil.OilGet(ans, ext, Oil.OhCaps()), Oil.OcScript()) == 0) {
+            script = SkCensus(ans, ext, scr);
+        }
         if (found >= 0) {
             if (Plan.AnOk(ans, found) == 1) {
                 return found;
