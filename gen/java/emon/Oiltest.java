@@ -38,6 +38,53 @@ public final class Oiltest {
         emon.Testport.assertEq(Oil.oilNativeCheck(Oil.ocBlocks() + Oil.ocBaseline(), Oil.ocBaseline()), 1, "native subset");
         emon.Testport.assertEq(Oil.oilNativeCheck(Oil.ocBlocks(), Oil.ocBaseline()), 0, "cannot claim an absent group as native");
     }
+    public static void testSourcePolicyReadsRequireRegistrationAndTheSourceEngine() {
+        emon.Port.Cells c = emon.Port.newCells();
+        emon.Port.Cells value = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.oilLine(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 2, 0, 2, 2), -1, "registered key can be absent");
+        emon.Port.cellsPush(value, 1);
+        emon.Port.cellsPush(value, 900);
+        Oil.oilScPut(c, at, 2, 2, 0, value, 0, 2);
+        Oil.oilEnd(c, at);
+        int p = Oil.oilSourceValue(c, at, 2, 0, 2, 2);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, p), 1, "measured reversal");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, p + 1), 900, "measured probability");
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 2, 1, 2, 2), -1, "unmeasured row");
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 3, 0, 2, 2), -1, "wrong subject");
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 2, 0, 1, 2), -1, "different source engine");
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 2, 0, 2, 99), -1, "unknown key");
+        emon.Testport.assertEq(Oil.oilKeyUsable(c, at, 2, 2), 1, "registered classifier policy key");
+        emon.Testport.assertEq(Oil.oilKeyUsable(c, at, 2, 1), 0, "detector score is diagnostic only");
+        emon.Testport.assertEq(Oil.oilKeyUsable(c, at, 1, 3), 0, "another engines model key is unusable");
+        emon.Testport.assertEq(Oil.oilKeyUsable(c, at, 2, 99), 0, "unknown key cannot influence policy");
+    }
+    public static void testSourceLookupHandlesDenseInputAndSealedSparseRows() {
+        emon.Port.Cells c = emon.Port.newCells();
+        int at = Oil.oilBegin(c, 1, Oil.oenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.oilLine(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.oilLine(c, at, 0, 10, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.cellsPush(c, 10);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 2);
+        emon.Port.cellsPush(c, 0);
+        emon.Port.cellsPush(c, 100);
+        emon.Port.cellsPush(c, 1);
+        emon.Port.cellsPush(c, 900);
+        Oil.oilSet(c, at, Oil.ohNsc(), 1);
+        int denseValue = Oil.oilSourceValue(c, at, 2, 1, 2, 2);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, denseValue), 1, "dense row index is implicit");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, denseValue + 1), 900, "dense fixed-width value");
+        Oil.oilEnd(c, at);
+        emon.Testport.assertEq(Oil.oilSourceValue(c, at, 2, 0, 2, 2), -1, "implied classifier value becomes absent");
+        int sparseValue = Oil.oilSourceValue(c, at, 2, 1, 2, 2);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, sparseValue), 1, "sparse lookup retains the original row index");
+        emon.Testport.assertEq(emon.Port.cellsAt(c, sparseValue + 1), 900, "sealing preserves informative measurements");
+    }
     public static void testConfidenceRoundingIsSymmetric() {
         emon.Testport.assertEq(Oil.oilPm(12345, 100), 123, "round down");
         emon.Testport.assertEq(Oil.oilPm(12350, 100), 124, "positive half away from zero");

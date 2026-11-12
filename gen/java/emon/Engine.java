@@ -234,6 +234,14 @@ public final class Engine {
     }
     public static int enPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         int status = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+        if (status == 0) {
+            if (Oilsrc.oxsCollect(ans, ev.views, ev.oruns, ev.olines, ev.oxs) < 0) {
+                return 2;
+            }
+            if (Oilsrc.oxsCheck(ev.oxs, ev.oruns) < 0) {
+                return 2;
+            }
+        }
         Ocrengine.oeTag(rq, d.pscr, 2 * c.oengine);
         return status;
     }
@@ -272,6 +280,7 @@ public final class Engine {
         } else {
             Player.plEmitGfxOpen(t, 0, ev.epages, ev.views, ev.pts, ev.refs, et, ev.feats, gl, wd, ln, mk, fnt, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, grl, gfl, ggp, grg);
         }
+        Oilsrc.oxsEmit(t, ev.oxs);
         return 0;
     }
     public static int enSeal(emon.Enctx.Arenas m, emon.Port.Cells chk, emon.Port.Cells out, int level) {
@@ -696,6 +705,7 @@ public final class Engine {
                     i += 1;
                 }
                 Player.plEmitOpen(d.evidence, 0, ev.epages, ev.views, ev.pts, ev.refs, d.et, ev.feats, d.snapg, d.wd, d.ln, d.snapk, d.snapf, ev.paths, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, ev.inks, ev.comps, ev.rules, ev.prims, ev.tlines, d.cg, d.fw, d.fl, s.fv, s.fad, s.fx, d.hl, d.grl, s.sm, d.gfl, s.ggp, s.grg);
+                Oilsrc.oxsEmit(d.evidence, ev.oxs);
             } else {
                 enDump(d.et, d.snapg, d.wd, d.ln, d.snapk, d.snapf, d.grl, d.gfl, s.ggp, s.grg, ev, d.evidence);
             }

@@ -18,6 +18,7 @@ use crate::emon::model::*;
 use crate::emon::notes::*;
 use crate::emon::ocrengine::*;
 use crate::emon::ocrledger::*;
+use crate::emon::oilsrc::*;
 use crate::emon::pageunit::*;
 use crate::emon::para::*;
 use crate::emon::pdfannot::*;
@@ -269,6 +270,14 @@ pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emo
 }
 pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, i: i32, idx: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
     let status: i32 = en_page_inner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+    if status == 0 {
+        if oxs_collect(ans, &mut ev.views, &mut ev.oruns, &mut ev.olines, &mut ev.oxs) < 0 {
+            return 2;
+        }
+        if oxs_check(&mut ev.oxs, &mut ev.oruns) < 0 {
+            return 2;
+        }
+    }
     oe_tag(rq, &mut d.pscr, 2 * c.oengine);
     return status;
 }
@@ -307,6 +316,7 @@ pub fn en_dump(et: &mut crate::port::Cells, gl: &mut crate::port::Cells, wd: &mu
     } else {
         pl_emit_gfx_open(t, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, et, &mut ev.feats, gl, wd, ln, mk, fnt, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, grl, gfl, ggp, grg);
     }
+    oxs_emit(t, &mut ev.oxs);
     return 0;
 }
 pub fn en_seal(m: &mut crate::emon::enctx::Arenas, mut chk: &mut crate::port::Cells, mut out: &mut crate::port::Cells, level: i32) -> i32 {
@@ -731,6 +741,7 @@ pub fn en_finish_pdf(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx
                 i += 1;
             }
             pl_emit_open(&mut d.evidence, 0, &mut ev.epages, &mut ev.views, &mut ev.pts, &mut ev.refs, &mut d.et, &mut ev.feats, &mut d.snapg, &mut d.wd, &mut d.ln, &mut d.snapk, &mut d.snapf, &mut ev.paths, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.tlines, &mut d.cg, &mut d.fw, &mut d.fl, &mut s.fv, &mut s.fad, &mut s.fx, &mut d.hl, &mut d.grl, &mut s.sm, &mut d.gfl, &mut s.ggp, &mut s.grg);
+            oxs_emit(&mut d.evidence, &mut ev.oxs);
         } else {
             en_dump(&mut d.et, &mut d.snapg, &mut d.wd, &mut d.ln, &mut d.snapk, &mut d.snapf, &mut d.grl, &mut d.gfl, &mut s.ggp, &mut s.grg, ev, &mut d.evidence);
         }

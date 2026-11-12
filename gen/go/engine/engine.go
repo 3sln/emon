@@ -22,6 +22,7 @@ import (
 	"emon/notes"
 	"emon/ocrengine"
 	"emon/ocrledger"
+	"emon/oilsrc"
 	"emon/pageunit"
 	"emon/para"
 	"emon/pdfannot"
@@ -295,6 +296,14 @@ func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
 
 func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
 	var status int32 = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms)
+	if status == 0 {
+		if oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0 {
+			return 2
+		}
+		if oilsrc.OxsCheck(ev.Oxs, ev.Oruns) < 0 {
+			return 2
+		}
+	}
 	ocrengine.OeTag(rq, d.Pscr, 2*c.Oengine)
 	return status
 }
@@ -336,6 +345,7 @@ func EnDump(et *port.Cells, gl *port.Cells, wd *port.Cells, ln *port.Cells, mk *
 	} else {
 		player.PlEmitGfxOpen(t, 0, ev.Epages, ev.Views, ev.Pts, ev.Refs, et, ev.Feats, gl, wd, ln, mk, fnt, ev.Paths, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Tlines, grl, gfl, ggp, grg)
 	}
+	oilsrc.OxsEmit(t, ev.Oxs)
 	return 0
 }
 
@@ -767,6 +777,7 @@ func EnFinishPdf(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas
 				i += 1
 			}
 			player.PlEmitOpen(d.Evidence, 0, ev.Epages, ev.Views, ev.Pts, ev.Refs, d.Et, ev.Feats, d.Snapg, d.Wd, d.Ln, d.Snapk, d.Snapf, ev.Paths, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Tlines, d.Cg, d.Fw, d.Fl, s.Fv, s.Fad, s.Fx, d.Hl, d.Grl, s.Sm, d.Gfl, s.Ggp, s.Grg)
+			oilsrc.OxsEmit(d.Evidence, ev.Oxs)
 		} else {
 			EnDump(d.Et, d.Snapg, d.Wd, d.Ln, d.Snapk, d.Snapf, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence)
 		}

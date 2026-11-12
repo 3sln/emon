@@ -1,0 +1,66 @@
+(ns emon.oilsrctest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-at cells-len cells-push cells-set]]
+            [emon.oil :refer [oil-begin oil-line oil-word oil-word-cp oil-sc-put oil-end]]
+            [emon.oilsrc :refer [oxs-record oxs-get oxs-key-usable oxs-check]]
+            [emon.evidence :refer [vw-new vk-render or-new or-set orf-engine orf-caps orf-lfirst orf-lcount orf-wcount
+                                   ol-new ol-get olf-qfirst]]
+            [kin.lang :refer [defn return let set while if do + -]]))
+
+(deftest test-source-quads-are-page-space-and-policy-keys-are-guarded
+  (let [^Cells answer (new-cells) ^Cells values (new-cells) ^Cells views (new-cells)
+        ^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells source (new-cells)
+        ^I32 at (oil-begin answer 7 2 288 288 1 1 0 1)
+        ^I32 run (or-new runs 1 0)]
+    (vw-new views 1 (vk-render) 7 -1 40 40 15000 0 -1 0 0 0 0 0)
+    (or-set runs run (orf-engine) 2) (or-set runs run (orf-caps) 288)
+    (or-set runs run (orf-lfirst) 0) (or-set runs run (orf-lcount) 1) (or-set runs run (orf-wcount) 1)
+    (ol-new lines 1 0 0 480 960 0 960 480 960 0 0 -1 0)
+    (oil-line answer at 0 0 10 20 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 10 0 10 20 0 20 0)
+    (let [^I32 word (oil-word answer at 0 0 10 20 0 900 0 0 -1 0)]
+      (oil-word-cp answer at word 65))
+    (cells-push values 1) (cells-push values 900)
+    (oil-sc-put answer at 2 2 0 values 0 2) (oil-end answer at)
+    (assert-eq (oxs-record answer at views runs run lines source) 0 "ingestion")
+    (assert-eq (oxs-check source runs) 0 "typed page-space source frames")
+    (assert-eq (ol-get lines 0 (olf-qfirst)) 0 "quad points to the source row, also its JSON array index")
+    (let [^I32 quad (oxs-get source run 2 0 2 0) ^I32 cls (oxs-get source run 2 0 2 2)
+          ^I32 count (cells-len source)]
+      (assert-eq (cells-at source (+ quad 2)) 480 "10 pixels at 150 dpi is 4.8 points")
+      (assert-eq (cells-at source (+ quad 5)) 960 "20 pixels is 9.6 points")
+      (assert-eq (cells-at source cls) 1 "classifier decision")
+      (assert-eq (cells-at source (+ cls 1)) 900 "per-mille confidence is not a length")
+      (assert-eq (oxs-key-usable runs run 2 2) 1 "registered policy key")
+      (assert-eq (oxs-key-usable runs run 2 1) 0 "diagnostic detector score")
+      (assert-eq (oxs-key-usable runs run 1 3) 0 "foreign namespace")
+      (assert-eq (oxs-get source run 2 1 2 2) -1 "absent row")
+      (oxs-record answer at views runs run lines source)
+      (assert-eq (cells-len source) count "committed runs are not ingested twice")
+      (cells-set source 2 1)
+      (assert-eq (oxs-check source runs) -1 "source namespace is checked against its run"))))
+
+(deftest test-model-codepoints-survive-without-a-quad-capability
+  (let [^Cells answer (new-cells) ^Cells values (new-cells) ^Cells views (new-cells)
+        ^Cells runs (new-cells) ^Cells lines (new-cells) ^Cells source (new-cells)
+        ^I32 at (oil-begin answer 7 1 8448 8448 1 1 0 0)
+        ^I32 run (or-new runs 1 0)]
+    (vw-new views 1 (vk-render) 7 -1 40 40 15000 0 -1 0 0 0 0 0)
+    (or-set runs run (orf-engine) 1) (or-set runs run (orf-caps) 8448)
+    (or-set runs run (orf-lfirst) 0) (or-set runs run (orf-lcount) 1) (or-set runs run (orf-wcount) 1)
+    (ol-new lines 1 0 0 480 960 0 960 480 960 0 0 -1 0)
+    (oil-line answer at 0 0 10 20 -1 1 -1 -1 0 0 0 0 0 0 0 999 999 999 999 999 999 999 999 0)
+    (let [^I32 word (oil-word answer at 0 0 10 20 0 900 1701734144 0 -1 0)]
+      (oil-word-cp answer at word 65))
+    (cells-push values 8) (cells-push values 101) (cells-push values 110) (cells-push values 103)
+    (cells-push values 95) (cells-push values 98) (cells-push values 101) (cells-push values 115) (cells-push values 116)
+    (oil-sc-put answer at 3 3 0 values 0 9) (oil-end answer at)
+    (oxs-record answer at views runs run lines source)
+    (assert-eq (oxs-check source runs) 0 "registered model value")
+    (assert-eq (ol-get lines 0 (olf-qfirst)) -1 "absent quad columns never read")
+    (assert-eq (cells-len source) 17 "only the model entry, no phantom quad")
+    (let [^I32 model (oxs-get source run 3 0 1 3)]
+      (assert-eq (cells-at source model) 8 "model length")
+      (assert-eq (cells-at source (+ model 4)) 95 "model variant underscore")
+      (assert-eq (oxs-key-usable runs run 1 3) 1 "scriptcheck model key")
+      (assert-eq (oxs-get source run 3 0 1 2) -1 "wrong subject/key is absent"))))

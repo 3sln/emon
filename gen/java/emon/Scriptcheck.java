@@ -60,6 +60,8 @@ public final class Scriptcheck {
         int lang = 0;
         int n = 0;
         int script = 0;
+        int model = -1;
+        int sourceFirst = 0;
         if (ext < 0) {
             return 0;
         }
@@ -87,12 +89,20 @@ public final class Scriptcheck {
             }
         }
         w = Oil.oilFirstWord(an, ext);
+        sourceFirst = Oil.oilSidecars(an, ext);
         while (i < nw) {
-            lang = Oil.oilWlang(an, ext, w);
-            if (lang > 0) {
-                n = skUnpack(lang, scr);
-                if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, 0, n)) == 1) {
+            model = Oilsrc.oxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr);
+            if (model >= 0) {
+                if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, model + 1, (model + 1) + emon.Port.cellsAt(scr, model))) == 1) {
                     return 0;
+                }
+            } else {
+                lang = Oil.oilWlang(an, ext, w);
+                if (lang > 0) {
+                    n = skUnpack(lang, scr);
+                    if (Ocrport.opScriptReads(script, Ocrport.opModelScript(scr, 0, n)) == 1) {
+                        return 0;
+                    }
                 }
             }
             w = Oil.oilWordNext(an, ext, w);

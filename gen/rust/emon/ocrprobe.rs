@@ -3,15 +3,17 @@
 
 use crate::emon::evidence::*;
 use crate::emon::ocr::*;
+use crate::emon::oilsrc::*;
 use crate::emon::plan::*;
 use crate::emon::scan::*;
 
 pub(crate) fn op_cpt(px: i32, dpi: i32) -> i32 {
     return (px * 7200) / dpi;
 }
-pub fn op_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells) -> i32 {
+pub fn op_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut oxs: &mut crate::port::Cells) -> i32 {
     // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
     ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::port::cells_drop(oxs, 0);
     let n: i32 = crate::port::src_len(s);
     let mid: i32 = crate::port::src_u8(s, n / 2);
     if crate::port::src_missed(s) {
@@ -45,5 +47,6 @@ pub fn op_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut c
     if an_ok(an, o2) == 1 {
         sc_answer(an, o2, 1, 0, 2, 0, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
     }
+    oxs_collect(an, views, oruns, olines, oxs);
     return us_done();
 }

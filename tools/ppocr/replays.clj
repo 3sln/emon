@@ -3,7 +3,7 @@
 ;; Compare stdout directly: large external-drive captures can contain sparse NUL holes.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]]
          '[cheshire.core :as json] '[clojure.string :as str] '[clojure.java.io :as io]
-         '[clojure.edn :as edn])
+         '[clojure.edn :as edn] '[ppocr.qualification :as qualification])
 (import '[java.util.zip GZIPInputStream] '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
 (def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
@@ -33,7 +33,12 @@
           result (equal-streams? expected (:out p))]
      (assert (= equal result) "stream equality result differs")
      (assert (zero? (:exit @p)) "mismatched stdout was not drained")))
-   (println "PASS replay stream equality, early mismatch and shorter/longer streams drain child stdout")
+   (qualification/compress-bundle! expected (qualification/file-sha256 expected))
+   (let [p (process ["bb" "-e" "(print (apply str (repeat 2097152 \"x\")))"]
+                    {:out :stream :err :string :shutdown nil})]
+     (assert (equal-streams? expected (:out p)) "compressed reference differs")
+     (assert (zero? (:exit @p)) "compressed comparison did not drain stdout"))
+   (println "PASS replay stream equality, gzip references, early mismatch and shorter/longer streams drain child stdout")
    (finally (fs/delete-tree dir)))))
 (when (= "true" (get args "--self-test")) (System/exit 0))
 (defn sha [expected]
@@ -63,6 +68,23 @@
                   (map #(assoc % :population "control") (recordings (str qual "/live/controls") true))
                   (map #(assoc % :population "fresh") (recordings (str qual "/fresh/ppocr") false)))))))
 (assert (= 198 (count cases)) "expected exactly 174 fixed and 24 fresh candidate recordings")
+(def record-driver
+ (when record-reference
+  (let [pdfium (str (fs/absolutize ".cache/pdfium/current/lib"))
+        library (str pdfium "/libpdfium.dylib")]
+   (assert (fs/regular-file? library) "qualification control recordings need the pinned pdfium library")
+   (let [r @(process ["kin/scripts/emon-rs-build"]
+                     {:extra-env {"EMON_RS_PPOCR" "1" "EMON_RS_PDFIUM" pdfium "EMON_CS_SHARED_COMPILATION" "false"}
+                      :out :string :err (str out "/reference-build.err") :shutdown nil})
+         driver (str/trim (:out r))]
+    (assert (zero? (:exit r)) (str "render-capable Rust reference build failed; see " out "/reference-build.err"))
+    (assert (fs/regular-file? driver) "reference builder did not return a driver")
+    (let [path (str record-reference "/PROVENANCE.edn")]
+     (spit path (pr-str (assoc (edn/read-string (slurp path))
+                              :reference-renderer {:engine "pdfium" :library-sha256 (qualification/file-sha256 library)}
+                              :record-driver-sha256 (qualification/file-sha256 driver)
+                              :live-reference-renderer-flag "--pdfium"))))
+    driver))))
 (def hosts [["rust-reference" ".cache/emon-rs-ppocr/target/release/emon-rs"]
             ["rust-native" ".cache/emon-rs-live/target/release/emon-rs"]
             ["go" ".cache/emon-go-live/emon-go"] ["java" ".cache/emon-java/emon-java"]
@@ -76,11 +98,14 @@
    (assert (fs/regular-file? (str record-reference "/PROVENANCE.edn")) "record into a qualified bitmap artifact")
    (assert (not (fs/exists? reference-recording)) "refusing to overwrite a reference recording")
    (fs/create-dirs (fs/parent reference-recording))
-   (let [r @(process (into [(second (first hosts)) "--ocr-engine=ppocr" "--out=bundle"
+   (let [r @(process (into [record-driver "--pdfium" "--ocr-engine=ppocr" "--out=bundle"
                            (str "--record=" reference-recording)] (concat flags [input]))
                     {:extra-env {"EMON_CS_SHARED_COMPILATION" "false"}
                      :out reference-bundle :err (str out "/reference.err") :shutdown nil})]
-    (assert (zero? (:exit r)) (str "Rust reference recording failed: " id))))
+    (assert (zero? (:exit r)) (str "Rust reference recording failed: " id))
+    (qualification/check-reference-renders
+      (edn/read-string (slurp (str recording "/transcript.edn")))
+      (edn/read-string (slurp (str reference-recording "/transcript.edn"))))))
   (let [digest (sha reference-bundle)]
   (doseq [[host bin] hosts]
    (doseq [disk ["."]]
@@ -96,6 +121,7 @@
     (swap! results conj {:id id :host host :equal true :bundle-sha256 digest})
     (spit (str out "/summary.json") (json/generate-string {:complete (= (* 198 6) (count @results)) :recordings 198 :results @results} {:pretty true}))))
   (when record-reference
+    (qualification/compress-bundle! reference-bundle (sha reference-bundle))
     (swap! recorded conj {:id id :input input :flags flags :population population
                          :recording (str "recordings/" i ".replay")
                          :expected (str "recordings/" i ".bundle")}))

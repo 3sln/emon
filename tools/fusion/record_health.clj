@@ -7,11 +7,12 @@
 ;; The page is rendered by pdftoppm at 150 dpi (gray) and read by the same Tesseract port the Engine uses (`host/rust/src/tess.rs`,
 ;; through P2.6's driver `test/ocr/rust/main.rs`: a `render` answered from the PGM, then an `ocr`). What is committed, in
 ;; `test/fusion/health/DIR/ID.ocr`, is ONE LINE of integers: the page's width and height in pixels, then the OCR answer's cells
-;; exactly as the engine made them (`emon.plan`'s answer record). A law (`kin/healthfusiontest.kin`) reads it back, builds the OCR
+;; exactly as the engine made them (the OIL answer record). A law (`kin/healthfusiontest.kin`) reads it back, builds the OCR
 ;; evidence with `sc-answer` as the page unit does, and aligns it to the text layer of the PDF: no engine runs and no pixel is read.
 ;; The producer (Tesseract's version, its models) is written to `test/fusion/health/PRODUCER.edn`.
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell sh]]
+         '[clojure.edn :as edn]
          '[clojure.string :as str])
 
 (def args (vec *command-line-args*))
@@ -40,11 +41,9 @@
 (def out-dir (str "test/fusion/health/" variant))
 (fs/create-dirs out-dir)
 
-(defn ocr-ans [edn]
-  ;; the :ans vector of the :ocr entry
-  (let [m (re-find #":kind :ocr :req \[[^\]]*\] :ans \[([^\]]*)\]" edn)]
-    (when-not m (throw (ex-info "no ocr entry in the transcript" {})))
-    (mapv parse-long (str/split (str/trim (second m)) #"\s+"))))
+(defn ocr-ans [text]
+  (or (some #(when (= :ocr (:kind %)) (:ans %)) (:entries (edn/read-string text)))
+      (throw (ex-info "no ocr entry in the transcript" {}))))
 
 (doseq [id ids]
   (let [pdf (str "test/corpus/synth/" variant "/" id ".pdf")
@@ -59,7 +58,7 @@
       (when-not (zero? (:exit r)) (println "FAIL" id) (System/exit (:exit r)))
       (let [ans (ocr-ans (slurp (str tdir "/transcript.edn")))]
         (spit (str out-dir "/" id ".ocr") (str w " " h " " (str/join " " ans) "\n"))
-        (when-not (fs/exists? "test/fusion/health/PRODUCER.edn")
+        (when (= id (first ids))
           (let [e (slurp (str tdir "/transcript.edn"))]
-            (spit "test/fusion/health/PRODUCER.edn" (str (second (re-find #"(:producer \{[^}]*\})" e)) "\n"))))
+            (spit "test/fusion/health/PRODUCER.edn" (str ":producer " (pr-str (:producer (edn/read-string e))) "\n"))))
         (println (format "recorded %s/%s.ocr: %dx%d px, %d cells, %d ms" out-dir id w h (count ans) (- (System/currentTimeMillis) t0)))))))

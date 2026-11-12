@@ -60,6 +60,8 @@ public static class Scriptcheck {
         int lang = 0;
         int n = 0;
         int script = 0;
+        int model = -1;
+        int sourceFirst = 0;
         if (ext < 0) {
             return 0;
         }
@@ -87,12 +89,20 @@ public static class Scriptcheck {
             }
         }
         w = Oil.OilFirstWord(an, ext);
+        sourceFirst = Oil.OilSidecars(an, ext);
         while (i < nw) {
-            lang = Oil.OilWlang(an, ext, w);
-            if (lang > 0) {
-                n = SkUnpack(lang, scr);
-                if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, 0, n)) == 1) {
+            model = Oilsrc.OxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr);
+            if (model >= 0) {
+                if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, model + 1, (model + 1) + emon.Port.CellsAt(scr, model))) == 1) {
                     return 0;
+                }
+            } else {
+                lang = Oil.OilWlang(an, ext, w);
+                if (lang > 0) {
+                    n = SkUnpack(lang, scr);
+                    if (Ocrport.OpScriptReads(script, Ocrport.OpModelScript(scr, 0, n)) == 1) {
+                        return 0;
+                    }
                 }
             }
             w = Oil.OilWordNext(an, ext, w);

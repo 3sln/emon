@@ -234,6 +234,14 @@ public static class Engine {
     }
     public static int EnPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         int status = EnPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
+        if (status == 0) {
+            if (Oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0) {
+                return 2;
+            }
+            if (Oilsrc.OxsCheck(ev.Oxs, ev.Oruns) < 0) {
+                return 2;
+            }
+        }
         Ocrengine.OeTag(rq, d.Pscr, 2 * c.Oengine);
         return status;
     }
@@ -272,6 +280,7 @@ public static class Engine {
         } else {
             Player.PlEmitGfxOpen(t, 0, ev.Epages, ev.Views, ev.Pts, ev.Refs, et, ev.Feats, gl, wd, ln, mk, fnt, ev.Paths, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Tlines, grl, gfl, ggp, grg);
         }
+        Oilsrc.OxsEmit(t, ev.Oxs);
         return 0;
     }
     public static int EnSeal(emon.Enctx.Arenas m, emon.Port.Cells chk, emon.Port.Cells @out, int level) {
@@ -696,6 +705,7 @@ public static class Engine {
                     i += 1;
                 }
                 Player.PlEmitOpen(d.Evidence, 0, ev.Epages, ev.Views, ev.Pts, ev.Refs, d.Et, ev.Feats, d.Snapg, d.Wd, d.Ln, d.Snapk, d.Snapf, ev.Paths, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Tlines, d.Cg, d.Fw, d.Fl, s.Fv, s.Fad, s.Fx, d.Hl, d.Grl, s.Sm, d.Gfl, s.Ggp, s.Grg);
+                Oilsrc.OxsEmit(d.Evidence, ev.Oxs);
             } else {
                 EnDump(d.Et, d.Snapg, d.Wd, d.Ln, d.Snapk, d.Snapf, d.Grl, d.Gfl, s.Ggp, s.Grg, ev, d.Evidence);
             }

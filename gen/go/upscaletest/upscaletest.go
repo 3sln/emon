@@ -27,6 +27,19 @@ func utFactorC(nlines int32, xh int32, conf int32) int32 {
 	return upscale.UpFactor(ans, at, 765, 990, port.NewCells())
 }
 
+func TestCropReversalPrecedesEnlargementAndAbsenceKeepsPageFallback(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var cls *port.Cells = port.NewCells()
+	var at int32 = utAnswer(ans, 272, 1, 8, 200, -1, -1)
+	oil.OilSet(ans, at, oil.OhEngine(), 2)
+	port.AssertEq(emonT, upscale.UpFactor(ans, at, 400, 400, port.NewCells()), 3, "absent classifier keeps existing page-orientation/rescue path")
+	port.CellsPush(cls, 1)
+	port.CellsPush(cls, 950)
+	oil.OilScPut(ans, at, 2, 2, 0, cls, 0, 2)
+	oil.OilEnd(ans, at)
+	port.AssertEq(emonT, upscale.UpFactor(ans, at, 400, 400, port.NewCells()), 1, "uniformly reversed crops need orientation before scale")
+}
+
 func TestTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged(emonT *testing.T) {
 	// P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
 	port.AssertEq(emonT, utFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice")

@@ -9,6 +9,7 @@ import (
 	"emon/ocr"
 	"emon/ocrport"
 	"emon/oil"
+	"emon/oilsrc"
 	"emon/plan"
 	"emon/port"
 )
@@ -74,6 +75,8 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 	var lang int32 = 0
 	var n int32 = 0
 	var script int32 = 0
+	var model int32 = -1
+	var sourceFirst int32 = 0
 	if ext < 0 {
 		return 0
 	}
@@ -101,12 +104,20 @@ func SkUnread(an *port.Cells, at int32, scr *port.Cells) int32 {
 		}
 	}
 	w = oil.OilFirstWord(an, ext)
+	sourceFirst = oil.OilSidecars(an, ext)
 	for i < nw {
-		lang = oil.OilWlang(an, ext, w)
-		if lang > 0 {
-			n = SkUnpack(lang, scr)
-			if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, 0, n)) == 1 {
+		model = oilsrc.OxsPolicyValue(an, ext, sourceFirst, 3, i, 1, 3, scr)
+		if model >= 0 {
+			if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, model+1, (model+1)+port.CellsAt(scr, model))) == 1 {
 				return 0
+			}
+		} else {
+			lang = oil.OilWlang(an, ext, w)
+			if lang > 0 {
+				n = SkUnpack(lang, scr)
+				if ocrport.OpScriptReads(script, ocrport.OpModelScript(scr, 0, n)) == 1 {
+					return 0
+				}
 			}
 		}
 		w = oil.OilWordNext(an, ext, w)

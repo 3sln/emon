@@ -1,9 +1,9 @@
 ;; Laws for `emon.upscale` (D564; SPEC 3.4, 8.3; D211, D215): the effective resolution estimated from the text's x-height, the factor a raster is read
 ;; again by (and when it is not: large enough text, a page turned, a raster too big), the weights of the cubic, and the enlarged raster itself.
 (ns emon.upscaletest
-  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find oil-sc-put oil-set oh-engine]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
-            [emon.port :refer [cells-len cells-at bms-put bms-get bms-has bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
+            [emon.port :refer [cells-len cells-at cells-push bms-put bms-get bms-has bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
 
             [emon.upscale :refer [up-receipt-score up-eff-dpi100 up-xheight up-score up-factor up-weights up-make up-max up-xh-trigger]]
             [kin.lang :refer [defn return let set while if do comment
@@ -20,6 +20,15 @@
 (defn ^I32 ut-factor-c [^I32 nlines ^I32 xh ^I32 conf]
     (let [^Cells ans (new-cells) ^I32 at (ofx-lines ans 272 nlines xh 200 1 conf -1 1281455214 100 -1 0 0 0)]
       (return (up-factor ans at 765 990 (new-cells)))))
+
+(deftest test-crop-reversal-precedes-enlargement-and-absence-keeps-page-fallback
+  (let [^Cells ans (new-cells) ^Cells cls (new-cells)
+        ^I32 at (ut-answer ans 272 1 8 200 -1 -1)]
+    (oil-set ans at (oh-engine) 2)
+    (assert-eq (up-factor ans at 400 400 (new-cells)) 3 "absent classifier keeps existing page-orientation/rescue path")
+    (cells-push cls 1) (cells-push cls 950)
+    (oil-sc-put ans at 2 2 0 cls 0 2) (oil-end ans at)
+    (assert-eq (up-factor ans at 400 400 (new-cells)) 1 "uniformly reversed crops need orientation before scale")))
 
 (deftest test-text-a-little-over-the-trigger-that-the-engine-read-badly-is-read-again-enlarged
   (comment "P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was")

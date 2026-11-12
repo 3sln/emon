@@ -19,6 +19,19 @@ public static class Upscaletest {
         return Upscale.UpFactor(ans, at, 765, 990, emon.Port.NewCells());
     }
     [Xunit.Fact]
+    public static void TestCropReversalPrecedesEnlargementAndAbsenceKeepsPageFallback() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells cls = emon.Port.NewCells();
+        int at = UtAnswer(ans, 272, 1, 8, 200, -1, -1);
+        Oil.OilSet(ans, at, Oil.OhEngine(), 2);
+        emon.Testport.AssertEq(Upscale.UpFactor(ans, at, 400, 400, emon.Port.NewCells()), 3, "absent classifier keeps existing page-orientation/rescue path");
+        emon.Port.CellsPush(cls, 1);
+        emon.Port.CellsPush(cls, 950);
+        Oil.OilScPut(ans, at, 2, 2, 0, cls, 0, 2);
+        Oil.OilEnd(ans, at);
+        emon.Testport.AssertEq(Upscale.UpFactor(ans, at, 400, 400, emon.Port.NewCells()), 1, "uniformly reversed crops need orientation before scale");
+    }
+    [Xunit.Fact]
     public static void TestTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged() {
         // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
         emon.Testport.AssertEq(UtFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");

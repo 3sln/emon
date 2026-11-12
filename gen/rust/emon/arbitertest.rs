@@ -365,8 +365,8 @@ fn test_an_unhealthy_font_gives_its_group_to_ocr() {
     at_group(cg, refs, w2, 1, o2, 1, 1000);
     at_run(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
     crate::testport::assert_eq(fw_count(nfw), 3, "three words");
-    crate::testport::assert_eq(crate::port::cells_at(nfw, 11), crate::port::cells_at(ow, 11), "the first word's text is OCR's");
-    crate::testport::assert_eq(crate::port::cells_at(nfw, 24 + 11), crate::port::cells_at(ow, 28 + 11), "so is the second's");
+    crate::testport::assert_eq(crate::port::cells_at(nfw, 11), ow_get(ow, o0, hd_tstart()), "the first word's text is OCR's");
+    crate::testport::assert_eq(crate::port::cells_at(nfw, 24 + 11), ow_get(ow, o1, hd_tstart()), "so is the second's");
     crate::testport::assert_eq(crate::port::cells_at(nfw, 48 + 11), crate::port::cells_at(fw, 48 + 11), "the healthy font's is the text layer's");
     crate::testport::assert_eq(crate::port::cells_at(nfw, 1), 0, "the box is the text layer's");
     crate::testport::assert_eq(crate::port::cells_at(nfw, 4), 1000, "all of it, ascent and descent");

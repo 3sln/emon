@@ -22,6 +22,7 @@
             [emon.pdfcontent :refer [pc-document]]
             [emon.tlhealth :refer [th-run]]
             [emon.scan :refer [sc-request sc-answer]]
+            [emon.oilsrc :refer [oxs-collect]]
             [emon.evidence :refer [ev-init vw-new vk-render hd-tstart hd-tlen hd-x0 hd-y0 hd-x1 hd-y1 ea-owords wf-font]]
             [emon.player :refer [cg-count cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-tline
                                  cgf-sim cgf-simfold cgf-flags]]
@@ -131,10 +132,11 @@
                           ^:mut ^Cells pg ^:mut ^Cells gx ^:mut ^Cells fw ^:mut ^Cells fl ^:mut ^Cells fa
                           ^:mut ^Cells hl ^:mut ^Cells hsc
                           ^:mut ^Cells cg ^:mut ^Cells scr ^:mut ^Cells gp ^:mut ^Cells dp
-                          ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt]
+                          ^:mut ^Cells ta ^:mut ^Cells tb ^:mut ^Cells tt ^:mut ^Cells oxs]
   (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
   (ev-init epages views pts refs etext feats glyphs words lines marks fonts paths images
            oruns oblocks olines owords osyms oalts inks components rules prims tlines)
+  (cells-drop oxs 0)
   (cells-drop cg 0)
   (let [^I32 o (pd-open s ar dc a b st)]
     (if (src-missed s) (return (us-need-bytes)))
@@ -194,6 +196,7 @@
                           (set view (vw-new views (+ i 1) (vk-render) rid -1 w h (* dpi 100) (lay-full) -1 0 0 0 0 0))
                           (sc-answer an ao (+ i 1) view oid 0 views epages etext oruns oblocks olines owords osyms oalts feats))))))
               (set i (+ i 1))))
+        (oxs-collect an views oruns olines oxs)
         (comment "the alignment; `reps` > 1 repeats it (clearing what it appended) so a host can time it apart from the document pass")
         (set r0 (cells-len refs))
         (set rep 0)

@@ -6,6 +6,7 @@ use crate::emon::model::*;
 use crate::emon::ocr::*;
 use crate::emon::ocrport::*;
 use crate::emon::oil::*;
+use crate::emon::oilsrc::*;
 use crate::emon::plan::*;
 
 pub fn sk_min_conf() -> i32 {
@@ -63,6 +64,8 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
     let mut lang: i32 = 0;
     let mut n: i32 = 0;
     let mut script: i32 = 0;
+    let mut model: i32 = -1;
+    let mut source_first: i32 = 0;
     if ext < 0 {
         return 0;
     }
@@ -90,12 +93,20 @@ pub fn sk_unread(an: &mut crate::port::Cells, at: i32, mut scr: &mut crate::port
         }
     }
     w = oil_first_word(an, ext);
+    source_first = oil_sidecars(an, ext);
     while i < nw {
-        lang = oil_wlang(an, ext, w);
-        if lang > 0 {
-            n = sk_unpack(lang, scr);
-            if op_script_reads(script, op_model_script(scr, 0, n)) == 1 {
+        model = oxs_policy_value(an, ext, source_first, 3, i, 1, 3, scr);
+        if model >= 0 {
+            if op_script_reads(script, op_model_script(scr, model + 1, (model + 1) + crate::port::cells_at(scr, model))) == 1 {
                 return 0;
+            }
+        } else {
+            lang = oil_wlang(an, ext, w);
+            if lang > 0 {
+                n = sk_unpack(lang, scr);
+                if op_script_reads(script, op_model_script(scr, 0, n)) == 1 {
+                    return 0;
+                }
             }
         }
         w = oil_word_next(an, ext, w);

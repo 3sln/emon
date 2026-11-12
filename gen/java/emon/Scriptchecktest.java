@@ -16,6 +16,19 @@ public final class Scriptchecktest {
     public static int unreadOf(int n, int script, int sconf, int lang, int lang0) {
         return unreadOfD(n, script, sconf, lang, lang0, 0);
     }
+    public static void testSourceModelOverridesLanguageAndAbsenceKeepsTheFallback() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells model = emon.Port.newCells();
+        int at = skAnswer(ans, 272, 5, 1132032620, 400, 1701734144, 1701734144, 0);
+        emon.Testport.assertEq(Scriptcheck.skUnread(ans, at, emon.Port.newCells()), 1, "absent source model uses ISO language");
+        emon.Port.cellsPush(model, 3);
+        emon.Port.cellsPush(model, 114);
+        emon.Port.cellsPush(model, 117);
+        emon.Port.cellsPush(model, 115);
+        Oil.oilScPut(ans, at, 3, 3, 0, model, 0, 4);
+        Oil.oilEnd(ans, at);
+        emon.Testport.assertEq(Scriptcheck.skUnread(ans, at, emon.Port.newCells()), 0, "the retained rus model reads Cyrillic");
+    }
     public static void testALanguageCellUnpacksToItsLetters() {
         emon.Port.Cells out = emon.Port.newCells();
         emon.Testport.assertEq(Scriptcheck.skUnpack(1701734144, out), 3, "`eng` is three letters");

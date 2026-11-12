@@ -14334,3 +14334,13 @@ Manual release.yml dispatch accepts version (blank reads the selected ref; other
 
 - [ ] **Signed off** (maintainer)
 
+### D887 — Retain OIL source evidence and expose the raw web qualification boundary
+
+OIL source frames retain typed adapter values by run, namespace, key, subject and source-local row. Line quad pointers index logical frames; quad and point payloads are normalized into page coordinates during ingestion. A scalar pixel length is refused until a registered key defines its axis. Policy reads require engine/namespace and registry checks. Planning uses temporary frames for non-geometric values before persistent page ingestion; the empty denylist remains explicit. Tesseract source models inform script checks, with word-language fallback when absent. Uniform reversed PP crop decisions postpone enlargement; absent or mixed decisions retain the orientation fallback. The hybrid incumbent remains unchanged. `bb oil-check` checks consumer sites and present/absent laws, and rejects unguarded source access.
+
+The new frozen native qualification passes six transports on 225 canonical OIL answers, 3×3 determinism and 198 six-driver document replays. Fixed CORD and SROIE P/R remain within 0.000001 of the published D864 numbers. The proper qualification artifact carries graph, runtime, policy, binary and renderer provenance, with checksum-verified compressed recordings.
+
+Strict Node qualification exposes ten raw-value differences of one per mille: seven word confidences and three detector-score sidecars; all other cells match. An isolated higher-precision experiment resolves the seven word cases but leaves the three detector cases. Production inference and the exact comparer are unchanged. Round 6 requires byte equality while D872 forbids transport-driven quantization or native policy changes: resolving that acceptance conflict requires a maintainer ruling. Chrome cannot launch in this sandbox. Phase 1 is not accepted; identity generalization and the final recording/acceptance pass remain unfinished.
+
+- [ ] **Signed off** (maintainer)
+

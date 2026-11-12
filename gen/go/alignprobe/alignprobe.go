@@ -5,6 +5,7 @@ package alignprobe
 
 import (
 	"emon/evidence"
+	"emon/oilsrc"
 	"emon/pdfcontent"
 	"emon/pdfdoc"
 	"emon/plan"
@@ -121,9 +122,10 @@ func apDump(t *strings.Builder, etext *port.Cells, refs *port.Cells, words *port
 	return 0
 }
 
-func ApUnit(s *port.Src, an *port.Cells, rq *port.Cells, loc *port.Cells, dump *strings.Builder, reps int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, pg *port.Cells, gx *port.Cells, fw *port.Cells, fl *port.Cells, fa *port.Cells, hl *port.Cells, hsc *port.Cells, cg *port.Cells, scr *port.Cells, gp *port.Cells, dp *port.Cells, ta *port.Cells, tb *port.Cells, tt *port.Cells) int32 {
+func ApUnit(s *port.Src, an *port.Cells, rq *port.Cells, loc *port.Cells, dump *strings.Builder, reps int32, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, ar *port.Cells, dc *port.Cells, a *port.Cells, b *port.Cells, st *port.Cells, cx *port.Cells, ox *port.Cells, cs *port.Cells, out *port.Cells, f0 *port.Cells, f1 *port.Cells, f2 *port.Cells, f3 *port.Cells, pg *port.Cells, gx *port.Cells, fw *port.Cells, fl *port.Cells, fa *port.Cells, hl *port.Cells, hsc *port.Cells, cg *port.Cells, scr *port.Cells, gp *port.Cells, dp *port.Cells, ta *port.Cells, tb *port.Cells, tt *port.Cells, oxs *port.Cells) int32 {
 	// One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
 	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.CellsDrop(oxs, 0)
 	port.CellsDrop(cg, 0)
 	var o int32 = pdfdoc.PdOpen(s, ar, dc, a, b, st)
 	if port.SrcMissed(s) {
@@ -206,6 +208,7 @@ func ApUnit(s *port.Src, an *port.Cells, rq *port.Cells, loc *port.Cells, dump *
 		}
 		i += 1
 	}
+	oilsrc.OxsCollect(an, views, oruns, olines, oxs)
 	// the alignment; `reps` > 1 repeats it (clearing what it appended) so a host can time it apart from the document pass
 	r0 = port.CellsLen(refs)
 	rep = 0

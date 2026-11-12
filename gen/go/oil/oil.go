@@ -1807,6 +1807,80 @@ func OilEnd(c *port.Cells, at int32) int32 {
 	return OilEndSource(c, at, 0)
 }
 
+func OilKeyUsable(c *port.Cells, at int32, ns int32, key int32) int32 {
+	// Policy readers require the source namespace and a policy-readable registered key. Phase 1 has no denied observed identities.
+	if OilGet(c, at, OhEngine()) != ns {
+		return 0
+	}
+	var registry int32 = oilregistry.OilKeyFind(ns, key)
+	if registry < 0 {
+		return 0
+	}
+	return oilregistry.OilKeyField(registry, 6)
+}
+
+func OilSidecars(c *port.Cells, at int32) int32 {
+	var p int32 = OilFirstWord(c, at)
+	var i int32 = 0
+	for i < OilNwords(c, at) {
+		p = OilWordNext(c, at, p)
+		i += 1
+	}
+	return p
+}
+
+func OilSourceValueFrom(c *port.Cells, at int32, first int32, subject int32, row int32, ns int32, key int32) int32 {
+	// As oil-source-value, with the validated answer's cached oil-sidecars offset. Planning can inspect every word without rescanning its symbols for each lookup.
+	if (row < 0) || (OilGet(c, at, OhEngine()) != ns) {
+		return -1
+	}
+	var registry int32 = oilregistry.OilKeyFind(ns, key)
+	var p int32 = first
+	var i int32 = 0
+	if registry < 0 {
+		return -1
+	}
+	if subject != oilregistry.OilKeyField(registry, 4) {
+		return -1
+	}
+	for i < OilGet(c, at, OhNsc()) {
+		if (port.CellsAt(c, p+1) == ns) && (port.CellsAt(c, p+2) == key) {
+			var q int32 = p + 6
+			var k int32 = 0
+			var index int32 = 0
+			var width int32 = 0
+			for k < port.CellsAt(c, p+5) {
+				index = k
+				if port.CellsAt(c, p+4) == 0 {
+					index = port.CellsAt(c, q)
+					q += 1
+				}
+				if index == row {
+					return q
+				}
+				width = oilregistry.OilKeyField(registry, 3)
+				if oilregistry.OilKeyField(registry, 2) == 9 {
+					width = 1 + port.CellsAt(c, q)
+				}
+				q += width
+				k += 1
+			}
+		}
+		p += port.CellsAt(c, p)
+		i += 1
+	}
+	return -1
+}
+
+func OilSourceValue(c *port.Cells, at int32, subject int32, row int32, ns int32, key int32) int32 {
+	// Payload offset in a validated OIL answer, or -1 absent. Dense and sealed sparse input are supported; CPS includes its length. Policy must first call oil-key-usable.
+	if OilGet(c, at, OhNsc()) == 0 {
+		return -1
+	}
+	var first int32 = OilSidecars(c, at)
+	return OilSourceValueFrom(c, at, first, subject, row, ns, key)
+}
+
 func oilFlatBoxValid(v *port.Cells, p int32) int32 {
 	if (port.CellsAt(v, p+2) < 0) || (port.CellsAt(v, p+3) < 0) {
 		return 0

@@ -28,6 +28,20 @@ func unreadOf(n int32, script int32, sconf int32, lang int32, lang0 int32) int32
 	return unreadOfD(n, script, sconf, lang, lang0, 0)
 }
 
+func TestSourceModelOverridesLanguageAndAbsenceKeepsTheFallback(emonT *testing.T) {
+	var ans *port.Cells = port.NewCells()
+	var model *port.Cells = port.NewCells()
+	var at int32 = skAnswer(ans, 272, 5, 1132032620, 400, 1701734144, 1701734144, 0)
+	port.AssertEq(emonT, scriptcheck.SkUnread(ans, at, port.NewCells()), 1, "absent source model uses ISO language")
+	port.CellsPush(model, 3)
+	port.CellsPush(model, 114)
+	port.CellsPush(model, 117)
+	port.CellsPush(model, 115)
+	oil.OilScPut(ans, at, 3, 3, 0, model, 0, 4)
+	oil.OilEnd(ans, at)
+	port.AssertEq(emonT, scriptcheck.SkUnread(ans, at, port.NewCells()), 0, "the retained rus model reads Cyrillic")
+}
+
 func TestALanguageCellUnpacksToItsLetters(emonT *testing.T) {
 	var out *port.Cells = port.NewCells()
 	port.AssertEq(emonT, scriptcheck.SkUnpack(1701734144, out), 3, "`eng` is three letters")

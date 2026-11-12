@@ -54,7 +54,7 @@
          [:port    "host/wasm/src/ppocr.rs"             "ocr ocrengine ocrport plan"]
          [:test "host/rust/tests/engine.rs" "ocrengine oil plan"]
          [:test "test/driver/rust/main.rs" "oil"]      ; `--fake-ports` (P10.2): the answers of a stand-in Ocr, built with the forms a real engine's adapter uses
-         [:test "test/driver/go/main.go" "oil plan"]
+         [:test "test/driver/go/main.go" "oil"]
          [:driver  "host/go/engine.go"                  "config enctx engine html model ocrport plan planloop"]
          [:machine "host/go/planrun/planrun.go"         "plan planctx planloop"]
          [:machine "host/go/planrun/transcript.go"      "planloop transcript transcriptctx"]

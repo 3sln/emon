@@ -56,10 +56,11 @@ struct EvOcr {
     owords: Cells,
     osyms: Cells,
     oalts: Cells,
+    oxs: Cells,
 }
 impl EvOcr {
     fn new() -> Self {
-        EvOcr { oruns: Cells::new(), oblocks: Cells::new(), olines: Cells::new(), owords: Cells::new(), osyms: Cells::new(), oalts: Cells::new() }
+        EvOcr { oruns: Cells::new(), oblocks: Cells::new(), olines: Cells::new(), owords: Cells::new(), osyms: Cells::new(), oalts: Cells::new(), oxs: Cells::new() }
     }
 }
 struct EvTrace {
@@ -166,10 +167,10 @@ fn main() {
     let mut unit = |an: &mut Cells, rq: &mut Cells| -> i32 {
         let view = base.view();
         let (mut sh, mut tx, mut oc, mut tr) = (EvShared::new(), EvText::new(), EvOcr::new(), EvTrace::new());
-        let st = emon::ocrprobe::op_unit(&view, an, rq, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines);
+        let st = emon::ocrprobe::op_unit(&view, an, rq, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines, &mut oc.oxs);
         if st == UNIT_DONE {
             evidence.clear();
-            emon::evidence::ev_emit(&mut evidence, 0, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines);
+            emon::oilsrc::oxs_emit_evidence(&mut evidence, 0, &mut sh.epages, &mut sh.views, &mut sh.pts, &mut sh.refs, &mut sh.etext, &mut sh.feats, &mut tx.glyphs, &mut tx.words, &mut tx.lines, &mut tx.marks, &mut tx.fonts, &mut tx.paths, &mut tx.images, &mut oc.oruns, &mut oc.oblocks, &mut oc.olines, &mut oc.owords, &mut oc.osyms, &mut oc.oalts, &mut tr.inks, &mut tr.components, &mut tr.rules, &mut tr.prims, &mut tr.tlines, &mut oc.oxs);
         }
         st
     };

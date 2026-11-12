@@ -6,6 +6,7 @@ package ocrprobe
 import (
 	"emon/evidence"
 	"emon/ocr"
+	"emon/oilsrc"
 	"emon/plan"
 	"emon/port"
 	"emon/scan"
@@ -15,9 +16,10 @@ func opCpt(px int32, dpi int32) int32 {
 	return (px * 7200) / dpi
 }
 
-func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells) int32 {
+func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, epages *port.Cells, views *port.Cells, pts *port.Cells, refs *port.Cells, etext *port.Cells, feats *port.Cells, glyphs *port.Cells, words *port.Cells, lines *port.Cells, marks *port.Cells, fonts *port.Cells, paths *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, inks *port.Cells, components *port.Cells, rules *port.Cells, prims *port.Cells, tlines *port.Cells, oxs *port.Cells) int32 {
 	// One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
 	evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines)
+	port.CellsDrop(oxs, 0)
 	var n int32 = port.SrcLen(s)
 	var mid int32 = port.SrcU8(s, n/2)
 	if port.SrcMissed(s) {
@@ -51,5 +53,6 @@ func OpUnit(s *port.Src, an *port.Cells, rq *port.Cells, epages *port.Cells, vie
 	if plan.AnOk(an, o2) == 1 {
 		scan.ScAnswer(an, o2, 1, 0, 2, 0, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 	}
+	oilsrc.OxsCollect(an, views, oruns, olines, oxs)
 	return plan.UsDone()
 }

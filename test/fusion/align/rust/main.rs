@@ -96,10 +96,11 @@ fn main() {
         let mut c: Vec<Cells> = (0..51).map(|_| Cells::new()).collect();
         let mut d = String::new();
         let mut loc = Cells::new();
+        let mut oxs = Cells::new();
         let (ev, rest) = c.split_at_mut(24);
         let [epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines] = ev else { unreachable!() };
         let [ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, pg, gx, fw, fl, fa, hl, hsc, cg, scr, gp, dp, ta, tb, tt] = rest else { unreachable!() };
-        let st_ = emon::alignprobe::ap_unit(view, an, rq, &mut loc, &mut d, reps, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, pg, gx, fw, fl, fa, hl, hsc, cg, scr, gp, dp, ta, tb, tt);
+        let st_ = emon::alignprobe::ap_unit(view, an, rq, &mut loc, &mut d, reps, epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines, ar, dc, a, b, st, cx, ox, cs, out, f0, f1, f2, f3, pg, gx, fw, fl, fa, hl, hsc, cg, scr, gp, dp, ta, tb, tt, &mut oxs);
         (st_, d)
     };
     let bench = std::env::var("EMON_ALIGN_BENCH").is_ok();

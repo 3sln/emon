@@ -1693,6 +1693,76 @@ pub fn oil_end_source(mut c: &mut crate::port::Cells, at: i32, flags: i32) -> i3
 pub fn oil_end(mut c: &mut crate::port::Cells, at: i32) -> i32 {
     return oil_end_source(c, at, 0);
 }
+pub fn oil_key_usable(c: &mut crate::port::Cells, at: i32, ns: i32, key: i32) -> i32 {
+    // Policy readers require the source namespace and a policy-readable registered key. Phase 1 has no denied observed identities.
+    if oil_get(c, at, oh_engine()) != ns {
+        return 0;
+    }
+    let registry: i32 = oil_key_find(ns, key);
+    if registry < 0 {
+        return 0;
+    }
+    return oil_key_field(registry, 6);
+}
+pub fn oil_sidecars(c: &mut crate::port::Cells, at: i32) -> i32 {
+    let mut p: i32 = oil_first_word(c, at);
+    let mut i: i32 = 0;
+    while i < oil_nwords(c, at) {
+        p = oil_word_next(c, at, p);
+        i += 1;
+    }
+    return p;
+}
+pub fn oil_source_value_from(c: &mut crate::port::Cells, at: i32, first: i32, subject: i32, row: i32, ns: i32, key: i32) -> i32 {
+    // As oil-source-value, with the validated answer's cached oil-sidecars offset. Planning can inspect every word without rescanning its symbols for each lookup.
+    if (row < 0) || (oil_get(c, at, oh_engine()) != ns) {
+        return -1;
+    }
+    let registry: i32 = oil_key_find(ns, key);
+    let mut p: i32 = first;
+    let mut i: i32 = 0;
+    if registry < 0 {
+        return -1;
+    }
+    if subject != oil_key_field(registry, 4) {
+        return -1;
+    }
+    while i < oil_get(c, at, oh_nsc()) {
+        if (crate::port::cells_at(c, p + 1) == ns) && (crate::port::cells_at(c, p + 2) == key) {
+            let mut q: i32 = p + 6;
+            let mut k: i32 = 0;
+            let mut index: i32 = 0;
+            let mut width: i32 = 0;
+            while k < crate::port::cells_at(c, p + 5) {
+                index = k;
+                if crate::port::cells_at(c, p + 4) == 0 {
+                    index = crate::port::cells_at(c, q);
+                    q += 1;
+                }
+                if index == row {
+                    return q;
+                }
+                width = oil_key_field(registry, 3);
+                if oil_key_field(registry, 2) == 9 {
+                    width = 1 + crate::port::cells_at(c, q);
+                }
+                q += width;
+                k += 1;
+            }
+        }
+        p += crate::port::cells_at(c, p);
+        i += 1;
+    }
+    return -1;
+}
+pub fn oil_source_value(c: &mut crate::port::Cells, at: i32, subject: i32, row: i32, ns: i32, key: i32) -> i32 {
+    // Payload offset in a validated OIL answer, or -1 absent. Dense and sealed sparse input are supported; CPS includes its length. Policy must first call oil-key-usable.
+    if oil_get(c, at, oh_nsc()) == 0 {
+        return -1;
+    }
+    let first: i32 = oil_sidecars(c, at);
+    return oil_source_value_from(c, at, first, subject, row, ns, key);
+}
 pub(crate) fn oil_flat_box_valid(v: &mut crate::port::Cells, p: i32) -> i32 {
     if (crate::port::cells_at(v, p + 2) < 0) || (crate::port::cells_at(v, p + 3) < 0) {
         return 0;

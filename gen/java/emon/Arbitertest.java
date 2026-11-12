@@ -357,8 +357,8 @@ public final class Arbitertest {
         atGroup(cg, refs, w2, 1, o2, 1, 1000);
         atRun(cg, refs, fw, fl, et, feats, ow, im, ep, nfw, nfl, fv, fx, afa);
         emon.Testport.assertEq(Player.fwCount(nfw), 3, "three words");
-        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 11), emon.Port.cellsAt(ow, 11), "the first word's text is OCR's");
-        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 24 + 11), emon.Port.cellsAt(ow, 28 + 11), "so is the second's");
+        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 11), Evidence.owGet(ow, o0, Evidence.hdTstart()), "the first word's text is OCR's");
+        emon.Testport.assertEq(emon.Port.cellsAt(nfw, 24 + 11), Evidence.owGet(ow, o1, Evidence.hdTstart()), "so is the second's");
         emon.Testport.assertEq(emon.Port.cellsAt(nfw, 48 + 11), emon.Port.cellsAt(fw, 48 + 11), "the healthy font's is the text layer's");
         emon.Testport.assertEq(emon.Port.cellsAt(nfw, 1), 0, "the box is the text layer's");
         emon.Testport.assertEq(emon.Port.cellsAt(nfw, 4), 1000, "all of it, ascent and descent");

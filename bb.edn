@@ -107,6 +107,8 @@
          :task (shell "kin/scripts/drift")}
   hosts {:doc "Do the four host trees agree, do the call sites match, and does no host file name a generated stage module outside the driver, port, fulfilment and API allowlist (P10.6 S5, D486; self-tested by planting a violation in each language)?"
          :task (shell "kin/scripts/hosts")}
+  oil-check {:doc "D883: registered source policy consumers and their present/absent laws; guarded source access, with planted-violation checks."
+             :task (shell "bb" "tools/oil_check.clj")}
   accuracy {:doc "Score predictions against the synthetic gold and ratchet test/scoreboard.edn (and, P9.5, require the Go, Java, C#, C and pod hosts to print the Rust predictor's Model byte for byte) (a gate since P1.10, D145).  bb accuracy [--predictor emon|oracle|degraded|fixtures] [--update] [--only ID]"
             :task (apply shell "bb" "tools/accuracy/accuracy.clj" *command-line-args*)}
   calibration {:doc "How well do the Model's confidences say how often they are right: reliability (ten bins), ECE and Brier per node kind, source class, corpus category and run, over the committed synthetic corpus as the real pipeline converts it (the committed OCR and fusion replays included). A report, not a gate (the gate is the conf-ece-*/conf-brier-* rows of `bb accuracy`). --write: the committed data (test/calibration/); --fit: fit the per-kind isotonic map of SPEC 9.6 from RAW confidences and write kin/calibdata.kin; --refit: the whole recalibration (identity table, bb emit, collect, fit, bb emit) (P10.1, D370-D374).  bb calibration [--write | --fit | --refit]"

@@ -42,6 +42,55 @@ public static class Oiltest {
         emon.Testport.AssertEq(Oil.OilNativeCheck(Oil.OcBlocks(), Oil.OcBaseline()), 0, "cannot claim an absent group as native");
     }
     [Xunit.Fact]
+    public static void TestSourcePolicyReadsRequireRegistrationAndTheSourceEngine() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        emon.Port.Cells value = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.OilLine(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 2, 0, 2, 2), -1, "registered key can be absent");
+        emon.Port.CellsPush(value, 1);
+        emon.Port.CellsPush(value, 900);
+        Oil.OilScPut(c, at, 2, 2, 0, value, 0, 2);
+        Oil.OilEnd(c, at);
+        int p = Oil.OilSourceValue(c, at, 2, 0, 2, 2);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, p), 1, "measured reversal");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, p + 1), 900, "measured probability");
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 2, 1, 2, 2), -1, "unmeasured row");
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 3, 0, 2, 2), -1, "wrong subject");
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 2, 0, 1, 2), -1, "different source engine");
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 2, 0, 2, 99), -1, "unknown key");
+        emon.Testport.AssertEq(Oil.OilKeyUsable(c, at, 2, 2), 1, "registered classifier policy key");
+        emon.Testport.AssertEq(Oil.OilKeyUsable(c, at, 2, 1), 0, "detector score is diagnostic only");
+        emon.Testport.AssertEq(Oil.OilKeyUsable(c, at, 1, 3), 0, "another engines model key is unusable");
+        emon.Testport.AssertEq(Oil.OilKeyUsable(c, at, 2, 99), 0, "unknown key cannot influence policy");
+    }
+    [Xunit.Fact]
+    public static void TestSourceLookupHandlesDenseInputAndSealedSparseRows() {
+        emon.Port.Cells c = emon.Port.NewCells();
+        int at = Oil.OilBegin(c, 1, Oil.OenPpocr(), 0, 0, 1, 0, 0, 1);
+        Oil.OilLine(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        Oil.OilLine(c, at, 0, 10, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        emon.Port.CellsPush(c, 10);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 2);
+        emon.Port.CellsPush(c, 0);
+        emon.Port.CellsPush(c, 100);
+        emon.Port.CellsPush(c, 1);
+        emon.Port.CellsPush(c, 900);
+        Oil.OilSet(c, at, Oil.OhNsc(), 1);
+        int denseValue = Oil.OilSourceValue(c, at, 2, 1, 2, 2);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, denseValue), 1, "dense row index is implicit");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, denseValue + 1), 900, "dense fixed-width value");
+        Oil.OilEnd(c, at);
+        emon.Testport.AssertEq(Oil.OilSourceValue(c, at, 2, 0, 2, 2), -1, "implied classifier value becomes absent");
+        int sparseValue = Oil.OilSourceValue(c, at, 2, 1, 2, 2);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, sparseValue), 1, "sparse lookup retains the original row index");
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, sparseValue + 1), 900, "sealing preserves informative measurements");
+    }
+    [Xunit.Fact]
     public static void TestConfidenceRoundingIsSymmetric() {
         emon.Testport.AssertEq(Oil.OilPm(12345, 100), 123, "round down");
         emon.Testport.AssertEq(Oil.OilPm(12350, 100), 124, "positive half away from zero");

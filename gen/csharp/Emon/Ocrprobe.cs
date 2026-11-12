@@ -8,9 +8,10 @@ public static class Ocrprobe {
     internal static int OpCpt(int px, int dpi) {
         return (px * 7200) / dpi;
     }
-    public static int OpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines) {
+    public static int OpUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells oxs) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
         Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.CellsDrop(oxs, 0);
         int n = emon.Port.SrcLen(s);
         int mid = emon.Port.SrcU8(s, n / 2);
         if (emon.Port.SrcMissed(s)) {
@@ -44,6 +45,7 @@ public static class Ocrprobe {
         if (Plan.AnOk(an, o2) == 1) {
             Scan.ScAnswer(an, o2, 1, 0, 2, 0, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         }
+        Oilsrc.OxsCollect(an, views, oruns, olines, oxs);
         return Plan.UsDone();
     }
 }

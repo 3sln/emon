@@ -18,6 +18,18 @@ public final class Upscaletest {
         int at = Oilfixturetest.ofxLines(ans, 272, nlines, xh, 200, 1, conf, -1, 1281455214, 100, -1, 0, 0, 0);
         return Upscale.upFactor(ans, at, 765, 990, emon.Port.newCells());
     }
+    public static void testCropReversalPrecedesEnlargementAndAbsenceKeepsPageFallback() {
+        emon.Port.Cells ans = emon.Port.newCells();
+        emon.Port.Cells cls = emon.Port.newCells();
+        int at = utAnswer(ans, 272, 1, 8, 200, -1, -1);
+        Oil.oilSet(ans, at, Oil.ohEngine(), 2);
+        emon.Testport.assertEq(Upscale.upFactor(ans, at, 400, 400, emon.Port.newCells()), 3, "absent classifier keeps existing page-orientation/rescue path");
+        emon.Port.cellsPush(cls, 1);
+        emon.Port.cellsPush(cls, 950);
+        Oil.oilScPut(ans, at, 2, 2, 0, cls, 0, 2);
+        Oil.oilEnd(ans, at);
+        emon.Testport.assertEq(Upscale.upFactor(ans, at, 400, 400, emon.Port.newCells()), 1, "uniformly reversed crops need orientation before scale");
+    }
     public static void testTextALittleOverTheTriggerThatTheEngineReadBadlyIsReadAgainEnlarged() {
         // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
         emon.Testport.assertEq(utFactorC(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");

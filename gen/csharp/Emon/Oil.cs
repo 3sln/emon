@@ -1693,6 +1693,76 @@ public static class Oil {
     public static int OilEnd(emon.Port.Cells c, int at) {
         return OilEndSource(c, at, 0);
     }
+    public static int OilKeyUsable(emon.Port.Cells c, int at, int ns, int key) {
+        // Policy readers require the source namespace and a policy-readable registered key. Phase 1 has no denied observed identities.
+        if (OilGet(c, at, OhEngine()) != ns) {
+            return 0;
+        }
+        int registry = Oilregistry.OilKeyFind(ns, key);
+        if (registry < 0) {
+            return 0;
+        }
+        return Oilregistry.OilKeyField(registry, 6);
+    }
+    public static int OilSidecars(emon.Port.Cells c, int at) {
+        int p = OilFirstWord(c, at);
+        int i = 0;
+        while (i < OilNwords(c, at)) {
+            p = OilWordNext(c, at, p);
+            i += 1;
+        }
+        return p;
+    }
+    public static int OilSourceValueFrom(emon.Port.Cells c, int at, int first, int subject, int row, int ns, int key) {
+        // As oil-source-value, with the validated answer's cached oil-sidecars offset. Planning can inspect every word without rescanning its symbols for each lookup.
+        if ((row < 0) || (OilGet(c, at, OhEngine()) != ns)) {
+            return -1;
+        }
+        int registry = Oilregistry.OilKeyFind(ns, key);
+        int p = first;
+        int i = 0;
+        if (registry < 0) {
+            return -1;
+        }
+        if (subject != Oilregistry.OilKeyField(registry, 4)) {
+            return -1;
+        }
+        while (i < OilGet(c, at, OhNsc())) {
+            if ((emon.Port.CellsAt(c, p + 1) == ns) && (emon.Port.CellsAt(c, p + 2) == key)) {
+                int q = p + 6;
+                int k = 0;
+                int index = 0;
+                int width = 0;
+                while (k < emon.Port.CellsAt(c, p + 5)) {
+                    index = k;
+                    if (emon.Port.CellsAt(c, p + 4) == 0) {
+                        index = emon.Port.CellsAt(c, q);
+                        q += 1;
+                    }
+                    if (index == row) {
+                        return q;
+                    }
+                    width = Oilregistry.OilKeyField(registry, 3);
+                    if (Oilregistry.OilKeyField(registry, 2) == 9) {
+                        width = 1 + emon.Port.CellsAt(c, q);
+                    }
+                    q += width;
+                    k += 1;
+                }
+            }
+            p += emon.Port.CellsAt(c, p);
+            i += 1;
+        }
+        return -1;
+    }
+    public static int OilSourceValue(emon.Port.Cells c, int at, int subject, int row, int ns, int key) {
+        // Payload offset in a validated OIL answer, or -1 absent. Dense and sealed sparse input are supported; CPS includes its length. Policy must first call oil-key-usable.
+        if (OilGet(c, at, OhNsc()) == 0) {
+            return -1;
+        }
+        int first = OilSidecars(c, at);
+        return OilSourceValueFrom(c, at, first, subject, row, ns, key);
+    }
     internal static int OilFlatBoxValid(emon.Port.Cells v, int p) {
         if ((emon.Port.CellsAt(v, p + 2) < 0) || (emon.Port.CellsAt(v, p + 3) < 0)) {
             return 0;

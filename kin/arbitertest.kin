@@ -16,8 +16,8 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells test-t TestT]]
             [emon.port :refer [cells-len cells-at cells-set cells-push]]
-            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set fe-new fe-set rf-add im-new ep-new or-new gl-set gf-mark mk-new mk-set mkf-artype mkf-arsub xt-alpha xo-angle xo-margin xo-rel-height
-                                   hd-feat wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
+            [emon.evidence :refer [wd-new wd-set ln-new ow-new ow-set ow-get fe-new fe-set rf-add im-new ep-new or-new gl-set gf-mark mk-new mk-set mkf-artype mkf-arsub xt-alpha xo-angle xo-margin xo-rel-height
+                                   hd-feat hd-tstart wf-font wf-size wf-style wf-src wf-gfirst wf-gcount wf-wbreak
                                    xt-font-health xt-bad-cp xt-vis xo-implausible xo-conf xo-kin-ink
                                    ea-words ea-owords]]
             [emon.player :refer [cg-new cg-set cg-get cgf-tfirst cgf-tcount cgf-ofirst cgf-ocount cgf-hfirst cgf-hcount cgf-simfold cgf-flags
@@ -376,8 +376,8 @@
     (at-group cg refs w2 1 o2 1 1000)
     (at-run cg refs fw fl et feats ow im ep nfw nfl fv fx afa)
     (assert-eq (fw-count nfw) 3 "three words")
-    (assert-eq (cells-at nfw 11) (cells-at ow 11) "the first word's text is OCR's")
-    (assert-eq (cells-at nfw (+ 24 11)) (cells-at ow (+ 28 11)) "so is the second's")
+    (assert-eq (cells-at nfw 11) (ow-get ow o0 (hd-tstart)) "the first word's text is OCR's")
+    (assert-eq (cells-at nfw (+ 24 11)) (ow-get ow o1 (hd-tstart)) "so is the second's")
     (assert-eq (cells-at nfw (+ 48 11)) (cells-at fw (+ 48 11)) "the healthy font's is the text layer's")
     (assert-eq (cells-at nfw 1) 0 "the box is the text layer's")
     (assert-eq (cells-at nfw 4) 1000 "all of it, ascent and descent")

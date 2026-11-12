@@ -6,6 +6,7 @@ package upscale
 import (
 	"emon/norm"
 	"emon/oil"
+	"emon/oilsrc"
 	"emon/port"
 )
 
@@ -195,6 +196,33 @@ func UpHint(an *port.Cells, at int32, k int32, dpi100 int32, hist *port.Cells) i
 	return v
 }
 
+func UpTurns(an *port.Cells, at int32, scratch *port.Cells) int32 {
+	// Uniform, confidently reversed source crops say orientation must precede scale. Mixed or absent crop decisions retain page OSD; retarget retains its tracer fallback. The hybrid still plans scale from its incumbent only.
+	var fallback int32 = norm.NmOrient(oil.OilOsd(an, at), oil.OilOconf(an, at), norm.NmOsdConf())
+	var count int32 = oil.OilNlines(an, at)
+	var first int32 = 0
+	var i int32 = 0
+	var cls int32 = -1
+	if count == 0 {
+		return fallback
+	}
+	if oil.OilKeyUsable(an, at, 2, 2) == 0 {
+		return fallback
+	}
+	first = oil.OilSidecars(an, at)
+	for i < count {
+		cls = oilsrc.OxsPolicyValue(an, at, first, 2, i, 2, 2, scratch)
+		if cls < 0 {
+			return fallback
+		}
+		if (port.CellsAt(scratch, cls) != 1) || (port.CellsAt(scratch, cls+1) < 500) {
+			return fallback
+		}
+		i += 1
+	}
+	return 2
+}
+
 func UpFactor(an *port.Cells, at int32, pxw int32, pxh int32, hist *port.Cells) int32 {
 	// By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
 	var ext int32 = oil.OilFind(an, at)
@@ -206,7 +234,7 @@ func UpFactor(an *port.Cells, at int32, pxw int32, pxh int32, hist *port.Cells) 
 		return 1
 	}
 	// a page the engine is sure is turned is read upright first: the size of its lines says nothing
-	if norm.NmOrient(oil.OilOsd(an, ext), oil.OilOconf(an, ext), norm.NmOsdConf()) > 0 {
+	if UpTurns(an, ext, hist) > 0 {
 		return 1
 	}
 	if pxh > side {

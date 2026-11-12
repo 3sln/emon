@@ -20,6 +20,20 @@ pub(crate) fn unread_of(n: i32, script: i32, sconf: i32, lang: i32, lang0: i32) 
     return unread_of_d(n, script, sconf, lang, lang0, 0);
 }
 #[test]
+fn test_source_model_overrides_language_and_absence_keeps_the_fallback() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let model: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = sk_answer(ans, 272, 5, 1132032620, 400, 1701734144, 1701734144, 0);
+    crate::testport::assert_eq(sk_unread(ans, at, &mut crate::port::Cells::new()), 1, "absent source model uses ISO language");
+    crate::port::cells_push(model, 3);
+    crate::port::cells_push(model, 114);
+    crate::port::cells_push(model, 117);
+    crate::port::cells_push(model, 115);
+    oil_sc_put(ans, at, 3, 3, 0, model, 0, 4);
+    oil_end(ans, at);
+    crate::testport::assert_eq(sk_unread(ans, at, &mut crate::port::Cells::new()), 0, "the retained rus model reads Cyrillic");
+}
+#[test]
 fn test_a_language_cell_unpacks_to_its_letters() {
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     crate::testport::assert_eq(sk_unpack(1701734144, out), 3, "`eng` is three letters");

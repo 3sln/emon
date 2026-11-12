@@ -21,7 +21,8 @@
 ;; page, and the unit adopts the enlarged reading in place of the first pass when it reads at least as much (`up-score`). Hosts do nothing new: the
 ;; resampling is not theirs.
 (ns emon.upscale
-  (:require [emon.oil :refer [oil-find oil-first-word oil-line oil-line-field oil-nlines oil-nwords oil-oconf oil-osd oil-policy-conf oil-wcp oil-wlen oil-word oil-word-next]]
+  (:require [emon.oil :refer [oil-find oil-first-word oil-sidecars oil-key-usable oil-line oil-line-field oil-nlines oil-nwords oil-oconf oil-osd oil-policy-conf oil-wcp oil-wlen oil-word oil-word-next]]
+            [emon.oilsrc :refer [oxs-policy-value]]
             [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.port :refer [cells-len cells-at cells-set cells-drop cells-push bms-put bitmap-w bitmap-h bitmap-channels bitmap-u8 bitmap-set-u8]]
             [emon.plan :refer []]
@@ -131,6 +132,20 @@
     (if (> v 1200) (set v 1200))
     (return v)))
 
+(defn ^:pub ^I32 up-turns [^Cells an ^I32 at ^:mut ^Cells scratch]
+  (comment "Uniform, confidently reversed source crops say orientation must precede scale. Mixed or absent crop decisions retain page OSD; retarget retains its tracer fallback. The hybrid still plans scale from its incumbent only.")
+  (let [^I32 fallback (nm-orient (oil-osd an at) (oil-oconf an at) (nm-osd-conf))
+        ^I32 count (oil-nlines an at) ^:mut ^I32 first 0 ^:mut ^I32 i 0 ^:mut ^I32 cls -1]
+    (if (== count 0) (return fallback))
+    (if (== (oil-key-usable an at 2 2) 0) (return fallback))
+    (set first (oil-sidecars an at))
+    (while (< i count)
+      (do (set cls (oxs-policy-value an at first 2 i 2 2 scratch))
+          (if (< cls 0) (return fallback))
+          (if (or (!= (cells-at scratch cls) 1) (< (cells-at scratch (+ cls 1)) 500)) (return fallback))
+          (set i (+ i 1))))
+    (return 2)))
+
 (defn ^:pub ^I32 up-factor [^Cells an ^I32 at ^I32 pxw ^I32 pxh ^:mut ^Cells hist]
   (comment "By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.")
   (let [^I32 ext (oil-find an at)
@@ -140,7 +155,7 @@
         ^:mut ^I32 side pxw]
     (if (< ext 0) (return 1))
     (comment "a page the engine is sure is turned is read upright first: the size of its lines says nothing")
-    (if (> (nm-orient (oil-osd an ext) (oil-oconf an ext) (nm-osd-conf)) 0) (return 1))
+    (if (> (up-turns an ext hist) 0) (return 1))
     (if (> pxh side) (set side pxh))
     (if (< words (up-rescue-words))
       (if (<= side (up-rescue-side)) (set k (up-rescue-k)))

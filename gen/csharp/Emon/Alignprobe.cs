@@ -104,9 +104,10 @@ public static class Alignprobe {
         }
         return 0;
     }
-    public static int ApUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells loc, System.Text.StringBuilder dump, int reps, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells pg, emon.Port.Cells gx, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fa, emon.Port.Cells hl, emon.Port.Cells hsc, emon.Port.Cells cg, emon.Port.Cells scr, emon.Port.Cells gp, emon.Port.Cells dp, emon.Port.Cells ta, emon.Port.Cells tb, emon.Port.Cells tt) {
+    public static int ApUnit(emon.Port.Src s, emon.Port.Cells an, emon.Port.Cells rq, emon.Port.Cells loc, System.Text.StringBuilder dump, int reps, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells pts, emon.Port.Cells refs, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells glyphs, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells marks, emon.Port.Cells fonts, emon.Port.Cells paths, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells inks, emon.Port.Cells components, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tlines, emon.Port.Cells ar, emon.Port.Cells dc, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells st, emon.Port.Cells cx, emon.Port.Cells ox, emon.Port.Cells cs, emon.Port.Cells @out, emon.Port.Cells f0, emon.Port.Cells f1, emon.Port.Cells f2, emon.Port.Cells f3, emon.Port.Cells pg, emon.Port.Cells gx, emon.Port.Cells fw, emon.Port.Cells fl, emon.Port.Cells fa, emon.Port.Cells hl, emon.Port.Cells hsc, emon.Port.Cells cg, emon.Port.Cells scr, emon.Port.Cells gp, emon.Port.Cells dp, emon.Port.Cells ta, emon.Port.Cells tb, emon.Port.Cells tt, emon.Port.Cells oxs) {
         // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
         Evidence.EvInit(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+        emon.Port.CellsDrop(oxs, 0);
         emon.Port.CellsDrop(cg, 0);
         int o = Pdfdoc.PdOpen(s, ar, dc, a, b, st);
         if (emon.Port.SrcMissed(s)) {
@@ -189,6 +190,7 @@ public static class Alignprobe {
             }
             i += 1;
         }
+        Oilsrc.OxsCollect(an, views, oruns, olines, oxs);
         // the alignment; `reps` > 1 repeats it (clearing what it appended) so a host can time it apart from the document pass
         r0 = emon.Port.CellsLen(refs);
         rep = 0;

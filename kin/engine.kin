@@ -28,6 +28,7 @@
             [emon.pdfcontent :refer [pc-document]]
             [emon.pageunit :refer [pu-plan pu-run-pdf pu-kind pk-born pk-scan]]
             [emon.ocrengine :refer [oe-tag oe-evidence]]
+            [emon.oilsrc :refer [oxs-collect oxs-check oxs-emit]]
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfmeta :refer [pm-run]]
             [emon.pdfannot :refer [pa-run]]
@@ -257,6 +258,9 @@
 
 (defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
   (let [^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
+    (if (== status 0)
+      (do (if (< (oxs-collect ans (fd ev views) (fd ev oruns) (fd ev olines) (fd ev oxs)) 0) (return 2))
+          (if (< (oxs-check (fd ev oxs) (fd ev oruns)) 0) (return 2))))
     (oe-tag rq (fd d pscr) (* 2 (fd c oengine)))
     (return status)))
 
@@ -302,6 +306,7 @@
       (pl-emit-gfx-open t 0 (fd ev epages) (fd ev views) (fd ev pts) (fd ev refs) et (fd ev feats) gl wd ln mk fnt (fd ev paths) (fd ev images)
              (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms) (fd ev oalts) (fd ev inks) (fd ev comps) (fd ev rules)
              (fd ev prims) (fd ev tlines) grl gfl ggp grg)))
+  (oxs-emit t (fd ev oxs))
   (return 0))
 
 ;; ----------------------------------------------------------------------------------------------- the checks of a finished Model
@@ -657,7 +662,8 @@
       (pl-emit-open (fd d evidence) 0 (fd ev epages) (fd ev views) (fd ev pts) (fd ev refs) (fd d et) (fd ev feats) (fd d snapg) (fd d wd) (fd d ln)
              (fd d snapk) (fd d snapf) (fd ev paths) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
              (fd ev oalts) (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev tlines) (fd d cg) (fd d fw) (fd d fl) (fd s fv) (fd s fad)
-             (fd s fx) (fd d hl) (fd d grl) (fd s sm) (fd d gfl) (fd s ggp) (fd s grg)))
+             (fd s fx) (fd d hl) (fd d grl) (fd s sm) (fd d gfl) (fd s ggp) (fd s grg))
+      (oxs-emit (fd d evidence) (fd ev oxs)))
           (en-dump (fd d et) (fd d snapg) (fd d wd) (fd d ln) (fd d snapk) (fd d snapf) (fd d grl) (fd d gfl) (fd s ggp) (fd s grg) ev (fd d evidence)))))
     (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
     (pa-pages (fd d pg) (fd m pages))

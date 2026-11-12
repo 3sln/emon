@@ -19,6 +19,19 @@ pub(crate) fn ut_factor_c(nlines: i32, xh: i32, conf: i32) -> i32 {
     return up_factor(ans, at, 765, 990, &mut crate::port::Cells::new());
 }
 #[test]
+fn test_crop_reversal_precedes_enlargement_and_absence_keeps_page_fallback() {
+    let ans: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cls: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = ut_answer(ans, 272, 1, 8, 200, -1, -1);
+    oil_set(ans, at, oh_engine(), 2);
+    crate::testport::assert_eq(up_factor(ans, at, 400, 400, &mut crate::port::Cells::new()), 3, "absent classifier keeps existing page-orientation/rescue path");
+    crate::port::cells_push(cls, 1);
+    crate::port::cells_push(cls, 950);
+    oil_sc_put(ans, at, 2, 2, 0, cls, 0, 2);
+    oil_end(ans, at);
+    crate::testport::assert_eq(up_factor(ans, at, 400, 400, &mut crate::port::Cells::new()), 1, "uniformly reversed crops need orientation before scale");
+}
+#[test]
 fn test_text_a_little_over_the_trigger_that_the_engine_read_badly_is_read_again_enlarged() {
     // P12.6 (R4): the 9 pixel trigger missed degraded typewriter scans at 100 to 130 dpi (x-height 10 to 13) that an external 3x enlargement recovers; a well read page of that size stays as it was
     crate::testport::assert_eq(ut_factor_c(30, 10, 500), 2, "x-height 10, 30 words at a mean confidence of 500: enlarged twice");

@@ -1,7 +1,7 @@
 ;; Laws for `emon.scriptcheck` (D564, P12.3 I-13): a page whose script OSD is sure of and that no model the engine read it with reads is UNREAD; one read by a model that
 ;; reads the script, a Latin page, a page OSD is unsure of, and a page of too few words are not.
 (ns emon.scriptchecktest
-  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells]]
+  (:require [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-find oil-sc-put]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-that new-cells test-t TestT]]
             [emon.port :refer [cells-at cells-drop cells-push cells-set]]
             [emon.plan :refer [    rq-arg rec-count an-find]]
@@ -22,6 +22,14 @@
 
 (defn ^I32 unread-of [^I32 n ^I32 script ^I32 sconf ^I32 lang ^I32 lang0]
   (return (unread-of-d n script sconf lang lang0 0)))
+
+(deftest test-source-model-overrides-language-and-absence-keeps-the-fallback
+  (let [^Cells ans (new-cells) ^Cells model (new-cells)
+        ^I32 at (sk-answer ans 272 5 1132032620 400 1701734144 1701734144 0)]
+    (assert-eq (sk-unread ans at (new-cells)) 1 "absent source model uses ISO language")
+    (cells-push model 3) (cells-push model 114) (cells-push model 117) (cells-push model 115)
+    (oil-sc-put ans at 3 3 0 model 0 4) (oil-end ans at)
+    (assert-eq (sk-unread ans at (new-cells)) 0 "the retained rus model reads Cyrillic")))
 
 (deftest test-a-language-cell-unpacks-to-its-letters
   (let [^Cells out (new-cells)]

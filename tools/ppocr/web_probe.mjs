@@ -13,7 +13,7 @@ const lexicon = ppocrLexicon({ createCore: require(corePath),
   traineddata: fs.readFileSync('.cache/tessdata/eng.traineddata') });
 const models = Object.fromEntries(['ch_PP-OCRv5_det_mobile.onnx', 'ch_ppocr_mobile_v2.0_cls_mobile.onnx', 'en_PP-OCRv5_rec_mobile.onnx']
   .map(n => [n, fs.readFileSync(`.cache/ppocr/${n}`)]));
-const read = ppocrAdapter({ wasm: fs.readFileSync('.cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm'),
+const read = ppocrAdapter({ wasm: fs.readFileSync(process.env.EMON_PPOCR_WASM || '.cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm'),
   loadOrt: () => import(pathToFileURL(ortPath)), wasmPaths: path.dirname(ortPath) + '/',
   ortWasm: fs.readFileSync(path.join(path.dirname(ortPath), 'ort-wasm-simd-threaded.wasm')), models, lexicon });
 const rows = JSON.parse(fs.readFileSync(`${out}/manifest.json`));

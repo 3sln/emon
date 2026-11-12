@@ -170,6 +170,32 @@ public static class Upscale {
         }
         return v;
     }
+    public static int UpTurns(emon.Port.Cells an, int at, emon.Port.Cells scratch) {
+        // Uniform, confidently reversed source crops say orientation must precede scale. Mixed or absent crop decisions retain page OSD; retarget retains its tracer fallback. The hybrid still plans scale from its incumbent only.
+        int fallback = Norm.NmOrient(Oil.OilOsd(an, at), Oil.OilOconf(an, at), Norm.NmOsdConf());
+        int count = Oil.OilNlines(an, at);
+        int first = 0;
+        int i = 0;
+        int cls = -1;
+        if (count == 0) {
+            return fallback;
+        }
+        if (Oil.OilKeyUsable(an, at, 2, 2) == 0) {
+            return fallback;
+        }
+        first = Oil.OilSidecars(an, at);
+        while (i < count) {
+            cls = Oilsrc.OxsPolicyValue(an, at, first, 2, i, 2, 2, scratch);
+            if (cls < 0) {
+                return fallback;
+            }
+            if ((emon.Port.CellsAt(scratch, cls) != 1) || (emon.Port.CellsAt(scratch, cls + 1) < 500)) {
+                return fallback;
+            }
+            i += 1;
+        }
+        return 2;
+    }
     public static int UpFactor(emon.Port.Cells an, int at, int pxw, int pxh, emon.Port.Cells hist) {
         // By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
         int ext = Oil.OilFind(an, at);
@@ -181,7 +207,7 @@ public static class Upscale {
             return 1;
         }
         // a page the engine is sure is turned is read upright first: the size of its lines says nothing
-        if (Norm.NmOrient(Oil.OilOsd(an, ext), Oil.OilOconf(an, ext), Norm.NmOsdConf()) > 0) {
+        if (UpTurns(an, ext, hist) > 0) {
             return 1;
         }
         if (pxh > side) {

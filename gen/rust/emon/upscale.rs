@@ -3,6 +3,7 @@
 
 use crate::emon::norm::*;
 use crate::emon::oil::*;
+use crate::emon::oilsrc::*;
 
 pub fn up_xh_trigger() -> i32 {
     // `up-xh-trigger`: a page whose text has a median x-height under this many pixels is read again enlarged (9 px is ten point type at 130 dpi: a 150 dpi scan, x-height 10, reads well and is left alone; a 100 dpi one does not).
@@ -169,6 +170,32 @@ pub fn up_hint(an: &mut crate::port::Cells, at: i32, k: i32, dpi100: i32, mut hi
     }
     return v;
 }
+pub fn up_turns(an: &mut crate::port::Cells, at: i32, mut scratch: &mut crate::port::Cells) -> i32 {
+    // Uniform, confidently reversed source crops say orientation must precede scale. Mixed or absent crop decisions retain page OSD; retarget retains its tracer fallback. The hybrid still plans scale from its incumbent only.
+    let fallback: i32 = nm_orient(oil_osd(an, at), oil_oconf(an, at), nm_osd_conf());
+    let count: i32 = oil_nlines(an, at);
+    let mut first: i32 = 0;
+    let mut i: i32 = 0;
+    let mut cls: i32 = -1;
+    if count == 0 {
+        return fallback;
+    }
+    if oil_key_usable(an, at, 2, 2) == 0 {
+        return fallback;
+    }
+    first = oil_sidecars(an, at);
+    while i < count {
+        cls = oxs_policy_value(an, at, first, 2, i, 2, 2, scratch);
+        if cls < 0 {
+            return fallback;
+        }
+        if (crate::port::cells_at(scratch, cls) != 1) || (crate::port::cells_at(scratch, cls + 1) < 500) {
+            return fallback;
+        }
+        i += 1;
+    }
+    return 2;
+}
 pub fn up_factor(an: &mut crate::port::Cells, at: i32, pxw: i32, pxh: i32, mut hist: &mut crate::port::Cells) -> i32 {
     // By what whole factor the raster (`pxw` x `pxh`) whose first-pass OCR answer is at `at` is read again, enlarged: 1 for not at all. See the head of this file.
     let ext: i32 = oil_find(an, at);
@@ -180,7 +207,7 @@ pub fn up_factor(an: &mut crate::port::Cells, at: i32, pxw: i32, pxh: i32, mut h
         return 1;
     }
     // a page the engine is sure is turned is read upright first: the size of its lines says nothing
-    if nm_orient(oil_osd(an, ext), oil_oconf(an, ext), nm_osd_conf()) > 0 {
+    if up_turns(an, ext, hist) > 0 {
         return 1;
     }
     if pxh > side {

@@ -1,0 +1,216 @@
+;; OIL source evidence in page space (D883). Variable frames are
+;; [length run namespace key subject source-row type payload-cells payload...].
+;; Source rows remain local to their run, including blocks without text lines.
+;; Key 0 is internal normalized line geometry, never a wire sidecar key.
+(ns emon.oilsrc
+  (:require [emon.lang :refer [I32 Cells Text emit-ascii]]
+            [emon.port :refer [cells-at cells-len cells-push cells-drop text-i32]]
+            [emon.plan :refer [an-find an-ok]]
+            [emon.oilregistry :refer [oil-key-find oil-key-field]]
+            [emon.oil :refer [oil-find oil-get oil-key-usable oil-source-value-from oh-engine oh-caps oh-nsc oil-has oc-quad oc-lconf oc-paras oc-baseline oc-rowmetrics
+                              oil-nwords oil-first-word oil-word-next oil-nlines oil-line-at]]
+            [emon.evidence :refer [or-count or-get orf-engine orf-request orf-view orf-lfirst orf-lcount orf-wcount orf-caps ol-set olf-qfirst
+                                   vw-px-to-cpt ev-emit-open]]
+            [emon.json :refer [js-cpt js-close]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or]]))
+
+(defn ^I32 oxs-head [^:mut ^Cells out ^I32 run ^I32 ns ^I32 key ^I32 subject ^I32 row ^I32 value-type ^I32 count]
+  (let [^I32 p (cells-len out)]
+    (cells-push out (+ 8 count)) (cells-push out run) (cells-push out ns) (cells-push out key)
+    (cells-push out subject) (cells-push out row) (cells-push out value-type) (cells-push out count)
+    (return (+ p 8))))
+
+(defn ^:pub ^I32 oxs-get [^Cells source ^I32 run ^I32 subject ^I32 row ^I32 ns ^I32 key]
+  (comment "Payload cell offset, or -1 absent. A policy caller must first use oxs-key-usable; diagnostics may inspect any registered key.")
+  (let [^:mut ^I32 p 0 ^I32 size (cells-len source)]
+    (while (< p size)
+      (do (if (< (- size p) 8) (return -1))
+          (let [^I32 n (cells-at source p)]
+            (if (or (< n 8) (> n (- size p))) (return -1))
+            (if (!= (cells-at source (+ p 7)) (- n 8)) (return -1))
+            (if (and (== (cells-at source (+ p 1)) run)
+                     (and (== (cells-at source (+ p 2)) ns)
+                          (and (== (cells-at source (+ p 3)) key)
+                               (and (== (cells-at source (+ p 4)) subject) (== (cells-at source (+ p 5)) row)))))
+              (return (+ p 8)))
+            (set p (+ p n)))))
+    (return -1)))
+
+(defn ^:pub ^I32 oxs-key-usable [^Cells runs ^I32 run ^I32 ns ^I32 key]
+  (comment "Phase 1 has no denied observed identities. Namespace and the registry's policy bit are mandatory on both present and absent paths.")
+  (if (or (< run 0) (>= run (or-count runs))) (return 0))
+  (if (!= (or-get runs run (orf-engine)) ns) (return 0))
+  (let [^I32 registry (oil-key-find ns key)]
+    (if (< registry 0) (return 0))
+    (return (oil-key-field registry 6))))
+
+(defn ^:pub ^I32 oxs-policy-value [^Cells answer ^I32 at ^I32 first ^I32 subject ^I32 row ^I32 ns ^I32 key ^:mut ^Cells source]
+  (comment "Pre-ingestion planning uses one temporary source frame in caller scratch. Only registered policy values without pixel units may take this path; geometric policy must use the ingested page-space arena.")
+  (cells-drop source 0)
+  (if (== (oil-key-usable answer at ns key) 0) (return -1))
+  (let [^I32 registry (oil-key-find ns key) ^I32 value-type (oil-key-field registry 2)
+        ^I32 value (oil-source-value-from answer at first subject row ns key)
+        ^:mut ^I32 count (oil-key-field registry 3) ^:mut ^I32 i 0]
+    (if (< value 0) (return -1))
+    (if (and (>= value-type 4) (<= value-type 6)) (return -1))
+    (if (== value-type 9) (set count (+ 1 (cells-at answer value))))
+    (oxs-head source 0 ns key subject row value-type count)
+    (while (< i count)
+      (do (cells-push source (cells-at answer (+ value i))) (set i (+ i 1))))
+    (return (oxs-get source 0 subject row ns key))))
+
+(defn ^:pub ^I32 oxs-check [^Cells source ^Cells runs]
+  (let [^:mut ^I32 p 0 ^I32 size (cells-len source)]
+    (while (< p size)
+      (do (if (< (- size p) 8) (return -1))
+          (let [^I32 length (cells-at source p) ^I32 run (cells-at source (+ p 1))
+                ^I32 ns (cells-at source (+ p 2)) ^I32 key (cells-at source (+ p 3))
+                ^I32 subject (cells-at source (+ p 4)) ^I32 row (cells-at source (+ p 5))
+                ^I32 value-type (cells-at source (+ p 6)) ^I32 count (cells-at source (+ p 7))]
+            (if (or (< length 8) (> length (- size p))) (return -1))
+            (if (!= count (- length 8)) (return -1))
+            (if (or (< run 0) (>= run (or-count runs))) (return -1))
+            (if (!= ns (or-get runs run (orf-engine))) (return -1))
+            (if (or (< subject 0) (> subject 4)) (return -1))
+            (if (< row 0) (return -1))
+            (if (and (== subject 0) (!= row 0)) (return -1))
+            (if (and (== subject 2) (>= row (or-get runs run (orf-lcount)))) (return -1))
+            (if (and (== subject 3) (>= row (or-get runs run (orf-wcount)))) (return -1))
+            (if (== key 0)
+              (do (if (or (!= value-type 6) (or (!= subject 2) (!= count 8))) (return -1))
+                  (if (== (oil-has (or-get runs run (orf-caps)) (oc-quad)) 0) (return -1)))
+              (let [^I32 registry (oil-key-find ns key)]
+                (if (< registry 0) (return -1))
+                (if (or (!= subject (oil-key-field registry 4)) (!= value-type (oil-key-field registry 2))) (return -1))
+                (if (== value-type 9)
+                  (do (if (< count 1) (return -1))
+                      (if (!= (cells-at source (+ p 8)) (- count 1)) (return -1)))
+                  (if (!= count (oil-key-field registry 3)) (return -1)))))
+            (set p (+ p length)))))
+    (return 0)))
+
+(defn ^I32 oxs-has-run [^Cells source ^I32 run]
+  (let [^:mut ^I32 p 0 ^I32 size (cells-len source)]
+    (while (< p size)
+      (do (if (< (- size p) 8) (return -1))
+          (let [^I32 n (cells-at source p)]
+            (if (or (< n 8) (> n (- size p))) (return -1))
+            (if (== (cells-at source (+ p 1)) run) (return 1))
+            (set p (+ p n)))))
+    (return 0)))
+
+(defn ^:pub ^I32 oxs-count [^Cells source]
+  (let [^:mut ^I32 p 0 ^:mut ^I32 count 0]
+    (while (< p (cells-len source))
+      (let [^I32 length (cells-at source p)]
+        (if (or (< length 8) (> length (- (cells-len source) p))) (return -1))
+        (set p (+ p length)) (set count (+ count 1))))
+    (return count)))
+
+(defn ^:pub ^I32 oxs-record [^Cells answer ^I32 at ^Cells views ^Cells runs ^I32 run
+                             ^:mut ^Cells lines ^:mut ^Cells source]
+  (comment "Retain a validated, sealed answer once. Quads and point-valued keys are mapped through the run's view; all other Phase-1 registered values keep their units.")
+  (if (or (< run 0) (>= run (or-count runs))) (return -1))
+  (if (!= (oil-get answer at (oh-engine)) (or-get runs run (orf-engine))) (return -1))
+  (if (and (== (oil-get answer at (oh-nsc)) 0)
+           (== (oil-has (oil-get answer at (oh-caps)) (oc-quad)) 0)) (return 0))
+  (let [^I32 existing (oxs-has-run source run)]
+    (if (< existing 0) (return -1))
+    (if (> existing 0) (return 0)))
+  (let [^I32 ns (oil-get answer at (oh-engine)) ^I32 caps (oil-get answer at (oh-caps))
+        ^I32 view (or-get runs run (orf-view)) ^I32 l0 (or-get runs run (orf-lfirst))
+        ^:mut ^I32 p (oil-first-word answer at) ^:mut ^I32 i 0 ^:mut ^I32 stored (oxs-count source)]
+    (if (!= (oil-has caps (oc-quad)) 0)
+      (while (< i (oil-nlines answer at))
+        (let [^I32 line (oil-line-at answer at i)
+              ^I32 q (+ (+ (+ (+ line 6) (oil-has caps (oc-lconf))) (oil-has caps (oc-paras)))
+                       (+ (* 4 (oil-has caps (oc-baseline))) (* 3 (oil-has caps (oc-rowmetrics)))))
+              ^:mut ^I32 corner 0]
+          (oxs-head source run ns 0 2 i 6 8)
+          (while (< corner 4)
+            (let [^I32 x (cells-at answer (+ q (* corner 2))) ^I32 y (cells-at answer (+ (+ q (* corner 2)) 1))]
+              (cells-push source (vw-px-to-cpt views view 0 x y))
+              (cells-push source (vw-px-to-cpt views view 1 x y))
+              (set corner (+ corner 1))))
+          (ol-set lines (+ l0 i) (olf-qfirst) stored)
+          (set stored (+ stored 1))
+          (set i (+ i 1)))))
+    (set i 0)
+    (while (< i (oil-nwords answer at))
+      (do (set p (oil-word-next answer at p)) (set i (+ i 1))))
+    (set i 0)
+    (while (< i (oil-get answer at (oh-nsc)))
+      (let [^I32 length (cells-at answer p) ^I32 key (cells-at answer (+ p 2))
+            ^I32 subject (cells-at answer (+ p 3)) ^I32 dense (cells-at answer (+ p 4))
+            ^I32 count (cells-at answer (+ p 5)) ^I32 registry (oil-key-find ns key)
+            ^:mut ^I32 q (+ p 6) ^:mut ^I32 k 0 ^:mut ^I32 row 0 ^:mut ^I32 width 0 ^:mut ^I32 j 0]
+        (if (< registry 0) (return -1))
+        (let [^I32 value-type (oil-key-field registry 2)]
+          ;; No scalar pixel-length key is registered in Phase 1. A future
+          ;; length key must specify its axis before it can be ingested.
+          (if (== value-type 4) (return -1))
+          (while (< k count)
+            (do (set row k)
+                (if (== dense 0) (do (set row (cells-at answer q)) (set q (+ q 1))))
+                (set width (oil-key-field registry 3))
+                (if (== value-type 9) (set width (+ 1 (cells-at answer q))))
+                (oxs-head source run ns key subject row value-type width)
+                (set j 0)
+                (if (or (== value-type 5) (== value-type 6))
+                  (while (< j width)
+                    (let [^I32 x (cells-at answer (+ q j)) ^I32 y (cells-at answer (+ (+ q j) 1))]
+                      (cells-push source (vw-px-to-cpt views view 0 x y))
+                      (cells-push source (vw-px-to-cpt views view 1 x y))
+                      (set j (+ j 2))))
+                  (while (< j width)
+                    (do (cells-push source (cells-at answer (+ q j))) (set j (+ j 1)))))
+                (set q (+ q width)) (set k (+ k 1)))))
+        (set p (+ p length)) (set i (+ i 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 oxs-collect [^Cells answers ^Cells views ^Cells runs ^:mut ^Cells lines ^:mut ^Cells source]
+  (let [^:mut ^I32 run 0]
+    (while (< run (or-count runs))
+      (let [^I32 at (an-find answers (or-get runs run (orf-request)))]
+        (if (>= at 0)
+          (if (== (an-ok answers at) 1)
+            (if (>= (oil-find answers at) 0)
+              (if (< (oxs-record answers at views runs run lines source) 0) (return -1)))))
+        (set run (+ run 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 oxs-emit [^Text out ^Cells source]
+  (if (== (cells-len source) 0) (return 0))
+  (emit-ascii out ",\"oxs\":[")
+  (let [^:mut ^I32 p 0 ^:mut ^I32 i 0]
+    (while (< p (cells-len source))
+      (do (if (> p 0) (emit-ascii out ","))
+          (emit-ascii out "{\"run\":") (text-i32 out (cells-at source (+ p 1)))
+          (emit-ascii out ",\"ns\":") (text-i32 out (cells-at source (+ p 2)))
+          (emit-ascii out ",\"key\":") (text-i32 out (cells-at source (+ p 3)))
+          (emit-ascii out ",\"subject\":") (text-i32 out (cells-at source (+ p 4)))
+          (emit-ascii out ",\"row\":") (text-i32 out (cells-at source (+ p 5)))
+          (emit-ascii out ",\"type\":") (text-i32 out (cells-at source (+ p 6)))
+          (emit-ascii out ",\"value\":[")
+          (set i 0)
+          (while (< i (cells-at source (+ p 7)))
+            (do (if (> i 0) (emit-ascii out ","))
+                (if (and (>= (cells-at source (+ p 6)) 4) (<= (cells-at source (+ p 6)) 6))
+                  (js-cpt out (cells-at source (+ (+ p 8) i)))
+                  (text-i32 out (cells-at source (+ (+ p 8) i))))
+                (set i (+ i 1))))
+          (emit-ascii out "]}") (set p (+ p (cells-at source p))))))
+  (emit-ascii out "]")
+  (return 0))
+
+(defn ^:pub ^I32 oxs-emit-evidence [^Text out ^I32 pretty
+    ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells pts ^:mut ^Cells refs ^:mut ^Cells etext ^:mut ^Cells feats
+    ^:mut ^Cells glyphs ^:mut ^Cells words ^:mut ^Cells lines ^:mut ^Cells marks ^:mut ^Cells fonts ^:mut ^Cells paths
+    ^:mut ^Cells images ^:mut ^Cells runs ^:mut ^Cells blocks ^:mut ^Cells olines ^:mut ^Cells owords
+    ^:mut ^Cells syms ^:mut ^Cells alts ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
+    ^:mut ^Cells prims ^:mut ^Cells tlines ^Cells source]
+  (ev-emit-open out pretty epages views pts refs etext feats glyphs words lines marks fonts paths images
+                runs blocks olines owords syms alts inks components rules prims tlines)
+  (oxs-emit out source)
+  (js-close out pretty 0 1)
+  (return 0))

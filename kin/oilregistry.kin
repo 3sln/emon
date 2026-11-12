@@ -2,6 +2,13 @@
 ;; Rows: namespace key type arity subject attach consumer fallback.
 ;; Subject: answer=0 block=1 line=2 word=3 symbol=4.
 ;; Attach: informative=1 not-implied=2 requested=3. Type 9 is ncp/cps.
+;; Policy consumers (through oilsrc/oxs-policy-value before ingestion):
+;; 1/3 scriptcheck/sk-unread, fallback word ISO language;
+;;     scriptchecktest/test-source-model-overrides-language-and-absence-keeps-the-fallback.
+;; 2/2 upscale/up-turns, fallback page orientation (then retarget's tracer);
+;;     upscaletest/test-crop-reversal-precedes-enlargement-and-absence-keeps-page-fallback.
+;; oilsrc's generic accessors also check this column, source namespace and identity
+;; policy. No geometric key is policy-readable in this phase.
 (ns emon.oilregistry
   (:require [emon.lang :refer [I32]]
             [kin.lang :refer [defn defdata return let set while if do + * < == and]]))

@@ -31,12 +31,13 @@
 ;; (left-to-right 0, right-to-left `ld-rtl`, top-to-bottom `ld-ttb`). The extension's confidences are x10.
 (ns emon.ocrprobe
   (:require [emon.lang :refer [I32 Cells Src]]
-            [emon.port :refer [src-len src-u8 src-missed cells-at]]
+            [emon.port :refer [src-len src-u8 src-missed cells-at cells-drop]]
             [emon.plan :refer [us-done us-requests us-need-bytes lay-full
                                rq-render rq-ocr rq-ocr-end
                                an-find an-ok an-arg]]
             [emon.ocr :refer [ocf-symbols ocf-osd]]
             [emon.scan :refer [sc-answer]]
+            [emon.oilsrc :refer [oxs-collect]]
             [emon.evidence :refer [ev-init im-new ep-new ep-set vw-new
                                    epf-flags epf-dpi vk-render eg-raster]]
             [kin.lang :refer [defn return let set while if do comment
@@ -53,10 +54,11 @@
                           ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
                           ^:mut ^Cells owords ^:mut ^Cells osyms ^:mut ^Cells oalts
                           ^:mut ^Cells inks ^:mut ^Cells components ^:mut ^Cells rules
-                          ^:mut ^Cells prims ^:mut ^Cells tlines]
+                          ^:mut ^Cells prims ^:mut ^Cells tlines ^:mut ^Cells oxs]
   (comment "One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.")
   (ev-init epages views pts refs etext feats glyphs words lines marks fonts paths images
            oruns oblocks olines owords osyms oalts inks components rules prims tlines)
+  (cells-drop oxs 0)
   (let [^I32 n (src-len s)
         ^I32 mid (src-u8 s (quot n 2))]
     (if (src-missed s) (return (us-need-bytes)))
@@ -81,4 +83,5 @@
           (im-new images 1 0 0 (op-cpt w1 dpi) (op-cpt h1 dpi) mid w1 h1)
           (if (== (an-ok an o2) 1)
             (sc-answer an o2 1 0 2 0 views epages etext oruns oblocks olines owords osyms oalts feats))))))
+  (oxs-collect an views oruns olines oxs)
   (return (us-done)))

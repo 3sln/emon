@@ -734,6 +734,48 @@
 (defn ^:pub ^I32 oil-end [^:mut ^Cells c ^I32 at]
   (return (oil-end-source c at 0)))
 
+(defn ^:pub ^I32 oil-key-usable [^Cells c ^I32 at ^I32 ns ^I32 key]
+  (comment "Policy readers require the source namespace and a policy-readable registered key. Phase 1 has no denied observed identities.")
+  (if (!= (oil-get c at (oh-engine)) ns) (return 0))
+  (let [^I32 registry (oil-key-find ns key)]
+    (if (< registry 0) (return 0))
+    (return (oil-key-field registry 6))))
+
+(defn ^:pub ^I32 oil-sidecars [^Cells c ^I32 at]
+  (let [^:mut ^I32 p (oil-first-word c at) ^:mut ^I32 i 0]
+    (while (< i (oil-nwords c at))
+      (do (set p (oil-word-next c at p)) (set i (+ i 1))))
+    (return p)))
+
+(defn ^:pub ^I32 oil-source-value-from [^Cells c ^I32 at ^I32 first ^I32 subject ^I32 row ^I32 ns ^I32 key]
+  (comment "As oil-source-value, with the validated answer's cached oil-sidecars offset. Planning can inspect every word without rescanning its symbols for each lookup.")
+  (if (or (< row 0) (!= (oil-get c at (oh-engine)) ns)) (return -1))
+  (let [^I32 registry (oil-key-find ns key) ^:mut ^I32 p first ^:mut ^I32 i 0]
+    (if (< registry 0) (return -1))
+    (if (!= subject (oil-key-field registry 4)) (return -1))
+    (while (< i (oil-get c at (oh-nsc)))
+      (do
+        (if (and (== (cells-at c (+ p 1)) ns) (== (cells-at c (+ p 2)) key))
+          (let [^:mut ^I32 q (+ p 6) ^:mut ^I32 k 0
+                ^:mut ^I32 index 0 ^:mut ^I32 width 0]
+            (while (< k (cells-at c (+ p 5)))
+              (do (set index k)
+                  (if (== (cells-at c (+ p 4)) 0)
+                    (do (set index (cells-at c q)) (set q (+ q 1))))
+                  (if (== index row) (return q))
+                  (set width (oil-key-field registry 3))
+                  (if (== (oil-key-field registry 2) 9)
+                    (set width (+ 1 (cells-at c q))))
+                  (set q (+ q width)) (set k (+ k 1))))))
+        (set p (+ p (cells-at c p))) (set i (+ i 1)))))
+  (return -1))
+
+(defn ^:pub ^I32 oil-source-value [^Cells c ^I32 at ^I32 subject ^I32 row ^I32 ns ^I32 key]
+  (comment "Payload offset in a validated OIL answer, or -1 absent. Dense and sealed sparse input are supported; CPS includes its length. Policy must first call oil-key-usable.")
+  (if (== (oil-get c at (oh-nsc)) 0) (return -1))
+  (let [^I32 first (oil-sidecars c at)]
+    (return (oil-source-value-from c at first subject row ns key))))
+
 
 (defn ^I32 oil-flat-box-valid [^Cells v ^I32 p]
   (if (or (< (cells-at v (+ p 2)) 0) (< (cells-at v (+ p 3)) 0)) (return 0))

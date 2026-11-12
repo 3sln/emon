@@ -40,6 +40,55 @@ fn test_native_must_be_a_subset_of_present_capabilities() {
     crate::testport::assert_eq(oil_native_check(oc_blocks(), oc_baseline()), 0, "cannot claim an absent group as native");
 }
 #[test]
+fn test_source_policy_reads_require_registration_and_the_source_engine() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let value: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 0, 0, 1);
+    oil_line(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    crate::testport::assert_eq(oil_source_value(c, at, 2, 0, 2, 2), -1, "registered key can be absent");
+    crate::port::cells_push(value, 1);
+    crate::port::cells_push(value, 900);
+    oil_sc_put(c, at, 2, 2, 0, value, 0, 2);
+    oil_end(c, at);
+    let p: i32 = oil_source_value(c, at, 2, 0, 2, 2);
+    crate::testport::assert_eq(crate::port::cells_at(c, p), 1, "measured reversal");
+    crate::testport::assert_eq(crate::port::cells_at(c, p + 1), 900, "measured probability");
+    crate::testport::assert_eq(oil_source_value(c, at, 2, 1, 2, 2), -1, "unmeasured row");
+    crate::testport::assert_eq(oil_source_value(c, at, 3, 0, 2, 2), -1, "wrong subject");
+    crate::testport::assert_eq(oil_source_value(c, at, 2, 0, 1, 2), -1, "different source engine");
+    crate::testport::assert_eq(oil_source_value(c, at, 2, 0, 2, 99), -1, "unknown key");
+    crate::testport::assert_eq(oil_key_usable(c, at, 2, 2), 1, "registered classifier policy key");
+    crate::testport::assert_eq(oil_key_usable(c, at, 2, 1), 0, "detector score is diagnostic only");
+    crate::testport::assert_eq(oil_key_usable(c, at, 1, 3), 0, "another engines model key is unusable");
+    crate::testport::assert_eq(oil_key_usable(c, at, 2, 99), 0, "unknown key cannot influence policy");
+}
+#[test]
+fn test_source_lookup_handles_dense_input_and_sealed_sparse_rows() {
+    let c: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = oil_begin(c, 1, oen_ppocr(), 0, 0, 1, 0, 0, 1);
+    oil_line(c, at, 0, 0, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    oil_line(c, at, 0, 10, 10, 10, -1, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    crate::port::cells_push(c, 10);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 2);
+    crate::port::cells_push(c, 0);
+    crate::port::cells_push(c, 100);
+    crate::port::cells_push(c, 1);
+    crate::port::cells_push(c, 900);
+    oil_set(c, at, oh_nsc(), 1);
+    let dense_value: i32 = oil_source_value(c, at, 2, 1, 2, 2);
+    crate::testport::assert_eq(crate::port::cells_at(c, dense_value), 1, "dense row index is implicit");
+    crate::testport::assert_eq(crate::port::cells_at(c, dense_value + 1), 900, "dense fixed-width value");
+    oil_end(c, at);
+    crate::testport::assert_eq(oil_source_value(c, at, 2, 0, 2, 2), -1, "implied classifier value becomes absent");
+    let sparse_value: i32 = oil_source_value(c, at, 2, 1, 2, 2);
+    crate::testport::assert_eq(crate::port::cells_at(c, sparse_value), 1, "sparse lookup retains the original row index");
+    crate::testport::assert_eq(crate::port::cells_at(c, sparse_value + 1), 900, "sealing preserves informative measurements");
+}
+#[test]
 fn test_confidence_rounding_is_symmetric() {
     crate::testport::assert_eq(oil_pm(12345, 100), 123, "round down");
     crate::testport::assert_eq(oil_pm(12350, 100), 124, "positive half away from zero");

@@ -2,6 +2,7 @@
 // source: emon.alignprobe
 
 use crate::emon::evidence::*;
+use crate::emon::oilsrc::*;
 use crate::emon::pdfcontent::*;
 use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
@@ -109,9 +110,10 @@ pub(crate) fn ap_dump(mut t: &mut String, etext: &mut crate::port::Cells, refs: 
     }
     return 0;
 }
-pub fn ap_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, mut dump: &mut String, reps: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut fl: &mut crate::port::Cells, mut fa: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut hsc: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut dp: &mut crate::port::Cells, mut ta: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tt: &mut crate::port::Cells) -> i32 {
+pub fn ap_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, mut dump: &mut String, reps: i32, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut pts: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut glyphs: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut marks: &mut crate::port::Cells, mut fonts: &mut crate::port::Cells, mut paths: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut components: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut ar: &mut crate::port::Cells, mut dc: &mut crate::port::Cells, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut st: &mut crate::port::Cells, mut cx: &mut crate::port::Cells, mut ox: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut out: &mut crate::port::Cells, mut f0: &mut crate::port::Cells, mut f1: &mut crate::port::Cells, mut f2: &mut crate::port::Cells, mut f3: &mut crate::port::Cells, mut pg: &mut crate::port::Cells, mut gx: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut fl: &mut crate::port::Cells, mut fa: &mut crate::port::Cells, mut hl: &mut crate::port::Cells, mut hsc: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut dp: &mut crate::port::Cells, mut ta: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tt: &mut crate::port::Cells, mut oxs: &mut crate::port::Cells) -> i32 {
     // One attempt. Answers `us-done`, `us-requests` or `us-need-bytes`.
     ev_init(epages, views, pts, refs, etext, feats, glyphs, words, lines, marks, fonts, paths, images, oruns, oblocks, olines, owords, osyms, oalts, inks, components, rules, prims, tlines);
+    crate::port::cells_drop(oxs, 0);
     crate::port::cells_drop(cg, 0);
     let o: i32 = pd_open(s, ar, dc, a, b, st);
     if crate::port::src_missed(s) {
@@ -194,6 +196,7 @@ pub fn ap_unit(s: &crate::port::Src, an: &mut crate::port::Cells, mut rq: &mut c
         }
         i += 1;
     }
+    oxs_collect(an, views, oruns, olines, oxs);
     // the alignment; `reps` > 1 repeats it (clearing what it appended) so a host can time it apart from the document pass
     r0 = crate::port::cells_len(refs);
     rep = 0;

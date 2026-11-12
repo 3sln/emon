@@ -24,6 +24,7 @@
  [{:id "check"         :cmd ["bb" "check"]                        :gate "check"         :secs 19  :why "one source, four languages, one answer: the whole generate-compile-run path"}
   {:id "drift"         :cmd ["bb" "drift"]                        :gate "drift"         :secs 61  :why "the committed generated tree is what the sources say"}
   {:id "hosts"         :cmd ["bb" "hosts"]                        :gate "hosts"         :secs 3   :why "the four host trees agree"}
+  {:id "oil-check"     :cmd ["bb" "oil-check"] :gate "oil-check" :secs 1 :why "D883: every source policy consumer is registered and guarded, with present/absent laws"}
   {:id "lang-test"     :cmd ["bb" "lang-test"]                    :gate "lang-test"     :secs 1   :why "the generator's own refusals (emit-ascii, defenum, defctx, fd): under a second"}
   {:id "api-diff"      :cmd ["bb" "api-diff"]                     :gate "api-diff"      :secs 2   :why "the public API is the frozen one (D527)"}
   {:id "release-audit" :cmd ["bb" "release-audit"]                :gate "release-audit" :secs 1   :why "licences, inventory and notices (D526)"}
@@ -55,7 +56,7 @@
 
  :shards
  [{:name "unit"      :gates ["unit"] :own-job true}
-  {:name "static"    :gates ["hosts" "drift" "release-audit" "api-diff" "lang-test"]}
+  {:name "static"    :gates ["hosts" "oil-check" "drift" "release-audit" "api-diff" "lang-test"]}
   {:name "check"     :gates ["check"]}
   {:name "replay"    :gates ["plan" "ocr" "render" "pdfium-wasm" "embedders"]}
   {:name "fusion"    :gates ["align" "fusion" "gfuse" "artifacts" "seals" "sealpx" "sigs" "retarget"]}
@@ -116,7 +117,7 @@
   ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
   {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
    :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
-  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest,ocrengine,ocrenginetest,oil,oiltest,oilregistry,oilfixturetest,ocalib,ocalibtest}.kin"
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrporttest,ocrengine,ocrenginetest,oil,oiltest,oilregistry,oilsrc,oilsrctest,oilfixturetest,ocalib,ocalibtest}.kin"
    :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
   {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
   {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]
@@ -171,7 +172,7 @@
   {:glob "kin/scripts/{ink,trace,png-bench}" :gates [] :why "reports and live recorders (bb ink, bb trace, bb png-bench): not gates"}
 
   ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
-  {:glob "tools/{api_diff,release_audit,version,rederive,ci}.clj" :gates [] :why "release and CI tooling: the fast core runs each (api-diff, release-audit, version --check, ci coverage)"}
+  {:glob "tools/{api_diff,release_audit,version,rederive,ci,oil_check}.clj" :gates [] :why "release, CI and OIL source-consumer audits: the fast core runs each"}
   {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547, D550): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by release.yml, release-run.yml and verify.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
   {:glob "tools/{corpus.clj,corpus_link.clj,corpus_test.clj,corpus_roundtrip.clj,samples.clj,pdfinfo.clj,shards/**}" :gates [] :why "corpus transport, the corpus-link/corpus-guard symlink tool and live tools: not gates (corpus-test is its own non-gate)"}

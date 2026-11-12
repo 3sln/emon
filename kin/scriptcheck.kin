@@ -11,7 +11,8 @@
 ;;   block of it `script-unread` and `low-conf` and holds its confidence at `sc-unread-conf`: the text is the engine's guess at a script it cannot read, kept (a
 ;;   reader may want it) and never presented as confident text.
 (ns emon.scriptcheck
-  (:require [emon.oil :refer [oil-find oil-first-word oil-nwords oil-sconf oil-script oil-wlang oil-word oil-word-flags oil-word-next]]
+  (:require [emon.oil :refer [oil-find oil-first-word oil-sidecars oil-nwords oil-sconf oil-script oil-wlang oil-word oil-word-flags oil-word-next]]
+            [emon.oilsrc :refer [oxs-policy-value]]
             [emon.lang :refer [I32 Cells]]
             [emon.port :refer [cells-drop cells-push cells-at]]
             [emon.plan :refer [an-find an-ok rq-ocr rq-ocr-lang rq-ocr-end]]
@@ -60,7 +61,7 @@
         ^:mut ^I32 i 0
         ^:mut ^I32 lang 0
         ^:mut ^I32 n 0
-        ^:mut ^I32 script 0]
+        ^:mut ^I32 script 0 ^:mut ^I32 model -1 ^:mut ^I32 source-first 0]
     (if (< ext 0) (return 0))
     (set script (oil-script an ext))
     (if (<= script 0) (return 0))
@@ -73,11 +74,15 @@
     (if (< (oil-sconf an ext) (sk-min-conf))
       (if (>= (* (sk-dict nw an ext) 1000) (* nw (sk-dict-share))) (return 0)))
     (set w (oil-first-word an ext))
+    (set source-first (oil-sidecars an ext))
     (while (< i nw)
-      (do (set lang (oil-wlang an ext w))
+      (do (set model (oxs-policy-value an ext source-first 3 i 1 3 scr))
+          (if (>= model 0)
+            (if (== (op-script-reads script (op-model-script scr (+ model 1) (+ (+ model 1) (cells-at scr model)))) 1) (return 0))
+            (do (set lang (oil-wlang an ext w))
           (if (> lang 0)
             (do (set n (sk-unpack lang scr))
-                (if (== (op-script-reads script (op-model-script scr 0 n)) 1) (return 0))))
+                (if (== (op-script-reads script (op-model-script scr 0 n)) 1) (return 0))))))
           (set w (oil-word-next an ext w))
           (set i (+ i 1))))
     (return 1)))

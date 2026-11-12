@@ -179,7 +179,23 @@ The optional [browser and Node adapter](../../docs/ppocr-web.md) uses ORT Web
 1.22.0 with the same Rust pipeline in a separate optional emon wasm build.
 It requires caller-supplied pinned assets and remains experimental; its live
 answer qualification is separate from the native hosts. `web_qualify.clj`
-records exact integer-field differences without changing the native policy.
+reads the new OIL `reference.answers` from `--qualification DIR` (default
+`$EMON_SCRATCH/ppocr-qual`), checks its provenance checksum and completed native
+transport comparison, and requires byte-identical answers, including
+sealed sidecars. It reports header equality and the first differing cell;
+historical OP1c answer hashes are not an OIL reference. `--candidate browser`
+runs Chrome instead of Node, and `--compare-only true` checks an existing
+candidate capture. A `--limit N` run is a development check, not qualification.
 
 The retained replay sweep includes a 74-page booklet and can take hours
 serially. It is an optional qualification run, not a normal CI gate.
+New reference recordings use the Rust PP build with pinned pdfium and
+`--pdfium`, including on the selected controls. Reference provenance records
+the renderer and driver hashes. A control that historically rendered
+successfully must still exercise successful render fulfilment; a reference
+made with unsupported render answers cannot qualify that control.
+Reference bundles are gzip-compressed after their six replay comparisons,
+with the decompressed SHA-256 checked before removing the raw capture.
+Both replay and accuracy readers accept the `.bundle.gz` fallback. To compact
+already completed cases of an in-progress run, use `bb tools/ppocr/compact.clj
+--qualification DIR --summary FILE`; it only touches complete six-host groups.

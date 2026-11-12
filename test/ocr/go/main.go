@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"emon/evidence"
 	"emon/ocrprobe"
+	"emon/oilsrc"
 	"emon/plan"
 	"emon/planrun"
 	"emon/port"
@@ -21,18 +21,25 @@ import (
 
 // The evidence arenas travel in four bundles, held by the host as structs (SPEC 8.4.6, D096).
 type EvShared struct{ Epages, Views, Pts, Refs, Etext, Feats *port.Cells }
+
 func NewEvShared() EvShared {
 	return EvShared{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
+
 type EvText struct{ Glyphs, Words, Lines, Marks, Fonts, Paths, Images *port.Cells }
+
 func NewEvText() EvText {
 	return EvText{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
-type EvOcr struct{ Oruns, Oblocks, Olines, Owords, Osyms, Oalts *port.Cells }
+
+type EvOcr struct{ Oruns, Oblocks, Olines, Owords, Osyms, Oalts, Oxs *port.Cells }
+
 func NewEvOcr() EvOcr {
-	return EvOcr{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
+	return EvOcr{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
+
 type EvTrace struct{ Inks, Components, Rules, Prims, Tlines *port.Cells }
+
 func NewEvTrace() EvTrace {
 	return EvTrace{port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()}
 }
@@ -110,10 +117,10 @@ func main() {
 	unit := func(an, rq *port.Cells, _ *port.BitmapSet, _ *port.Buf) int32 {
 		view := base.View()
 		sh, tx, oc, tr := NewEvShared(), NewEvText(), NewEvOcr(), NewEvTrace()
-		st := ocrprobe.OpUnit(view, an, rq, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines)
+		st := ocrprobe.OpUnit(view, an, rq, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines, oc.Oxs)
 		if st == port.PlanUnitDone {
 			evBuf.Reset()
-			evidence.EvEmit(&evBuf, 0, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines)
+			oilsrc.OxsEmitEvidence(&evBuf, 0, sh.Epages, sh.Views, sh.Pts, sh.Refs, sh.Etext, sh.Feats, tx.Glyphs, tx.Words, tx.Lines, tx.Marks, tx.Fonts, tx.Paths, tx.Images, oc.Oruns, oc.Oblocks, oc.Olines, oc.Owords, oc.Osyms, oc.Oalts, tr.Inks, tr.Components, tr.Rules, tr.Prims, tr.Tlines, oc.Oxs)
 		}
 		return st
 	}

@@ -17,6 +17,20 @@ public static class Scriptchecktest {
         return UnreadOfD(n, script, sconf, lang, lang0, 0);
     }
     [Xunit.Fact]
+    public static void TestSourceModelOverridesLanguageAndAbsenceKeepsTheFallback() {
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells model = emon.Port.NewCells();
+        int at = SkAnswer(ans, 272, 5, 1132032620, 400, 1701734144, 1701734144, 0);
+        emon.Testport.AssertEq(Scriptcheck.SkUnread(ans, at, emon.Port.NewCells()), 1, "absent source model uses ISO language");
+        emon.Port.CellsPush(model, 3);
+        emon.Port.CellsPush(model, 114);
+        emon.Port.CellsPush(model, 117);
+        emon.Port.CellsPush(model, 115);
+        Oil.OilScPut(ans, at, 3, 3, 0, model, 0, 4);
+        Oil.OilEnd(ans, at);
+        emon.Testport.AssertEq(Scriptcheck.SkUnread(ans, at, emon.Port.NewCells()), 0, "the retained rus model reads Cyrillic");
+    }
+    [Xunit.Fact]
     public static void TestALanguageCellUnpacksToItsLetters() {
         emon.Port.Cells @out = emon.Port.NewCells();
         emon.Testport.AssertEq(Scriptcheck.SkUnpack(1701734144, @out), 3, "`eng` is three letters");
