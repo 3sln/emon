@@ -14344,3 +14344,21 @@ Strict Node qualification exposes ten raw-value differences of one per mille: se
 
 - [ ] **Signed off** (maintainer)
 
+### D888 — Health captures must use the exact rendered filename
+
+Round 8 traces the h-inverted trust failure to the live health recorder's prefix glob. When h-inverted-numbered was recorded first, recording h-inverted could select the numbered document's earlier PGM. The Round 7 h-inverted capture consequently contained 179 words instead of the historical 218. The source PDF is a tracked synthetic fixture, outside the bucket shard registry; its SHA-256 matches `test/corpus/synth/MANIFEST.json` and its committed Git bytes.
+
+The recorder now requests `pdftoppm -singlefile` and reads that invocation's exact output path. Recording the numbered document followed by h-inverted restores the latter's 218-word content: every ordered word text and box exactly matches the original capture from 081228b8. All 28 focused health/arbiter laws and the full 1,407-law Rust gate pass, including the unchanged every-font-is-trusted assertion. The retained health capture names contain no other prefix pair. No trust threshold or assertion changes.
+
+- [ ] **Signed off** (maintainer)
+
+### D889 — Raw OIL detector scores expose an ORT inference difference before quantization
+
+Round 8 compares the detector tensors for the fixed SROIE 00048 bitmap. Native and web preprocessing produce exactly identical float32 inputs (3,686,400 bytes). Native ORT and ORT Web produce different bits in 127,152 of the 307,200 detector output floats. JavaScript copies tensor bytes to Rust wasm without converting their values; native and wasm use the same Rust answer builder and Kin integer rounding.
+
+A scratch-only diagnostic feeds the web detector output into the native Rust postprocessor, leaving inference settings and production code unchanged. This reproduces detector row 35's 845/846 difference. The component has 798 pixels under the native tensor and 796 under the web tensor: small inference differences cross the existing 0.3 component threshold. Its means are 0.84463078545448478 and 0.84602685385013943. Converting those means to float32 gives distinct bits, `3f5839b9` and `3f589537`; one shared half-away rounding still gives 845 and 846. Passing float32 bits to Kin therefore cannot remove this difference.
+
+D873 compared calibrated word confidences and did not emit detector scores. Its 225 exact old answers did not establish raw tensor identity. Strict OIL byte equality and D872's frozen inference execution remain an acceptance blocker beyond the conversion-only authority in Round 8. No tolerance, component threshold, inference setting, reference answer or production PP measurement is changed.
+
+- [ ] **Signed off** (maintainer)
+

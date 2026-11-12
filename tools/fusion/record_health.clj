@@ -50,8 +50,10 @@
         t0 (System/currentTimeMillis)
         pg (str work "/pg-" id)
         tdir (str work "/t-" id)]
-    (shell {:out :string :err :string} "pdftoppm" "-r" "150" "-gray" "-f" "1" "-l" "1" pdf pg)
-    (let [pgm (first (fs/glob work (str "pg-" id "*.pgm")))
+    (shell {:out :string :err :string} "pdftoppm" "-r" "150" "-gray" "-f" "1" "-l" "1" "-singlefile" pdf pg)
+    ;; A prefix glob also selects h-inverted-numbered's earlier render when
+    ;; recording h-inverted. Read precisely the file this invocation produced.
+    (let [pgm (str pg ".pgm")
           hdr (str/split-lines (slurp (str pgm) :encoding "ISO-8859-1"))
           [w h] (map parse-long (str/split (second hdr) #" "))
           r (sh {:err :inherit} (str work "/prog") "record" tdir pdf (str pgm) "150")]
