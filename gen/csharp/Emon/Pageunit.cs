@@ -548,9 +548,9 @@ public static class Pageunit {
         }
         nw = Evidence.OwCount(owords) - w0;
         Pageink.PnFeatures(i + 1, bms, Pageink.PnKText(), emon.Port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
-        if (((fuse & 8) == 8) && (Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot())) < 0)) {
+        if (((fuse & 8) == 8) && (Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot(2))) < 0)) {
             if (Ofuse.OfPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
-                Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot()), did, (dpi100 + 50) / 100, loc);
+                Scan.ScRequest(rq, Plan.PuId(i, Ocrengine.OeRequestSlot(2)), did, (dpi100 + 50) / 100, loc);
                 ppasked = 1;
             }
         }
@@ -602,17 +602,17 @@ public static class Pageunit {
             nsel = Oapct.PctFuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
         }
         if ((fuse & 8) == 8) {
-            ua = Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot()));
+            ua = Plan.AnFind(ans, Plan.PuId(i, Ocrengine.OeRequestSlot(2)));
             if ((ua >= 0) && (Plan.AnOk(ans, ua) == 1)) {
                 ppview = vdec;
                 if (rid != did) {
                     ppview = Scan.ScPageView(epages, views, images, i + 1, did, pw, ph, Plan.AnArg(ans, ad, 0), Plan.AnArg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1);
                 }
-                Scan.ScPageEvidence(ans, ua, i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot()), ppview, dpi100, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                Scan.ScPageEvidence(ans, ua, i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot(2)), ppview, dpi100, Scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
             }
         }
         if ((fuse & 8) == 8) {
-            Oapp.PpSums(i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
+            Oapp.PpSums(i + 1, Plan.PuId(i, Ocrengine.OeRequestSlot(2)), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
         }
         if ((fuse & 8) == 8) {
             if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) == run) || (emon.Port.CellsAt(rtp, Retarget.RtpQ()) == 0)) {

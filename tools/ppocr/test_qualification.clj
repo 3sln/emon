@@ -55,7 +55,10 @@
 
 (deftest web-comparison-rejects-cell-and-serialization-drift
   (let [root (fs/create-temp-dir {:prefix "emon-web-qualification-"})
-        answer (into [28 3 2 0 1 2] (repeat 22 0))
+        answer (assoc (into [28 3 2 0 1 2] (repeat 22 0)) 8 24928)
+        policy "fixture frozen PP policy"
+        [hi lo] (q/observed-hash (str policy " runtime=" q/web-runtime))
+        web (assoc answer 6 hi 7 lo)
         line (json/generate-string answer)]
     (try
       (spit (str root "/bitmap.png") "path-resolution-fixture")
@@ -64,11 +67,16 @@
       (spit (str root "/fresh-bitmaps.json") "[]")
       (spit (str root "/reference.answers") (apply str (repeat 225 (str line "\n"))))
       (spit (str root "/PROVENANCE.edn")
-            (pr-str {:transport-equality true :reference-sha256 (q/file-sha256 (str root "/reference.answers"))}))
-      (doseq [[candidate succeeds?] [[line true]
-                                    [(json/generate-string (assoc answer 17 1)) false]
-                                    [(str " " line) false]]]
+            (pr-str {:transport-equality true :policy-identity policy
+                     :reference-sha256 (q/file-sha256 (str root "/reference.answers"))}))
+      (doseq [[candidate repeat-line succeeds?]
+              [[(json/generate-string web) (json/generate-string web) true]
+               [(json/generate-string (assoc web 17 1)) (json/generate-string (assoc web 17 1)) false]
+               [(str " " (json/generate-string web)) (str " " (json/generate-string web)) false]
+               [(json/generate-string web) (str " " (json/generate-string web)) false]
+               [(json/generate-string web) line false]]]
         (spit (str root "/web.jsonl") (str candidate "\n"))
+        (spit (str root "/web-repeat.jsonl") (str repeat-line "\n"))
         (let [result @(process ["bb" "tools/ppocr/web_qualify.clj" "--qualification" (str root)
                                "--out" (str root) "--limit" "1" "--compare-only" "true"]
                               {:out :string :err :string :shutdown nil})]
@@ -81,6 +89,27 @@
       (spit (str root "/PROVENANCE.edn") "{:transport-equality false}")
       (is (thrown-with-msg? AssertionError #"qualification is incomplete" (q/reference-lines root)))
       (finally (fs/delete-tree root)))))
+
+(deftest web-tolerance-is-restricted-to-registered-score-cells
+  (let [header (assoc (into [0 3 2 0 1 2] (repeat 22 0))
+                      8 24928 23 1 24 1 25 1)
+        line [0 0 10 10 -1 1 0 0 10 0 10 10 0 10 0]
+        word [0 0 10 10 0 900 1701734144 1 0 1 65]
+        sidecar [8 2 1 2 0 1 0 800
+                 9 2 2 2 0 1 0 1 900]
+        a (vec (concat header line word sidecar))
+        a (assoc a 0 (count a) 25 2)
+        hash (q/observed-hash "test runtime")
+        b (assoc a 6 (first hash) 7 (second hash))]
+    (is (:accepted (q/web-answer-difference a b hash)))
+    (doseq [cell [48 61] delta [-1 1]]
+      (is (:accepted (q/web-answer-difference a (update b cell + delta) hash))))
+    (doseq [cell (remove #{6 7 48 61} (range (count a)))]
+      (is (try (not (:accepted (q/web-answer-difference a (update b cell inc) hash)))
+               (catch Exception _ true) (catch AssertionError _ true))))
+    (doseq [cell [48 61]]
+      (is (not (:accepted (q/web-answer-difference a (update b cell + 2) hash)))))
+    (is (not (:accepted (q/web-answer-difference a b [0 0]))))))
 
 (let [result (run-tests)]
   (when (pos? (+ (:fail result) (:error result))) (System/exit 1)))

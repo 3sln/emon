@@ -7,6 +7,15 @@ use crate::emon::ofuse::*;
 use crate::emon::plan::*;
 
 #[test]
+fn test_hybrid_roles_and_extra_slots_are_engine_indexed() {
+    crate::testport::assert_eq(oe_role(1), 1, "Tesseract incumbent");
+    crate::testport::assert_eq(oe_role(2), 2, "PP challenger");
+    crate::testport::assert_eq(oe_role(3), 0, "unregistered engine has no role");
+    crate::testport::assert_eq(oe_request_slot(2), 23, "first registered extra engine");
+    crate::testport::assert_eq(oe_request_slot(1), -1, "incumbent has no extra slot");
+    crate::testport::assert_eq(oe_request_slot(3), -1, "unregistered engine has no extra slot");
+}
+#[test]
 fn test_default_ocr_request_is_unchanged() {
     let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();

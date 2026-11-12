@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { launch } from '../../test/driver/wasm/browser.mjs';
 import { startServer } from '../../test/driver/wasm/server.mjs';
 const out = process.argv[2];
-const server = await startServer({ wasm: '.cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm' });
+const server = await startServer({ wasm: process.env.EMON_PPOCR_WASM || '.cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm' });
 let browser;
 try {
   browser = await launch();

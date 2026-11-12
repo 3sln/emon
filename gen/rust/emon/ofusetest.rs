@@ -1028,6 +1028,8 @@ fn test_repeated_identifier_needs_an_independent_incumbent_and_an_empty_slot() {
     or_new(runs, 1, 0);
     or_set(runs, 0, orf_request(), 272);
     or_set(runs, 1, orf_request(), 279);
+    or_set(runs, 0, orf_engine(), 1);
+    or_set(runs, 1, orf_engine(), 2);
     oft_w(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
     oft_w(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
     crate::port::cells_push(sel, 0);
@@ -1048,6 +1050,18 @@ fn test_repeated_identifier_needs_an_independent_incumbent_and_an_empty_slot() {
     crate::port::cells_push(c, 0);
     crate::port::cells_push(c, 0);
     crate::port::cells_push(c, 1);
+    or_set(runs, 1, orf_request(), 280);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), 1, "challenger identity survives a different request slot");
+    or_set(runs, 1, orf_request(), 279);
+    or_set(runs, 0, orf_request(), 279);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), 1, "incumbent identity is independent even in the challenger's former slot");
+    or_set(runs, 0, orf_request(), 272);
+    or_set(runs, 1, orf_engine(), 3);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine has no insertion role");
+    or_set(runs, 1, orf_engine(), 2);
+    or_set(runs, 0, orf_engine(), 3);
+    crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine is not an incumbent insertion witness");
+    or_set(runs, 0, orf_engine(), 1);
     crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
     crate::testport::assert_eq(of_pp_repeat_choice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
     crate::port::cells_set(c, 12, 699);

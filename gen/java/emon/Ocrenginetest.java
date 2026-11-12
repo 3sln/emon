@@ -5,6 +5,14 @@ package emon;
 
 
 public final class Ocrenginetest {
+    public static void testHybridRolesAndExtraSlotsAreEngineIndexed() {
+        emon.Testport.assertEq(Ocrengine.oeRole(1), 1, "Tesseract incumbent");
+        emon.Testport.assertEq(Ocrengine.oeRole(2), 2, "PP challenger");
+        emon.Testport.assertEq(Ocrengine.oeRole(3), 0, "unregistered engine has no role");
+        emon.Testport.assertEq(Ocrengine.oeRequestSlot(2), 23, "first registered extra engine");
+        emon.Testport.assertEq(Ocrengine.oeRequestSlot(1), -1, "incumbent has no extra slot");
+        emon.Testport.assertEq(Ocrengine.oeRequestSlot(3), -1, "unregistered engine has no extra slot");
+    }
     public static void testDefaultOcrRequestIsUnchanged() {
         emon.Port.Cells r = emon.Port.newCells();
         emon.Port.Cells scratch = emon.Port.newCells();

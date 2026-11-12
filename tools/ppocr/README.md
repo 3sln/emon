@@ -181,11 +181,39 @@ It requires caller-supplied pinned assets and remains experimental; its live
 answer qualification is separate from the native hosts. `web_qualify.clj`
 reads the new OIL `reference.answers` from `--qualification DIR` (default
 `$EMON_SCRATCH/ppocr-qual`), checks its provenance checksum and completed native
-transport comparison, and requires byte-identical answers, including
-sealed sidecars. It reports header equality and the first differing cell;
+transport comparison. D900 compares ORT Web with native ORT using a scoped
+rule: text, geometry, indices, capabilities, headers and sidecars are identical,
+except the checked web observed-identity hash and raw word-confidence and
+`det-score` values, which may differ by at most one per mille. No other score
+or sidecar receives a tolerance. Two fresh runs within the web identity must
+be byte-identical. Full qualification also replays the actual web answers in
+the fixed 60 CORD and 60 SROIE recordings through native kin composition and
+requires D864 word P/R within ±0.002. Native transport comparisons stay exact.
+It reports header equality and the first differing cell;
 historical OP1c answer hashes are not an OIL reference. `--candidate browser`
 runs Chrome instead of Node, and `--compare-only true` checks an existing
-candidate capture. A `--limit N` run is a development check, not qualification.
+candidate capture plus its `*-repeat.jsonl`. A `--limit N` run is a development
+check, not qualification. Use a fresh output directory for receipt scoring.
+
+The coordinator can run the complete Chrome comparison with one command after
+installing the locked JS dependencies and restoring the pinned model/runtime
+assets. The frozen wasm input is retained with the qualification artifact:
+
+```sh
+EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="$EMON_SCRATCH/ppocr-qual/web/emon.wasm" bb -cp tools tools/ppocr/web_qualify.clj --candidate browser --out "$EMON_SCRATCH/oil-chrome" --qualification "$EMON_SCRATCH/ppocr-qual"
+```
+
+Expected output includes `"answers":225`, `"accepted":225`,
+`"deterministic":true`, and `PASS D900 web receipt P/R within +/-0.002 on fixed
+60 CORD and 60 SROIE`. The exact native/web byte count is diagnostic; all 225
+must satisfy the scoped rule. Chrome launch may require running outside an
+agent sandbox. Receipt replay uses `.cache/emon-rs-fusion-ppocr/target/release/emon-rs`
+and requires its SHA-256 to match the qualification artifact's recorded native
+driver; it does not silently score with a different policy build.
+The retained `web/emon.wasm` and its provenance qualify the frozen reference's
+policy. A new build may be supplied with `EMON_PPOCR_WASM`; its observed policy
+hash must match the native artifact. Qualifying the frozen pair does not accept
+later source changes.
 
 The retained replay sweep includes a 74-page booklet and can take hours
 serially. It is an optional qualification run, not a normal CI gate.

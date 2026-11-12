@@ -14362,3 +14362,54 @@ D873 compared calibrated word confidences and did not emit detector scores. Its 
 
 - [ ] **Signed off** (maintainer)
 
+### D900 — Qualify ORT Web under its observed runtime identity with a scoped raw-score comparison
+
+The Round 9 coordinator ruling resolves D889: the browser PP observed identity
+includes `ORT Web 1.22.0 wasm SIMD` alongside the requested model/policy identity.
+The wasm bridge writes its hash through kin's OIL identity helper; inference,
+postprocessing and quantization remain unchanged. The requested configuration
+continues to identify the same models and policy.
+
+Web/native qualification checks every OIL cell. Only raw word-confidence and
+registered PP `det-score` payload cells may differ by at most one per mille.
+The observed hash must equal the expected web identity; all other header cells,
+text, geometry, indices, capabilities and sidecars remain exact. The comparer
+walks the capability-strided rows and registered sparse sidecar framing; it does
+not recognize tolerable values by their numeric range alone. Native equality
+across all six transports remains absolute.
+
+Two independent web runs must produce byte-identical canonical recordings.
+Actual captured web answers are substituted into the fixed 60 CORD and 60 SROIE
+recordings, after verifying their native reference matches, and replayed through
+the frozen native kin composition policy with inference unavailable. Word P/R
+must remain within ±0.002 of D864. The reference artifact is never overwritten.
+The one-command Chrome runner and expected output are in `tools/ppocr/README.md`;
+the coordinator runs Chrome outside the sandbox. This scoped qualification does
+not by itself accept unfinished Phase 1 identity and calibration work.
+
+- [ ] **Signed off** (maintainer)
+
+### D901 — Hybrid identifier repeats use observed engine roles instead of request slots
+
+The Phase 1 hybrid assigns Tesseract the incumbent role and PP the challenger
+role in a kin table. Identifier-repeat insertion checks those roles from each
+run's OIL engine field. Changing a challenger's request slot no longer removes
+its role, and an incumbent remains independent in the challenger's former slot.
+Unregistered engines have no insertion or incumbent-witness role. Existing
+confidence floors, margins, format guards and lexical guards are unchanged.
+
+The same table allocates extra-engine slots in page-local 23..26, capped at four;
+an incumbent or unregistered engine receives no extra slot. The current PP
+challenger still occupies 23. The next requests use 28 for script retry, 29 for
+opposite orientation, and 32..55/64..87 for lines/cells, so the reserved range
+does not collide. The request dispatcher still awaits the every-request v2
+identity migration; this does not complete sub-phase (b).
+
+The different-slot law fails before the implementation change. After it, 72
+focused Rust laws pass, including the role/slot and unregistered-engine cases;
+four-language generation and compilation pass. The PP policy pin is refreshed.
+The retained D900 qualification remains a qualification of its frozen binaries
+and policy, not this unfinished final implementation.
+
+- [ ] **Signed off** (maintainer)
+

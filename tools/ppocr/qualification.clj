@@ -82,3 +82,51 @@
                                                  (map vector reference candidate)))
                              (when (not= (count reference) (count candidate))
                                (min (count reference) (count candidate))))})
+
+(def web-runtime "ORT Web 1.22.0 wasm SIMD")
+
+(defn observed-hash [identity]
+  (let [hash (reduce (fn [h b] (unchecked-multiply (bit-xor h (bit-and b 255)) 1099511628211))
+                     -3750763034362895579 (.getBytes identity "UTF-8"))]
+    [(unchecked-int (unsigned-bit-shift-right hash 32)) (unchecked-int hash)]))
+
+(defn web-score-cells [answer]
+  ;; Walk only the qualified PP schema, never infer a score by its value.
+  ;; Reject new capabilities until their framing has been reviewed here.
+  (oil-answer answer)
+  (assert (= 24928 (answer 8)) "unexpected PP web capabilities")
+  (assert (= 0 (answer 22)) "PP web must not fabricate blocks")
+  (let [[p scores] (loop [i 0 p (+ 28 (* 15 (answer 23))) scores #{}]
+                     (if (= i (answer 24)) [p scores]
+                         (let [n (answer (+ p 9))]
+                           (assert (= 0 (answer (+ p 8))) "PP web symbols are absent")
+                           (assert (<= 0 n (- (count answer) p 10)) "invalid PP text framing")
+                           (recur (inc i) (+ p 10 n) (conj scores (+ p 5))))))]
+    (loop [i 0 p p scores scores]
+      (if (= i (answer 25))
+        (do (assert (= p (count answer)) "unexpected PP answer tail") scores)
+        (let [[length ns key subject dense n] (subvec answer p (+ p 6))
+              width ({1 1 2 2 3 1 4 3} key)]
+          (assert (and (= ns 2) width (= dense 0)
+                       (= subject (if (= key 4) 3 2))
+                       (= length (+ 6 (* n (inc width))))) "invalid PP sidecar framing")
+          (recur (inc i) (+ p length)
+                 (if (= key 1)
+                   (into scores (map #(+ p 7 (* % 2)) (range n))) scores)))))))
+
+(defn web-answer-difference [reference candidate expected-observed]
+  (let [scores (web-score-cells reference)
+        candidate-scores (web-score-cells candidate)
+        changed (keep-indexed (fn [i a] (when (not= a (get candidate i)) i)) reference)
+        permitted? (and (= (count reference) (count candidate))
+                        (= scores candidate-scores)
+                        (= expected-observed (subvec candidate 6 8))
+                        (every? (fn [i]
+                                  (or (#{6 7} i)
+                                      (and (contains? scores i)
+                                           (<= 0 (reference i) 1000)
+                                           (<= 0 (candidate i) 1000)
+                                           (<= (abs (- (reference i) (candidate i))) 1)))) changed))]
+    (assoc (answer-difference reference candidate)
+           :accepted (boolean permitted?)
+           :score-differences (count (filter scores changed)))))

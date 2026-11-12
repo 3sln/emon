@@ -1027,6 +1027,8 @@ public static class Ofusetest {
         Evidence.OrNew(runs, 1, 0);
         Evidence.OrSet(runs, 0, Evidence.OrfRequest(), 272);
         Evidence.OrSet(runs, 1, Evidence.OrfRequest(), 279);
+        Evidence.OrSet(runs, 0, Evidence.OrfEngine(), 1);
+        Evidence.OrSet(runs, 1, Evidence.OrfEngine(), 2);
         OftW(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
         OftW(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
         emon.Port.CellsPush(sel, 0);
@@ -1047,6 +1049,18 @@ public static class Ofusetest {
         emon.Port.CellsPush(c, 0);
         emon.Port.CellsPush(c, 0);
         emon.Port.CellsPush(c, 1);
+        Evidence.OrSet(runs, 1, Evidence.OrfRequest(), 280);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "challenger identity survives a different request slot");
+        Evidence.OrSet(runs, 1, Evidence.OrfRequest(), 279);
+        Evidence.OrSet(runs, 0, Evidence.OrfRequest(), 279);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "incumbent identity is independent even in the challenger's former slot");
+        Evidence.OrSet(runs, 0, Evidence.OrfRequest(), 272);
+        Evidence.OrSet(runs, 1, Evidence.OrfEngine(), 3);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine has no insertion role");
+        Evidence.OrSet(runs, 1, Evidence.OrfEngine(), 2);
+        Evidence.OrSet(runs, 0, Evidence.OrfEngine(), 3);
+        emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine is not an incumbent insertion witness");
+        Evidence.OrSet(runs, 0, Evidence.OrfEngine(), 1);
         emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
         emon.Testport.AssertEq(Ofuse.OfPpRepeatChoice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
         emon.Port.CellsSet(c, 12, 699);

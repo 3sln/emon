@@ -1,8 +1,9 @@
 #!/usr/bin/env bb
-;; Compare web transports with the newly recorded Rust OIL reference.
+;; D900: scoped ORT Web/native comparison plus exact within-web repeats.
 ;; Never fetch assets, re-answer the reference, or consult historical hashes.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]]
          '[cheshire.core :as json] '[clojure.string :as str]
+         '[clojure.edn :as edn]
          '[ppocr.qualification :as qualification])
 (def args (apply hash-map *command-line-args*))
 (assert (every? #{"--out" "--limit" "--compare-only" "--candidate" "--qualification"} (keys args)) "unknown option")
@@ -26,28 +27,57 @@
 (spit (str out "/manifest.json") (json/generate-string manifest))
 (def native (mapv #(qualification/oil-answer (vec (json/parse-string %)))
                   (take (count selected) reference-lines)))
+(def policy (:policy-identity (edn/read-string (slurp (str qual "/PROVENANCE.edn")))))
+(assert (and (string? policy) (not (str/blank? policy))) "native qualification has no policy identity")
+(def expected-observed (qualification/observed-hash (str policy " runtime=" qualification/web-runtime)))
 (when-not (= "true" (get args "--compare-only"))
+ (doseq [pass ["repeat" "current"]]
   (space!)
   (fs/delete-if-exists (str out "/" candidate ".jsonl"))
   (let [script (if (= candidate "browser") "tools/ppocr/web_browser.mjs" "tools/ppocr/web_probe.mjs")
         result @(process ["node" "--experimental-wasm-exnref" script out]
                          {:shutdown nil :out (str out "/" candidate ".log") :err :out
                           :extra-env {"EMON_CS_SHARED_COMPILATION" "false"
+                                      "EMON_PPOCR_WASM" (or (System/getenv "EMON_PPOCR_WASM")
+                                                           ".cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm")
                                       "TESSDATA_PREFIX" (str (fs/absolutize ".cache/tessdata"))}})]
-    (assert (zero? (:exit result)) (str candidate " inference failed; see " out "/" candidate ".log"))))
+    (assert (zero? (:exit result)) (str candidate " inference failed; see " out "/" candidate ".log")))
+  (when (= pass "repeat")
+    (fs/copy (str out "/" candidate ".jsonl") (str out "/" candidate "-repeat.jsonl")
+             {:replace-existing true}))))
 (def candidate-lines (str/split-lines (slurp (str out "/" candidate ".jsonl"))))
 (def web (mapv #(qualification/oil-answer (vec (json/parse-string %))) candidate-lines))
 (assert (= (count selected) (count web)) "incomplete candidate answers")
 (def differences
   (mapv (fn [row a b reference-line candidate-line]
-          (assoc (qualification/answer-difference a b) :id (:id row)
-                 :bytes-equal (= reference-line candidate-line)))
+          (assoc (qualification/web-answer-difference a b expected-observed) :id (:id row)
+                 :bytes-equal (= reference-line candidate-line)
+                 :canonical (= candidate-line (json/generate-string b))))
         selected native web (take (count selected) reference-lines) candidate-lines))
 (spit (str out "/" candidate "-differences.json") (json/generate-string differences {:pretty true}))
-(def summary {:answers (count selected)
+(def deterministic (= (slurp (str out "/" candidate ".jsonl"))
+                      (slurp (str out "/" candidate "-repeat.jsonl"))))
+(def summary {:comparison "D900 scoped ORT Web/native; only raw word-confidence and det-score +/-1"
+              :runtime qualification/web-runtime :deterministic deterministic
+              :observed (str policy " runtime=" qualification/web-runtime)
+              :observed-hash expected-observed :complete false
+              :capture-sha256 (qualification/file-sha256 (str out "/" candidate ".jsonl"))
+              :reference-sha256 (qualification/file-sha256 (str qual "/reference.answers"))
+              :answers (count selected)
               :qualification (= 225 (count selected))
               :equal (count (filter :bytes-equal differences))
-              :different (count (remove :bytes-equal differences))})
+              :different (count (remove :bytes-equal differences))
+              :raw-score-different (count (filter #(pos? (:score-differences %)) differences))
+              :raw-score-cells (reduce + (map :score-differences differences))
+              :accepted (count (filter #(and (:accepted %) (:canonical %)) differences))})
 (spit (str out "/" candidate "-summary.json") (json/generate-string summary {:pretty true}))
 (println (json/generate-string summary))
-(assert (zero? (:different summary)) (str candidate " answer bytes differ from Rust OIL reference"))
+(assert (and deterministic (= (:answers summary) (:accepted summary)))
+        (str candidate " answer bytes differ outside D900 scope or web repeat is nondeterministic"))
+(when (:qualification summary)
+  (let [result @(process ["bb" "-cp" "tools" "tools/ppocr/web_receipts.clj"
+                         "--qualification" qual "--captures" out "--candidate" candidate]
+                        {:inherit true :shutdown nil})]
+    (assert (zero? (:exit result)) "web fixed-receipt acceptance failed")
+    (spit (str out "/" candidate "-summary.json")
+          (json/generate-string (assoc summary :complete true :receipts-accepted true) {:pretty true}))))

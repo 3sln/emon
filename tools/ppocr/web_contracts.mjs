@@ -7,7 +7,8 @@ const source = fs.readFileSync('.cache/emon-wasm-ppocr/target/wasm32-unknown-unk
 const module = await WebAssembly.compile(source);
 assert.deepEqual(WebAssembly.Module.imports(module), [{ module: 'ppocr', name: 'valid_word', kind: 'function' }]);
 const w = await Wasm.instantiate(module);
-const policy = 'ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f';
+const policy = String.fromCodePoint(...fs.readFileSync('kin/ocrengine.kin', 'utf8')
+  .match(/:data \[([0-9 ]+)\]/)[1].trim().split(/\s+/).map(Number));
 const plain = [11, w.kind.ocr, 2, 1, 3, 0, 0, 0, 0, 0, 1701734144];
 const tagged = plain.concat([-3100, 1, policy.length], Array.from(policy, c => c.codePointAt(0)));
 tagged[0] = tagged.length;

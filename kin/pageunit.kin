@@ -506,9 +506,9 @@
     (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) roid w0 nw ws comps owords feats scr)
     ;; OP1c: inspect the incumbent and measured ink before paying for PP.
     ;; Share the retarget round; keep the original bitmap/scale for PP.
-    (if (and (== (bit-and fuse 8) 8) (< (an-find ans (pu-id i (oe-request-slot))) 0))
+    (if (and (== (bit-and fuse 8) 8) (< (an-find ans (pu-id i (oe-request-slot 2))) 0))
       (if (== (of-pp-complete owords etext w0 nw comps (+ i 1)) 0)
-        (do (sc-request rq (pu-id i (oe-request-slot)) did (quot (+ dpi100 50) 100) loc)
+        (do (sc-request rq (pu-id i (oe-request-slot 2)) did (quot (+ dpi100 50) 100) loc)
             (set ppasked 1))))
     (rt-prep rtp)
     (rt-receipt-source rtp maskv)
@@ -550,16 +550,16 @@
           (set ua (pct-record i dpi100 bx0 by0 ans loc s2 vdec views epages etext oruns oblocks olines owords osyms oalts feats))
           (set nsel (pct-fuse (+ i 1) s2 s1 ua etext oruns olines owords scr nsel oaz s3 s4 s5 s6 ri))))
     (if (== (bit-and fuse 8) 8)
-      (do (set ua (an-find ans (pu-id i (oe-request-slot))))
+      (do (set ua (an-find ans (pu-id i (oe-request-slot 2))))
           (if (and (>= ua 0) (== (an-ok ans ua) 1))
             (do (set ppview vdec)
                 (if (!= rid did)
                   (set ppview (sc-page-view epages views images (+ i 1) did pw ph (an-arg ans ad 0) (an-arg ans ad 1) dpi100
                                            bx0 by0 obj bx0 by0 bx1 by1)))
-                (sc-page-evidence ans ua (+ i 1) (pu-id i (oe-request-slot)) ppview dpi100 (sc-lang loc)
+                (sc-page-evidence ans ua (+ i 1) (pu-id i (oe-request-slot 2)) ppview dpi100 (sc-lang loc)
                                   views epages etext oruns oblocks olines owords osyms oalts feats)))))
     (if (== (bit-and fuse 8) 8)
-      (pp-sums (+ i 1) (pu-id i (oe-request-slot)) oruns olines owords etext rules scr nsel aux
+      (pp-sums (+ i 1) (pu-id i (oe-request-slot 2)) oruns olines owords etext rules scr nsel aux
                ws sv snap pc sg mem s1 s2 s3 s4 s5 s6 rn ri))
     ;; Preserve the default RC5c/P-ARB selected words before admitting PP.
     ;; In particular, a previously repaired numeric slot is the incumbent.

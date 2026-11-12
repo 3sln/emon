@@ -4,14 +4,40 @@
 use crate::emon::plan::*;
 
 pub static OE_IDENTITY: [i32; 74] = [
-    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 99, 101, 98, 57, 57, 99,
-    101, 52, 98, 52, 100, 100, 55, 99, 97, 101, 102, 98, 98, 102, 56, 98,
-    57, 100, 98, 57, 48, 101, 57, 50, 100, 97, 50, 52, 49, 55, 101, 51,
-    56, 48, 56, 98, 98, 99, 54, 57, 99, 56, 50, 51, 48, 99, 55, 101,
-    99, 50, 54, 101, 99, 102, 98, 53, 53, 55
+    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
+    100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
+    101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
+    53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
+    53, 48, 57, 55, 57, 101, 100, 54, 54, 102
 ];
-pub fn oe_request_slot() -> i32 {
-    return 23;
+pub static OE_ROLES: [i32; 4] = [
+    1, 1,
+    2, 2
+];
+pub fn oe_role(engine: i32) -> i32 {
+    let mut i: i32 = 0;
+    while i < 2 {
+        if OE_ROLES[(i * 2 + 0) as usize] == engine {
+            return OE_ROLES[(i * 2 + 1) as usize];
+        }
+        i += 1;
+    }
+    return 0;
+}
+pub fn oe_request_slot(engine: i32) -> i32 {
+    // Page-local slots 23..26 are reserved for at most four extra engines, outside the line/cell/witness ranges. The role table assigns their indices.
+    let mut i: i32 = 0;
+    let mut extra: i32 = 0;
+    while i < 2 {
+        if OE_ROLES[(i * 2 + 1) as usize] == 2 {
+            if (OE_ROLES[(i * 2 + 0) as usize] == engine) && (extra < 4) {
+                return 23 + extra;
+            }
+            extra += 1;
+        }
+        i += 1;
+    }
+    return -1;
 }
 pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells, engine: i32) -> i32 {
     if engine == 0 {
@@ -27,7 +53,7 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
         let kind: i32 = crate::port::cells_at(requests, at + 1);
         let mut count: i32 = n;
         let mut first: i32 = 10;
-        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot())) {
+        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot(2))) {
             k = first;
             while (k + 2) < count {
                 if (crate::port::cells_at(requests, at + k) == -3100) && ((crate::port::cells_at(requests, (at + k) + 1) == 1) && (crate::port::cells_at(requests, (at + k) + 2) == ((count - k) - 3))) {
@@ -43,7 +69,7 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
             crate::port::cells_push(scratch, crate::port::cells_at(requests, at + i));
             i += 1;
         }
-        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot())) {
+        if (kind == pk_ocr()) && ((engine == 1) || ((crate::port::cells_at(requests, at + 2) % 256) == oe_request_slot(2))) {
             crate::port::cells_push(scratch, -3100);
             crate::port::cells_push(scratch, 1);
             crate::port::cells_push(scratch, 74);

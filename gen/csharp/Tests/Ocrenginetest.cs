@@ -6,6 +6,15 @@ namespace emon;
 
 public static class Ocrenginetest {
     [Xunit.Fact]
+    public static void TestHybridRolesAndExtraSlotsAreEngineIndexed() {
+        emon.Testport.AssertEq(Ocrengine.OeRole(1), 1, "Tesseract incumbent");
+        emon.Testport.AssertEq(Ocrengine.OeRole(2), 2, "PP challenger");
+        emon.Testport.AssertEq(Ocrengine.OeRole(3), 0, "unregistered engine has no role");
+        emon.Testport.AssertEq(Ocrengine.OeRequestSlot(2), 23, "first registered extra engine");
+        emon.Testport.AssertEq(Ocrengine.OeRequestSlot(1), -1, "incumbent has no extra slot");
+        emon.Testport.AssertEq(Ocrengine.OeRequestSlot(3), -1, "unregistered engine has no extra slot");
+    }
+    [Xunit.Fact]
     public static void TestDefaultOcrRequestIsUnchanged() {
         emon.Port.Cells r = emon.Port.NewCells();
         emon.Port.Cells scratch = emon.Port.NewCells();

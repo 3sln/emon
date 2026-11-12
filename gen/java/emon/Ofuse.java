@@ -1494,7 +1494,7 @@ public final class Ofuse {
         while (i < (emon.Port.cellsLen(c) / ofCstride())) {
             run = ofCget(c, i, 0);
             if ((run >= 0) && (run < Evidence.orCount(runs))) {
-                if (((Evidence.orGet(runs, run, Evidence.orfRequest()) % 256) == 23) && ((ofCget(c, i, 2) == 1) && (ofCget(c, i, 4) >= ofInsertConf()))) {
+                if ((Ocrengine.oeRole(Evidence.orGet(runs, run, Evidence.orfEngine())) == 2) && ((ofCget(c, i, 2) == 1) && (ofCget(c, i, 4) >= ofInsertConf()))) {
                     w = emon.Port.cellsAt(refs, ofCget(c, i, 1));
                     if (ofPpCode(text, Evidence.owGet(words, w, Evidence.hdTstart()), Evidence.owGet(words, w, Evidence.hdTlen())) == 1) {
                         j = 0;
@@ -1503,7 +1503,7 @@ public final class Ofuse {
                             v = emon.Port.cellsAt(sel, j);
                             run = Evidence.owGet(words, v, Evidence.owfRun());
                             if ((run >= 0) && (run < Evidence.orCount(runs))) {
-                                if (((Evidence.orGet(runs, run, Evidence.orfRequest()) % 256) != 23) && ((Evidence.owGet(words, w, Evidence.hdPage()) == Evidence.owGet(words, v, Evidence.hdPage())) && (Evidence.owConfidence(words, v) >= ofInsertConf()))) {
+                                if ((Ocrengine.oeRole(Evidence.orGet(runs, run, Evidence.orfEngine())) == 1) && ((Evidence.owGet(words, w, Evidence.hdPage()) == Evidence.owGet(words, v, Evidence.hdPage())) && (Evidence.owConfidence(words, v) >= ofInsertConf()))) {
                                     if ((ofWordSame(words, text, w, v, 0) == 1) && (Evidence.evOverlapSmall(Evidence.owGet(words, w, Evidence.hdX0()), Evidence.owGet(words, w, Evidence.hdY0()), Evidence.owGet(words, w, Evidence.hdX1()), Evidence.owGet(words, w, Evidence.hdY1()), Evidence.owGet(words, v, Evidence.hdX0()), Evidence.owGet(words, v, Evidence.hdY0()), Evidence.owGet(words, v, Evidence.hdX1()), Evidence.owGet(words, v, Evidence.hdY1())) == 0)) {
                                         found = 1;
                                     }

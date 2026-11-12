@@ -986,6 +986,8 @@ public final class Ofusetest {
         Evidence.orNew(runs, 1, 0);
         Evidence.orSet(runs, 0, Evidence.orfRequest(), 272);
         Evidence.orSet(runs, 1, Evidence.orfRequest(), 279);
+        Evidence.orSet(runs, 0, Evidence.orfEngine(), 1);
+        Evidence.orSet(runs, 1, Evidence.orfEngine(), 2);
         oftW(words, 1000, 1000, 1200, 1200, 0, 3, 0, 0, 700, 0);
         oftW(words, 1000, 2000, 1200, 2200, 0, 3, 1, 1, 700, 0);
         emon.Port.cellsPush(sel, 0);
@@ -1006,6 +1008,18 @@ public final class Ofusetest {
         emon.Port.cellsPush(c, 0);
         emon.Port.cellsPush(c, 0);
         emon.Port.cellsPush(c, 1);
+        Evidence.orSet(runs, 1, Evidence.orfRequest(), 280);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "challenger identity survives a different request slot");
+        Evidence.orSet(runs, 1, Evidence.orfRequest(), 279);
+        Evidence.orSet(runs, 0, Evidence.orfRequest(), 279);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "incumbent identity is independent even in the challenger's former slot");
+        Evidence.orSet(runs, 0, Evidence.orfRequest(), 272);
+        Evidence.orSet(runs, 1, Evidence.orfEngine(), 3);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine has no insertion role");
+        Evidence.orSet(runs, 1, Evidence.orfEngine(), 2);
+        Evidence.orSet(runs, 0, Evidence.orfEngine(), 3);
+        emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), -1, "an unregistered engine is not an incumbent insertion witness");
+        Evidence.orSet(runs, 0, Evidence.orfEngine(), 1);
         emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 0), 1, "verbatim independently supported identifier inserts");
         emon.Testport.assertEq(Ofuse.ofPpRepeatChoice(runs, words, text, c, refs, sel, 1), -1, "never overrides even a low-confidence incumbent");
         emon.Port.cellsSet(c, 12, 699);

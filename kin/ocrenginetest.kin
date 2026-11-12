@@ -1,12 +1,20 @@
 (ns emon.ocrenginetest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.ofuse :refer [of-rule of-pp-choice of-pp-year of-pp-code]]
-            [emon.ocrengine :refer [oe-tag oe-id-count]]
+            [emon.ocrengine :refer [oe-tag oe-id-count oe-role oe-request-slot]]
             [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
             [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
             [emon.port :refer [cells-len cells-at cells-push]]
             [emon.test :refer [deftest assert-eq new-cells]]
             [kin.lang :refer [let + -]]))
+
+(deftest test-hybrid-roles-and-extra-slots-are-engine-indexed
+  (assert-eq (oe-role 1) 1 "Tesseract incumbent")
+  (assert-eq (oe-role 2) 2 "PP challenger")
+  (assert-eq (oe-role 3) 0 "unregistered engine has no role")
+  (assert-eq (oe-request-slot 2) 23 "first registered extra engine")
+  (assert-eq (oe-request-slot 1) -1 "incumbent has no extra slot")
+  (assert-eq (oe-request-slot 3) -1 "unregistered engine has no extra slot"))
 
 (deftest test-default-ocr-request-is-unchanged
   (let [^Cells r (new-cells) ^Cells scratch (new-cells)

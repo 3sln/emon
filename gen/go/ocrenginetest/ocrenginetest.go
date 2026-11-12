@@ -12,6 +12,15 @@ import (
 	"testing"
 )
 
+func TestHybridRolesAndExtraSlotsAreEngineIndexed(emonT *testing.T) {
+	port.AssertEq(emonT, ocrengine.OeRole(1), 1, "Tesseract incumbent")
+	port.AssertEq(emonT, ocrengine.OeRole(2), 2, "PP challenger")
+	port.AssertEq(emonT, ocrengine.OeRole(3), 0, "unregistered engine has no role")
+	port.AssertEq(emonT, ocrengine.OeRequestSlot(2), 23, "first registered extra engine")
+	port.AssertEq(emonT, ocrengine.OeRequestSlot(1), -1, "incumbent has no extra slot")
+	port.AssertEq(emonT, ocrengine.OeRequestSlot(3), -1, "unregistered engine has no extra slot")
+}
+
 func TestDefaultOcrRequestIsUnchanged(emonT *testing.T) {
 	var r *port.Cells = port.NewCells()
 	var scratch *port.Cells = port.NewCells()

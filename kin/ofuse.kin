@@ -3,11 +3,12 @@
 ;; Rule codes: keep0 agree1 margin2 insert3 blocked-format4 blocked-lexicon5 blocked-slot6.
 (ns emon.ofuse
   (:require [emon.lang :refer [I32 I64 Cells i64 i32]]
+            [emon.ocrengine :refer [oe-role]]
             [emon.ofmt :refer [ofmt-valid fmt-digit]]
             [emon.port :refer [cells-at cells-len cells-push cells-set cells-drop]]
             [emon.evidence :refer [ow-confidence co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 ow-count ow-stride ow-get ow-set hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-bx0 hd-by0 hd-bx1 hd-by1 hd-rot hd-dir
                                    hd-line hd-tstart hd-tlen hd-conf hd-feat owf-flags oe-garbage oe-dictionary owf-run owf-from ev-overlap-small
-                                   or-new or-count or-get or-set orf-page orf-view orf-pass orf-request orf-lfirst orf-lcount orf-wfirst orf-wcount
+                                   or-new or-count or-get or-set orf-page orf-view orf-pass orf-request orf-engine orf-lfirst orf-lcount orf-wfirst orf-wcount
                                    ol-new ol-count ol-get ol-set lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1 lh-rot lh-dir lh-first lh-count olf-run
                                    op-first op-upscaled op-body-ink op-receipt op-receipt-rescue op-line op-cell op-fused
                                    oz-stride ozf-page ozf-x0 ozf-ifirst ozf-icount ozf-cfirst ozf-ccount ozf-rule ozf-votes ozf-ivotes ozf-nulls ozf-margin ozf-readings ozf-op]]
@@ -1233,7 +1234,7 @@
     (while (< i (quot (cells-len c) (of-cstride)))
       (do (set run (of-cget c i 0))
           (if (and (>= run 0) (< run (or-count runs)))
-            (if (and (== (rem (or-get runs run (orf-request)) 256) 23)
+            (if (and (== (oe-role (or-get runs run (orf-engine))) 2)
                      (and (== (of-cget c i 2) 1) (>= (of-cget c i 4) (of-insert-conf))))
               (do (set w (cells-at refs (of-cget c i 1)))
                   (if (== (of-pp-code text (ow-get words w (hd-tstart)) (ow-get words w (hd-tlen))) 1)
@@ -1242,7 +1243,7 @@
                           (do (set v (cells-at sel j))
                               (set run (ow-get words v (owf-run)))
                               (if (and (>= run 0) (< run (or-count runs)))
-                                (if (and (!= (rem (or-get runs run (orf-request)) 256) 23)
+                                (if (and (== (oe-role (or-get runs run (orf-engine))) 1)
                                          (and (== (ow-get words w (hd-page)) (ow-get words v (hd-page)))
                                               (>= (ow-confidence words v) (of-insert-conf))))
                                   (if (and (== (of-word-same words text w v 0) 1)

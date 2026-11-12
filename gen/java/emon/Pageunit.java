@@ -548,9 +548,9 @@ public final class Pageunit {
         }
         nw = Evidence.owCount(owords) - w0;
         Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
-        if (((fuse & 8) == 8) && (Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot())) < 0)) {
+        if (((fuse & 8) == 8) && (Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot(2))) < 0)) {
             if (Ofuse.ofPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
-                Scan.scRequest(rq, Plan.puId(i, Ocrengine.oeRequestSlot()), did, (dpi100 + 50) / 100, loc);
+                Scan.scRequest(rq, Plan.puId(i, Ocrengine.oeRequestSlot(2)), did, (dpi100 + 50) / 100, loc);
                 ppasked = 1;
             }
         }
@@ -602,17 +602,17 @@ public final class Pageunit {
             nsel = Oapct.pctFuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
         }
         if ((fuse & 8) == 8) {
-            ua = Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot()));
+            ua = Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot(2)));
             if ((ua >= 0) && (Plan.anOk(ans, ua) == 1)) {
                 ppview = vdec;
                 if (rid != did) {
                     ppview = Scan.scPageView(epages, views, images, i + 1, did, pw, ph, Plan.anArg(ans, ad, 0), Plan.anArg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1);
                 }
-                Scan.scPageEvidence(ans, ua, i + 1, Plan.puId(i, Ocrengine.oeRequestSlot()), ppview, dpi100, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+                Scan.scPageEvidence(ans, ua, i + 1, Plan.puId(i, Ocrengine.oeRequestSlot(2)), ppview, dpi100, Scan.scLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
             }
         }
         if ((fuse & 8) == 8) {
-            Oapp.ppSums(i + 1, Plan.puId(i, Ocrengine.oeRequestSlot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
+            Oapp.ppSums(i + 1, Plan.puId(i, Ocrengine.oeRequestSlot(2)), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
         }
         if ((fuse & 8) == 8) {
             if ((emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) == run) || (emon.Port.cellsAt(rtp, Retarget.rtpQ()) == 0)) {

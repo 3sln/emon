@@ -9,12 +9,35 @@
 ;; policy and the frozen calibration. Update on any observable adapter change.
 (defdata ^:pub oe-identity
   :emitter kin.lang/flat-array
-  :data [112 112 111 99 114 53 45 101 110 45 99 101 98 57 57 99 101 52 98 52 100 100 55 99 97 101 102 98 98 102 56 98 57 100 98 57 48 101 57 50 100 97 50 52 49 55 101 51 56 48 56 98 98 99 54 57 99 56 50 51 48 99 55 101 99 50 54 101 99 102 98 53 53 55]
+  :data [112 112 111 99 114 53 45 101 110 45 54 101 55 48 101 55 100 97 48 102 50 100 56 57 56 56 55 53 53 100 48 55 101 98 48 101 50 99 49 48 99 55 49 98 99 54 55 53 53 97 99 48 100 50 56 56 52 57 102 48 100 51 48 53 53 48 57 55 57 101 100 54 54 102]
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
-;; Page-local 23 is reserved for the additional PP reading; outside line/cell/witness ranges.
-(defn ^:pub ^I32 oe-request-slot [] (return 23))
+;; Phase 1's hybrid role table. Request slots allocate work; the observed OIL
+;; engine selects a reading's role. Unregistered engines have no insertion role.
+(defdata ^:pub oe-roles
+  :emitter kin.lang/flat-array
+  :stride 2
+  :data [1 1 2 2]
+  :accessors {^I32 oe-role-count [^I32 ignored]
+              ^I32 oe-role-at [^I32 ignored ^I32 row ^I32 col]})
+
+(defn ^:pub ^I32 oe-role [^I32 engine]
+  (let [^:mut ^I32 i 0]
+    (while (< i (oe-role-count 0))
+      (do (if (== (oe-role-at 0 i 0) engine) (return (oe-role-at 0 i 1)))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 oe-request-slot [^I32 engine]
+  (comment "Page-local slots 23..26 are reserved for at most four extra engines, outside the line/cell/witness ranges. The role table assigns their indices.")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 extra 0]
+    (while (< i (oe-role-count 0))
+      (do (if (== (oe-role-at 0 i 1) 2)
+            (do (if (and (== (oe-role-at 0 i 0) engine) (< extra 4)) (return (+ 23 extra)))
+                (set extra (+ extra 1))))
+          (set i (+ i 1)))))
+  (return -1))
 
 (defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 engine]
   (if (== engine 0) (return 0))
@@ -28,7 +51,7 @@
             ^:mut ^I32 first 10]
         ;; Queued requests may already have been tagged by an earlier page unit.
         ;; Replace a reserved trailer rather than appending a second identity.
-        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot))))
+        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot 2))))
           (do (set k first)
               (while (< (+ k 2) count)
                 (if (and (== (cells-at requests (+ at k)) -3100)
@@ -39,7 +62,7 @@
         (set i 0)
         (while (< i count)
           (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
-        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot))))
+        (if (and (== kind (pk-ocr)) (or (== engine 1) (== (rem (cells-at requests (+ at 2)) 256) (oe-request-slot 2))))
           (do (cells-push scratch -3100)
               (cells-push scratch 1)
               (cells-push scratch (oe-id-count 0))

@@ -5,6 +5,7 @@ package ofuse
 
 import (
 	"emon/evidence"
+	"emon/ocrengine"
 	"emon/ofmt"
 	"emon/port"
 	"emon/scan"
@@ -1531,7 +1532,7 @@ func OfPpRepeatChoice(runs *port.Cells, words *port.Cells, text *port.Cells, c *
 	for i < (port.CellsLen(c) / OfCstride()) {
 		run = OfCget(c, i, 0)
 		if (run >= 0) && (run < evidence.OrCount(runs)) {
-			if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) == 23) && ((OfCget(c, i, 2) == 1) && (OfCget(c, i, 4) >= OfInsertConf())) {
+			if (ocrengine.OeRole(evidence.OrGet(runs, run, evidence.OrfEngine())) == 2) && ((OfCget(c, i, 2) == 1) && (OfCget(c, i, 4) >= OfInsertConf())) {
 				w = port.CellsAt(refs, OfCget(c, i, 1))
 				if OfPpCode(text, evidence.OwGet(words, w, evidence.HdTstart()), evidence.OwGet(words, w, evidence.HdTlen())) == 1 {
 					j = 0
@@ -1540,7 +1541,7 @@ func OfPpRepeatChoice(runs *port.Cells, words *port.Cells, text *port.Cells, c *
 						v = port.CellsAt(sel, j)
 						run = evidence.OwGet(words, v, evidence.OwfRun())
 						if (run >= 0) && (run < evidence.OrCount(runs)) {
-							if ((evidence.OrGet(runs, run, evidence.OrfRequest()) % 256) != 23) && ((evidence.OwGet(words, w, evidence.HdPage()) == evidence.OwGet(words, v, evidence.HdPage())) && (evidence.OwConfidence(words, v) >= OfInsertConf())) {
+							if (ocrengine.OeRole(evidence.OrGet(runs, run, evidence.OrfEngine())) == 1) && ((evidence.OwGet(words, w, evidence.HdPage()) == evidence.OwGet(words, v, evidence.HdPage())) && (evidence.OwConfidence(words, v) >= OfInsertConf())) {
 								if (ofWordSame(words, text, w, v, 0) == 1) && (evidence.EvOverlapSmall(evidence.OwGet(words, w, evidence.HdX0()), evidence.OwGet(words, w, evidence.HdY0()), evidence.OwGet(words, w, evidence.HdX1()), evidence.OwGet(words, w, evidence.HdY1()), evidence.OwGet(words, v, evidence.HdX0()), evidence.OwGet(words, v, evidence.HdY0()), evidence.OwGet(words, v, evidence.HdX1()), evidence.OwGet(words, v, evidence.HdY1())) == 0) {
 									found = 1
 								}

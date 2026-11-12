@@ -3,7 +3,7 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.test :refer [deftest assert-eq assert-text new-cells new-text TestT test-t]]
             [emon.port :refer [cells-push cells-at cells-len cells-set]]
-            [emon.evidence :refer [oe-garbage oe-dictionary co-new ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-y0 hd-y1 hd-line hd-feat owf-run ow-set owf-flags or-new or-set or-get or-count orf-request orf-pass orf-wfirst orf-wcount
+            [emon.evidence :refer [oe-garbage oe-dictionary co-new ow-new ow-get ow-count hd-tstart hd-tlen hd-conf hd-x0 hd-y0 hd-y1 hd-line hd-feat owf-run ow-set owf-flags or-new or-set or-get or-count orf-request orf-engine orf-pass orf-wfirst orf-wcount
                                    orf-lfirst orf-lcount ol-new ol-set ol-get ol-count olf-run lh-first lh-count op-fused ev-check ev-row ev-emit-ofuse
                                    oz-stride ozf-ifirst ozf-icount ozf-cfirst ozf-ccount ozf-rule ozf-votes ozf-ivotes ozf-nulls ozf-margin ozf-readings ozf-op]]
             [emon.scan :refer [sc-prep sc-sel-base sc-xtra-base sc-admit-floor]]
@@ -844,6 +844,7 @@
     (cells-push text 65) (cells-push text 66) (cells-push text 49)
     (or-new runs 1 0) (or-new runs 1 0)
     (or-set runs 0 (orf-request) 272) (or-set runs 1 (orf-request) 279)
+    (or-set runs 0 (orf-engine) 1) (or-set runs 1 (orf-engine) 2)
     (oft-w words 1000 1000 1200 1200 0 3 0 0 700 0)
     (oft-w words 1000 2000 1200 2200 0 3 1 1 700 0)
     (cells-push sel 0) (cells-push refs 1)
@@ -852,6 +853,18 @@
     (cells-push c 0) (cells-push c 0) (cells-push c 0) (cells-push c 0)
     (cells-push c 1) (cells-push c 0) (cells-push c 1) (cells-push c 1)
     (cells-push c 700) (cells-push c 0) (cells-push c 0) (cells-push c 1)
+    (or-set runs 1 (orf-request) 280)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) 1 "challenger identity survives a different request slot")
+    (or-set runs 1 (orf-request) 279)
+    (or-set runs 0 (orf-request) 279)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) 1 "incumbent identity is independent even in the challenger's former slot")
+    (or-set runs 0 (orf-request) 272)
+    (or-set runs 1 (orf-engine) 3)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "an unregistered engine has no insertion role")
+    (or-set runs 1 (orf-engine) 2)
+    (or-set runs 0 (orf-engine) 3)
+    (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) -1 "an unregistered engine is not an incumbent insertion witness")
+    (or-set runs 0 (orf-engine) 1)
     (assert-eq (of-pp-repeat-choice runs words text c refs sel 0) 1 "verbatim independently supported identifier inserts")
     (assert-eq (of-pp-repeat-choice runs words text c refs sel 1) -1 "never overrides even a low-confidence incumbent")
     (cells-set c 12 699)

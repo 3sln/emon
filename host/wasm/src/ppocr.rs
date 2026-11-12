@@ -107,7 +107,24 @@ fn advance() -> i32 {
 fn advance_inner() -> i32 {
     let mut task = STATE.with(|s| s.borrow_mut().task.take()).expect("PP job absent");
     match task.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
-        Poll::Ready(Ok(v)) => { crate::wasm::put_i32s(&v); 0 }
+        Poll::Ready(Ok(v)) => {
+            // The requested model/policy stays the same. Observed execution
+            // names ORT Web separately from native ORT (D900).
+            let mut answer = crate::port::Cells::new();
+            for cell in v { crate::port::cells_push(&mut answer, cell); }
+            let mut identity = crate::port::Cells::new();
+            for cp in crate::emon::ocrengine::OE_IDENTITY {
+                crate::port::cells_push(&mut identity, cp);
+            }
+            for cp in " runtime=ORT Web 1.22.0 wasm SIMD".chars() {
+                crate::port::cells_push(&mut identity, cp as i32);
+            }
+            let n = crate::port::cells_len(&identity);
+            crate::emon::oil::oil_observed(&mut answer, 0, &mut identity, 0, n);
+            let v: Vec<i32> = (0..crate::port::cells_len(&answer))
+                .map(|i| crate::port::cells_at(&answer, i)).collect();
+            crate::wasm::put_i32s(&v); 0
+        }
         Poll::Ready(Err(e)) => { crate::wasm::put_str(&e); -1 }
         Poll::Pending => {
             STATE.with(|s| {

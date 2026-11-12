@@ -10,15 +10,43 @@ import (
 )
 
 var OeIdentity [74]int32 = [74]int32{
-	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 99, 101, 98, 57, 57, 99,
-	101, 52, 98, 52, 100, 100, 55, 99, 97, 101, 102, 98, 98, 102, 56, 98,
-	57, 100, 98, 57, 48, 101, 57, 50, 100, 97, 50, 52, 49, 55, 101, 51,
-	56, 48, 56, 98, 98, 99, 54, 57, 99, 56, 50, 51, 48, 99, 55, 101,
-	99, 50, 54, 101, 99, 102, 98, 53, 53, 55,
+	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
+	100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
+	101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
+	53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
+	53, 48, 57, 55, 57, 101, 100, 54, 54, 102,
 }
 
-func OeRequestSlot() int32 {
-	return 23
+var OeRoles [4]int32 = [4]int32{
+	1, 1,
+	2, 2,
+}
+
+func OeRole(engine int32) int32 {
+	var i int32 = 0
+	for i < 2 {
+		if OeRoles[i*2+0] == engine {
+			return OeRoles[i*2+1]
+		}
+		i += 1
+	}
+	return 0
+}
+
+func OeRequestSlot(engine int32) int32 {
+	// Page-local slots 23..26 are reserved for at most four extra engines, outside the line/cell/witness ranges. The role table assigns their indices.
+	var i int32 = 0
+	var extra int32 = 0
+	for i < 2 {
+		if OeRoles[i*2+1] == 2 {
+			if (OeRoles[i*2+0] == engine) && (extra < 4) {
+				return 23 + extra
+			}
+			extra += 1
+		}
+		i += 1
+	}
+	return -1
 }
 
 func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
@@ -35,7 +63,7 @@ func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
 		var kind int32 = port.CellsAt(requests, at+1)
 		var count int32 = n
 		var first int32 = 10
-		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot())) {
+		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot(2))) {
 			k = first
 			for (k + 2) < count {
 				if (port.CellsAt(requests, at+k) == -3100) && ((port.CellsAt(requests, (at+k)+1) == 1) && (port.CellsAt(requests, (at+k)+2) == ((count - k) - 3))) {
@@ -51,7 +79,7 @@ func OeTag(requests *port.Cells, scratch *port.Cells, engine int32) int32 {
 			port.CellsPush(scratch, port.CellsAt(requests, at+i))
 			i += 1
 		}
-		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot())) {
+		if (kind == plan.PkOcr()) && ((engine == 1) || ((port.CellsAt(requests, at+2) % 256) == OeRequestSlot(2))) {
 			port.CellsPush(scratch, -3100)
 			port.CellsPush(scratch, 1)
 			port.CellsPush(scratch, 74)

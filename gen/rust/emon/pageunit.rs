@@ -565,9 +565,9 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     nw = ow_count(owords) - w0;
     pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
-    if ((fuse & 8) == 8) && (an_find(ans, pu_id(i, oe_request_slot())) < 0) {
+    if ((fuse & 8) == 8) && (an_find(ans, pu_id(i, oe_request_slot(2))) < 0) {
         if of_pp_complete(owords, etext, w0, nw, comps, i + 1) == 0 {
-            sc_request(rq, pu_id(i, oe_request_slot()), did, (dpi100 + 50) / 100, loc);
+            sc_request(rq, pu_id(i, oe_request_slot(2)), did, (dpi100 + 50) / 100, loc);
             ppasked = 1;
         }
     }
@@ -619,17 +619,17 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         nsel = pct_fuse(i + 1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri);
     }
     if (fuse & 8) == 8 {
-        ua = an_find(ans, pu_id(i, oe_request_slot()));
+        ua = an_find(ans, pu_id(i, oe_request_slot(2)));
         if (ua >= 0) && (an_ok(ans, ua) == 1) {
             ppview = vdec;
             if rid != did {
                 ppview = sc_page_view(epages, views, images, i + 1, did, pw, ph, an_arg(ans, ad, 0), an_arg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1);
             }
-            sc_page_evidence(ans, ua, i + 1, pu_id(i, oe_request_slot()), ppview, dpi100, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
+            sc_page_evidence(ans, ua, i + 1, pu_id(i, oe_request_slot(2)), ppview, dpi100, sc_lang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         }
     }
     if (fuse & 8) == 8 {
-        pp_sums(i + 1, pu_id(i, oe_request_slot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
+        pp_sums(i + 1, pu_id(i, oe_request_slot(2)), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri);
     }
     if (fuse & 8) == 8 {
         if (crate::port::cells_at(rtp, rtp_primary()) == run) || (crate::port::cells_at(rtp, rtp_q()) == 0) {

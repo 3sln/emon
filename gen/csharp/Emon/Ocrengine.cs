@@ -6,14 +6,40 @@ namespace emon;
 
 public static class Ocrengine {
     public static readonly int[] OeIdentity = new int[] {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 99, 101, 98, 57, 57, 99,
-        101, 52, 98, 52, 100, 100, 55, 99, 97, 101, 102, 98, 98, 102, 56, 98,
-        57, 100, 98, 57, 48, 101, 57, 50, 100, 97, 50, 52, 49, 55, 101, 51,
-        56, 48, 56, 98, 98, 99, 54, 57, 99, 56, 50, 51, 48, 99, 55, 101,
-        99, 50, 54, 101, 99, 102, 98, 53, 53, 55
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 54, 101, 55, 48, 101, 55,
+        100, 97, 48, 102, 50, 100, 56, 57, 56, 56, 55, 53, 53, 100, 48, 55,
+        101, 98, 48, 101, 50, 99, 49, 48, 99, 55, 49, 98, 99, 54, 55, 53,
+        53, 97, 99, 48, 100, 50, 56, 56, 52, 57, 102, 48, 100, 51, 48, 53,
+        53, 48, 57, 55, 57, 101, 100, 54, 54, 102
     };
-    public static int OeRequestSlot() {
-        return 23;
+    public static readonly int[] OeRoles = new int[] {
+        1, 1,
+        2, 2
+    };
+    public static int OeRole(int engine) {
+        int i = 0;
+        while (i < 2) {
+            if (OeRoles[i * 2 + 0] == engine) {
+                return OeRoles[i * 2 + 1];
+            }
+            i += 1;
+        }
+        return 0;
+    }
+    public static int OeRequestSlot(int engine) {
+        // Page-local slots 23..26 are reserved for at most four extra engines, outside the line/cell/witness ranges. The role table assigns their indices.
+        int i = 0;
+        int extra = 0;
+        while (i < 2) {
+            if (OeRoles[i * 2 + 1] == 2) {
+                if ((OeRoles[i * 2 + 0] == engine) && (extra < 4)) {
+                    return 23 + extra;
+                }
+                extra += 1;
+            }
+            i += 1;
+        }
+        return -1;
     }
     public static int OeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int engine) {
         if (engine == 0) {
@@ -29,7 +55,7 @@ public static class Ocrengine {
             int kind = emon.Port.CellsAt(requests, at + 1);
             int count = n;
             int first = 10;
-            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot()))) {
+            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot(2)))) {
                 k = first;
                 while ((k + 2) < count) {
                     if ((emon.Port.CellsAt(requests, at + k) == -3100) && ((emon.Port.CellsAt(requests, (at + k) + 1) == 1) && (emon.Port.CellsAt(requests, (at + k) + 2) == ((count - k) - 3)))) {
@@ -45,7 +71,7 @@ public static class Ocrengine {
                 emon.Port.CellsPush(scratch, emon.Port.CellsAt(requests, at + i));
                 i += 1;
             }
-            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot()))) {
+            if ((kind == Plan.PkOcr()) && ((engine == 1) || ((emon.Port.CellsAt(requests, at + 2) % 256) == OeRequestSlot(2)))) {
                 emon.Port.CellsPush(scratch, -3100);
                 emon.Port.CellsPush(scratch, 1);
                 emon.Port.CellsPush(scratch, 74);

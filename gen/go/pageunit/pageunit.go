@@ -586,9 +586,9 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	}
 	nw = evidence.OwCount(owords) - w0
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
-	if ((fuse & 8) == 8) && (plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot())) < 0) {
+	if ((fuse & 8) == 8) && (plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot(2))) < 0) {
 		if ofuse.OfPpComplete(owords, etext, w0, nw, comps, i+1) == 0 {
-			scan.ScRequest(rq, plan.PuId(i, ocrengine.OeRequestSlot()), did, (dpi100+50)/100, loc)
+			scan.ScRequest(rq, plan.PuId(i, ocrengine.OeRequestSlot(2)), did, (dpi100+50)/100, loc)
 			ppasked = 1
 		}
 	}
@@ -640,17 +640,17 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		nsel = oapct.PctFuse(i+1, s2, s1, ua, etext, oruns, olines, owords, scr, nsel, oaz, s3, s4, s5, s6, ri)
 	}
 	if (fuse & 8) == 8 {
-		ua = plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot()))
+		ua = plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot(2)))
 		if (ua >= 0) && (plan.AnOk(ans, ua) == 1) {
 			ppview = vdec
 			if rid != did {
 				ppview = scan.ScPageView(epages, views, images, i+1, did, pw, ph, plan.AnArg(ans, ad, 0), plan.AnArg(ans, ad, 1), dpi100, bx0, by0, obj, bx0, by0, bx1, by1)
 			}
-			scan.ScPageEvidence(ans, ua, i+1, plan.PuId(i, ocrengine.OeRequestSlot()), ppview, dpi100, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
+			scan.ScPageEvidence(ans, ua, i+1, plan.PuId(i, ocrengine.OeRequestSlot(2)), ppview, dpi100, scan.ScLang(loc), views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 		}
 	}
 	if (fuse & 8) == 8 {
-		oapp.PpSums(i+1, plan.PuId(i, ocrengine.OeRequestSlot()), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri)
+		oapp.PpSums(i+1, plan.PuId(i, ocrengine.OeRequestSlot(2)), oruns, olines, owords, etext, rules, scr, nsel, aux, ws, sv, snap, pc, sg, mem, s1, s2, s3, s4, s5, s6, rn, ri)
 	}
 	if (fuse & 8) == 8 {
 		if (port.CellsAt(rtp, retarget.RtpPrimary()) == run) || (port.CellsAt(rtp, retarget.RtpQ()) == 0) {

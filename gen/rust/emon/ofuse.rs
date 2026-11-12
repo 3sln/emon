@@ -2,6 +2,7 @@
 // source: emon.ofuse
 
 use crate::emon::evidence::*;
+use crate::emon::ocrengine::*;
 use crate::emon::ofmt::*;
 use crate::emon::scan::*;
 
@@ -1494,7 +1495,7 @@ pub fn of_pp_repeat_choice(runs: &mut crate::port::Cells, words: &mut crate::por
     while i < (crate::port::cells_len(c) / of_cstride()) {
         run = of_cget(c, i, 0);
         if (run >= 0) && (run < or_count(runs)) {
-            if ((or_get(runs, run, orf_request()) % 256) == 23) && ((of_cget(c, i, 2) == 1) && (of_cget(c, i, 4) >= of_insert_conf())) {
+            if (oe_role(or_get(runs, run, orf_engine())) == 2) && ((of_cget(c, i, 2) == 1) && (of_cget(c, i, 4) >= of_insert_conf())) {
                 w = crate::port::cells_at(refs, of_cget(c, i, 1));
                 if of_pp_code(text, ow_get(words, w, hd_tstart()), ow_get(words, w, hd_tlen())) == 1 {
                     j = 0;
@@ -1503,7 +1504,7 @@ pub fn of_pp_repeat_choice(runs: &mut crate::port::Cells, words: &mut crate::por
                         v = crate::port::cells_at(sel, j);
                         run = ow_get(words, v, owf_run());
                         if (run >= 0) && (run < or_count(runs)) {
-                            if ((or_get(runs, run, orf_request()) % 256) != 23) && ((ow_get(words, w, hd_page()) == ow_get(words, v, hd_page())) && (ow_confidence(words, v) >= of_insert_conf())) {
+                            if (oe_role(or_get(runs, run, orf_engine())) == 1) && ((ow_get(words, w, hd_page()) == ow_get(words, v, hd_page())) && (ow_confidence(words, v) >= of_insert_conf())) {
                                 if (of_word_same(words, text, w, v, 0) == 1) && (ev_overlap_small(ow_get(words, w, hd_x0()), ow_get(words, w, hd_y0()), ow_get(words, w, hd_x1()), ow_get(words, w, hd_y1()), ow_get(words, v, hd_x0()), ow_get(words, v, hd_y0()), ow_get(words, v, hd_x1()), ow_get(words, v, hd_y1())) == 0) {
                                     found = 1;
                                 }
