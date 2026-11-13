@@ -117,10 +117,6 @@ jobs:
           ref: ${{ inputs.sha || github.sha }}
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: bb ci core (check, drift, hosts, api-diff, release-audit, version --check, the self-tests, ci coverage)
         run: bb ci core
@@ -140,10 +136,6 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha || github.sha }}
           path: emon
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
@@ -204,10 +196,6 @@ jobs:
           ref: ${{ inputs.sha || github.sha }}
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: Corpus for the real-file laws (formats financial forms layout multilingual tables; too big to cache)
         env:
@@ -252,10 +240,6 @@ jobs:
           ref: ${{ inputs.sha || github.sha }}
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: bb unit red ${{ matrix.arm }}
         run: bb unit red ${{ matrix.arm }}
@@ -277,10 +261,6 @@ jobs:
           ref: ${{ inputs.sha || github.sha }}
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: Corpus (png-check and image read real scans)
         if: matrix.corpus

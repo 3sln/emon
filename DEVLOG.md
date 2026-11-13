@@ -14335,3 +14335,9 @@ Manual release.yml dispatch accepts version (blank reads the selected ref; other
 
 - [ ] **Signed off** (maintainer)
 
+
+### D900 — kin is pinned by git SHA; a local kin is an opt-in alias
+
+Maintainer, 2026-11-12: build from a clean clone and straightforward CI, with the local kin kept for co-building. `deps.edn` pins `io.github.3sln/kin` with `:git/url` and `:git/sha` (the only place the pin lives); `bb.edn` takes `{emon/deps {:local/root "."}}` as its `:deps`, so babashka fetches the same pin into `~/.gitlibs` (needs `git`, no JVM). The `:local-kin` alias of `deps.edn` overrides it with `{:local/root "../kin"}`; babashka has no alias switch, so a developer opts in by exporting `BABASHKA_CLASSPATH="$PWD/tools:$PWD/tools/lib:$(clojure -A:local-kin -Spath)"` (CONTRIBUTING.md). `kin/scripts/emit` finds kin's source root from the classpath instead of a hard-coded `../kin/src`. The `3sln/kin` checkouts are gone from `verify.yml`, `pr.yml` and `pages.yml`, and the setup action caches `~/.gitlibs` keyed on `deps.edn`; CI never sets the override. Bumping the pin is editing the SHA, then `bb emit` and the gates. Rejected: a custom resolver with a `local.edn` `:kin-dir`, a mismatch warning and a `kin-bump` task (more machinery than the alias).
+
+- [ ] **Signed off** (maintainer)

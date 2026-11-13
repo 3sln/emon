@@ -38,7 +38,7 @@ structure*, and **accuracy is the goal the whole design is organised
 around** — not visual fidelity, not round-tripping, not editing.
 
 The four implementations are one source: logic is written in **kin**
-(`../kin`), generated into all four targets, and committed. Where a language
+(pinned by SHA in `deps.edn`), generated into all four targets, and committed. Where a language
 genuinely differs — decoding images, running OCR, rendering a PDF page to
 pixels, threads — it differs in a small, named, hand-written **host layer**
 (§7), never by letting the four drift.
@@ -3663,7 +3663,7 @@ log, and a newcomer needs only what is listed here to run every gate.
     bb gates     all of the above; fails if a gate prints no score
 
 **Tools.** `bb` (babashka) and `sh`; `git` (for `drift`); a checkout of
-`kin` as a sibling directory (`../kin`, put on the classpath by `bb.edn`);
+`kin`, which `bb.edn` fetches at the SHA pinned in `deps.edn` (a sibling checkout is opt-in, CONTRIBUTING.md);
 `python3` (only for the third-party reference oracles in `unit`: the table and
 JSON-golden checks and the `jsonschema` / html5lib validators, which are tooling,
 not runtime; all other scripting is babashka, D094). Each target's toolchain is used if present and **skipped loudly**

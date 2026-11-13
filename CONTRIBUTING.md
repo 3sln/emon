@@ -15,7 +15,8 @@ in a small port, tags it in kin, and each host implements the port as it likes. 
   Run `bb emit` and commit the regenerated `gen/` in the same commit; `bb drift` fails when `gen/` is not what the sources say.
 - A change to a *port* or to a host's API (`host/rust`, `host/go`, `host/java`, `host/csharp`, `host/js`, `host/c`, `host/pod`)
   is hand-written. It must keep the four hosts alike: `bb hosts` and `bb embedders` check the shape.
-- The kin language library is pinned by SHA in `deps.edn` and fetched by Clojure/gitlibs. To co-build, opt in with `:kin-dir "../kin"` in gitignored `local.edn`. A problem in kin is not fixed from here: write it up
+- The kin language library is pinned by SHA in `deps.edn` and fetched on demand (see "Co-building with a local kin" to use a
+  checkout instead). A problem in kin is not fixed from here: write it up
   under "Found in kin, not ours to fix here" in the DEVLOG, and the fix goes to kin's repository.
 
 ## What you need
@@ -35,6 +36,17 @@ toolchain is used when it is there and **skipped, loudly,** when it is not (`EMO
 | pdfium and Tesseract (live recorders and `bb samples`, never the gates) | `bb pdfium-fetch`, and Tesseract and Leptonica from your package manager; `bb native` builds the static ones the CLI bundles |
 
 The sample corpus (`corpus/`, 12 GB) is not in git and the gates do not need it (SPEC 15.2 says how to share it).
+
+## Co-building with a local kin
+
+A clean clone builds with no `../kin`: `deps.edn` pins kin by git SHA and babashka fetches it into `~/.gitlibs` (needs `git`).
+To co-build against your own kin checkout, opt in with the `:local-kin` alias of `deps.edn` (it overrides the pin with
+`{:local/root "../kin"}`) by putting it on babashka's classpath, from the repository root:
+
+    export BABASHKA_CLASSPATH="$PWD/tools:$PWD/tools/lib:$(clojure -A:local-kin -Spath)"
+
+Unset it to go back to the pin. CI never sets it. To move the pin, edit the `:git/sha` in `deps.edn` (the only place it lives),
+run `bb emit` and the gates, and commit `gen/` with it.
 
 ## Corpus on an external drive
 

@@ -45,10 +45,6 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.ref || github.event.repository.default_branch }}
           path: emon
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: The pinned nightly for the WebAssembly module (the unwinding std)
         run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
