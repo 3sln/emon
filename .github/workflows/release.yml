@@ -1,4 +1,4 @@
-# D900: changing version.edn on main releases the verified commit end to end.
+# D887: changing version.edn on main releases the verified commit end to end.
 name: release
 on:
   push:

@@ -1,4 +1,4 @@
-# D900: per-version serialized pipeline. Called only after release.yml validates the ref/version.
+# D887: per-version serialized pipeline. Called only after release.yml validates the ref/version.
 name: release pipeline
 on:
   workflow_call:
