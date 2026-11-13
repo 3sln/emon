@@ -234,6 +234,10 @@ func OeRegister(table *port.Cells, runs *port.Cells, lines *port.Cells, words *p
 }
 
 func OeEvidence(out *strings.Builder, table *port.Cells, scratch *port.Cells) int32 {
+	// No engine answered: no key, so the evidence of a document nobody read is what it was before the table (the P1.7 goldens).
+	if port.CellsLen(table) == 0 {
+		return 0
+	}
 	port.TextAscii(out, ",\"ocr-engines\":[")
 	var i int32 = 0
 	var j int32 = 0

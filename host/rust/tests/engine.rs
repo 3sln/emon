@@ -1261,7 +1261,7 @@ fn optional_ocr_refuses_tesseract_best_and_unavailable_scripts_without_inference
 }
 
 #[test]
-fn optional_ocr_evidence_names_the_requested_engine_when_reading_is_unsupported() {
+fn optional_ocr_evidence_names_no_engine_when_reading_is_unsupported() {
     struct Unavailable;
     impl Ocr for Unavailable {
         fn fulfil(&self, req: &emon::plan::Request, _: &emon::plan::Bitmaps, _: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
@@ -1273,7 +1273,10 @@ fn optional_ocr_evidence_names_the_requested_engine_when_reading_is_unsupported(
     let e = Engine::new(Config { ocr: Some(OcrPort(std::sync::Arc::new(Unavailable))), ..Config::default() });
     let o = Options { ocr_engine: emon::OcrEngine::PpOcr, keep_evidence: true, ..Options::default() };
     let m = e.convert(Input::bytes(image("png-phys300.png")), &o).unwrap();
-    assert!(m.evidence().unwrap().contains("\"ocr-engine\":{\"name\":\"ppocr\""));
+    let ev = m.evidence().unwrap();
+    // OIL: the engine table lists the engines that answered, so an unsupported read names none and writes no key at all
+    assert!(!ev.contains("ocr-engine"));
+    assert!(!ev.contains("ppocr"));
 }
 
 #[test]

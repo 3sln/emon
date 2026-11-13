@@ -217,6 +217,10 @@ pub fn oe_register(mut table: &mut crate::port::Cells, mut runs: &mut crate::por
     return 0;
 }
 pub fn oe_evidence(out: &mut String, table: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells) -> i32 {
+    // No engine answered: no key, so the evidence of a document nobody read is what it was before the table (the P1.7 goldens).
+    if crate::port::cells_len(table) == 0 {
+        return 0;
+    }
     crate::port::text_ascii(out, ",\"ocr-engines\":[");
     let mut i: i32 = 0;
     let mut j: i32 = 0;

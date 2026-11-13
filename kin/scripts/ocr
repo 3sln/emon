@@ -148,8 +148,9 @@
           tam (str work "/tampered")]
       (fs/create-dirs tam)
       (doseq [f (fs/list-dir t)] (fs/copy f (str tam "/" (fs/file-name f))))
-      (check (str/includes? edn "[10 3 2 1 3 3 0 0 0 0]") "the OCR request is where the tamper expects it")
-      (spit (str tam "/transcript.edn") (str/replace-first edn "[10 3 2 1 3 3 0 0 0 0]" "[10 3 2 1 4 3 0 0 0 0]"))
+      ;; OIL: the request is the 10 wire cells then the requested-identity trailer, so its length is no longer 10
+      (check (re-find #"\[\d+ 3 2 1 3 3 0 0 0 0[ \]]" edn) "the OCR request is where the tamper expects it")
+      (spit (str tam "/transcript.edn") (str/replace-first edn #"(\[\d+ 3 2 1 )3( 3 0 0 0 0[ \]])" "$14$2"))
       (doseq [[name prog] [["rust" rust] ["go" go]]]
         (let [r (run prog tam)]
           (check (and (= 3 (:exit r)) (= "error: transcript-miss" (:out r)))
