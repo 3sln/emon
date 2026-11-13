@@ -242,11 +242,11 @@ public final class Pageunittest {
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 0), 257, "of the render with its text");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 1), 3, "psm 3");
         emon.Testport.assertEq(Plan.rqArg(rq, 0, 5), 0, "the whole bitmap");
-        emon.Testport.assertEq(emon.Port.cellsLen(rq), 14 + 112, "no language with identity");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq), 14 + Ocridentity.oiTessLen(), "no language with identity");
         // a Latin text layer asks for the Latin script's models
         bornPlan(pl1, 1, Rasterplan.rpAskFull(), 1);
         runPage(0, 2, pl1, ans, rq1);
-        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 15 + 112, "one language and identity");
+        emon.Testport.assertEq(emon.Port.cellsLen(rq1), 15 + Ocridentity.oiTessLen(), "one language and identity");
         emon.Testport.assertEq(emon.Port.cellsAt(rq1, 10), 1281455214, "`Latn`");
     }
     public static void testUnderWitnessTheRenderWithoutItsTextAndTheWitnessLinesAreReadInRoundTwo() {

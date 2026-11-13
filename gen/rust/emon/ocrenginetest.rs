@@ -18,6 +18,12 @@ fn test_hybrid_roles_and_extra_slots_are_engine_indexed() {
     crate::testport::assert_eq(oe_request_slot(3), -1, "unregistered engine has no extra slot");
 }
 #[test]
+fn test_engine_identity_has_callable_host_accessors() {
+    crate::testport::assert_eq(oe_id_len(), 74, "engine identity length is exported");
+    crate::testport::assert_eq(oe_id_value(0), 112, "identity begins with p");
+    crate::testport::assert_eq(oe_id_value(1), 112, "identity has two p characters");
+}
+#[test]
 fn test_every_default_ocr_request_carries_requested_identity() {
     let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -25,7 +31,7 @@ fn test_every_default_ocr_request_carries_requested_identity() {
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
     oe_tag(r, scratch, 0);
-    crate::testport::assert_eq(crate::port::cells_len(r), 15 + 112, "default identity extends the key");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oi_tess_len(), "default identity extends the key");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "record header includes identity");
     crate::testport::assert_eq(op_lang_count(r), 1, "one legacy language");
 }

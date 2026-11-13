@@ -730,4 +730,4 @@ g728 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T review[386,354,418,366] | O review[38
 g729 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T together[421,354,462,366] | O together[421,356,462,366] | H 
 g730 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T world[464,354,492,366] | O world[464,356,492,364] | H 
 g731 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T new.[495,354,518,366] | O new.[495,359,517,364] | H 
-file transcript.edn: 199518 bytes 83c449de
+file transcript.edn: 198482 bytes 317b1823

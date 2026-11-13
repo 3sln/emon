@@ -110,7 +110,7 @@ fn test_a_view_is_asked_by_its_hash_and_another_pixel_is_another_request() {
     crate::testport::assert_eq(rq_arg(rq, 0, 0), pu_view_id(0, 32), "of the kin-made view, by its id from view-base");
     crate::testport::assert_that(rq_arg(rq, 0, 0) >= view_base(), "an id the hosts know for a view");
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 3, "psm 3");
-    crate::testport::assert_eq(rq_nargs(rq, 0), (9 + 4) + 112, "the pixel box, then the two cells of the hash");
+    crate::testport::assert_eq(rq_nargs(rq, 0), (9 + 4) + oi_tess_len(), "the pixel box, then the two cells of the hash");
     crate::testport::assert_eq(rq_arg(rq, 0, 7), crate::port::cells_at(rtp, rtp_hash()), "the hash's high half is the bulk form's");
     crate::testport::assert_eq(rq_arg(rq, 0, 8), crate::port::cells_at(rtp, rtp_hash() + 1), "and its low half");
     crate::port::bitmap_set_u8(v, 3, 4, 0, 201);
@@ -913,7 +913,7 @@ fn test_receipt_block_view_request_carries_the_actual_pixel_hash() {
     crate::testport::assert_eq(rt_ask_receipt_block(0, vid, 300, 0, ans, loc, bms, rtp, rq), 1, "one read of the enlarged raster");
     crate::testport::assert_eq(rq_arg(rq, 0, 0), vid, "the enlarged raster owns the read");
     crate::testport::assert_eq(rq_arg(rq, 0, 1), 6, "the view keeps block segmentation");
-    crate::testport::assert_eq(rq_nargs(rq, 0), (9 + 4) + 112, "a view request includes both hash cells");
+    crate::testport::assert_eq(rq_nargs(rq, 0), (9 + 4) + oi_tess_len(), "a view request includes both hash cells");
     let hi: i32 = rq_arg(rq, 0, 7);
     let lo: i32 = rq_arg(rq, 0, 8);
     crate::port::bitmap_set_u8(crate::port::bms_get(bms, vid), 0, 0, 0, 255);

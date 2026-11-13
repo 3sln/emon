@@ -1,8 +1,8 @@
 (ns emon.ocrenginetest
   (:require [emon.lang :refer [I32 Cells]]
             [emon.ofuse :refer [of-rule of-pp-choice of-pp-year of-pp-code]]
-            [emon.ocrengine :refer [oe-register oe-tag oe-select oe-id-count oe-role oe-request-slot]]
-            [emon.ocridentity :refer [oi-tess-count]]
+            [emon.ocrengine :refer [oe-register oe-tag oe-select oe-id-count oe-id-len oe-id-value oe-role oe-request-slot]]
+            [emon.ocridentity :refer [oi-tess-len]]
             [emon.evidence :refer [or-new or-set or-get orf-engine orf-eix orf-observed-hi]]
             [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
             [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-request-engine op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
@@ -18,13 +18,18 @@
   (assert-eq (oe-request-slot 1) -1 "incumbent has no extra slot")
   (assert-eq (oe-request-slot 3) -1 "unregistered engine has no extra slot"))
 
+(deftest test-engine-identity-has-callable-host-accessors
+  (assert-eq (oe-id-len) 74 "engine identity length is exported")
+  (assert-eq (oe-id-value 0) 112 "identity begins with p")
+  (assert-eq (oe-id-value 1) 112 "identity has two p characters"))
+
 (deftest test-every-default-ocr-request-carries-requested-identity
   (let [^Cells r (new-cells) ^Cells scratch (new-cells)
         ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
     (rq-ocr-lang r 101 110 103 0)
     (rq-ocr-end r at)
     (oe-tag r scratch 0)
-    (assert-eq (cells-len r) (+ 15 (oi-tess-count 0)) "default identity extends the key")
+    (assert-eq (cells-len r) (+ 15 (oi-tess-len)) "default identity extends the key")
     (assert-eq (cells-at r 0) (cells-len r) "record header includes identity")
     (assert-eq (op-lang-count r) 1 "one legacy language")))
 

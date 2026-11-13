@@ -199,4 +199,4 @@ g197 p1 t1 o1 h0 f0 s0 c0 l-1 n2 | T הקבוצה[500,655,539,669] | O NIN[501,6
 g198 p1 t1 o1 h0 f0 s0 c0 l-1 n2 | T להגיש[465,655,497,669] | O wan’?[466,655,496,665] | H 
 g199 p1 t1 o1 h0 f0 s0 c0 l-1 n2 | T ודנה[440,655,462,669] | O AIT[440,658,461,665] | H 
 g200 p1 t1 o1 h0 f0 s0 c0 l-1 n2 | T והתרחבה.[385,655,436,669] | O NANANAL[385,658,435,665] | H 
-file transcript.edn: 59621 bytes d32b18c6
+file transcript.edn: 59944 bytes 485bab57

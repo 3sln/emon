@@ -267,11 +267,11 @@ func TestUnderFullTheWholeRenderWithItsTextIsReadInRoundTwoInTheTextLayersScript
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 0), 257, "of the render with its text")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 1), 3, "psm 3")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 5), 0, "the whole bitmap")
-	port.AssertEq(emonT, port.CellsLen(rq), 14+112, "no language with identity")
+	port.AssertEq(emonT, port.CellsLen(rq), 14+ocridentity.OiTessLen(), "no language with identity")
 	// a Latin text layer asks for the Latin script's models
 	bornPlan(pl1, 1, rasterplan.RpAskFull(), 1)
 	runPage(0, 2, pl1, ans, rq1)
-	port.AssertEq(emonT, port.CellsLen(rq1), 15+112, "one language and identity")
+	port.AssertEq(emonT, port.CellsLen(rq1), 15+ocridentity.OiTessLen(), "one language and identity")
 	port.AssertEq(emonT, port.CellsAt(rq1, 10), 1281455214, "`Latn`")
 }
 

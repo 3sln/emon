@@ -67,7 +67,7 @@ public final class Plantest {
         Plan.rqOcrLang(c, 101, 110, 103, 0);
         Plan.rqOcrLang(c, 100, 101, 117, 0);
         Plan.rqOcrEnd(c, at);
-        emon.Testport.assertEq(Plan.recLen(c, 0), (12 + 4) + 112, "ten cells and two languages");
+        emon.Testport.assertEq(Plan.recLen(c, 0), (12 + 4) + Ocridentity.oiTessLen(), "ten cells and two languages");
         emon.Testport.assertEq(Plan.recKind(c, 0), 3, "kind");
         emon.Testport.assertEq(Plan.rqArg(c, 0, 0), 3, "bitmap");
         emon.Testport.assertEq(Plan.rqArg(c, 0, 1), 6, "psm");
@@ -75,7 +75,7 @@ public final class Plantest {
         emon.Testport.assertEq(Plan.rqArg(c, 0, 6), 40, "region height");
         emon.Testport.assertEq(Plan.rqArg(c, 0, 7), 1701734144, "eng packed big-endian");
         emon.Testport.assertEq(Plan.rqArg(c, 0, 8), 1684370688, "deu packed big-endian");
-        emon.Testport.assertEq(Plan.rqNargs(c, 0), 13 + 112, "arguments include requested identity");
+        emon.Testport.assertEq(Plan.rqNargs(c, 0), 13 + Ocridentity.oiTessLen(), "arguments include requested identity");
     }
     public static void testABytesRequestIsASpan() {
         emon.Port.Cells c = emon.Port.newCells();

@@ -1,7 +1,7 @@
 ;; Laws for `emon.retarget` (P7.4; SPEC 8.3, 7.3; D196): what the first pass calls for, the body-ink view, the request that names a kin-made view and its hash,
 ;; and which run's line the pipeline reads.
 (ns emon.retargettest
-  (:require [emon.ocridentity :refer [oi-tess-count]]
+  (:require [emon.ocridentity :refer [oi-tess-len]]
             [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-nwords oil-first-word oil-wlen oil-wcp oil-word-next]] [emon.lang :refer [I32 Bitmap Cells BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set test-t TestT]]
             [emon.port :refer [bitmap-new bitmap-w bitmap-h bitmap-u8 bitmap-set-u8 bitmap-hash bms-put bms-get cells-len cells-at cells-set cells-push]]
@@ -115,7 +115,7 @@
     (assert-eq (rq-arg rq 0 0) (pu-view-id 0 32) "of the kin-made view, by its id from view-base")
     (assert-that (>= (rq-arg rq 0 0) (view-base)) "an id the hosts know for a view")
     (assert-eq (rq-arg rq 0 1) 3 "psm 3")
-    (assert-eq (rq-nargs rq 0) (+ (+ 9 4) (oi-tess-count 0)) "the pixel box, then the two cells of the hash")
+    (assert-eq (rq-nargs rq 0) (+ (+ 9 4) (oi-tess-len)) "the pixel box, then the two cells of the hash")
     (assert-eq (rq-arg rq 0 7) (cells-at rtp (rtp-hash)) "the hash's high half is the bulk form's")
     (assert-eq (rq-arg rq 0 8) (cells-at rtp (+ (rtp-hash) 1)) "and its low half")
     (bitmap-set-u8 v 3 4 0 201)
@@ -740,7 +740,7 @@
     (assert-eq (rt-ask-receipt-block 0 vid 300 0 ans loc bms rtp rq) 1 "one read of the enlarged raster")
     (assert-eq (rq-arg rq 0 0) vid "the enlarged raster owns the read")
     (assert-eq (rq-arg rq 0 1) 6 "the view keeps block segmentation")
-    (assert-eq (rq-nargs rq 0) (+ (+ 9 4) (oi-tess-count 0)) "a view request includes both hash cells")
+    (assert-eq (rq-nargs rq 0) (+ (+ 9 4) (oi-tess-len)) "a view request includes both hash cells")
     (let [^I32 hi (rq-arg rq 0 7) ^I32 lo (rq-arg rq 0 8)]
       (bitmap-set-u8 (bms-get bms vid) 0 0 0 255)
       (rt-ask-receipt-block 0 vid 300 0 ans loc bms rtp rq2)

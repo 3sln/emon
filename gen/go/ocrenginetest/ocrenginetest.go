@@ -23,6 +23,12 @@ func TestHybridRolesAndExtraSlotsAreEngineIndexed(emonT *testing.T) {
 	port.AssertEq(emonT, ocrengine.OeRequestSlot(3), -1, "unregistered engine has no extra slot")
 }
 
+func TestEngineIdentityHasCallableHostAccessors(emonT *testing.T) {
+	port.AssertEq(emonT, ocrengine.OeIdLen(), 74, "engine identity length is exported")
+	port.AssertEq(emonT, ocrengine.OeIdValue(0), 112, "identity begins with p")
+	port.AssertEq(emonT, ocrengine.OeIdValue(1), 112, "identity has two p characters")
+}
+
 func TestEveryDefaultOcrRequestCarriesRequestedIdentity(emonT *testing.T) {
 	var r *port.Cells = port.NewCells()
 	var scratch *port.Cells = port.NewCells()
@@ -30,7 +36,7 @@ func TestEveryDefaultOcrRequestCarriesRequestedIdentity(emonT *testing.T) {
 	plan.RqOcrLang(r, 101, 110, 103, 0)
 	plan.RqOcrEnd(r, at)
 	ocrengine.OeTag(r, scratch, 0)
-	port.AssertEq(emonT, port.CellsLen(r), 15+112, "default identity extends the key")
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocridentity.OiTessLen(), "default identity extends the key")
 	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "record header includes identity")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "one legacy language")
 }

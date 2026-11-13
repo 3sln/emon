@@ -13,6 +13,9 @@ public static class Ocridentity {
         49, 56, 99, 48, 101, 57, 99, 99, 54, 101, 52, 57, 53, 56, 101, 99,
         49, 100, 50, 101, 98, 56, 98, 99, 97, 101, 53, 53, 97, 55, 98, 99
     };
+    public static int OiTessLen() {
+        return 112;
+    }
     public static int OiDefault(emon.Port.Cells c) {
         emon.Port.CellsPush(c, -3100);
         emon.Port.CellsPush(c, 2);

@@ -397,4 +397,4 @@ g395 p2 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T does[382,564,405,576] | O does[383,56
 g396 p2 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T turn[407,564,428,576] | O turn[407,567,428,574] | H 
 g397 p2 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T animal[431,564,465,576] | O animal[432,566,464,574] | H 
 g398 p2 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T form.[467,564,494,576] | O form.[468,566,493,574] | H 
-file transcript.edn: 112679 bytes 1f67ff44
+file transcript.edn: 112822 bytes 1f1b23c2

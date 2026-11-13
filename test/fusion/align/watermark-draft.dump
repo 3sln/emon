@@ -913,4 +913,4 @@ g911 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T budget[487,661,521,673] | O budget[48
 g912 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T be[523,661,535,673] | O be[523,663,535,671] | H 
 g913 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T might[72,676,100,689] | O might[72,678,100,689] | H 
 g914 p2 t1 o1 h0 f0 s1000 c1000 l-1 n3 | T because.[103,676,144,689] | O because.[103,678,144,687] | H 
-file transcript.edn: 225872 bytes 9b334ff3
+file transcript.edn: 224976 bytes f7e13695

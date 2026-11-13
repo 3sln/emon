@@ -2,7 +2,7 @@
 ;; then every other frame, ids `f + 1`), the header-only form, the page table it builds from the answers (pixels to
 ;; centipoints at the stated resolution, 300 dpi and a flag when there is none), and its failure statuses.
 (ns emon.rasterintest
-  (:require [emon.ocridentity :refer [oi-tess-count]]
+  (:require [emon.ocridentity :refer [oi-tess-len]]
             [emon.oil :refer [oil-tess-begin oil-begin oil-get oil-set oh-caps oh-native oc-rowmetrics oil-tess-block oil-line oil-word oil-word-cp oil-sym oil-sym-cp oil-end oil-find oil-line-at oil-line-field oil-flat]] [emon.oilfixturetest :refer [ofx-lines]] [emon.lang :refer [I32 Cells Src Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set hex-blob]]
             [emon.port :refer [cells-len cells-at cells-push src-of-blob bms-put bms-get bitmap-w bitmap-h bitmap-set-u8]]
@@ -170,7 +170,7 @@
     (assert-eq (rq-arg rq 0 2) (+ 3 (* 300 256)) "symbols, OSD, and the 300 dpi it assumed as a hint")
     (assert-eq (ocf-dpi (rq-arg rq 0 2)) 300 "read back")
     (assert-eq (rq-arg rq 0 5) 0 "the whole bitmap")
-    (assert-eq (rq-nargs rq 0) (+ (+ 7 4) (oi-tess-count 0)) "and no language: no locale was given")))
+    (assert-eq (rq-nargs rq 0) (+ (+ 7 4) (oi-tess-len)) "and no language: no locale was given")))
 
 (deftest test-a-locale-hint-names-the-language
   (let [^Cells ans (new-cells)
@@ -184,7 +184,7 @@
     (an-decode ans 260 463 894 1 20000 1 1)
     (assert-eq (page-pol 0 ans rq 2 loc (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)) (us-requests) "it asks")
     (assert-eq (rq-arg rq 0 2) (+ 3 (* 200 256)) "the stated 200 dpi")
-    (assert-eq (rq-nargs rq 0) (+ (+ 8 4) (oi-tess-count 0)) "one language")
+    (assert-eq (rq-nargs rq 0) (+ (+ 8 4) (oi-tess-len)) "one language")
     (assert-eq (rq-arg rq 0 7) 1684370688 "`de-CH` is `deu`")))
 
 (deftest test-never-asks-for-no-ocr

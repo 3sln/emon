@@ -96,4 +96,4 @@ g94 p1 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T point[205,326,230,339] | O point[205,3
 g95 p1 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T this[233,326,251,339] | O this[233,328,251,336] | H 
 g96 p1 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T review[254,326,286,339] | O review[254,328,286,336] | H 
 g97 p1 t1 o1 h0 f0 s1000 c1000 l-1 n1 | T all.[288,326,303,339] | O all.[289,328,302,336] | H 
-file transcript.edn: 26613 bytes b4d29d92
+file transcript.edn: 27212 bytes ec2c6862

@@ -10,6 +10,10 @@
   :accessors {^I32 oi-tess-count [^I32 ignored]
               ^I32 oi-tess-at [^I32 ignored ^I32 i]})
 
+;; Keep this as a callable cross-module function: Go may inline flat-array accessors.
+(defn ^:pub ^I32 oi-tess-len []
+  (return (oi-tess-count 0)))
+
 (defn ^:pub ^I32 oi-default [^:mut ^Cells c]
   (cells-push c -3100) (cells-push c 2) (cells-push c 1)
   (cells-push c (oi-tess-count 0))

@@ -13,6 +13,11 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrengine.oeRequestSlot(1), -1, "incumbent has no extra slot");
         emon.Testport.assertEq(Ocrengine.oeRequestSlot(3), -1, "unregistered engine has no extra slot");
     }
+    public static void testEngineIdentityHasCallableHostAccessors() {
+        emon.Testport.assertEq(Ocrengine.oeIdLen(), 74, "engine identity length is exported");
+        emon.Testport.assertEq(Ocrengine.oeIdValue(0), 112, "identity begins with p");
+        emon.Testport.assertEq(Ocrengine.oeIdValue(1), 112, "identity has two p characters");
+    }
     public static void testEveryDefaultOcrRequestCarriesRequestedIdentity() {
         emon.Port.Cells r = emon.Port.newCells();
         emon.Port.Cells scratch = emon.Port.newCells();
@@ -20,7 +25,7 @@ public final class Ocrenginetest {
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
         Ocrengine.oeTag(r, scratch, 0);
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 112, "default identity extends the key");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocridentity.oiTessLen(), "default identity extends the key");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record header includes identity");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "one legacy language");
     }

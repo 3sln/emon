@@ -249,11 +249,11 @@ public static class Pageunittest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), 257, "of the render with its text");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 3, "psm 3");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 5), 0, "the whole bitmap");
-        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 14 + 112, "no language with identity");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq), 14 + Ocridentity.OiTessLen(), "no language with identity");
         // a Latin text layer asks for the Latin script's models
         BornPlan(pl1, 1, Rasterplan.RpAskFull(), 1);
         RunPage(0, 2, pl1, ans, rq1);
-        emon.Testport.AssertEq(emon.Port.CellsLen(rq1), 15 + 112, "one language and identity");
+        emon.Testport.AssertEq(emon.Port.CellsLen(rq1), 15 + Ocridentity.OiTessLen(), "one language and identity");
         emon.Testport.AssertEq(emon.Port.CellsAt(rq1, 10), 1281455214, "`Latn`");
     }
     [Xunit.Fact]

@@ -17,6 +17,10 @@ var OiTesseract [112]int32 = [112]int32{
 	49, 100, 50, 101, 98, 56, 98, 99, 97, 101, 53, 53, 97, 55, 98, 99,
 }
 
+func OiTessLen() int32 {
+	return 112
+}
+
 func OiDefault(c *port.Cells) int32 {
 	port.CellsPush(c, -3100)
 	port.CellsPush(c, 2)

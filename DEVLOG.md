@@ -9337,6 +9337,8 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
 
 ## Found in kin, not ours to fix here
 
+- Go inlines cross-module flat-array accessor calls. If a test imports a module only to call an accessor, generated Go can report the import as unused. emon keeps a plain exported wrapper (`oi-tess-len`) and tests call it; this is an emitter behavior, not a kin fix for this task.
+
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
 - Forward refs / mutual recursion — **WRONG**: `declarefn` (kin `src/kin.cljc` `declare!`).
 - Rust `&mut Cells` (can't pass twice, nested read E0499) — **emon's own tag, not kin**:

@@ -207,8 +207,8 @@ impl Ocr for PpOcr {
         let caps = 32 | 64 | 256 | 8192 | 16384;
         let at = crate::emon::oil::oil_begin(&mut out, req.id(), 2, caps, 32 | 256, 1, 1, 1701734144, 1);
         let mut observed = Cells::new();
-        for i in 0..crate::emon::ocrengine::oe_id_count(0) {
-            crate::port::cells_push(&mut observed, crate::emon::ocrengine::oe_id_at(0, i));
+        for i in 0..crate::emon::ocrengine::oe_id_len() {
+            crate::port::cells_push(&mut observed, crate::emon::ocrengine::oe_id_value(i));
         }
         let observed_len = crate::port::cells_len(&observed);
         crate::emon::oil::oil_observed(&mut out, at, &mut observed, 0, observed_len);

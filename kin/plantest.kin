@@ -2,7 +2,7 @@
 ;; walkers and their refusals; and the probe unit driven by hand through its two
 ;; rounds (the hosts drive it for real, `bb plan`).
 (ns emon.plantest
-  (:require [emon.ocridentity :refer [oi-tess-count]]
+  (:require [emon.ocridentity :refer [oi-tess-len]]
             [emon.oil :refer [oil-begin oil-word oil-word-cp oil-end oil-nwords oil-first-word oil-wlen oil-wcp oil-word-next]] [emon.lang :refer [I32 Blob Src Cells Text]]
             [emon.test :refer [deftest assert-eq assert-that assert-text text-blob
                                new-cells new-text]]
@@ -89,7 +89,7 @@
     (rq-ocr-lang c 101 110 103 0)
     (rq-ocr-lang c 100 101 117 0)
     (rq-ocr-end c at)
-    (assert-eq (rec-len c 0) (+ (+ 12 4) (oi-tess-count 0)) "ten cells and two languages")
+    (assert-eq (rec-len c 0) (+ (+ 12 4) (oi-tess-len)) "ten cells and two languages")
     (assert-eq (rec-kind c 0) 3 "kind")
     (assert-eq (rq-arg c 0 0) 3 "bitmap")
     (assert-eq (rq-arg c 0 1) 6 "psm")
@@ -97,7 +97,7 @@
     (assert-eq (rq-arg c 0 6) 40 "region height")
     (assert-eq (rq-arg c 0 7) 1701734144 "eng packed big-endian")
     (assert-eq (rq-arg c 0 8) 1684370688 "deu packed big-endian")
-    (assert-eq (rq-nargs c 0) (+ 13 (oi-tess-count 0)) "arguments include requested identity")))
+    (assert-eq (rq-nargs c 0) (+ 13 (oi-tess-len)) "arguments include requested identity")))
 
 (deftest test-a-bytes-request-is-a-span
   (let [^Cells c (new-cells)]

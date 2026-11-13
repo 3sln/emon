@@ -198,4 +198,4 @@ g196 p2 t0 o1 h1 f0 s800 c800 l-1 n-1 | T  | O think[251,241,276,250] | H tbink[
 g197 p2 t0 o1 h1 f0 s1000 c1000 l-1 n-1 | T  | O night[280,241,304,252] | H night[280,243,302,253]
 g198 p2 t0 o1 h1 f0 s1000 c1000 l-1 n-1 | T  | O might[307,241,335,252] | H might[308,243,336,253]
 g199 p2 t0 o1 h1 f0 s1000 c1000 l-1 n-1 | T  | O red.[339,241,357,250] | H red.[339,243,356,253]
-file transcript.edn: 76901 bytes 5f7996a4
+file transcript.edn: 77389 bytes 2496efba
