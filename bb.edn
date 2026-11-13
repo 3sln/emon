@@ -2,10 +2,12 @@
 ;; this file mirrors nome's (D026). kin is on the PATH rather than in `:deps`
 ;; for nome's reason: nothing in the generation path needs a JVM, so the
 ;; generator must not either. `deps.edn` carries the Clojure-consumer form.
-{:paths ["kin/src" "../kin/src" "tools" "tools/lib"]
+{:paths ["kin/src" "tools" "tools/lib"]
  :tasks
  {gen   {:doc "Print what a source generates.   bb gen kin/hello.kin"
          :task (apply shell "kin/scripts/gen" *command-line-args*)}
+  kin-root {:doc "Print the selected kin source tree. Set :kin-dir in local.edn to co-build locally."
+            :task (shell "bb" "tools/kin_root.clj")}
   emit  {:doc "Write every source's modules into gen/."
          :task (shell "kin/scripts/emit")}
   lang-test {:doc "Generation-time refusals of emit-ascii and defenum."

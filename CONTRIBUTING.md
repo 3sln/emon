@@ -15,12 +15,12 @@ in a small port, tags it in kin, and each host implements the port as it likes. 
   Run `bb emit` and commit the regenerated `gen/` in the same commit; `bb drift` fails when `gen/` is not what the sources say.
 - A change to a *port* or to a host's API (`host/rust`, `host/go`, `host/java`, `host/csharp`, `host/js`, `host/c`, `host/pod`)
   is hand-written. It must keep the four hosts alike: `bb hosts` and `bb embedders` check the shape.
-- The kin language library is a separate project, checked out as `../kin`. A problem in kin is not fixed from here: write it up
+- The kin language library is pinned by SHA in `deps.edn` and fetched by Clojure/gitlibs. To co-build, opt in with `:kin-dir "../kin"` in gitignored `local.edn`. A problem in kin is not fixed from here: write it up
   under "Found in kin, not ours to fix here" in the DEVLOG, and the fix goes to kin's repository.
 
 ## What you need
 
-`bb` (babashka), `sh` and `git`; a checkout of kin as `../kin`; `python3` for a few third-party reference checks. Each host's
+`bb` (babashka), `clojure`, `sh` and `git`; `python3` for a few third-party reference checks. Each host's
 toolchain is used when it is there and **skipped, loudly,** when it is not (`EMON_SKIP_JAVA=1`, `EMON_SKIP_CSHARP=1`, `EMON_SKIP_C=1`,
 `EMON_SKIP_POD=1` and `EMON_SKIP_WASM=1` leave one out on purpose):
 
