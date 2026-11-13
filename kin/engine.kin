@@ -499,7 +499,8 @@
       (en-figures m s d (fd c level)))
     (if (!= (fd c keep) 0)
       (do (if (== kind 0) (fc-emit-budget (fd s fcand) (fd s ffd) (fd d evidence)))
-          (oe-evidence (fd d evidence) (fd ev oet) (fd s s0))
+          (if (> (cells-len (fd ev oet)) 0) ; no engine answered: no key, so a document nobody read keeps the P1.7 evidence goldens
+            (oe-evidence (fd d evidence) (fd ev oet) (fd s s0)))
           (emit-ascii (fd d evidence) "}")))
     ;; restructuring (kin/restruct.kin, P4.5, P4.6): the body is copied into new arenas, in document order, and they replace the old ones
       (rs-run (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s rn) (fd s ra) (fd s rr) (fd s rnm) (fd s rstk) (fd s rused) (fd s rout)

@@ -628,7 +628,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 		if kind == 0 {
 			figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence)
 		}
-		ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0)
+		if port.CellsLen(ev.Oet) > 0 {
+			ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0)
+		}
 		port.TextAscii(d.Evidence, "}")
 	}
 	restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout)

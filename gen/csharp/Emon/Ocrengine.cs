@@ -216,10 +216,6 @@ public static class Ocrengine {
         return 0;
     }
     public static int OeEvidence(System.Text.StringBuilder @out, emon.Port.Cells table, emon.Port.Cells scratch) {
-        // No engine answered: no key, so the evidence of a document nobody read is what it was before the table (the P1.7 goldens).
-        if (emon.Port.CellsLen(table) == 0) {
-            return 0;
-        }
         emon.Port.TextAscii(@out, ",\"ocr-engines\":[");
         int i = 0;
         int j = 0;

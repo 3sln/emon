@@ -594,7 +594,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
         if kind == 0 {
             fc_emit_budget(&mut s.fcand, &mut s.ffd, &mut d.evidence);
         }
-        oe_evidence(&mut d.evidence, &mut ev.oet, &mut s.s0);
+        if crate::port::cells_len(&mut ev.oet) > 0 {
+            oe_evidence(&mut d.evidence, &mut ev.oet, &mut s.s0);
+        }
         crate::port::text_ascii(&mut d.evidence, "}");
     }
     rs_run(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.rn, &mut s.ra, &mut s.rr, &mut s.rnm, &mut s.rstk, &mut s.rused, &mut s.rout, &mut m.layout);

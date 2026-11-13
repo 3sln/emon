@@ -558,7 +558,9 @@ public final class Engine {
             if (kind == 0) {
                 Figclass.fcEmitBudget(s.fcand, s.ffd, d.evidence);
             }
-            Ocrengine.oeEvidence(d.evidence, ev.oet, s.s0);
+            if (emon.Port.cellsLen(ev.oet) > 0) {
+                Ocrengine.oeEvidence(d.evidence, ev.oet, s.s0);
+            }
             emon.Port.textAscii(d.evidence, "}");
         }
         Restruct.rsRun(m.nodes, m.attrs, m.regions, m.text, s.rn, s.ra, s.rr, s.rnm, s.rstk, s.rused, s.rout, m.layout);

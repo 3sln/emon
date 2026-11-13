@@ -558,7 +558,9 @@ public static class Engine {
             if (kind == 0) {
                 Figclass.FcEmitBudget(s.Fcand, s.Ffd, d.Evidence);
             }
-            Ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0);
+            if (emon.Port.CellsLen(ev.Oet) > 0) {
+                Ocrengine.OeEvidence(d.Evidence, ev.Oet, s.S0);
+            }
             emon.Port.TextAscii(d.Evidence, "}");
         }
         Restruct.RsRun(m.Nodes, m.Attrs, m.Regions, m.Text, s.Rn, s.Ra, s.Rr, s.Rnm, s.Rstk, s.Rused, s.Rout, m.Layout);

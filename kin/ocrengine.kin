@@ -156,8 +156,6 @@
   (return 0))
 
 (defn ^:pub ^I32 oe-evidence [^Text out ^Cells table ^:mut ^Cells scratch]
-  (comment "No engine answered: no key, so the evidence of a document nobody read is what it was before the table (the P1.7 goldens).")
-  (if (== (cells-len table) 0) (return 0))
   (emit-ascii out ",\"ocr-engines\":[")
   (let [^:mut ^I32 i 0 ^:mut ^I32 j 0]
     (while (< i (quot (cells-len table) 7))
