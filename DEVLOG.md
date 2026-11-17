@@ -4106,7 +4106,7 @@ Work for the release after 0.1.0 (ids from D559; the coordinator renumbers at th
 Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engine-neutral OCR interchange (OIL, D883), engines as adapters, a bare core plus adapter packages, and pinned model packs. Dart/Flutter ships as a thin FFI package over the C ABI. There is no Dart kin target (D884). No backwards compatibility: re-record and re-baseline. Order: P13.1 and P13.2 now; Dart P13.6 to P13.8 may run beside the OIL items, since they touch the C ABI and host/dart, not kin.
 
 - [x] P13.1 — One-file release (REL1). Placeholder versions in tracked manifests, stamped from `version.edn` at build time. `release.yml` runs end to end on a `version.edn` bump on main, and retries manually with `workflow_dispatch version [only]`. Replaces bump/draft/publish-on-release. DONE (D886).
-- [ ] P13.2 — OIL phase 1: OIL replaces the Tesseract-shaped answer record. Tesseract and PP are expressed in it, with emon's own enums, capability bits, requested and observed engine identity, and the sidecar registry. Gate: the Tesseract path shows zero accuracy regressions, and PP P/R stays within ±0.002. Fix the four host bugs the audit found: PP's `osd=0`, the browser's missing OSD and zero baselines, row metrics never filled, and PP calibration living in the Rust host.
+- [x] P13.2 — OIL phase 1 (DONE: D888–D894): OIL replaces the Tesseract-shaped answer record. Tesseract and PP are expressed in it, with emon's own enums, capability bits, requested and observed engine identity, and the sidecar registry. Gate: the Tesseract path shows zero accuracy regressions, and PP P/R stays within ±0.002. Fix the four host bugs the audit found: PP's `osd=0`, the browser's missing OSD and zero baselines, row metrics never filled, and PP calibration living in the Rust host.
 - [x] P13.3 — Packaging design (PKG1): `emon-core` (no OCR engine) plus adapter packages, a turnkey `emon` per platform, hybrids composed in core, and SHA-pinned model/language packs as release assets. Covers the package matrix per ecosystem and the C ABI adapter-callback form. DONE (D885). Executed as P13.14–P13.22.
 - [ ] P13.4 — OIL phase 2: PP-alone as a first-class engine. Measure first (row/line split on the OP1 bundles), then build kin row assembly for segment engines. Gate: CORD line items ≥ 22/151, the D849 baseline.
 - [ ] P13.5 — Threshold refit: about 20 `scan`/`retarget` thresholds move from raw Tesseract confidence to calibrated `pcal`. A separate reviewed phase, taken after P13.4 acceptance.
@@ -14474,5 +14474,58 @@ Rows set in `emon-replay` (old to new):
 Removed from `emon-replay` (102 metrics, all of them scored by the two moved documents; `emon-replay-px` covers them): the whole `scan/tables` category (73 metrics: block-table, block-caption, block-heading, block-paragraph, bow, cer, furniture, table-teds-lite and conf-brier/conf-ece rows for caption, cell, row, rowgroup, table), and 29 metrics of `scan/all` (block-caption p/r/f1, block-table p/r/f1, table-continued-acc, table-teds-lite and the conf-brier/conf-ece caption, cell, row, rowgroup and table rows). The full list is in the report `oil3-report.md`.
 
 Maintainer decisions: 2026-11-16 "Move to scan-px"; 2026-11-17 "Hand-edit, with guards" (guard: the moved documents' table, caption, heading and conf metrics are ratcheted under `emon-replay-px`; only the `emon-replay` entry is edited), then the standing permission to adjust ratchets with good cause, logged.
+
+- [ ] **Signed off** (maintainer)
+
+### D895 — Dart/Flutter evaluation release is the priority; full platform OCR from the first preview
+
+Maintainer decision of 2026-11-17: the next priority after OIL phase 1 is a Dart/Flutter release that the maintainer can evaluate in a mobile app at work.
+
+**Scope:**
+- **Targets:** Android (arm64, armv7, x86_64), iOS (device and simulator) and desktop. Web is deferred.
+- **OCR:** the first preview carries the full adapter architecture and built-in platform OCR: Apple Vision on iOS and macOS, ML Kit on Android, Windows.Media.Ocr. PP-OCR and Tesseract are also available, so the engines can be compared in-app. App size stays small because models are packs, not bundled.
+- **Delivery:** `emon` and `emon_flutter` preview 0.x on pub.dev.
+
+**Order:**
+1. P13.14 (K1)
+2. P13.15 (K2)
+3. P13.19 (K6)
+4. P13.21 (K8), with per-engine calibration
+5. P13.4 (PP-alone row assembly), so PP-OCR is compared fairly on receipts
+6. P13.17 (K4)
+7. P13.20 (K7) and P13.20b
+8. P13.18 (K5)
+
+Independent steps may run in parallel.
+
+**Calibration in the preview.** Until a platform engine has its fitted calibration (D883 ruling 3), the preview may select it explicitly as the reading engine. Its confidences are then flagged uncalibrated, and it is never chosen automatically.
+
+**Maintainer actions:**
+- a pub.dev verified publisher for 3sln.com (DNS);
+- a manual first publish of each package, because automated publishing can only be enabled on an existing package;
+- the repository deploy key for the tag-push OIDC flow (D885).
+
+- [ ] **Signed off** (maintainer)
+
+### D896 — Pack downloads and engine choice are controllable by app code
+
+Maintainer direction of 2026-11-17: the turnkey packages must let app code decide about engines and pack downloads, for example offering ML Kit versus PP-OCR, showing download progress, or requiring opt-in. One shape across every SDK registry (P13.16) and Dart (P13.20):
+
+- **`engines()`** lists every engine with its state: built-in, installed, downloadable (with size and licence) or unavailable.
+- **`prepare(options)`** is a preflight: the packs a conversion with those options needs, and which are missing.
+- **`packs.ensure(ids, onProgress, cancel)`** fetches packs ahead of time.
+- **`onPackNeeded(request)`** handles a missing pack during conversion. The request carries the pack id, engine, size, licence and reason. The app answers with one of:
+  - `fetch`, optionally with progress;
+  - `provide`, giving bytes or a path from the app's own CDN or assets;
+  - `decline`, in which case the page is unread with `pack-missing:<id>` and never blank;
+  - `substitute`, giving another engine.
+- **`packs.events`** is one progress/cancel stream for app- and library-initiated downloads. It also reports platform model downloads (ML Kit / Play services) where the platform exposes them.
+
+Defaults:
+- `emon_flutter` and the other turnkeys fetch automatically when no hook is set.
+- Core and bare adapters never fetch (D885).
+- `EMON_OFFLINE=1` or `packs: never` always wins over hooks.
+
+Every pack, including app-provided bytes, is verified against the catalogue's SHA-256 before use.
 
 - [ ] **Signed off** (maintainer)
