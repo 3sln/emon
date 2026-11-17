@@ -14428,7 +14428,7 @@ An engine without the script capability is judged by the shared text-script cens
 
 - [ ] **Signed off** (maintainer)
 
-### D903 — Two scan fixtures that need pixels move from test/ocr/scan to scan-px; the emon-replay population goes from 5 to 3 documents (proposed D901, coordinator renumbers)
+### D903 — Two scan fixtures that need pixels move from test/ocr/scan to scan-px; the emon-replay population goes from 5 to 3 documents
 
 Found while chasing the OIL phase 1 report that a live re-recording of the five `test/ocr/scan/*` documents gave extra pixel re-read rounds on oil2. It is not an OIL change. Main's live driver asks for the same rounds on the same documents (h-keyword: 1 round-2 read, table-simple-ruled: 14), and the Model JSON of main's live run and oil2's is byte-identical for all four documents compared (h-plain, h-keyword, table-simple-ruled, columns-two). The request streams differ only by the OIL identity trailer and the producer header.
 
