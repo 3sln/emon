@@ -580,7 +580,7 @@
     (set p (cells-at (fd t ents) (+ marker 3)))
     (if (== (tw-hash-matches (fd t ents) (+ marker 4) p hi lo) 1)
       (do (tw-cps out (fd t ents) (+ marker 4) p 1) (return 1)))
-    ;; The sole qualified web runtime is a distinct observed identity (D900).
+    ;; The sole qualified web runtime is a distinct observed identity (D891).
     (cells-drop (fd t tmp) 0)
     (while (< k p)
       (do (cells-push (fd t tmp) (cells-at (fd t ents) (+ (+ marker 4) k))) (set k (+ k 1))))

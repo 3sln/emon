@@ -14336,7 +14336,7 @@ Manual release.yml dispatch accepts version (blank reads the selected ref; other
 
 - [ ] **Signed off** (maintainer)
 
-### D887 — Retain OIL source evidence and expose the raw web qualification boundary
+### D888 — Retain OIL source evidence and expose the raw web qualification boundary
 
 OIL source frames retain typed adapter values by run, namespace, key, subject and source-local row. Line quad pointers index logical frames; quad and point payloads are normalized into page coordinates during ingestion. A scalar pixel length is refused until a registered key defines its axis. Policy reads require engine/namespace and registry checks. Planning uses temporary frames for non-geometric values before persistent page ingestion; the empty denylist remains explicit. Tesseract source models inform script checks, with word-language fallback when absent. Uniform reversed PP crop decisions postpone enlargement; absent or mixed decisions retain the orientation fallback. The hybrid incumbent remains unchanged. `bb oil-check` checks consumer sites and present/absent laws, and rejects unguarded source access.
 
@@ -14346,7 +14346,7 @@ Strict Node qualification exposes ten raw-value differences of one per mille: se
 
 - [ ] **Signed off** (maintainer)
 
-### D888 — Health captures must use the exact rendered filename
+### D889 — Health captures must use the exact rendered filename
 
 Round 8 traces the h-inverted trust failure to the live health recorder's prefix glob. When h-inverted-numbered was recorded first, recording h-inverted could select the numbered document's earlier PGM. The Round 7 h-inverted capture consequently contained 179 words instead of the historical 218. The source PDF is a tracked synthetic fixture, outside the bucket shard registry; its SHA-256 matches `test/corpus/synth/MANIFEST.json` and its committed Git bytes.
 
@@ -14354,7 +14354,7 @@ The recorder now requests `pdftoppm -singlefile` and reads that invocation's exa
 
 - [ ] **Signed off** (maintainer)
 
-### D889 — Raw OIL detector scores expose an ORT inference difference before quantization
+### D890 — Raw OIL detector scores expose an ORT inference difference before quantization
 
 Round 8 compares the detector tensors for the fixed SROIE 00048 bitmap. Native and web preprocessing produce exactly identical float32 inputs (3,686,400 bytes). Native ORT and ORT Web produce different bits in 127,152 of the 307,200 detector output floats. JavaScript copies tensor bytes to Rust wasm without converting their values; native and wasm use the same Rust answer builder and Kin integer rounding.
 
@@ -14364,9 +14364,9 @@ D873 compared calibrated word confidences and did not emit detector scores. Its 
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — Qualify ORT Web under its observed runtime identity with a scoped raw-score comparison
+### D891 — Qualify ORT Web under its observed runtime identity with a scoped raw-score comparison
 
-The Round 9 coordinator ruling resolves D889: the browser PP observed identity
+The Round 9 coordinator ruling resolves D890: the browser PP observed identity
 includes `ORT Web 1.22.0 wasm SIMD` alongside the requested model/policy identity.
 The wasm bridge writes its hash through kin's OIL identity helper; inference,
 postprocessing and quantization remain unchanged. The requested configuration
@@ -14391,7 +14391,7 @@ not by itself accept unfinished Phase 1 identity and calibration work.
 
 - [ ] **Signed off** (maintainer)
 
-### D901 — Hybrid identifier repeats use observed engine roles instead of request slots
+### D892 — Hybrid identifier repeats use observed engine roles instead of request slots
 
 The Phase 1 hybrid assigns Tesseract the incumbent role and PP the challenger
 role in a kin table. Identifier-repeat insertion checks those roles from each
@@ -14410,17 +14410,17 @@ identity migration; this does not complete sub-phase (b).
 The different-slot law fails before the implementation change. After it, 72
 focused Rust laws pass, including the role/slot and unregistered-engine cases;
 four-language generation and compilation pass. The PP policy pin is refreshed.
-The retained D900 qualification remains a qualification of its frozen binaries
+The retained D891 qualification remains a qualification of its frozen binaries
 and policy, not this unfinished final implementation.
 
 - [ ] **Signed off** (maintainer)
 
 
-### D902 — Every OCR key names its configuration; engine roles, calibration and provenance are kin policy
+### D893 — Every OCR key names its configuration; engine roles, calibration and provenance are kin policy
 
 Every OCR request carries the v2 `-3100 2 engine length code-points` identity trailer. Tesseract's requested pin covers the model catalogue, canonical adapter and kin wire/resolver policy; the request retains its language and flags. PP is selected at the planning site, independently of the allocated slot. Hybrid primary keys also name the challenger policy, so changing the composition yields an ordinary request-key miss. The D859/D867 host replay classifiers are removed. Tesseract model resolution lives in `emon.ocrtess`; neutral request framing remains in `emon.ocrport`.
 
-Observed hashes are retained on runs. A document table deduplicates requested and observed identities, assigns run indices and word/line provenance bits, and emits an `ocr-engines` vector. Evidence represents an observed hash as its two signed cells, losslessly. Transcript `:engines` is derived from successful requested/observed readings; full observed strings are checked against producer values or the canonical native/web policy identity. Native PP supplies its policy hash; the D900 web runtime remains distinct. The browser hashes its supplied observed string through kin. Native Tesseract's observed string includes actual Tesseract/Leptonica versions and installed model-file fingerprints; metadata calls its OEM `Init3 default`, rather than asserting LSTM. The embedder-owned Tesseract.js adapter reports its configured OEM, languages and core location without inventing unavailable model hashes.
+Observed hashes are retained on runs. A document table deduplicates requested and observed identities, assigns run indices and word/line provenance bits, and emits an `ocr-engines` vector. Evidence represents an observed hash as its two signed cells, losslessly. Transcript `:engines` is derived from successful requested/observed readings; full observed strings are checked against producer values or the canonical native/web policy identity. Native PP supplies its policy hash; the D891 web runtime remains distinct. The browser hashes its supplied observed string through kin. Native Tesseract's observed string includes actual Tesseract/Leptonica versions and installed model-file fingerprints; metadata calls its OEM `Init3 default`, rather than asserting LSTM. The embedder-owned Tesseract.js adapter reports its configured OEM, languages and core location without inventing unavailable model hashes.
 
 PP word calibration is generated in kin from the frozen D845 fit counts. Weighted isotonic pooling repairs bins 6/7 to 57 correct of 135, or 422 per mille. The historical fit report remains intact as source evidence; the unused host map and lookup are removed. Word maps include engine, calibration class and confidence kind; absent or unfitted scores remain -1. Tesseract's policy scale stays fixed during P13.2 under ruling 5. Node maps gain the engine column and exact-engine, any-engine, pooled fallback. Nodes carry their page's primary engine; the registered incumbent stays primary on seal and stamp pages. The fitter supports engine-labelled raw rows and preserves other engines' maps during a targeted fit. Unknown maps may corroborate but cannot insert or replace; their Model output is capped and flagged.
 
@@ -14428,7 +14428,7 @@ An engine without the script capability is judged by the shared text-script cens
 
 - [ ] **Signed off** (maintainer)
 
-### D903 — Two scan fixtures that need pixels move from test/ocr/scan to scan-px; the emon-replay population goes from 5 to 3 documents
+### D894 — Two scan fixtures that need pixels move from test/ocr/scan to scan-px; the emon-replay population goes from 5 to 3 documents
 
 Found while chasing the OIL phase 1 report that a live re-recording of the five `test/ocr/scan/*` documents gave extra pixel re-read rounds on oil2. It is not an OIL change. Main's live driver asks for the same rounds on the same documents (h-keyword: 1 round-2 read, table-simple-ruled: 14), and the Model JSON of main's live run and oil2's is byte-identical for all four documents compared (h-plain, h-keyword, table-simple-ruled, columns-two). The request streams differ only by the OIL identity trailer and the producer header.
 

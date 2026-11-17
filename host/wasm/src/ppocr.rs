@@ -109,7 +109,7 @@ fn advance_inner() -> i32 {
     match task.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
         Poll::Ready(Ok(v)) => {
             // The requested model/policy stays the same. Observed execution
-            // names ORT Web separately from native ORT (D900).
+            // names ORT Web separately from native ORT (D891).
             let mut answer = crate::port::Cells::new();
             for cell in v { crate::port::cells_push(&mut answer, cell); }
             let mut identity = crate::port::Cells::new();

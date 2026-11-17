@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; D900: scoped ORT Web/native comparison plus exact within-web repeats.
+;; D891: scoped ORT Web/native comparison plus exact within-web repeats.
 ;; Never fetch assets, re-answer the reference, or consult historical hashes.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]]
          '[cheshire.core :as json] '[clojure.string :as str]
@@ -57,7 +57,7 @@
 (spit (str out "/" candidate "-differences.json") (json/generate-string differences {:pretty true}))
 (def deterministic (= (slurp (str out "/" candidate ".jsonl"))
                       (slurp (str out "/" candidate "-repeat.jsonl"))))
-(def summary {:comparison "D900 scoped ORT Web/native; only raw word-confidence and det-score +/-1"
+(def summary {:comparison "D891 scoped ORT Web/native; only raw word-confidence and det-score +/-1"
               :runtime qualification/web-runtime :deterministic deterministic
               :observed (str policy " runtime=" qualification/web-runtime)
               :observed-hash expected-observed :complete false
@@ -73,7 +73,7 @@
 (spit (str out "/" candidate "-summary.json") (json/generate-string summary {:pretty true}))
 (println (json/generate-string summary))
 (assert (and deterministic (= (:answers summary) (:accepted summary)))
-        (str candidate " answer bytes differ outside D900 scope or web repeat is nondeterministic"))
+        (str candidate " answer bytes differ outside D891 scope or web repeat is nondeterministic"))
 (when (:qualification summary)
   (let [result @(process ["bb" "-cp" "tools" "tools/ppocr/web_receipts.clj"
                          "--qualification" qual "--captures" out "--candidate" candidate]

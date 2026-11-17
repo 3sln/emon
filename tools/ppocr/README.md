@@ -181,7 +181,7 @@ It requires caller-supplied pinned assets and remains experimental; its live
 answer qualification is separate from the native hosts. `web_qualify.clj`
 reads the new OIL `reference.answers` from `--qualification DIR` (default
 `$EMON_SCRATCH/ppocr-qual`), checks its provenance checksum and completed native
-transport comparison. D900 compares ORT Web with native ORT using a scoped
+transport comparison. D891 compares ORT Web with native ORT using a scoped
 rule: text, geometry, indices, capabilities, headers and sidecars are identical,
 except the checked web observed-identity hash and raw word-confidence and
 `det-score` values, which may differ by at most one per mille. No other score
@@ -204,7 +204,7 @@ EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="$EMON_SCRATCH/ppocr-qual/web/e
 ```
 
 Expected output includes `"answers":225`, `"accepted":225`,
-`"deterministic":true`, and `PASS D900 web receipt P/R within +/-0.002 on fixed
+`"deterministic":true`, and `PASS D891 web receipt P/R within +/-0.002 on fixed
 60 CORD and 60 SROIE`. The exact native/web byte count is diagnostic; all 225
 must satisfy the scoped rule. Chrome launch may require running outside an
 agent sandbox. Receipt replay uses `.cache/emon-rs-fusion-ppocr/target/release/emon-rs`

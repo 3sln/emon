@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; D900: replay actual web readings through the frozen native composition policy.
+;; D891: replay actual web readings through the frozen native composition policy.
 ;; Tesseract answers and all other requests remain the recorded fixed inputs.
 (require '[babashka.fs :as fs] '[babashka.process :refer [process]]
          '[cheshire.core :as json] '[clojure.edn :as edn] '[clojure.string :as str]
@@ -51,7 +51,7 @@
     (spit (str target "/transcript.edn")
           (pr-str (-> transcript (assoc :entries entries)
                       (assoc-in [:producer :onnxruntime] q/web-runtime)
-                      (assoc-in [:producer :qualification] "D900 captured web PP; frozen recorded Tesseract"))))
+                      (assoc-in [:producer :qualification] "D891 captured web PP; frozen recorded Tesseract"))))
     (let [result @(process [driver "--ocr-engine=ppocr" "--out=bundle" (str "--replay=" target) (:input row)]
                           {:out bundle :err (str captures "/" candidate "-receipt.err") :shutdown nil
                            :extra-env {"EMON_CS_SHARED_COMPILATION" "false"
@@ -66,4 +66,4 @@
 (let [result @(process ["python3" "tools/oracle/ppocr/oil_accuracy.py" "--qualification" out]
                       {:inherit true :shutdown nil})]
   (assert (zero? (:exit result)) "web receipt P/R outside D864 tolerance"))
-(println "PASS D900 web receipt P/R within +/-0.002 on fixed 60 CORD and 60 SROIE")
+(println "PASS D891 web receipt P/R within +/-0.002 on fixed 60 CORD and 60 SROIE")
