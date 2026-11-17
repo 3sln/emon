@@ -14427,3 +14427,44 @@ PP word calibration is generated in kin from the frozen D845 fit counts. Weighte
 An engine without the script capability is judged by the shared text-script census and ISO model script, without inventing OSD confidence. The fallback requires three words, three script-bearing characters and a 60% dominant script; an unknown model cannot establish mismatch. Present OSD retains its existing policy. The no-OSD and absent-score laws were observed failing before the fixes. Verification and live re-recording results belong to the OIL2 Round 10 report; this entry does not claim acceptance before those gates finish.
 
 - [ ] **Signed off** (maintainer)
+
+### D903 — Two scan fixtures that need pixels move from test/ocr/scan to scan-px; the emon-replay population goes from 5 to 3 documents (proposed D901, coordinator renumbers)
+
+Found while chasing the OIL phase 1 report that a live re-recording of the five `test/ocr/scan/*` documents gave extra pixel re-read rounds on oil2. It is not an OIL change. Main's live driver asks for the same rounds on the same documents (h-keyword: 1 round-2 read, table-simple-ruled: 14), and the Model JSON of main's live run and oil2's is byte-identical for all four documents compared (h-plain, h-keyword, table-simple-ruled, columns-two). The request streams differ only by the OIL identity trailer and the producer header.
+
+Main's committed `h-keyword` and `table-simple-ruled` transcripts in `test/ocr/scan/` predate pixel reads (P6.3). Main's own recorder rejects them: stripping bitmaps and replaying gives `transcript-bad: 14 recorded entries were never asked for`. Pages like these are what `test/ocr/scan-px/` is for (D392, whole transcripts with bitmaps). They moved there, recorded with `record-scan.clj --px`. `tools/ocr/record-scan.clj` is byte-identical to main's again (round 12 had changed it to keep bitmaps everywhere, which broke the section 5 "no bitmap" and tamper assertions for all five); `columns-two`, `furn-title-pagenum` and `h-plain` were re-recorded with it, its replay-equals-recording check intact. No assertion or threshold of `bb ocr` changed.
+
+The `emon-replay` ratchet (rederive step board-ocr-scans) now covers 3 documents instead of 5. Its old numbers rested on the two stale slim transcripts, which never replayed the table and keyword pixel re-reads. The tool path refuses this change (`--rebaseline-conf` and `--update` do not write regressions or vanished metrics), so the `emon-replay` entry of `test/scoreboard.edn` was edited once, by script, touching only that entry: 22 values set (below) and 102 metrics removed, 286 to 184 metrics; every other predictor is identical. The two moved documents are scored under `emon-replay-px`, updated through the normal `bb accuracy --predictor emon-replay-px --update` (no regression; new `scan/tables` and `scan/headings` entries, e.g. scan/tables block-table-f1 1.0, block-caption-f1 1.0, heading-level-acc 1.0, conf-ece-cell .281).
+
+Rows set in `emon-replay` (old to new):
+
+| category | metric | old | new |
+|---|---|---|---|
+| scan/all | :heading-level-acc | 0.806452 | 0.75 |
+| scan/headings | :heading-level-acc | 0.736842 | 0.615385 |
+| scan/headings | :heading-level-e2e | 0.56 | 0.533333 |
+| scan/all | :conf-brier-all | 0.153624 | 0.163746 |
+| scan/all | :conf-brier-section | 0.177564 | 0.228709 |
+| scan/all | :conf-brier-section-infer | 0.177564 | 0.228709 |
+| scan/all | :conf-ece-all | 0.04762 | 0.092796 |
+| scan/all | :conf-ece-heading | 0.043774 | 0.103083 |
+| scan/all | :conf-ece-heading-ocr | 0.043774 | 0.103083 |
+| scan/all | :conf-ece-paragraph | 0.047136 | 0.052783 |
+| scan/all | :conf-ece-paragraph-ocr | 0.047136 | 0.052783 |
+| scan/all | :conf-ece-section | 0.146548 | 0.203 |
+| scan/all | :conf-ece-section-infer | 0.146548 | 0.203 |
+| scan/headings | :conf-brier-section | 0.24063 | 0.350671 |
+| scan/headings | :conf-brier-section-infer | 0.24063 | 0.350671 |
+| scan/headings | :conf-ece-all | 0.140921 | 0.217439 |
+| scan/headings | :conf-ece-heading | 0.063158 | 0.22 |
+| scan/headings | :conf-ece-heading-ocr | 0.063158 | 0.22 |
+| scan/headings | :conf-ece-paragraph | 0.15408 | 0.177733 |
+| scan/headings | :conf-ece-paragraph-ocr | 0.15408 | 0.177733 |
+| scan/headings | :conf-ece-section | 0.216158 | 0.337615 |
+| scan/headings | :conf-ece-section-infer | 0.216158 | 0.337615 |
+
+Removed from `emon-replay` (102 metrics, all of them scored by the two moved documents; `emon-replay-px` covers them): the whole `scan/tables` category (73 metrics: block-table, block-caption, block-heading, block-paragraph, bow, cer, furniture, table-teds-lite and conf-brier/conf-ece rows for caption, cell, row, rowgroup, table), and 29 metrics of `scan/all` (block-caption p/r/f1, block-table p/r/f1, table-continued-acc, table-teds-lite and the conf-brier/conf-ece caption, cell, row, rowgroup and table rows). The full list is in the report `oil3-report.md`.
+
+Maintainer decisions: 2026-11-16 "Move to scan-px"; 2026-11-17 "Hand-edit, with guards" (guard: the moved documents' table, caption, heading and conf metrics are ratcheted under `emon-replay-px`; only the `emon-replay` entry is edited), then the standing permission to adjust ratchets with good cause, logged.
+
+- [ ] **Signed off** (maintainer)
