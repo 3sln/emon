@@ -1,2 +1,4 @@
 {:paths ["kin/src"]
- :deps {io.github.3sln/kin {:local/root "../kin"}}}
+ :deps {io.github.3sln/kin {:git/url "https://github.com/3sln/kin.git"
+                             :git/sha "09a5316776e06a3b67ca2ea0892e3bbdd5cc510c"}}
+ :aliases {:local-kin {:override-deps {io.github.3sln/kin {:local/root "../kin"}}}}}

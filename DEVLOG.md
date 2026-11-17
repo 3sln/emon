@@ -4125,6 +4125,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [ ] P13.18 — K5 packaging + release: `bb package` per piece, core/adapters/turnkey layering check, native bundle per triple, `release.yml` per-package jobs and `only` retry.
 - [ ] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8).
 - [ ] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing: GitHub OIDC from `pub.yml` on a deploy-key-pushed tag, D885).
+- [ ] P13.20b — `emon_flutter`, the Flutter turnkey: a federated plugin on top of `emon`. It adds `emon_ocr_mlkit` (an Android-only Flutter plugin: ML Kit through Play services, adapter contract) and the web implementation over the JS SDK. Build hooks cannot add Gradle dependencies or Android code, so Android platform OCR needs a plugin. Devices without Play services fall back to PP or Tesseract. The pure-Dart `emon` stays Flutter-free: Vision and Windows OCR come as hook-shipped adapter libraries.
 - [ ] P13.21 — K8 platform adapters Vision, Windows OCR, ML Kit (= P13.10, P13.11).
 - [ ] P13.22 — K9 turnkey defaults per platform, switched one engine at a time with its scoreboard rows.
 
@@ -14333,6 +14334,13 @@ Supersedes the release orchestration and version-copying parts of D524, D525, D5
 A main push touching version.edn resolves the version and runs the per-version, non-cancelling reusable pipeline in release-run.yml. Full verify.yml and archive validation precede all public changes. A same-commit tag/release is reused; a different-commit tag or release target is refused. The published GitHub release includes notes and verified archives, followed by independent crates/npm/NuGet/Maven/Go jobs and a failing partial-publication summary. Normal scoped verification remains; version-only pushes run only the release verification, while mixed pushes may verify twice. Prereleases retain GitHub prerelease and npm next.
 
 Manual release.yml dispatch accepts version (blank reads the selected ref; otherwise must match), only (assets,crates,npm,nuget,maven,go), and dry_run, default true. A selected-registry retry requires an existing published release. Re-run failed jobs remains idempotent. D881/D882 authentication remains OIDC with no release environment; npm's caller policy must identify release.yml; NuGet's called-workflow policy must identify release-run.yml (sources in docs/releasing.md). Hosted workflow, cross-platform archive and OIDC behavior require CI validation. See docs/releasing.md for operations and the REL1 report for local gate evidence.
+
+- [ ] **Signed off** (maintainer)
+
+
+### D887 — kin is pinned by git SHA; a local kin is an opt-in alias
+
+Maintainer, 2026-11-12: build from a clean clone and straightforward CI, with the local kin kept for co-building. `deps.edn` pins `io.github.3sln/kin` with `:git/url` and `:git/sha` (the only place the pin lives); `bb.edn` takes `{emon/deps {:local/root "."}}` as its `:deps`, so babashka fetches the same pin into `~/.gitlibs` (needs `git`, no JVM). The `:local-kin` alias of `deps.edn` overrides it with `{:local/root "../kin"}`; babashka has no alias switch, so a developer opts in by exporting `BABASHKA_CLASSPATH="$PWD/tools:$PWD/tools/lib:$(clojure -A:local-kin -Spath)"` (CONTRIBUTING.md). `kin/scripts/emit` finds kin's source root from the classpath instead of a hard-coded `../kin/src`. The `3sln/kin` checkouts are gone from `verify.yml`, `pr.yml` and `pages.yml`, and the setup action caches `~/.gitlibs` keyed on `deps.edn`; CI never sets the override. Bumping the pin is editing the SHA, then `bb emit` and the gates. Rejected: a custom resolver with a `local.edn` `:kin-dir`, a mismatch warning and a `kin-bump` task (more machinery than the alias).
 
 - [ ] **Signed off** (maintainer)
 

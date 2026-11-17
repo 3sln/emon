@@ -58,10 +58,6 @@ jobs:
         with:
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: bb ci core (check, drift, hosts, api-diff, release-audit, version --check, ci coverage)
         run: bb ci core
@@ -84,10 +80,6 @@ jobs:
         with:
           path: emon
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: 3sln/kin
-          path: kin
       - uses: ./emon/.github/actions/setup
       - name: FAST variants (a labelled subset)
         if: matrix.fast != ''

@@ -51,12 +51,18 @@
 
 (def stamp-file ".emit-stamp")
 
+;; The kin library's source root, wherever the classpath got it from: the gitlibs
+;; checkout of the SHA pinned in deps.edn, or ../kin when the `:local-kin` alias is on
+;; BABASHKA_CLASSPATH (CONTRIBUTING.md). No path is written down here.
+(def kin-src
+  (-> (clojure.java.io/resource "kin/project.cljc") fs/path fs/parent fs/parent str))
+
 (defn- inputs []
   (sort (map str (concat (fs/glob "kin" "*.kin")
                          (fs/glob "kin/src" "**.cljc")
                          (fs/glob "kin/src" "**.clj")
-                         (fs/glob "../kin/src" "**.cljc")
-                         (fs/glob "../kin/src" "**.clj")
+                         (fs/glob kin-src "**.cljc")
+                         (fs/glob kin-src "**.clj")
                          [(fs/path "kin/scripts/emit")]))))
 
 (defn- gofmt-version []

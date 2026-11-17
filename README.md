@@ -252,7 +252,7 @@ Never in any build: JBIG2 and JPEG 2000 decoders (see below).
   [Java](docs/hosts/java.md), [C#](docs/hosts/csharp.md), [JavaScript](docs/hosts/js.md), [C](docs/hosts/c.md),
   [pod](docs/hosts/pod.md): opening, converting, ports, errors, limits, and the full API index.
 - [docs/cli.md](docs/cli.md): the command-line tool. [docs/releasing.md](docs/releasing.md): how a release is made.
-- [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, and the decision log.
+- [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, and the decision log. A clean clone builds with `bb` and `git` alone: kin is fetched at the SHA pinned in `deps.edn`; a local kin checkout is opt-in.
 
 The public API is frozen at 0.1.0 in `api/surface.edn` and held by `bb api-diff`: until 1.0 a minor release may
 change it, with a note; a patch release may not.
