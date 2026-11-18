@@ -1079,6 +1079,8 @@ fn owed(s: &mut Session, bytes: &[u8]) -> Option<Vec<Vec<i32>>> {
                 }
             }
             Ok(Step::Requests(v)) => return Some(v),
+            // only an async adapter's work makes a session wait, and this one has no adapters
+            Ok(Step::Waiting) => panic!("a session without adapters does not wait"),
             Err(e) => panic!("step: {}", e.name()),
         }
     }

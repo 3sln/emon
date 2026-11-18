@@ -157,7 +157,10 @@
     (need (str pdfium-dir "/.verified") (str "run `bb pdfium-fetch --platform " (:pdfium cfg) "`"))
     (let [dir (if (= kind :core) stage-dir adapter-stage-dir)
           env (cond-> {"CARGO_TARGET_DIR" (str dir "/target")}
-                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++"))
+                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++")
+                                ;; the C of `ring` (the pack fetch's TLS, feature `packs-fetch`) is built by cc-rs, which looks for `<triple>-clang` and finds none on the PATH: name the NDK's
+                                (str "CC_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/" (ndk-clang-triple) "-clang")
+                                (str "AR_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/llvm-ar"))
                 (not android?) (assoc "IPHONEOS_DEPLOYMENT_TARGET" (:ios-deployment cfg)))
           have (str/split-lines (:out (sh {} "rustup" "target" "list" "--installed")))]
       (when-not (some #{(:rust cfg)} (map str/trim have)) (die "the Rust target " (:rust cfg) " is not installed in the active toolchain: rustup target add " (:rust cfg)))

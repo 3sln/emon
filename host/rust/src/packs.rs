@@ -225,7 +225,8 @@ pub fn default_store() -> PathBuf {
     } else {
         env("XDG_CACHE_HOME").map(|d| PathBuf::from(d).join("emon/packs")).or_else(|| home.map(|h| PathBuf::from(h).join(".cache/emon/packs")))
     };
-    p.unwrap_or_else(|| std::env::temp_dir().join("emon-packs"))
+    // a cache directory this process cannot make (an Android shell's HOME is `/`, a sandbox has none) is not a store: the temporary directory is
+    p.filter(|d| std::fs::create_dir_all(d).is_ok()).unwrap_or_else(|| std::env::temp_dir().join("emon-packs"))
 }
 
 // `EMON_OFFLINE=1` (pkg1 3.4, D896): nothing is fetched and no hook is asked, whatever the mode says.
