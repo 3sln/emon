@@ -2,7 +2,7 @@
 ;; requests every time, under its own ids; a page it has nothing to say about asks nothing; and the set holds an answer's
 ;; bitmap and the ones kin makes, apart.
 (ns emon.pageunittest
-  (:require [emon.ocridentity :refer [oi-tess-len]]
+  (:require [emon.ocridentity :refer [oi-tess-count]]
             [emon.lang :refer [I32 Cells Bitmap BitmapSet Blob Src]]
             [emon.test :refer [deftest assert-eq assert-eq-at assert-that new-cells new-bitmap-set test-file TestT test-t]]
             [emon.port :refer [cells-len cells-at cells-set cells-push bms-get bms-has bms-put bitmap-w bitmap-h bitmap-channels
@@ -266,11 +266,11 @@
     (assert-eq (rq-arg rq 0 0) 257 "of the render with its text")
     (assert-eq (rq-arg rq 0 1) 3 "psm 3")
     (assert-eq (rq-arg rq 0 5) 0 "the whole bitmap")
-    (assert-eq (cells-len rq) (+ 14 (oi-tess-len)) "no language with identity")
+    (assert-eq (cells-len rq) (+ 14 (oi-tess-count 0)) "no language with identity")
     (comment "a Latin text layer asks for the Latin script's models")
     (born-plan pl1 1 (rp-ask-full) 1)
     (run-page 0 2 pl1 ans rq1)
-    (assert-eq (cells-len rq1) (+ 15 (oi-tess-len)) "one language and identity")
+    (assert-eq (cells-len rq1) (+ 15 (oi-tess-count 0)) "one language and identity")
     (assert-eq (cells-at rq1 10) 1281455214 "`Latn`")))
 
 (deftest test-under-witness-the-render-without-its-text-and-the-witness-lines-are-read-in-round-two

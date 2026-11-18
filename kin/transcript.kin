@@ -12,6 +12,10 @@
 ;;         {:round 0 :kind :render :req [7 1 1 0 0 150 0] :ans [8 1 1 0 1275 1650 1 150] :bitmap "bitmap-0000.png"}
 ;;         ...]}
 ;;
+;;   THE ENGINE TABLE (D900) is `:pk-engines`, written FIRST, before the producer, when the run had one: one map per engine the host registered, `:engine` (the name `emon.engines`
+;;   spells), `:caps` (the OIL capability bits it declared) and `:role` (the role it took), so a replay knows which engines were available and needs no adapter to know it.
+;;   A transcript with none writes none; an engine the table does not know is refused by name (`tb-engine-unknown`).
+;;
 ;;   WRITING. The host builds a `Tr` (`tr-add-input`, `tr-add-producer`, `tr-add-entry`) and `tr-write` writes the file to a `Text`. A bitmap is a flag
 ;;   on its entry; its file is named by the entry's place (`tr-bitmap-name`), and the host writes the PNG.
 ;;   READING.  `tr-read` reads the file from a Blob and answers 0 or the reason it is no transcript (`tb`); `msg` holds its sentence. It is the reader the
@@ -24,6 +28,7 @@
 (ns emon.transcript
   (:require [emon.lang :refer [I32 I64 i32 shr64 Cells Text Blob defenum fd emit-ascii shl32 sar32]]
             [emon.oil :refer [oil-obs-hash oen-emit-name]]
+            [emon.engines :refer [eng-find eng-emit-name erole-find erole-emit-name]]
             [emon.transcriptctx :refer [Tr]]
             [emon.port :refer [blob-len blob-u8 cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp]]
             [kin.lang :refer [defdata defn return let set while if do comment
@@ -52,10 +57,15 @@
    [tf-kind 8 "kind"]
    [tf-req 9 "req"]
    [tf-ans 10 "ans"]
-   [tf-bitmap 11 "bitmap"]])
+   [tf-bitmap 11 "bitmap"]
+   [tf-pk-engines 12 "pk-engines"]
+   [tf-engine 13 "engine"]
+   [tf-caps 14 "caps"]
+   [tf-role 15 "role"]])
 
 ;; What can be wrong with a transcript: the reasons of `transcript-bad` (the spelling is the sentence). `tb-trailing`, `tb-integer` and `tb-unexpected` are
-;; followed by the byte offset; `tb-bitmap-missing` follows the file's name and `tb-unused` the count (the host and `tr-unused-msg` say them).
+;; followed by the byte offset; `tb-bitmap-missing` follows the file's name and `tb-unused` the count (the host and `tr-unused-msg` say them); `tb-engine-unknown`
+;; is followed by the engine's name as the file gave it, in quotes (an unknown engine is refused by name).
 (defenum ^:pub tb
   [[tb-none 0 "none"]
    [tb-no-file 1 "no transcript.edn"]
@@ -85,7 +95,9 @@
    [tb-ans-record 25 "an entry's :ans is not the answer to its :req"]
    [tb-bitmap-missing 26 "is missing"]
    [tb-inputs 27 "the transcript is of other inputs than this run's"]
-   [tb-unused 28 "recorded entries were never asked for"]])
+   [tb-unused 28 "recorded entries were never asked for"]
+   [tb-engines 29 "a row of :pk-engines is not a map with an :engine string, an integer :caps and a keyword :role"]
+   [tb-engine-unknown 30 "a row of :pk-engines names an engine that is not in the engine table:"]])
 
 ;; ----------------------------------------------------------------------------------------------- reading: bytes
 
@@ -427,6 +439,46 @@
           (set i (ed-end t b i 0))))
     (return 0)))
 
+(defn ^I32 ed-engines [^Tr t ^Blob b ^I32 pos]
+  (comment "The `:pk-engines` vector at `pos`: each a map with an `:engine` (a string naming an engine of the table), an integer `:caps` and a keyword `:role`. 0, or the reason (`tb`).")
+  (if (!= (ed-first b pos) 91) (return (ed-fail t (tb-engines) (ed-ws b pos))))
+  (let [^:mut ^I32 i (+ (ed-ws b pos) 1)]
+    (while (>= (blob-len b) 0)
+      (do (set i (ed-ws b i))
+          (if (== (blob-u8 b i) 93) (return 0))
+          (if (!= (blob-u8 b i) 123) (return (ed-fail t (tb-engines) i)))
+          (let [^I32 ep (ed-field t b i (tf-engine))
+                ^I32 cp (ed-field t b i (tf-caps))
+                ^I32 rp (ed-field t b i (tf-role))]
+            (if (or (< ep 0) (!= (ed-first b ep) 34)) (return (ed-fail t (tb-engines) i)))
+            (if (or (< cp 0) (== (ed-int-at t b cp) 0)) (return (ed-fail t (tb-engines) i)))
+            (let [^I32 caps (fd t ival)]
+              (if (or (< rp 0) (!= (ed-first b rp) 58)) (return (ed-fail t (tb-engines) i)))
+              (let [^I32 es (ed-ws b ep)
+                    ^I32 ee (ed-end t b es 0)
+                    ^I32 rs (ed-ws b rp)
+                    ^I32 re (ed-end t b rs 0)
+                    ^I32 eng (eng-find b (+ es 1) (- ee 1))
+                    ^I32 role (erole-find b (+ rs 1) re)]
+                (if (< eng 0)
+                  (do (ed-fail t (tb-engine-unknown) i)
+                      (emit-ascii (fd t msg) " ")
+                      (text-cp (fd t msg) 34)
+                      (let [^:mut ^I32 k (+ es 1)]
+                        (while (and (< k (- ee 1)) (< (- k es) 65))
+                          (do (if (and (>= (blob-u8 b k) 32) (< (blob-u8 b k) 127))
+                                (text-cp (fd t msg) (blob-u8 b k))
+                                (text-cp (fd t msg) 63))
+                              (set k (+ k 1)))))
+                      (text-cp (fd t msg) 34)
+                      (return (tb-engine-unknown))))
+                (if (< role 0) (return (ed-fail t (tb-engines) i)))
+                (cells-push (fd t etab) eng)
+                (cells-push (fd t etab) caps)
+                (cells-push (fd t etab) role))))
+          (set i (ed-end t b i 0))))
+    (return 0)))
+
 (defn ^:pub ^I32 tr-read [^Tr t ^Blob b]
   (comment "Read `transcript.edn` from `b` into `t` (a new one): 0, or the reason it is no transcript (`tb`), its sentence in `msg`.")
   (if (== (ed-utf8 b) 0) (return (ed-fail t (tb-not-utf8) 0)))
@@ -436,14 +488,18 @@
       (if (!= f (blob-len b)) (return (ed-fail t (tb-trailing) f)))))
   (let [^I32 top (ed-ws b 0)]
     (if (!= (blob-u8 b top) 123) (return (ed-fail t (tb-not-map) top)))
-    ;; the first of each key the format has, then read in the order the hosts did: version, producer, inputs, entries
+    ;; the first of each key the format has, then read in the order the hosts did: version, producer, engine table, inputs, entries
     (let [^I32 vp (ed-field t b top (tf-version))
           ^I32 pp (ed-field t b top (tf-producer))
+          ^I32 kp (ed-field t b top (tf-pk-engines))
           ^I32 ip (ed-field t b top (tf-inputs))
           ^I32 ep (ed-field t b top (tf-entries))]
       (if (or (< vp 0) (== (ed-int-at t b vp) 0)) (return (ed-fail t (tb-version) top)))
       (if (!= (fd t ival) 1) (return (ed-fail t (tb-version) top)))
       (if (>= pp 0) (ed-producer t b pp))
+      (if (>= kp 0)
+        (let [^I32 r (ed-engines t b kp)]
+          (if (!= r 0) (return r))))
       (if (< ip 0) (return (ed-fail t (tb-no-inputs) top)))
       (let [^I32 r (ed-inputs t b ip)]
         (if (!= r 0) (return r)))
@@ -475,6 +531,18 @@
         (cells-push (fd t prod) v)
         (set i (+ i 1))))
     (return 0)))
+
+(defn ^:pub ^I32 tr-add-engine [^Tr t ^I32 eng ^I32 caps ^I32 role]
+  (comment "One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.")
+  (cells-push (fd t etab) eng)
+  (cells-push (fd t etab) caps)
+  (cells-push (fd t etab) role)
+  (return 0))
+
+(defn ^:pub ^I32 tr-n-engines [^Tr t] (return (quot (cells-len (fd t etab)) 3)))
+(defn ^:pub ^I32 tr-eng-engine [^Tr t ^I32 i] (return (cells-at (fd t etab) (* 3 i))))
+(defn ^:pub ^I32 tr-eng-caps [^Tr t ^I32 i] (return (cells-at (fd t etab) (+ (* 3 i) 1))))
+(defn ^:pub ^I32 tr-eng-role [^Tr t ^I32 i] (return (cells-at (fd t etab) (+ (* 3 i) 2))))
 
 (defn ^:pub ^I32 tr-add-entry [^Tr t ^I32 round ^Cells src ^I32 req-at ^I32 req-len ^I32 ans-at ^I32 ans-len ^I32 bitmap]
   (comment "An entry: the round, the request record at `req-at` of `src`, the answer record at `ans-at`, and whether it has a bitmap (the host keeps the pixels).")
@@ -618,12 +686,40 @@
     (if (> count 0) (do (emit-ascii out "]") (text-cp out 10))))
   (return 0))
 
+(defn ^I32 tw-pk-engines [^Tr t ^:mut ^Text out]
+  (comment "` :pk-engines [{...} ...]` and a newline, when the run had an engine table; nothing otherwise.")
+  (let [^I32 n (cells-len (fd t etab)) ^:mut ^I32 at 0]
+    (if (== n 0) (return 0))
+    (emit-ascii out " :")
+    (tf-emit-name out (tf-pk-engines))
+    (emit-ascii out " [")
+    (while (< at n)
+      (do (if (> at 0) (emit-ascii out " "))
+          (emit-ascii out "{:")
+          (tf-emit-name out (tf-engine))
+          (emit-ascii out " \"")
+          (if (== (eng-emit-name out (cells-at (fd t etab) at)) 0) (emit-ascii out "unknown"))
+          (emit-ascii out "\" :")
+          (tf-emit-name out (tf-caps))
+          (emit-ascii out " ")
+          (text-i32 out (cells-at (fd t etab) (+ at 1)))
+          (emit-ascii out " :")
+          (tf-emit-name out (tf-role))
+          (emit-ascii out " :")
+          (if (== (erole-emit-name out (cells-at (fd t etab) (+ at 2))) 0) (emit-ascii out "unknown"))
+          (emit-ascii out "}")
+          (set at (+ at 3))))
+    (emit-ascii out "]")
+    (text-cp out 10)
+    (return 0)))
+
 (defn ^:pub ^I32 tr-write [^Tr t ^:mut ^Text out]
   (comment "Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.")
   (emit-ascii out "{:")
   (tf-emit-name out (tf-version))
   (emit-ascii out " 1")
   (text-cp out 10)
+  (tw-pk-engines t out)
   (if (> (cells-len (fd t prod)) 0)
     (do (emit-ascii out " :")
         (tf-emit-name out (tf-producer))

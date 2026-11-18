@@ -674,4 +674,7 @@ impl crate::engine::Ocr for TessOcr {
     fn producer(&self) -> Vec<(String, String)> {
         self.producer.clone()
     }
+    fn engines(&self) -> Vec<i32> {
+        vec![crate::emon::engines::eng_tesseract()]
+    }
 }

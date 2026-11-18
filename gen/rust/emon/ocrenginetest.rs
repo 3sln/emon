@@ -3,7 +3,6 @@
 
 use crate::emon::evidence::*;
 use crate::emon::ocrengine::*;
-use crate::emon::ocridentity::*;
 use crate::emon::ocrport::*;
 use crate::emon::ofuse::*;
 use crate::emon::plan::*;
@@ -31,7 +30,7 @@ fn test_every_default_ocr_request_carries_requested_identity() {
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
     oe_tag(r, scratch, 0);
-    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oi_tess_len(), "default identity extends the key");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + 112, "default identity extends the key");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "record header includes identity");
     crate::testport::assert_eq(op_lang_count(r), 1, "one legacy language");
 }

@@ -1,0 +1,524 @@
+;; Laws for `emon.engines` and `emon.packdata` (K1, D900; D883 rulings 3 and 8, D885, D893, D895, D896): the engine table, its roles, the turnkey defaults, the pack catalogue as kin
+;; holds it and its agreement with the table, pack resolution for each engine and option combination, the refusals by name, and the engine table in a transcript.
+(ns emon.enginestest
+  (:require [emon.lang :refer [I32 Cells Text Blob fd]]
+            [emon.transcriptctx :refer [Tr]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop blob-len]]
+            [emon.oil :refer [oil-tess-begin oil-get oh-caps oen-emit-name]]
+            [emon.ocrengine :refer [oe-role]]
+            [emon.packdata :refer [pack-file-count pack-lang-count pack-lang-at pkid-find pkid-emit-name plic-emit-name
+                                   pkid-tess-fast-eng pkid-tess-osd pkid-tess-fast-spa pkid-tess-fast-chs pkid-pp5-det-mobile pkid-pp5-cls-mobile pkid-pp5-rec-en-mobile]]
+            [emon.engines :refer [eng-tesseract eng-ppocr eng-ppocr-web eng-apple-vision eng-windows-media-ocr eng-mlkit-text eng-pdfium eng-find eng-emit-name
+                                  ekind-ocr ekind-render eimpl-builtin eimpl-native eimpl-plugin
+                                  pcls-macos pcls-ios pcls-linux pcls-windows pcls-android pcls-web
+                                  erole-incumbent erole-challenger erole-reader
+                                  pkind-recognizer pkind-osd pkind-detector pkind-classifier
+                                  pfetch-never pfetch-auto pstate-installed pstate-missing pstate-unsupported
+                                  pkerr-ok pkerr-unknown-engine pkerr-unknown-pack pkerr-unknown-class pkerr-not-ocr pkerr-engine-class pkerr-bad-language
+                                  pkf-osd
+                                  pk-engine-known pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-impl pk-engine-caps pk-engine-classes pk-engine-calibrated
+                                  pk-engine-needs pk-class-known pk-engine-on pk-role-mask pk-role-default
+                                  pk-default-engine pk-platform-engine pk-pp-engine pk-default-fetch pk-default-render pk-bundled-count pk-bundled
+                                  pk-pack-count pk-pack-known pk-pack-rev pk-pack-engine pk-pack-kind pk-pack-licence pk-pack-file-count pk-pack-bytes pk-pack-file-bytes
+                                  pk-pack-file-sha pk-pack-file-name pk-pack-covers pk-pack-for pk-lang-eng
+                                  pk-parse-engines pk-parse-packs pk-explain pk-resolve pk-rows pk-missing pk-record-engines]]
+            [emon.transcript :refer [tr-read tr-write tr-add-engine tr-n-engines tr-eng-engine tr-eng-caps tr-eng-role tr-add-input tr-add-producer
+                                     tb-engines tb-engine-unknown]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or quot bit-and bit-or]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 en-names [^TestT emon-t ^I32 code ^Str want]
+  (let [^Text t (new-text)]
+    (assert-eq (eng-emit-name t code) 1 want)
+    (assert-text t want want)
+    (assert-eq (eng-find (text-blob want) 0 (blob-len (text-blob want))) code want)
+    (return 0)))
+
+(defn ^I32 en-cells3 [^:mut ^Cells c ^I32 a ^I32 b ^I32 d]
+  (cells-drop c 0)
+  (cells-push c a)
+  (cells-push c b)
+  (cells-push c d)
+  (return 0))
+
+(defn ^I32 en-cells1 [^:mut ^Cells c ^I32 a]
+  (cells-drop c 0)
+  (cells-push c a)
+  (return 0))
+
+(defn ^I32 en-cells2 [^:mut ^Cells c ^I32 a ^I32 b]
+  (cells-drop c 0)
+  (cells-push c a)
+  (cells-push c b)
+  (return 0))
+
+(defn ^I32 en-resolve [^I32 pclass ^I32 flags ^Cells langs ^Cells engs ^Cells installed ^:mut ^Cells out]
+  (let [^Cells scratch (new-cells)]
+    (return (pk-resolve pclass flags langs engs installed out scratch))))
+
+(defn ^I32 en-expect-row [^TestT emon-t ^Cells out ^I32 row ^I32 state ^I32 eng ^I32 pack ^I32 lang ^Str law]
+  (assert-eq (cells-at out (* row 4)) state law)
+  (assert-eq (cells-at out (+ (* row 4) 1)) eng law)
+  (assert-eq (cells-at out (+ (* row 4) 2)) pack law)
+  (assert-eq (cells-at out (+ (* row 4) 3)) lang law)
+  (return 0))
+
+;; ------------------------------------------------------------------ the engine table
+
+(deftest test-an-engine-is-spelled-once-for-the-option-and-the-transcript
+  (en-names (test-t) (eng-tesseract) "tesseract")
+  (en-names (test-t) (eng-ppocr) "ppocr")
+  (en-names (test-t) (eng-ppocr-web) "ppocr-web")
+  (en-names (test-t) (eng-apple-vision) "apple-vision")
+  (en-names (test-t) (eng-windows-media-ocr) "windows-media-ocr")
+  (en-names (test-t) (eng-mlkit-text) "mlkit-text")
+  (en-names (test-t) (eng-pdfium) "pdfium")
+  (assert-eq (eng-find (text-blob "vision") 0 6) -1 "a platform's shorthand is no engine")
+  (assert-eq (eng-find (text-blob "ppocr-we") 0 8) -1 "a prefix is no name"))
+
+(deftest test-every-engine-of-the-table-is-registered-with-a-sound-row
+  (assert-eq (pk-engine-count) 7 "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium")
+  (let [^:mut ^I32 i 0]
+    (while (< i (pk-engine-count))
+      (let [^I32 eng (pk-engine-at i)
+            ^I32 caps (pk-engine-caps eng)
+            ^I32 classes (pk-engine-classes eng)
+            ^Text t (new-text)]
+        (assert-eq (pk-engine-known eng) 1 "the table's own engine is known")
+        (assert-eq (eng-emit-name t eng) 1 "every engine has a name")
+        (assert-that (and (> classes 0) (<= classes 63)) "an engine runs on at least one platform class and on no class that is not one")
+        (assert-eq (bit-and caps 8388607) caps "capabilities are OIL bits and nothing else")
+        (assert-that (or (== (pk-engine-impl eng) (eimpl-builtin)) (or (== (pk-engine-impl eng) (eimpl-native)) (== (pk-engine-impl eng) (eimpl-plugin)))) "built in, a native adapter or a plugin")
+        (if (== (pk-engine-kind eng) (ekind-ocr))
+          (do (assert-eq (oen-emit-name (new-text) (pk-engine-oen eng)) 1 "an OCR engine answers as a registered OIL engine")
+              (assert-that (> caps 0) "an OCR engine declares capabilities"))
+          (do (assert-eq (pk-engine-oen eng) 0 "a renderer has no OIL engine")
+              (assert-eq caps 0 "a renderer declares no OCR capabilities")))
+        (set i (+ i 1)))))
+  (assert-eq (pk-engine-known 0) 0 "0 is no engine")
+  (assert-eq (pk-engine-known 99) 0 "99 is no engine"))
+
+(deftest test-the-engines-and-where-each-runs
+  (assert-eq (pk-engine-kind (eng-pdfium)) (ekind-render) "pdfium renders")
+  (assert-eq (pk-engine-kind (eng-tesseract)) (ekind-ocr) "tesseract reads")
+  (assert-eq (pk-engine-impl (eng-tesseract)) (eimpl-native) "Tesseract is one native adapter library (D885)")
+  (assert-eq (pk-engine-impl (eng-ppocr)) (eimpl-native) "PP-OCR is a native adapter")
+  (assert-eq (pk-engine-impl (eng-ppocr-web)) (eimpl-plugin) "ONNX Runtime Web is the browser's own")
+  (assert-eq (pk-engine-impl (eng-mlkit-text)) (eimpl-plugin) "ML Kit is a Flutter plugin")
+  (assert-eq (pk-engine-impl (eng-pdfium)) (eimpl-builtin) "the renderer is core's own binding")
+  (assert-eq (pk-engine-oen (eng-ppocr-web)) (pk-engine-oen (eng-ppocr)) "the web runtime answers as the same OIL engine (D891 distinguishes it by its observed identity)")
+  (assert-eq (pk-engine-on (eng-tesseract) (pcls-macos)) 1 "Tesseract on macOS")
+  (assert-eq (pk-engine-on (eng-tesseract) (pcls-web)) 1 "Tesseract on the web (tesseract.js)")
+  (assert-eq (pk-engine-on (eng-apple-vision) (pcls-macos)) 1 "Vision on macOS")
+  (assert-eq (pk-engine-on (eng-apple-vision) (pcls-ios)) 1 "Vision on iOS")
+  (assert-eq (pk-engine-on (eng-apple-vision) (pcls-windows)) 0 "no Vision on Windows")
+  (assert-eq (pk-engine-on (eng-apple-vision) (pcls-android)) 0 "no Vision on Android")
+  (assert-eq (pk-engine-on (eng-windows-media-ocr) (pcls-windows)) 1 "Windows OCR on Windows")
+  (assert-eq (pk-engine-on (eng-windows-media-ocr) (pcls-linux)) 0 "no Windows OCR on Linux")
+  (assert-eq (pk-engine-on (eng-mlkit-text) (pcls-android)) 1 "ML Kit on Android")
+  (assert-eq (pk-engine-on (eng-mlkit-text) (pcls-ios)) 0 "no ML Kit here (the plugin is Android's)")
+  (assert-eq (pk-engine-on (eng-ppocr) (pcls-ios)) 1 "PP-OCR ships for every native target (D885)")
+  (assert-eq (pk-engine-on (eng-ppocr) (pcls-web)) 0 "the web has its own PP-OCR row")
+  (assert-eq (pk-engine-on (eng-ppocr-web) (pcls-web)) 1 "PP-OCR on the web")
+  (assert-eq (pk-engine-on (eng-ppocr-web) (pcls-linux)) 0 "ppocr-web is the browser's only")
+  (assert-eq (pk-engine-on (eng-tesseract) 0) 0 "an unknown class has no engine")
+  (assert-eq (pk-engine-on (eng-tesseract) 7) 0 "nor class 7")
+  (assert-eq (pk-class-known (pcls-web)) 1 "the web is a class")
+  (assert-eq (pk-class-known 7) 0 "7 is not"))
+
+(deftest test-the-declared-capabilities-agree-with-what-the-adapters-write
+  (let [^Cells c (new-cells)
+        ^I32 at (oil-tess-begin c 1 3 1 0 0 0 0 0 0 0 0 1)]
+    (assert-eq (oil-get c at (oh-caps)) (pk-engine-caps (eng-tesseract)) "Tesseract's ceiling is what oil-tess-begin sets with symbols, OSD and the binary image")
+    (assert-eq (bit-and (pk-engine-caps (eng-tesseract)) 15) 15 "blocks, paragraphs, block kind and baselines"))
+  (assert-eq (pk-engine-caps (eng-ppocr)) 24928 "PP-OCR declares quad, angle, word confidence, word language and lexicon (host/rust/src/ppocr.rs)")
+  (assert-eq (pk-engine-caps (eng-ppocr-web)) (pk-engine-caps (eng-ppocr)) "the same adapter code")
+  (assert-eq (bit-and (pk-engine-caps (eng-apple-vision)) 1536) 0 "Vision has no OSD (dart1 4.2)")
+  (assert-eq (bit-and (pk-engine-caps (eng-apple-vision)) 2048) 0 "nor script detection")
+  (assert-eq (bit-and (pk-engine-caps (eng-windows-media-ocr)) 256) 0 "Windows OCR has no confidence at all"))
+
+;; ------------------------------------------------------------------ roles
+
+(deftest test-roles-follow-the-rulings-for-calibrated-and-uncalibrated-engines
+  (let [^:mut ^I32 i 0 ^:mut ^I32 c 1]
+    (while (< i (pk-engine-count))
+      (let [^I32 eng (pk-engine-at i)]
+        (set c 1)
+        (while (<= c 6)
+          (do (if (== (pk-engine-kind eng) (ekind-render))
+                (assert-eq (pk-role-mask eng c) 0 "a renderer has no role")
+                (if (== (pk-engine-on eng c) 1)
+                  (do (assert-that (> (pk-role-mask eng c) 0) "an engine that runs on a class has roles there")
+                      (assert-eq (bit-and (pk-role-mask eng c) (pk-role-default eng c)) (pk-role-default eng c) "the default role is one of its roles")
+                      (assert-that (> (pk-role-default eng c) 0) "and there is a default")
+                      (if (== (pk-engine-calibrated eng) 0)
+                        (do (assert-eq (bit-and (pk-role-mask eng c) (erole-incumbent)) 0 "an uncalibrated engine is never the incumbent (D883 ruling 3)")
+                            (assert-eq (bit-and (pk-role-mask eng c) (erole-challenger)) 0 "and never inserts as a challenger")
+                            (assert-eq (pk-role-default eng c) (erole-reader) "it reads when selected, explicitly (D895)"))))
+                  (do (assert-eq (pk-role-mask eng c) 0 "no roles on a class the engine does not run on")
+                      (assert-eq (pk-role-default eng c) 0 "no default either"))))
+              (set c (+ c 1)))))
+      (set i (+ i 1)))))
+
+(deftest test-the-role-table-agrees-with-the-hybrid-roles-of-ocrengine
+  (assert-eq (pk-role-default (eng-tesseract) (pcls-macos)) (erole-incumbent) "Tesseract is the incumbent")
+  (assert-eq (oe-role (pk-engine-oen (eng-tesseract))) 1 "and the hybrid table says incumbent (1)")
+  (assert-eq (pk-role-default (eng-ppocr) (pcls-linux)) (erole-challenger) "PP-OCR is the challenger")
+  (assert-eq (oe-role (pk-engine-oen (eng-ppocr))) 2 "and the hybrid table says challenger (2)")
+  (assert-eq (pk-role-default (eng-ppocr-web) (pcls-web)) (erole-challenger) "the web runtime too")
+  (assert-eq (oe-role (pk-engine-oen (eng-apple-vision))) 0 "the hybrid table gives a platform engine no insertion role")
+  (assert-eq (oe-role (pk-engine-oen (eng-windows-media-ocr))) 0 "nor Windows OCR")
+  (assert-eq (oe-role (pk-engine-oen (eng-mlkit-text))) 0 "nor ML Kit")
+  (assert-eq (pk-role-mask (eng-tesseract) (pcls-ios)) 5 "Tesseract is the incumbent or the sole reader")
+  (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "an uncalibrated engine reads or votes")
+  (assert-eq (pk-role-default (eng-apple-vision) (pcls-windows)) 0 "no role on the wrong class"))
+
+;; ------------------------------------------------------------------ the turnkey defaults
+
+(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 platform ^I32 pp]
+  (let [^I32 eng (pk-default-engine pclass)]
+    (assert-eq eng (eng-tesseract) "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)")
+    (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
+    (assert-eq (pk-engine-calibrated eng) 1 "the default is calibrated")
+    (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent")
+    (assert-eq (pk-platform-engine pclass) platform "the class's own engine")
+    (if (!= platform 0)
+      (do (assert-eq (pk-engine-on platform pclass) 1 "the platform engine runs on the class")
+          (assert-eq (pk-engine-calibrated platform) 0 "uncalibrated (D895)")
+          (assert-that (!= platform eng) "and never the automatic choice")))
+    (assert-eq (pk-pp-engine pclass) pp "the PP-OCR runtime of the class")
+    (assert-eq (pk-engine-on pp pclass) 1 "runs on it")
+    (assert-eq (pk-default-fetch pclass) (pfetch-auto) "a turnkey fetches on demand (D885, D896)")
+    (assert-eq (pk-default-render pclass) (eng-pdfium) "pdfium renders")
+    (return 0)))
+
+(deftest test-the-turnkey-default-of-every-platform-class
+  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-linux) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-web) 0 (eng-ppocr-web))
+  (assert-eq (pk-default-engine 0) 0 "an unknown class has no default")
+  (assert-eq (pk-default-engine 7) 0 "nor class 7")
+  (assert-eq (pk-default-fetch 7) 0 "and no fetch policy")
+  (assert-eq (pfetch-never) 1 "core and the bare adapters never fetch: `never` is a mode, not a turnkey default")
+  (assert-eq (pk-bundled-count) 2 "English and OSD are bundled (D885)")
+  (assert-eq (pk-bundled 0) (pkid-tess-fast-eng) "English")
+  (assert-eq (pk-bundled 1) (pkid-tess-osd) "OSD")
+  (assert-eq (pk-bundled 2) 0 "nothing else"))
+
+;; ------------------------------------------------------------------ the catalogue as kin holds it
+
+(defn ^I32 en-sha-nonzero [^I32 p ^I32 i]
+  (let [^:mut ^I32 w 0]
+    (while (< w 8)
+      (do (if (!= (pk-pack-file-sha p i w) 0) (return 1))
+          (set w (+ w 1)))))
+  (return 0))
+
+(deftest test-every-pack-of-the-catalogue-is-sound-and-names-an-engine-of-the-table
+  (assert-eq (pk-pack-count) 24 "20 language models, OSD and the three PP-OCR models")
+  (let [^:mut ^I32 p 1 ^:mut ^I32 files 0 ^:mut ^I32 langs 0]
+    (while (<= p (pk-pack-count))
+      (let [^Text t (new-text)
+            ^Text lic (new-text)
+            ^I32 eng (pk-pack-engine p)
+            ^I32 kind (pk-pack-kind p)
+            ^:mut ^I32 sum 0 ^:mut ^I32 i 0 ^:mut ^I32 n 0]
+        (assert-eq (pk-pack-known p) 1 "known")
+        (assert-eq (pkid-emit-name t p) 1 "a pack has an id")
+        (assert-eq (plic-emit-name lic (pk-pack-licence p)) 1 "and a licence")
+        (assert-eq (pkid-find (text-blob "tess-osd") 0 8) (pkid-tess-osd) "ids are found by name")
+        (assert-that (or (== eng 0) (== (pk-engine-known eng) 1)) "a pack is for an engine of the table, or for any")
+        (assert-that (> (pk-pack-rev p) 0) "a revision")
+        (assert-that (or (== kind (pkind-recognizer)) (or (== kind (pkind-osd)) (or (== kind (pkind-detector)) (== kind (pkind-classifier))))) "a known kind")
+        (if (!= eng 0)
+          (assert-that (!= (bit-and (pk-engine-needs eng) kind) 0) "the engine it is for reads with that kind of pack"))
+        (assert-that (> (pk-pack-file-count p) 0) "files")
+        (while (< i (pk-pack-file-count p))
+          (do (set sum (+ sum (pk-pack-file-bytes p i)))
+              (assert-that (> (pk-pack-file-bytes p i) 0) "a file has a size")
+              (assert-eq (en-sha-nonzero p i) 1 "and a hash")
+              (assert-that (> (pk-pack-file-name p i (new-text)) 0) "and a name")
+              (set files (+ files 1))
+              (set i (+ i 1))))
+        (assert-eq sum (pk-pack-bytes p) "the pack's size is its files'")
+        (set i 0)
+        (while (< i (pack-lang-count 0))
+          (do (if (== (pack-lang-at 0 i 0) p) (set n (+ n 1)))
+              (set i (+ i 1))))
+        (set langs (+ langs n))
+        (if (== kind (pkind-recognizer))
+          (assert-that (> n 0) "a recognizer reads a language")
+          (assert-eq n 0 "only a recognizer reads a language"))
+        (set p (+ p 1))))
+    (assert-eq files (pack-file-count 0) "every file row belongs to a pack, in order")
+    (assert-eq langs (pack-lang-count 0) "every language row belongs to a pack")))
+
+(deftest test-the-catalogue-holds-the-hashes-the-hosts-verify-against
+  (let [^Text n (new-text)]
+    (pk-pack-file-name (pkid-tess-fast-eng) 0 n)
+    (assert-text n "eng.traineddata" "the file's own name")
+    (assert-eq (pk-pack-file-bytes (pkid-tess-fast-eng) 0) 4113088 "English is 4113088 bytes")
+    (assert-eq (pk-pack-file-sha (pkid-tess-fast-eng) 0 0) 2101551805 "its SHA-256 starts 7d4322bd")
+    (assert-eq (pk-pack-bytes (pkid-tess-osd)) 10562727 "OSD")
+    (assert-eq (pk-pack-file-sha (pkid-tess-osd) 0 0) -1661610634 "starts 9cf5d576, a negative I32")
+    (assert-eq (pk-pack-engine (pkid-tess-osd)) (eng-tesseract) "for Tesseract")
+    (assert-eq (pk-pack-kind (pkid-tess-osd)) (pkind-osd) "an OSD model")
+    (assert-eq (pk-pack-engine (pkid-pp5-det-mobile)) (eng-ppocr) "the detector is PP-OCR's")
+    (assert-eq (pk-pack-kind (pkid-pp5-det-mobile)) (pkind-detector) "a detector")
+    (assert-eq (pk-pack-kind (pkid-pp5-cls-mobile)) (pkind-classifier) "a classifier")
+    (assert-eq (pk-pack-covers (pkid-pp5-rec-en-mobile) (pk-lang-eng)) 1 "English recognizer")
+    (assert-eq (pk-pack-covers (pkid-pp5-rec-en-mobile) 1936744704) 0 "not Spanish")
+    (assert-eq (pk-pack-covers (pkid-tess-fast-chs) 1667789568) 1 "Chinese is read under the request's own `chs` (D883 ruling 7)")
+    (assert-eq (pk-pack-for (eng-tesseract) (pkind-recognizer) (pk-lang-eng)) (pkid-tess-fast-eng) "English for Tesseract")
+    (assert-eq (pk-pack-for (eng-ppocr) (pkind-recognizer) (pk-lang-eng)) (pkid-pp5-rec-en-mobile) "English for PP-OCR")
+    (assert-eq (pk-pack-for (eng-ppocr) (pkind-recognizer) 1936744704) 0 "no Spanish for PP-OCR")))
+
+;; ------------------------------------------------------------------ resolution
+
+(deftest test-the-default-resolution-needs-english-and-says-whether-it-is-there
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 1 "one pack: English, for the turnkey default engine")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is missing")
+    (assert-eq (pk-missing out) 1 "one missing")
+    (en-cells1 installed (pkid-tess-fast-eng))
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves with English installed")
+    (en-expect-row (test-t) out 0 (pstate-installed) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is installed")
+    (assert-eq (pk-missing out) 0 "nothing is missing")
+    (cells-push installed (pkid-tess-osd))
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
+    (assert-eq (pk-rows out) 1 "still one row")))
+
+(deftest test-orientation-detection-adds-the-osd-pack-for-tesseract-only
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (en-resolve (pcls-linux) (pkf-osd) langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 2 "English and OSD")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "English first, the catalogue's order")
+    (en-expect-row (test-t) out 1 (pstate-missing) (eng-tesseract) (pkid-tess-osd) 0 "then OSD")
+    (en-cells1 engs (eng-ppocr))
+    (assert-eq (en-resolve (pcls-linux) (pkf-osd) langs engs installed out) (pkerr-ok) "PP-OCR with OSD")
+    (assert-eq (pk-rows out) 3 "PP-OCR has no OSD model: its detector, classifier and English recognizer")))
+
+(deftest test-pp-ocr-needs-its-three-models-and-reads-only-the-languages-it-has-a-recognizer-for
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (en-cells1 engs (eng-ppocr))
+    (assert-eq (en-resolve (pcls-android) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 3 "three models")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-ppocr) (pkid-pp5-det-mobile) 0 "detector")
+    (en-expect-row (test-t) out 1 (pstate-missing) (eng-ppocr) (pkid-pp5-cls-mobile) 0 "classifier")
+    (en-expect-row (test-t) out 2 (pstate-missing) (eng-ppocr) (pkid-pp5-rec-en-mobile) 0 "English recognizer")
+    (en-cells1 langs 1936744704)
+    (assert-eq (en-resolve (pcls-android) 0 langs engs installed out) (pkerr-ok) "Spanish resolves")
+    (assert-eq (pk-rows out) 3 "the detector, the classifier and one unreadable language")
+    (en-expect-row (test-t) out 2 (pstate-unsupported) (eng-ppocr) 0 1936744704 "no PP-OCR recognizer reads Spanish: unread, never blank (D038)")
+    (cells-drop engs 0)
+    (en-cells1 engs (eng-tesseract))
+    (assert-eq (en-resolve (pcls-android) 0 langs engs installed out) (pkerr-ok) "Tesseract reads Spanish")
+    (assert-eq (pk-rows out) 1 "one pack")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-spa) 0 "the Spanish model")))
+
+(deftest test-a-hybrid-needs-both-engines-packs-in-the-catalogues-order
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (en-cells2 engs (eng-tesseract) (eng-ppocr))
+    (assert-eq (en-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 5 "English, OSD, detector, classifier, recognizer")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "1")
+    (en-expect-row (test-t) out 1 (pstate-missing) (eng-tesseract) (pkid-tess-osd) 0 "2")
+    (en-expect-row (test-t) out 2 (pstate-missing) (eng-ppocr) (pkid-pp5-det-mobile) 0 "3")
+    (en-expect-row (test-t) out 3 (pstate-missing) (eng-ppocr) (pkid-pp5-cls-mobile) 0 "4")
+    (en-expect-row (test-t) out 4 (pstate-missing) (eng-ppocr) (pkid-pp5-rec-en-mobile) 0 "5")
+    (en-cells3 installed (pkid-pp5-det-mobile) (pkid-tess-osd) (pkid-tess-fast-eng))
+    (assert-eq (en-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "partly installed")
+    (assert-eq (pk-missing out) 2 "the classifier and the recognizer are missing")
+    (en-expect-row (test-t) out 0 (pstate-installed) (eng-tesseract) (pkid-tess-fast-eng) 0 "English there")
+    (en-expect-row (test-t) out 3 (pstate-missing) (eng-ppocr) (pkid-pp5-cls-mobile) 0 "classifier missing")))
+
+(defn ^I32 en-same [^TestT emon-t ^Cells a ^Cells b ^Str law]
+  (assert-eq (cells-len a) (cells-len b) law)
+  (let [^:mut ^I32 i 0]
+    (while (< i (cells-len a))
+      (do (assert-eq (cells-at a i) (cells-at b i) law)
+          (set i (+ i 1)))))
+  (return 0))
+
+(deftest test-the-order-of-a-resolution-does-not-depend-on-the-order-or-repeats-of-its-inputs
+  (let [^Cells l1 (new-cells) ^Cells l2 (new-cells) ^Cells e1 (new-cells) ^Cells e2 (new-cells) ^Cells i1 (new-cells) ^Cells i2 (new-cells)
+        ^Cells a (new-cells) ^Cells b (new-cells)]
+    (cells-push l1 1936744704) (cells-push l1 (pk-lang-eng)) (cells-push l1 1718771968)
+    (cells-push l2 1718771968) (cells-push l2 1936744704) (cells-push l2 (pk-lang-eng)) (cells-push l2 (pk-lang-eng))
+    (cells-push e1 (eng-ppocr)) (cells-push e1 (eng-tesseract))
+    (cells-push e2 (eng-tesseract)) (cells-push e2 (eng-ppocr)) (cells-push e2 (eng-tesseract))
+    (cells-push i1 (pkid-tess-fast-spa)) (cells-push i1 (pkid-pp5-det-mobile))
+    (cells-push i2 (pkid-pp5-det-mobile)) (cells-push i2 (pkid-tess-fast-spa)) (cells-push i2 (pkid-pp5-det-mobile))
+    (assert-eq (en-resolve (pcls-linux) (pkf-osd) l1 e1 i1 a) (pkerr-ok) "one order")
+    (assert-eq (en-resolve (pcls-linux) (pkf-osd) l2 e2 i2 b) (pkerr-ok) "another")
+    (en-same (test-t) a b "the same rows in the same order")
+    (assert-that (> (pk-rows a) 6) "English, Spanish, French, OSD and three models, and PP-OCR's two unreadable languages")))
+
+(deftest test-platform-engines-and-the-renderer-need-no-pack
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (en-cells1 engs (eng-apple-vision))
+    (assert-eq (en-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "Vision on macOS")
+    (assert-eq (pk-rows out) 0 "needs nothing: the OS has the model")
+    (en-cells1 engs (eng-windows-media-ocr))
+    (assert-eq (en-resolve (pcls-windows) 0 langs engs installed out) (pkerr-ok) "Windows OCR")
+    (assert-eq (pk-rows out) 0 "needs nothing")
+    (en-cells1 engs (eng-mlkit-text))
+    (assert-eq (en-resolve (pcls-android) 0 langs engs installed out) (pkerr-ok) "ML Kit")
+    (assert-eq (pk-rows out) 0 "needs nothing")
+    (en-cells2 engs (eng-apple-vision) (eng-tesseract))
+    (assert-eq (en-resolve (pcls-ios) 0 langs engs installed out) (pkerr-ok) "Vision with Tesseract alongside")
+    (assert-eq (pk-rows out) 1 "only Tesseract's English")))
+
+(deftest test-resolution-refuses-what-the-catalogue-and-the-table-do-not-have
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells) ^Text msg (new-text)]
+    (en-cells1 engs 99)
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-unknown-engine) "an engine that is not in the table")
+    (assert-eq (cells-at out 0) 99 "the subject")
+    (pk-explain (pkerr-unknown-engine) out msg)
+    (assert-text msg "unknown engine: 99" "named")
+    (en-cells1 engs (eng-pdfium))
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-not-ocr) "a renderer does not read")
+    (en-cells1 engs (eng-apple-vision))
+    (assert-eq (en-resolve (pcls-windows) 0 langs engs installed out) (pkerr-engine-class) "Vision is not on Windows")
+    (let [^Text m2 (new-text)]
+      (pk-explain (pkerr-engine-class) out m2)
+      (assert-text m2 "engine is not available on the platform class: \"apple-vision\" on \"windows\"" "both named"))
+    (cells-drop engs 0)
+    (assert-eq (en-resolve 9 0 langs engs installed out) (pkerr-unknown-class) "a class that is not one")
+    (assert-eq (cells-at out 0) 9 "the subject")
+    (en-cells1 installed 99)
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-unknown-pack) "an installed pack that is not in the catalogue")
+    (assert-eq (cells-at out 0) 99 "the subject")
+    (cells-drop installed 0)
+    (en-cells1 langs 0)
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-bad-language) "no language is 0")))
+
+(defn ^I32 en-engine-list [^TestT emon-t ^Blob b ^I32 want-n ^I32 want-first]
+  (let [^Cells out (new-cells) ^Text msg (new-text)]
+    (assert-eq (pk-parse-engines b 0 (blob-len b) out msg) (pkerr-ok) "engine names read")
+    (assert-eq (cells-len out) want-n "how many")
+    (if (> want-n 0) (assert-eq (cells-at out 0) want-first "the first"))
+    (return 0)))
+
+(defn ^I32 en-engine-refused [^TestT emon-t ^Blob b ^I32 want-read ^Str want]
+  (let [^Cells out (new-cells) ^Text msg (new-text)]
+    (assert-eq (pk-parse-engines b 0 (blob-len b) out msg) (pkerr-unknown-engine) "an unknown engine is refused")
+    (assert-text msg want "and named")
+    (assert-eq (cells-len out) want-read "the names before it were read")
+    (return 0)))
+
+(defn ^I32 en-pack-refused [^TestT emon-t ^Blob b ^Str want]
+  (let [^Cells out (new-cells) ^Text msg (new-text)]
+    (assert-eq (pk-parse-packs b 0 (blob-len b) out msg) (pkerr-unknown-pack) "an unknown pack is refused")
+    (assert-text msg want "and named")
+    (return 0)))
+
+(deftest test-names-are-refused-by-name
+  (en-engine-list (test-t) (text-blob " tesseract , ppocr,ppocr-web ") 3 (eng-tesseract))
+  (en-engine-list (test-t) (text-blob "") 0 0)
+  (en-engine-list (test-t) (text-blob "ppocr-web") 1 (eng-ppocr-web))
+  (en-engine-refused (test-t) (text-blob "tesseract,paddle,ppocr") 1 "unknown engine: \"paddle\"")
+  (en-engine-refused (test-t) (text-blob "vision") 0 "unknown engine: \"vision\"")
+  (en-pack-refused (test-t) (text-blob "tess-osd,tess-fast-xyz") "unknown pack: \"tess-fast-xyz\"")
+  (let [^Cells out (new-cells) ^Text msg (new-text) ^Blob ok (text-blob "tess-fast-eng,tess-osd,pp5-det-mobile")]
+    (assert-eq (pk-parse-packs ok 0 (blob-len ok) out msg) (pkerr-ok) "pack ids read")
+    (assert-eq (cells-len out) 3 "three")
+    (assert-eq (cells-at out 0) (pkid-tess-fast-eng) "first")
+    (assert-eq (cells-at out 1) (pkid-tess-osd) "second")
+    (assert-eq (cells-at out 2) (pkid-pp5-det-mobile) "third")))
+
+(deftest test-names-resolve-end-to-end
+  (let [^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells langs (new-cells) ^Cells out (new-cells) ^Text msg (new-text)
+        ^Blob es (text-blob "tesseract,ppocr") ^Blob ps (text-blob "tess-fast-eng,pp5-det-mobile")]
+    (assert-eq (pk-parse-engines es 0 (blob-len es) engs msg) (pkerr-ok) "engines")
+    (assert-eq (pk-parse-packs ps 0 (blob-len ps) installed msg) (pkerr-ok) "installed")
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 4 "English, detector, classifier, recognizer")
+    (assert-eq (pk-missing out) 2 "the classifier and the recognizer")))
+
+;; ------------------------------------------------------------------ the engine table in a transcript
+
+(deftest test-the-record-of-an-engine-table-follows-the-table-and-refuses-what-it-does-not-have
+  (let [^Cells avail (new-cells) ^Cells out (new-cells)]
+    (cells-push avail (eng-ppocr))
+    (cells-push avail (eng-tesseract))
+    (cells-push avail (eng-ppocr))
+    (assert-eq (pk-record-engines out (pcls-macos) avail) (pkerr-ok) "the engines of a hybrid run")
+    (assert-eq (cells-len out) 6 "two rows")
+    (assert-eq (cells-at out 0) (eng-tesseract) "in the table's order, once each")
+    (assert-eq (cells-at out 1) (pk-engine-caps (eng-tesseract)) "the caps the table declares")
+    (assert-eq (cells-at out 2) (erole-incumbent) "the role it takes by default")
+    (assert-eq (cells-at out 3) (eng-ppocr) "second")
+    (assert-eq (cells-at out 5) (erole-challenger) "the challenger")
+    (en-cells1 avail (eng-apple-vision))
+    (assert-eq (pk-record-engines out (pcls-windows) avail) (pkerr-engine-class) "an engine that cannot run on the class is not recorded")
+    (en-cells1 avail 42)
+    (assert-eq (pk-record-engines out (pcls-macos) avail) (pkerr-unknown-engine) "nor one that is not in the table")
+    (assert-eq (cells-at out 0) 42 "named")
+    (cells-drop avail 0)
+    (assert-eq (pk-record-engines out (pcls-macos) avail) (pkerr-ok) "no engine at all")
+    (assert-eq (cells-len out) 0 "no rows")
+    (assert-eq (pk-record-engines out 0 avail) (pkerr-unknown-class) "no class")))
+
+(defn ^I32 en-prod [^Tr t]
+  (let [^Cells k (new-cells) ^Cells v (new-cells)]
+    (cells-push k 101) (cells-push k 110) (cells-push k 103)
+    (cells-push v 116) (cells-push v 101) (cells-push v 115) (cells-push v 115)
+    (return (tr-add-producer t k v))))
+
+(defn ^I32 en-read-table [^TestT emon-t]
+  (let [^Blob b (text-blob "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 7339791 :role :incumbent} {:engine \"apple-vision\" :caps 1048992 :role :reader}]\n :producer {:eng \"tess\"}\n :inputs [{:index 0 :length 94562}]\n :entries []}\n")
+        ^Tr t (new-ctx Tr) ^Text out (new-text)]
+    (assert-eq (tr-read t b) 0 "a transcript with an engine table reads")
+    (assert-eq (tr-n-engines t) 2 "two engines")
+    (assert-eq (tr-eng-engine t 0) (eng-tesseract) "the first")
+    (assert-eq (tr-eng-caps t 0) 7339791 "its caps")
+    (assert-eq (tr-eng-role t 0) (erole-incumbent) "its role")
+    (assert-eq (tr-eng-engine t 1) (eng-apple-vision) "the second")
+    (assert-eq (tr-eng-caps t 1) 1048992 "its caps")
+    (assert-eq (tr-eng-role t 1) (erole-reader) "an uncalibrated engine read alone")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 7339791 :role :incumbent} {:engine \"apple-vision\" :caps 1048992 :role :reader}]\n :producer {:eng \"tess\"}\n :inputs [{:index 0 :length 94562}]\n :entries []}\n"
+                 "read and written again, the same bytes")
+    (return 0)))
+
+(defn ^I32 en-read-none [^TestT emon-t]
+  (let [^Blob b (text-blob "{:emon-transcript 1\n :inputs []\n :entries []}\n")
+        ^Tr t (new-ctx Tr) ^Text out (new-text)]
+    (assert-eq (tr-read t b) 0 "a transcript with none reads")
+    (assert-eq (tr-n-engines t) 0 "no engines")
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :inputs []\n :entries []}\n" "and writes none")
+    (return 0)))
+
+(deftest test-the-engine-table-is-written-first-and-read-back
+  (let [^Tr t (new-ctx Tr) ^Text out (new-text)]
+    (tr-add-engine t (eng-tesseract) 7339791 (erole-incumbent))
+    (tr-add-engine t (eng-ppocr) 24928 (erole-challenger))
+    (en-prod t)
+    (tr-add-input t 0 94562)
+    (tr-write t out)
+    (assert-text out "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 7339791 :role :incumbent} {:engine \"ppocr\" :caps 24928 :role :challenger}]\n :producer {:eng \"tess\"}\n :inputs [{:index 0 :length 94562}]\n :entries []}\n"
+                 "the table comes before the producer, the inputs and the entries"))
+  (en-read-table (test-t))
+  (en-read-none (test-t)))
+
+(defn ^I32 en-refused [^TestT emon-t ^Str text ^I32 want]
+  (let [^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t (text-blob text)) want text)
+    (return 0)))
+
+(deftest test-a-transcript-with-an-unknown-engine-or-a-bad-row-is-refused
+  (let [^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t (text-blob "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :incumbent} {:engine \"paddle\" :caps 1 :role :reader}]\n :inputs []\n :entries []}\n")) (tb-engine-unknown) "an engine that is not in the table")
+    (assert-text (fd t msg) "a row of :pk-engines names an engine that is not in the engine table: \"paddle\"" "refused by name"))
+  (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :role :incumbent}]\n :inputs []\n :entries []}\n" (tb-engines))
+  (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n" (tb-engines))
+  (en-refused (test-t) "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n" (tb-engines))
+  (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n" (tb-engines)))

@@ -6,7 +6,6 @@ package ocrenginetest
 import (
 	"emon/evidence"
 	"emon/ocrengine"
-	"emon/ocridentity"
 	"emon/ocrport"
 	"emon/ofuse"
 	"emon/plan"
@@ -36,7 +35,7 @@ func TestEveryDefaultOcrRequestCarriesRequestedIdentity(emonT *testing.T) {
 	plan.RqOcrLang(r, 101, 110, 103, 0)
 	plan.RqOcrEnd(r, at)
 	ocrengine.OeTag(r, scratch, 0)
-	port.AssertEq(emonT, port.CellsLen(r), 15+ocridentity.OiTessLen(), "default identity extends the key")
+	port.AssertEq(emonT, port.CellsLen(r), 15+112, "default identity extends the key")
 	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "record header includes identity")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "one legacy language")
 }

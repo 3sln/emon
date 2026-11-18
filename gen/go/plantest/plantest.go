@@ -5,7 +5,6 @@ package plantest
 
 import (
 	"emon/evidence"
-	"emon/ocridentity"
 	"emon/oil"
 	"emon/plan"
 	"emon/planprobe"
@@ -80,7 +79,7 @@ func TestAnOcrRequestCarriesItsLanguages(emonT *testing.T) {
 	plan.RqOcrLang(c, 101, 110, 103, 0)
 	plan.RqOcrLang(c, 100, 101, 117, 0)
 	plan.RqOcrEnd(c, at)
-	port.AssertEq(emonT, plan.RecLen(c, 0), (12+4)+ocridentity.OiTessLen(), "ten cells and two languages")
+	port.AssertEq(emonT, plan.RecLen(c, 0), (12+4)+112, "ten cells and two languages")
 	port.AssertEq(emonT, plan.RecKind(c, 0), 3, "kind")
 	port.AssertEq(emonT, plan.RqArg(c, 0, 0), 3, "bitmap")
 	port.AssertEq(emonT, plan.RqArg(c, 0, 1), 6, "psm")
@@ -88,7 +87,7 @@ func TestAnOcrRequestCarriesItsLanguages(emonT *testing.T) {
 	port.AssertEq(emonT, plan.RqArg(c, 0, 6), 40, "region height")
 	port.AssertEq(emonT, plan.RqArg(c, 0, 7), 1701734144, "eng packed big-endian")
 	port.AssertEq(emonT, plan.RqArg(c, 0, 8), 1684370688, "deu packed big-endian")
-	port.AssertEq(emonT, plan.RqNargs(c, 0), 13+ocridentity.OiTessLen(), "arguments include requested identity")
+	port.AssertEq(emonT, plan.RqNargs(c, 0), 13+112, "arguments include requested identity")
 }
 
 func TestABytesRequestIsASpan(emonT *testing.T) {

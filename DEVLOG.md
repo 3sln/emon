@@ -9338,7 +9338,7 @@ worse than the no-engine run's plus 0.0005; the broken documents' CER under half
 
 ## Found in kin, not ours to fix here
 
-- Go inlines cross-module flat-array accessor calls. If a test imports a module only to call an accessor, generated Go can report the import as unused. emon keeps a plain exported wrapper (`oi-tess-len`) and tests call it; this is an emitter behavior, not a kin fix for this task.
+- **Fixed upstream (kin 09a5316, D1191; pinned by D887; emon's workaround removed by K1).** Go inlined cross-module flat-array accessor calls, so a test that imported a module only to call an accessor got Go's "imported and not used". emon kept a wrapper (`oi-tess-len`) and tests called it. Tests now call `oi-tess-count` directly and the wrapper is gone; `bb unit go` passes.
 
 **Audit (2026-09-30, coordinator; checked against kin's source and nome):**
 - Forward refs / mutual recursion — **WRONG**: `declarefn` (kin `src/kin.cljc` `declare!`).

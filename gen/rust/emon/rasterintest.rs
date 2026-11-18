@@ -4,7 +4,6 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::ocr::*;
-use crate::emon::ocridentity::*;
 use crate::emon::oil::*;
 use crate::emon::oilfixturetest::*;
 use crate::emon::plan::*;
@@ -166,7 +165,7 @@ fn test_with_the_policy_the_frames_second_round_asks_for_ocr_of_its_bitmap() {
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 3 + (300 * 256), "symbols, OSD, and the 300 dpi it assumed as a hint");
     crate::testport::assert_eq(ocf_dpi(rq_arg(rq, 0, 2)), 300, "read back");
     crate::testport::assert_eq(rq_arg(rq, 0, 5), 0, "the whole bitmap");
-    crate::testport::assert_eq(rq_nargs(rq, 0), (7 + 4) + oi_tess_len(), "and no language: no locale was given");
+    crate::testport::assert_eq(rq_nargs(rq, 0), (7 + 4) + 112, "and no language: no locale was given");
 }
 #[test]
 fn test_a_locale_hint_names_the_language() {
@@ -181,7 +180,7 @@ fn test_a_locale_hint_names_the_language() {
     an_decode(ans, 260, 463, 894, 1, 20000, 1, 1);
     crate::testport::assert_eq(page_pol(0, ans, rq, 2, loc, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), us_requests(), "it asks");
     crate::testport::assert_eq(rq_arg(rq, 0, 2), 3 + (200 * 256), "the stated 200 dpi");
-    crate::testport::assert_eq(rq_nargs(rq, 0), (8 + 4) + oi_tess_len(), "one language");
+    crate::testport::assert_eq(rq_nargs(rq, 0), (8 + 4) + 112, "one language");
     crate::testport::assert_eq(rq_arg(rq, 0, 7), 1684370688, "`de-CH` is `deu`");
 }
 #[test]

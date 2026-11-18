@@ -1,0 +1,594 @@
+;; THE ENGINE TABLE, THE PACK RESOLVER AND THE TURNKEY DEFAULTS (K1, D900; D883 rulings 3, 7 and 8, D885, D893, D895, D896; pkg1 sections 1.1 and 3).
+;;
+;; Kin owns which engines exist, what each may declare and do, which packs each needs, and what a platform's turnkey package chooses for an app that chooses
+;; nothing. A host only LOADS adapters, FETCHES and VERIFIES bytes; it never decides which engine reads or which pack a conversion needs. Everything here is a pure
+;; function of its inputs, so a replay computes what the recording computed.
+;;
+;;   THE ENGINE TABLE (`en-table`), one row per registered engine:
+;;       eng  oen  kind  impl  caps  classes  calibrated  needs
+;;     eng         the engine's id here (`eng`; the names are the ones `ocr-engines=` takes). `ppocr-web` is `ppocr` under ONNX Runtime Web (D891): a distinct row
+;;                 (a distinct runtime, distinct platform class, a plugin not a native library), the same OIL engine
+;;     oen         the OIL engine code its answers carry (`emon.oil`'s `oen`; 0 for a renderer)
+;;     kind        `ekind`: ocr or render
+;;     impl        `eimpl`: built into the core library, a native adapter library, or a platform plugin (the embedder's: a Flutter plugin, the browser's own code)
+;;     caps        the OIL capability bits (`emon.oil`'s `oc`) the engine CAN declare: the ceiling. What an adapter's `describe` reports at registration narrows it
+;;     classes     the platform classes (`pcls`) the engine can run on, a bit set: bit (class - 1)
+;;     calibrated  1 when the engine has a frozen reliability map (D883 ruling 3). The platform engines are present and UNCALIBRATED (D895): they may vote, may not
+;;                 insert or replace, are never the incumbent, and a preview may select them only explicitly
+;;     needs       the kinds of pack (`pkind`, a bit set) the engine reads with. A language-specific kind (recognizer) is resolved per language; osd is needed only when
+;;                 the conversion wants orientation and script detection
+;;
+;;   ROLES (`en-roles`): per engine and platform class, the roles the engine may take (`erole`, a bit set) and the role it takes by default when it is selected. D892's
+;;   table (`emon.ocrengine`'s `oe-roles`) is what the hybrid composes with; a law holds the two to one another. Tesseract is the incumbent everywhere (ruling 8), PP-OCR
+;;   the challenger, and an uncalibrated platform engine a reader (alone) or a voter (corroborating), never an incumbent or a challenger that inserts.
+;;
+;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895): the engine an app gets when it chooses nothing (Tesseract on every class until each platform
+;;   engine passes its own acceptance, D885), the platform's own OS engine (selectable explicitly, never chosen automatically, D895), the PP-OCR runtime of the class (the
+;;   hybrid partner), whether packs are fetched on demand (`pfetch`: auto for a turnkey package; core and bare adapters never fetch, D885, and EMON_OFFLINE=1 or `never`
+;;   always wins, D896) and the renderer.
+;;
+;;   PACK RESOLUTION (`pk-resolve`, D896's `prepare()`): the options (platform class, flags, the languages, the engines asked for) and the set of installed packs give
+;;   the packs the conversion needs and which are missing, in a stable order (the catalogue's), plus the (engine, language) pairs no pack of the catalogue reads
+;;   (`unsupported`: the page is unread and never blank, D038). The catalogue is `emon.packdata`, GENERATED from release/packs/packs.edn by `bb packs --emit`.
+;;
+;;   REFUSALS BY NAME. `pk-parse-engines` and `pk-parse-packs` read comma-separated names (an option's value, a list of installed packs) and refuse an unknown one with its
+;;   name in the message; `pk-resolve` refuses a code that is no engine, pack or class, or an engine that is not available on the class; `pk-explain` is the sentence.
+;;
+;;   THE RECORD (`pk-record-engines`): the engines a conversion had, as `[eng caps role]` rows for the transcript's `:pk-engines`, first in every transcript (a replay
+;;   reads them from the file, so it needs no adapter and knows which engines were available).
+(ns emon.engines
+  (:require [emon.lang :refer [I32 Cells Text Blob defenum emit-ascii shl32]]
+            [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp blob-u8]]
+            [emon.packdata :refer [pack-row-count pack-row-at pack-lang-count pack-lang-at pack-file-at pack-name-at pkid-find
+                                   pkid-tess-fast-eng pkid-tess-osd]]
+            [kin.lang :refer [defdata defn return let set while if do comment + - * < > <= >= == != and or quot bit-and bit-or]]))
+
+;; ----------------------------------------------------------------------------------------------- the names
+
+;; The engines. The numbers are this table's own and are never reused. The spelling is what an option names (`ocr-engines=tesseract,ppocr`) and what a transcript writes.
+(defenum ^:pub ^:parse eng
+  [[eng-tesseract 1 "tesseract"]
+   [eng-ppocr 2 "ppocr"]
+   [eng-ppocr-web 3 "ppocr-web"]
+   [eng-apple-vision 4 "apple-vision"]
+   [eng-windows-media-ocr 5 "windows-media-ocr"]
+   [eng-mlkit-text 6 "mlkit-text"]
+   [eng-pdfium 7 "pdfium"]])
+
+(defenum ^:pub ^:parse ekind
+  [[ekind-ocr 1 "ocr"]
+   [ekind-render 2 "render"]])
+
+(defenum ^:pub ^:parse eimpl
+  [[eimpl-builtin 1 "built-in"]
+   [eimpl-native 2 "native-adapter"]
+   [eimpl-plugin 3 "platform-plugin"]])
+
+;; The platform classes of a turnkey package: the OS family of the host that runs emon (the browser is one).
+(defenum ^:pub ^:parse pcls
+  [[pcls-macos 1 "macos"]
+   [pcls-ios 2 "ios"]
+   [pcls-linux 3 "linux"]
+   [pcls-windows 4 "windows"]
+   [pcls-android 5 "android"]
+   [pcls-web 6 "web"]])
+
+;; A role: one bit each, so a set of roles is a number. 0 is no role (a renderer).
+(defenum ^:pub ^:parse erole
+  [[erole-none 0 "none"]
+   [erole-incumbent 1 "incumbent"]
+   [erole-challenger 2 "challenger"]
+   [erole-reader 4 "reader"]
+   [erole-voter 8 "voter"]])
+
+;; The kinds of pack: one bit each, so what an engine needs is a number. The catalogue's `:kind`.
+(defenum ^:pub ^:parse pkind
+  [[pkind-recognizer 1 "recognizer"]
+   [pkind-osd 2 "osd"]
+   [pkind-detector 4 "detector"]
+   [pkind-classifier 8 "classifier"]
+   [pkind-lexicon 16 "lexicon"]])
+
+;; How packs come: `never` fetches nothing, `cache` only reads what is cached, `auto` fetches on demand (D885, D896).
+(defenum ^:pub ^:parse pfetch
+  [[pfetch-never 1 "never"]
+   [pfetch-cache 2 "cache"]
+   [pfetch-auto 3 "auto"]])
+
+;; What `pk-resolve` says of one pack (or one unreadable language).
+(defenum ^:pub pstate
+  [[pstate-installed 1 "installed"]
+   [pstate-missing 2 "missing"]
+   [pstate-unsupported 3 "unsupported"]])
+
+;; Why a resolution or a record was refused: the spelling is the sentence's start (`pk-explain` adds the subject).
+(defenum ^:pub pkerr
+  [[pkerr-ok 0 "ok"]
+   [pkerr-unknown-engine 1 "unknown engine"]
+   [pkerr-unknown-pack 2 "unknown pack"]
+   [pkerr-unknown-class 3 "unknown platform class"]
+   [pkerr-not-ocr 4 "not an OCR engine"]
+   [pkerr-engine-class 5 "engine is not available on the platform class"]
+   [pkerr-bad-language 6 "bad language code"]])
+
+;; Options of a resolution (`flags`).
+(defn ^:pub ^I32 pkf-osd [] (return 1))
+
+;; ----------------------------------------------------------------------------------------------- the tables
+
+;; eng oen kind impl caps classes calibrated needs.
+;; caps (OIL `oc`), per engine, the ceiling it can declare:
+;;   tesseract 7339791 = blocks paras btype baseline wconf deskew wdir wlang lexicon style psize order (2225423, what `oil-tess-begin` always sets)
+;;                       + symbols symconf alts (917504) + orient script (2560) + binary (4194304)
+;;   ppocr     24928   = quad angle wconf wlang lexicon (what host/rust/src/ppocr.rs declares)
+;;   apple-vision 1048992 = quad lconf wconf walts (a 2-3 level ordinal confidence; topCandidates; no OSD, dart1 4.2)
+;;   windows-media-ocr 64 = angle (lines, words and their rectangles; no confidence at all)
+;;   mlkit-text 401825 = blocks quad lconf wconf wlang symbols symconf
+;; classes: macos 1, ios 2, linux 4, windows 8, android 16, web 32. needs: recognizer 1, osd 2, detector 4, classifier 8.
+(defdata ^:pub en-table
+  :emitter kin.lang/flat-array
+  :stride 8
+  :data [1 1 1 2 7339791 63 1 3
+         2 2 1 2 24928 31 1 13
+         3 2 1 3 24928 32 1 13
+         4 3 1 2 1048992 3 0 0
+         5 5 1 2 64 8 0 0
+         6 4 1 3 401825 16 0 0
+         7 0 2 1 0 63 0 0]
+  :accessors {^I32 en-table-count [^I32 ignored]
+              ^I32 en-table-at [^I32 ignored ^I32 row ^I32 col]})
+
+;; eng class roles default. One row for each (OCR engine, class the engine runs on). Roles: incumbent 1, challenger 2, reader 4, voter 8.
+(defdata ^:pub en-roles
+  :emitter kin.lang/flat-array
+  :stride 4
+  :data [1 1 5 1
+         1 2 5 1
+         1 3 5 1
+         1 4 5 1
+         1 5 5 1
+         1 6 5 1
+         2 1 6 2
+         2 2 6 2
+         2 3 6 2
+         2 4 6 2
+         2 5 6 2
+         3 6 6 2
+         4 1 12 4
+         4 2 12 4
+         5 4 12 4
+         6 5 12 4]
+  :accessors {^I32 en-roles-count [^I32 ignored]
+              ^I32 en-roles-at [^I32 ignored ^I32 row ^I32 col]})
+
+;; class engine platform-engine pp-engine fetch render. Tesseract everywhere (D885); the platform engine is explicit-only (D895); a turnkey fetches on demand (D885, D896).
+(defdata ^:pub en-turnkey
+  :emitter kin.lang/flat-array
+  :stride 6
+  :data [1 1 4 2 3 7
+         2 1 4 2 3 7
+         3 1 0 2 3 7
+         4 1 5 2 3 7
+         5 1 6 2 3 7
+         6 1 0 3 3 7]
+  :accessors {^I32 en-turnkey-count [^I32 ignored]
+              ^I32 en-turnkey-at [^I32 ignored ^I32 row ^I32 col]})
+
+;; ----------------------------------------------------------------------------------------------- the engine table
+
+(defn ^I32 pk-en-row [^I32 eng]
+  (comment "The row of an engine in the table, or -1.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (en-table-count 0))
+      (do (if (== (en-table-at 0 i 0) eng) (return i))
+          (set i (+ i 1)))))
+  (return -1))
+
+(defn ^:pub ^I32 pk-engine-known [^I32 eng]
+  (if (< (pk-en-row eng) 0) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 pk-engine-count []
+  (return (en-table-count 0)))
+
+(defn ^:pub ^I32 pk-engine-at [^I32 i]
+  (comment "The i-th engine of the table, in its order.")
+  (return (en-table-at 0 i 0)))
+
+(defn ^I32 pk-en-col [^I32 eng ^I32 col]
+  (let [^I32 r (pk-en-row eng)]
+    (if (< r 0) (return 0))
+    (return (en-table-at 0 r col))))
+
+(defn ^:pub ^I32 pk-engine-oen [^I32 eng] (return (pk-en-col eng 1)))
+(defn ^:pub ^I32 pk-engine-kind [^I32 eng] (return (pk-en-col eng 2)))
+(defn ^:pub ^I32 pk-engine-impl [^I32 eng] (return (pk-en-col eng 3)))
+(defn ^:pub ^I32 pk-engine-caps [^I32 eng] (return (pk-en-col eng 4)))
+(defn ^:pub ^I32 pk-engine-classes [^I32 eng] (return (pk-en-col eng 5)))
+(defn ^:pub ^I32 pk-engine-calibrated [^I32 eng] (return (pk-en-col eng 6)))
+(defn ^:pub ^I32 pk-engine-needs [^I32 eng] (return (pk-en-col eng 7)))
+
+(defn ^:pub ^I32 pk-class-known [^I32 pclass]
+  (if (< pclass 1) (return 0))
+  (if (> pclass 6) (return 0))
+  (return 1))
+
+(defn ^:pub ^I32 pk-engine-on [^I32 eng ^I32 pclass]
+  (comment "1 when the engine runs on the platform class.")
+  (if (== (pk-class-known pclass) 0) (return 0))
+  (if (!= (bit-and (pk-engine-classes eng) (shl32 1 (- pclass 1))) 0) (return 1))
+  (return 0))
+
+(defn ^I32 pk-role-row [^I32 eng ^I32 pclass]
+  (let [^:mut ^I32 i 0]
+    (while (< i (en-roles-count 0))
+      (do (if (and (== (en-roles-at 0 i 0) eng) (== (en-roles-at 0 i 1) pclass)) (return i))
+          (set i (+ i 1)))))
+  (return -1))
+
+(defn ^:pub ^I32 pk-role-mask [^I32 eng ^I32 pclass]
+  (comment "The roles the engine may take on the class (a set of `erole` bits); 0 for none.")
+  (let [^I32 r (pk-role-row eng pclass)]
+    (if (< r 0) (return 0))
+    (return (en-roles-at 0 r 2))))
+
+(defn ^:pub ^I32 pk-role-default [^I32 eng ^I32 pclass]
+  (comment "The role the engine takes by default when selected on the class (an `erole` bit); 0 for none.")
+  (let [^I32 r (pk-role-row eng pclass)]
+    (if (< r 0) (return 0))
+    (return (en-roles-at 0 r 3))))
+
+;; ----------------------------------------------------------------------------------------------- the turnkey defaults
+
+(defn ^I32 pk-tk-col [^I32 pclass ^I32 col]
+  (let [^:mut ^I32 i 0]
+    (while (< i (en-turnkey-count 0))
+      (do (if (== (en-turnkey-at 0 i 0) pclass) (return (en-turnkey-at 0 i col)))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-default-engine [^I32 pclass]
+  (comment "The OCR engine a turnkey package uses on the class when the app chooses nothing; 0 for an unknown class.")
+  (return (pk-tk-col pclass 1)))
+
+(defn ^:pub ^I32 pk-platform-engine [^I32 pclass]
+  (comment "The class's own OS engine, or 0. Selectable explicitly, never chosen automatically (D895): it is uncalibrated.")
+  (return (pk-tk-col pclass 2)))
+
+(defn ^:pub ^I32 pk-pp-engine [^I32 pclass]
+  (comment "The PP-OCR runtime of the class: the hybrid partner.")
+  (return (pk-tk-col pclass 3)))
+
+(defn ^:pub ^I32 pk-default-fetch [^I32 pclass]
+  (comment "How a TURNKEY package fetches packs on the class (`pfetch`). Core and bare adapters never fetch (D885); `EMON_OFFLINE=1` or `never` always wins (D896).")
+  (return (pk-tk-col pclass 4)))
+
+(defn ^:pub ^I32 pk-default-render [^I32 pclass]
+  (return (pk-tk-col pclass 5)))
+
+(defn ^:pub ^I32 pk-bundled-count []
+  (comment "The packs a turnkey package ships inside itself (D885: English and OSD); everything else is fetched.")
+  (return 2))
+
+(defn ^:pub ^I32 pk-bundled [^I32 i]
+  (if (== i 0) (return (pkid-tess-fast-eng)))
+  (if (== i 1) (return (pkid-tess-osd)))
+  (return 0))
+
+;; ----------------------------------------------------------------------------------------------- the catalogue
+
+(defn ^:pub ^I32 pk-pack-count []
+  (return (pack-row-count 0)))
+
+(defn ^:pub ^I32 pk-pack-known [^I32 p]
+  (if (< p 1) (return 0))
+  (if (> p (pack-row-count 0)) (return 0))
+  (return 1))
+
+;; A pack's row: id rev engine kind licence file-first file-count bytes.
+(defn ^:pub ^I32 pk-pack-rev [^I32 p] (return (pack-row-at 0 (- p 1) 1)))
+(defn ^:pub ^I32 pk-pack-engine [^I32 p]
+  (comment "The engine the pack is for, or 0 for a pack every engine may read.")
+  (return (pack-row-at 0 (- p 1) 2)))
+(defn ^:pub ^I32 pk-pack-kind [^I32 p] (return (pack-row-at 0 (- p 1) 3)))
+(defn ^:pub ^I32 pk-pack-licence [^I32 p] (return (pack-row-at 0 (- p 1) 4)))
+(defn ^:pub ^I32 pk-pack-file-count [^I32 p] (return (pack-row-at 0 (- p 1) 6)))
+(defn ^:pub ^I32 pk-pack-bytes [^I32 p]
+  (comment "The size of the pack's files together.")
+  (return (pack-row-at 0 (- p 1) 7)))
+
+(defn ^I32 pk-file-row [^I32 p ^I32 i]
+  (comment "The row in `pack-file-at` of the i-th file of pack p.")
+  (return (+ (pack-row-at 0 (- p 1) 5) i)))
+
+(defn ^:pub ^I32 pk-pack-file-bytes [^I32 p ^I32 i]
+  (return (pack-file-at 0 (pk-file-row p i) 1)))
+
+(defn ^:pub ^I32 pk-pack-file-sha [^I32 p ^I32 i ^I32 word]
+  (comment "Word 0..7 of the file's SHA-256, big-endian: the bytes a host verifies against.")
+  (return (pack-file-at 0 (pk-file-row p i) (+ 3 word))))
+
+(defn ^:pub ^I32 pk-pack-file-name [^I32 p ^I32 i ^:mut ^Text out]
+  (comment "Write the file's name (ASCII); answers its length.")
+  (let [^:mut ^I32 at (pack-file-at 0 (pk-file-row p i) 2)
+        ^:mut ^I32 n 0]
+    (while (!= (pack-name-at 0 at) 0)
+      (do (text-cp out (pack-name-at 0 at))
+          (set at (+ at 1))
+          (set n (+ n 1))))
+    (return n)))
+
+(defn ^:pub ^I32 pk-pack-covers [^I32 p ^I32 lang]
+  (comment "1 when the pack reads the language (a packed ISO 639-3 cell).")
+  (let [^:mut ^I32 i 0]
+    (while (< i (pack-lang-count 0))
+      (do (if (and (== (pack-lang-at 0 i 0) p) (== (pack-lang-at 0 i 1) lang)) (return 1))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-pack-for [^I32 eng ^I32 kind ^I32 lang]
+  (comment "The first pack (the catalogue's order) of the kind that the engine reads and that covers the language, or 0.")
+  (let [^:mut ^I32 p 1 ^:mut ^I32 pe 0]
+    (while (<= p (pack-row-count 0))
+      (do (set pe (pk-pack-engine p))
+          (if (and (== (pk-pack-kind p) kind) (or (== pe eng) (== pe 0)))
+            (if (== (pk-pack-covers p lang) 1) (return p)))
+          (set p (+ p 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-lang-eng []
+  (comment "English as emon packs a language: the three letters in the top three bytes (`eng`).")
+  (return 1701734144))
+
+;; ----------------------------------------------------------------------------------------------- names
+
+(defn ^I32 pk-name-msg [^:mut ^Text msg ^I32 why ^Blob b ^I32 from ^I32 to]
+  (comment "`unknown engine: \"foo\"`: the reason's sentence and the name as given (printable ASCII only, cut at 64 bytes).")
+  (pkerr-emit-name msg why)
+  (emit-ascii msg ": ")
+  (text-cp msg 34)
+  (let [^:mut ^I32 i from ^:mut ^I32 c 0]
+    (while (and (< i to) (< (- i from) 64))
+      (do (set c (blob-u8 b i))
+          (if (or (< c 32) (> c 126)) (set c 63))
+          (text-cp msg c)
+          (set i (+ i 1)))))
+  (text-cp msg 34)
+  (return why))
+
+(defn ^:pub ^I32 pk-parse-engines [^Blob b ^I32 from ^I32 to ^:mut ^Cells out ^:mut ^Text msg]
+  (comment "Read a comma-separated list of engine names (`tesseract,ppocr`, spaces around a name allowed; an option's value) and push their ids to `out`. 0, or `pkerr-unknown-engine` with the name in `msg`.")
+  (let [^:mut ^I32 s from ^:mut ^I32 i from ^:mut ^I32 c 44 ^:mut ^I32 a 0 ^:mut ^I32 z 0 ^:mut ^I32 code 0]
+    (while (<= i to)
+      (do (set c 44)
+          (if (< i to) (set c (blob-u8 b i)))
+          (if (== c 44)
+            (do (set a s)
+                (set z i)
+                (while (and (< a z) (== (blob-u8 b a) 32)) (set a (+ a 1)))
+                (while (and (< a z) (== (blob-u8 b (- z 1)) 32)) (set z (- z 1)))
+                (if (> z a)
+                  (do (set code (eng-find b a z))
+                      (if (< code 0) (return (pk-name-msg msg (pkerr-unknown-engine) b a z)))
+                      (cells-push out code)))
+                (set s (+ i 1))))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-parse-packs [^Blob b ^I32 from ^I32 to ^:mut ^Cells out ^:mut ^Text msg]
+  (comment "The same for pack ids (`tess-fast-eng,tess-osd`): push their codes to `out`. 0, or `pkerr-unknown-pack` with the name in `msg`.")
+  (let [^:mut ^I32 s from ^:mut ^I32 i from ^:mut ^I32 c 44 ^:mut ^I32 a 0 ^:mut ^I32 z 0 ^:mut ^I32 code 0]
+    (while (<= i to)
+      (do (set c 44)
+          (if (< i to) (set c (blob-u8 b i)))
+          (if (== c 44)
+            (do (set a s)
+                (set z i)
+                (while (and (< a z) (== (blob-u8 b a) 32)) (set a (+ a 1)))
+                (while (and (< a z) (== (blob-u8 b (- z 1)) 32)) (set z (- z 1)))
+                (if (> z a)
+                  (do (set code (pkid-find b a z))
+                      (if (< code 0) (return (pk-name-msg msg (pkerr-unknown-pack) b a z)))
+                      (cells-push out code)))
+                (set s (+ i 1))))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-explain [^I32 code ^Cells subject ^:mut ^Text msg]
+  (comment "The sentence of a refusal of `pk-resolve` or `pk-record-engines`: the reason, then its subject (`subject` is what the call left in `out`).")
+  (pkerr-emit-name msg code)
+  (if (== code (pkerr-unknown-engine))
+    (do (emit-ascii msg ": ") (text-i32 msg (cells-at subject 0))))
+  (if (== code (pkerr-unknown-pack))
+    (do (emit-ascii msg ": ") (text-i32 msg (cells-at subject 0))))
+  (if (== code (pkerr-unknown-class))
+    (do (emit-ascii msg ": ") (text-i32 msg (cells-at subject 0))))
+  (if (== code (pkerr-bad-language))
+    (do (emit-ascii msg ": ") (text-i32 msg (cells-at subject 0))))
+  (if (or (== code (pkerr-not-ocr)) (== code (pkerr-engine-class)))
+    (do (emit-ascii msg ": ")
+        (text-cp msg 34)
+        (eng-emit-name msg (cells-at subject 0))
+        (text-cp msg 34)))
+  (if (== code (pkerr-engine-class))
+    (do (emit-ascii msg " on ")
+        (text-cp msg 34)
+        (pcls-emit-name msg (cells-at subject 1))
+        (text-cp msg 34)))
+  (return code))
+
+;; ----------------------------------------------------------------------------------------------- resolution
+
+(defn ^I32 pk-has [^Cells c ^I32 from ^I32 v]
+  (comment "1 when `v` is among the cells of `c` from `from` on.")
+  (let [^I32 n (cells-len c) ^:mut ^I32 i from]
+    (while (< i n)
+      (do (if (== (cells-at c i) v) (return 1))
+          (set i (+ i 1)))))
+  (return 0))
+
+(defn ^I32 pk-lang-add [^:mut ^Cells c ^I32 base ^I32 lang]
+  (comment "Insert the language into the sorted, duplicate-free list that starts at `base` of `c`.")
+  (let [^:mut ^I32 i base ^I32 n (cells-len c) ^:mut ^I32 at -1 ^:mut ^I32 v 0 ^:mut ^I32 prev 0]
+    (while (and (< i n) (< at 0))
+      (do (set v (cells-at c i))
+          (if (== v lang) (return 0))
+          (if (> v lang) (set at i))
+          (set i (+ i 1))))
+    (if (< at 0)
+      (do (cells-push c lang) (return 0)))
+    (cells-push c 0)
+    (set i (- (cells-len c) 1))
+    (while (> i at)
+      (do (set prev (cells-at c (- i 1)))
+          (cells-set c i prev)
+          (set i (- i 1))))
+    (cells-set c at lang)
+    (return 0)))
+
+(defn ^I32 pk-fail [^:mut ^Cells out ^I32 code ^I32 a ^I32 b]
+  (comment "Refuse: `out` holds the subject (what `pk-explain` writes) and the reason is the answer.")
+  (cells-drop out 0)
+  (cells-push out a)
+  (cells-push out b)
+  (return code))
+
+(defn ^:pub ^I32 pk-resolve [^I32 pclass ^I32 flags ^Cells langs ^Cells engines ^Cells installed ^:mut ^Cells out ^:mut ^Cells scratch]
+  (comment "D896's `prepare()`, as kin policy: the packs a conversion needs and which of them are missing.")
+  (comment "pclass: the platform class (`pcls`). flags: `pkf-osd` when orientation and script detection are wanted. langs: packed ISO 639-3 cells; none means English.")
+  (comment "engines: the engines asked for (`eng`); none means the class's turnkey default. installed: the codes (`pkid`) of the packs present.")
+  (comment "out: rows `[state engine pack lang]` (`pstate`). The packs needed, in the catalogue's order, `installed` or `missing`; then the (engine, language) pairs no pack of the")
+  (comment "catalogue reads, `unsupported` (pack 0), sorted by engine then language. The order does not depend on the order or repetition of the inputs.")
+  (comment "On a refusal the answer is the reason (`pkerr`) and `out` holds `[subject-a subject-b]` for `pk-explain`. scratch: working cells.")
+  (cells-drop out 0)
+  (cells-drop scratch 0)
+  (if (== (pk-class-known pclass) 0) (return (pk-fail out (pkerr-unknown-class) pclass 0)))
+  (let [^I32 np (pack-row-count 0)
+        ^I32 ne (en-table-count 0)
+        ^I32 sel (+ np 1)
+        ^I32 lb (+ (+ np 1) ne)
+        ^:mut ^I32 i 0 ^:mut ^I32 r 0 ^:mut ^I32 v 0 ^:mut ^I32 eng 0 ^:mut ^I32 p 0 ^:mut ^I32 pe 0
+        ^:mut ^I32 needs 0 ^:mut ^I32 pk 0 ^:mut ^I32 lang 0 ^:mut ^I32 j 0]
+    (while (< i lb)
+      (do (cells-push scratch 0) (set i (+ i 1))))
+    ;; the engines: asked for, or the turnkey default
+    (if (== (cells-len engines) 0)
+      (do (set r (pk-en-row (pk-default-engine pclass)))
+          (if (>= r 0) (cells-set scratch (+ sel r) 1)))
+      (do (set i 0)
+          (while (< i (cells-len engines))
+            (do (set eng (cells-at engines i))
+                (set r (pk-en-row eng))
+                (if (< r 0) (return (pk-fail out (pkerr-unknown-engine) eng 0)))
+                (if (!= (en-table-at 0 r 2) (ekind-ocr)) (return (pk-fail out (pkerr-not-ocr) eng 0)))
+                (if (== (pk-engine-on eng pclass) 0) (return (pk-fail out (pkerr-engine-class) eng pclass)))
+                (cells-set scratch (+ sel r) 1)
+                (set i (+ i 1))))))
+    ;; the languages: sorted, without repeats; none means English
+    (if (== (cells-len langs) 0)
+      (cells-push scratch (pk-lang-eng))
+      (do (set i 0)
+          (while (< i (cells-len langs))
+            (do (set lang (cells-at langs i))
+                (if (<= lang 0) (return (pk-fail out (pkerr-bad-language) lang 0)))
+                (pk-lang-add scratch lb lang)
+                (set i (+ i 1))))))
+    ;; the installed packs must be of the catalogue
+    (set i 0)
+    (while (< i (cells-len installed))
+      (do (set p (cells-at installed i))
+          (if (== (pk-pack-known p) 0) (return (pk-fail out (pkerr-unknown-pack) p 0)))
+          (set i (+ i 1))))
+    ;; pass 1: the packs each selected engine reads with
+    (set r 0)
+    (while (< r ne)
+      (do (if (== (cells-at scratch (+ sel r)) 1)
+            (do (set eng (en-table-at 0 r 0))
+                (set needs (en-table-at 0 r 7))
+                (set p 1)
+                (while (<= p np)
+                  (do (set pe (pk-pack-engine p))
+                      (set pk (pk-pack-kind p))
+                      (if (and (or (== pe eng) (== pe 0)) (!= (bit-and needs pk) 0))
+                        (do (if (== pk (pkind-osd))
+                              (if (!= (bit-and flags (pkf-osd)) 0) (cells-set scratch p 1)))
+                            (if (or (== pk (pkind-detector)) (== pk (pkind-classifier)))
+                              (cells-set scratch p 1))))
+                      (set p (+ p 1))))
+                (set j lb)
+                (while (< j (cells-len scratch))
+                  (do (set lang (cells-at scratch j))
+                      (set p (pk-pack-for eng (pkind-recognizer) lang))
+                      (if (and (!= p 0) (!= (bit-and needs (pkind-recognizer)) 0)) (cells-set scratch p 1))
+                      (set p (pk-pack-for eng (pkind-lexicon) lang))
+                      (if (and (!= p 0) (!= (bit-and needs (pkind-lexicon)) 0)) (cells-set scratch p 1))
+                      (set j (+ j 1))))))
+          (set r (+ r 1))))
+    ;; the packs needed, in the catalogue's order
+    (set p 1)
+    (while (<= p np)
+      (do (if (== (cells-at scratch p) 1)
+            (do (set v (pstate-missing))
+                (if (== (pk-has installed 0 p) 1) (set v (pstate-installed)))
+                (cells-push out v)
+                (cells-push out (pk-pack-engine p))
+                (cells-push out p)
+                (cells-push out 0)))
+          (set p (+ p 1))))
+    ;; pass 2: the languages no pack reads, by engine then language
+    (set r 0)
+    (while (< r ne)
+      (do (if (and (== (cells-at scratch (+ sel r)) 1) (!= (bit-and (en-table-at 0 r 7) (pkind-recognizer)) 0))
+            (do (set eng (en-table-at 0 r 0))
+                (set j lb)
+                (while (< j (cells-len scratch))
+                  (do (set lang (cells-at scratch j))
+                      (if (== (pk-pack-for eng (pkind-recognizer) lang) 0)
+                        (do (cells-push out (pstate-unsupported))
+                            (cells-push out eng)
+                            (cells-push out 0)
+                            (cells-push out lang)))
+                      (set j (+ j 1))))))
+          (set r (+ r 1)))))
+  (return 0))
+
+(defn ^:pub ^I32 pk-rows [^Cells out]
+  (comment "How many rows `pk-resolve` left in `out`.")
+  (return (quot (cells-len out) 4)))
+
+(defn ^:pub ^I32 pk-row-state [^Cells out ^I32 row] (return (cells-at out (* row 4))))
+(defn ^:pub ^I32 pk-row-engine [^Cells out ^I32 row] (return (cells-at out (+ (* row 4) 1))))
+(defn ^:pub ^I32 pk-row-pack [^Cells out ^I32 row] (return (cells-at out (+ (* row 4) 2))))
+(defn ^:pub ^I32 pk-row-lang [^Cells out ^I32 row] (return (cells-at out (+ (* row 4) 3))))
+
+(defn ^:pub ^I32 pk-missing [^Cells out]
+  (comment "How many packs of the resolution are missing.")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 n 0]
+    (while (< i (pk-rows out))
+      (do (if (== (pk-row-state out i) (pstate-missing)) (set n (+ n 1)))
+          (set i (+ i 1))))
+    (return n)))
+
+;; ----------------------------------------------------------------------------------------------- the record
+
+(defn ^:pub ^I32 pk-record-engines [^:mut ^Cells out ^I32 pclass ^Cells avail]
+  (comment "The engine table of a conversion, for a transcript's `:pk-engines`: one `[eng caps role]` row for each engine of `avail` (engine ids, any order, repeats allowed),")
+  (comment "in the table's order. `caps` is the ceiling the table declares and `role` the default role on the class. 0, or the reason (`pkerr`) with the subject left in `out`.")
+  (cells-drop out 0)
+  (if (== (pk-class-known pclass) 0) (return (pk-fail out (pkerr-unknown-class) pclass 0)))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 eng 0]
+    (while (< i (cells-len avail))
+      (do (set eng (cells-at avail i))
+          (if (== (pk-engine-known eng) 0) (return (pk-fail out (pkerr-unknown-engine) eng 0)))
+          (if (== (pk-engine-on eng pclass) 0) (return (pk-fail out (pkerr-engine-class) eng pclass)))
+          (set i (+ i 1)))))
+  (let [^:mut ^I32 r 0 ^:mut ^I32 row-eng 0 ^:mut ^I32 role 0]
+    (while (< r (en-table-count 0))
+      (do (set row-eng (en-table-at 0 r 0))
+          (if (== (pk-has avail 0 row-eng) 1)
+            (do (set role (pk-role-default row-eng pclass))
+                (cells-push out row-eng)
+                (cells-push out (en-table-at 0 r 4))
+                (cells-push out role)))
+          (set r (+ r 1)))))
+  (return 0))

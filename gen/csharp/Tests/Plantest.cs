@@ -72,7 +72,7 @@ public static class Plantest {
         Plan.RqOcrLang(c, 101, 110, 103, 0);
         Plan.RqOcrLang(c, 100, 101, 117, 0);
         Plan.RqOcrEnd(c, at);
-        emon.Testport.AssertEq(Plan.RecLen(c, 0), (12 + 4) + Ocridentity.OiTessLen(), "ten cells and two languages");
+        emon.Testport.AssertEq(Plan.RecLen(c, 0), (12 + 4) + 112, "ten cells and two languages");
         emon.Testport.AssertEq(Plan.RecKind(c, 0), 3, "kind");
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 0), 3, "bitmap");
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 1), 6, "psm");
@@ -80,7 +80,7 @@ public static class Plantest {
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 6), 40, "region height");
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 7), 1701734144, "eng packed big-endian");
         emon.Testport.AssertEq(Plan.RqArg(c, 0, 8), 1684370688, "deu packed big-endian");
-        emon.Testport.AssertEq(Plan.RqNargs(c, 0), 13 + Ocridentity.OiTessLen(), "arguments include requested identity");
+        emon.Testport.AssertEq(Plan.RqNargs(c, 0), 13 + 112, "arguments include requested identity");
     }
     [Xunit.Fact]
     public static void TestABytesRequestIsASpan() {

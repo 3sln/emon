@@ -715,6 +715,9 @@ pub struct Transcript {
     // replay depends on the answers, not on whose engine gave them. Empty for a run with no live port that
     // identifies itself, which leaves the file as it always was.
     pub producer: Vec<(String, String)>,
+    // THE ENGINE TABLE (D900): the engines this run had, `(engine, caps, role)` in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+    // when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
+    pub engines: Vec<(i32, i32, i32)>,
 }
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
@@ -756,6 +759,9 @@ impl Transcript {
         for (i, l) in &self.inputs {
             kt::tr_add_input(&mut tr, *i, *l);
         }
+        for (e, c, r) in &self.engines {
+            kt::tr_add_engine(&mut tr, *e, *c, *r);
+        }
         for (k, v) in &self.producer {
             kt::tr_add_producer(&mut tr, &mut cps(k), &mut cps(v));
         }
@@ -796,6 +802,9 @@ impl Transcript {
         let mut t = Transcript::default();
         for i in 0..kt::tr_n_inputs(&mut tr) {
             t.inputs.push((kt::tr_in_index(&mut tr, i), kt::tr_in_length(&mut tr, i)));
+        }
+        for i in 0..kt::tr_n_engines(&mut tr) {
+            t.engines.push((kt::tr_eng_engine(&mut tr, i), kt::tr_eng_caps(&mut tr, i), kt::tr_eng_role(&mut tr, i)));
         }
         let mut p = 0;
         while kt::tr_p_more(&mut tr, p) == 1 {

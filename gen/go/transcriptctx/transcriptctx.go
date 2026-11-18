@@ -11,6 +11,7 @@ import (
 type Tr struct {
 	Inputs *port.Cells
 	Prod   *port.Cells
+	Etab   *port.Cells
 	Ents   *port.Cells
 	Names  *port.Cells
 	Idx    *port.Cells
@@ -27,6 +28,7 @@ func NewTr() *Tr {
 	return &Tr{
 		Inputs: port.NewCells(),
 		Prod:   port.NewCells(),
+		Etab:   port.NewCells(),
 		Ents:   port.NewCells(),
 		Names:  port.NewCells(),
 		Idx:    port.NewCells(),
@@ -43,6 +45,7 @@ func (d *Tr) Clone() *Tr {
 	c := NewTr()
 	port.CellsCopyInto(c.Inputs, d.Inputs)
 	port.CellsCopyInto(c.Prod, d.Prod)
+	port.CellsCopyInto(c.Etab, d.Etab)
 	port.CellsCopyInto(c.Ents, d.Ents)
 	port.CellsCopyInto(c.Names, d.Names)
 	port.CellsCopyInto(c.Idx, d.Idx)

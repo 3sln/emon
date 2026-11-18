@@ -7,6 +7,7 @@ public final class Transcriptctx {
     public static final class Tr {
         public emon.Port.Cells inputs = emon.Port.newCells();
         public emon.Port.Cells prod = emon.Port.newCells();
+        public emon.Port.Cells etab = emon.Port.newCells();
         public emon.Port.Cells ents = emon.Port.newCells();
         public emon.Port.Cells names = emon.Port.newCells();
         public emon.Port.Cells idx = emon.Port.newCells();
@@ -24,6 +25,7 @@ public final class Transcriptctx {
             Tr c = new Tr();
             emon.Port.cellsCopyInto(c.inputs, this.inputs);
             emon.Port.cellsCopyInto(c.prod, this.prod);
+            emon.Port.cellsCopyInto(c.etab, this.etab);
             emon.Port.cellsCopyInto(c.ents, this.ents);
             emon.Port.cellsCopyInto(c.names, this.names);
             emon.Port.cellsCopyInto(c.idx, this.idx);

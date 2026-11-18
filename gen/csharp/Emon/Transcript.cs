@@ -152,6 +152,18 @@ public static class Transcript {
     public static int TfBitmap() {
         return 11;
     }
+    public static int TfPkEngines() {
+        return 12;
+    }
+    public static int TfEngine() {
+        return 13;
+    }
+    public static int TfCaps() {
+        return 14;
+    }
+    public static int TfRole() {
+        return 15;
+    }
     public static int TfEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "emon-transcript");
@@ -195,6 +207,22 @@ public static class Transcript {
         }
         if (code == 11) {
             emon.Port.TextAscii(t, "bitmap");
+            return 1;
+        }
+        if (code == 12) {
+            emon.Port.TextAscii(t, "pk-engines");
+            return 1;
+        }
+        if (code == 13) {
+            emon.Port.TextAscii(t, "engine");
+            return 1;
+        }
+        if (code == 14) {
+            emon.Port.TextAscii(t, "caps");
+            return 1;
+        }
+        if (code == 15) {
+            emon.Port.TextAscii(t, "role");
             return 1;
         }
         return 0;
@@ -369,6 +397,66 @@ public static class Transcript {
                 }
             }
         }
+        if ((to - from) == 10) {
+            if (emon.Port.BlobU8(b, from + 0) == 112) {
+                if (emon.Port.BlobU8(b, from + 1) == 107) {
+                    if (emon.Port.BlobU8(b, from + 2) == 45) {
+                        if (emon.Port.BlobU8(b, from + 3) == 101) {
+                            if (emon.Port.BlobU8(b, from + 4) == 110) {
+                                if (emon.Port.BlobU8(b, from + 5) == 103) {
+                                    if (emon.Port.BlobU8(b, from + 6) == 105) {
+                                        if (emon.Port.BlobU8(b, from + 7) == 110) {
+                                            if (emon.Port.BlobU8(b, from + 8) == 101) {
+                                                if (emon.Port.BlobU8(b, from + 9) == 115) {
+                                                    return 12;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ((to - from) == 6) {
+            if (emon.Port.BlobU8(b, from + 0) == 101) {
+                if (emon.Port.BlobU8(b, from + 1) == 110) {
+                    if (emon.Port.BlobU8(b, from + 2) == 103) {
+                        if (emon.Port.BlobU8(b, from + 3) == 105) {
+                            if (emon.Port.BlobU8(b, from + 4) == 110) {
+                                if (emon.Port.BlobU8(b, from + 5) == 101) {
+                                    return 13;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ((to - from) == 4) {
+            if (emon.Port.BlobU8(b, from + 0) == 99) {
+                if (emon.Port.BlobU8(b, from + 1) == 97) {
+                    if (emon.Port.BlobU8(b, from + 2) == 112) {
+                        if (emon.Port.BlobU8(b, from + 3) == 115) {
+                            return 14;
+                        }
+                    }
+                }
+            }
+        }
+        if ((to - from) == 4) {
+            if (emon.Port.BlobU8(b, from + 0) == 114) {
+                if (emon.Port.BlobU8(b, from + 1) == 111) {
+                    if (emon.Port.BlobU8(b, from + 2) == 108) {
+                        if (emon.Port.BlobU8(b, from + 3) == 101) {
+                            return 15;
+                        }
+                    }
+                }
+            }
+        }
         return -1;
     }
     public static int TbNone() {
@@ -457,6 +545,12 @@ public static class Transcript {
     }
     public static int TbUnused() {
         return 28;
+    }
+    public static int TbEngines() {
+        return 29;
+    }
+    public static int TbEngineUnknown() {
+        return 30;
     }
     public static int TbEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
@@ -573,6 +667,14 @@ public static class Transcript {
         }
         if (code == 28) {
             emon.Port.TextAscii(t, "recorded entries were never asked for");
+            return 1;
+        }
+        if (code == 29) {
+            emon.Port.TextAscii(t, "a row of :pk-engines is not a map with an :engine string, an integer :caps and a keyword :role");
+            return 1;
+        }
+        if (code == 30) {
+            emon.Port.TextAscii(t, "a row of :pk-engines names an engine that is not in the engine table:");
             return 1;
         }
         return 0;
@@ -1053,6 +1155,65 @@ public static class Transcript {
         }
         return 0;
     }
+    internal static int EdEngines(emon.Transcriptctx.Tr t, byte[] b, int pos) {
+        // The `:pk-engines` vector at `pos`: each a map with an `:engine` (a string naming an engine of the table), an integer `:caps` and a keyword `:role`. 0, or the reason (`tb`).
+        if (EdFirst(b, pos) != 91) {
+            return EdFail(t, TbEngines(), EdWs(b, pos));
+        }
+        int i = EdWs(b, pos) + 1;
+        while (emon.Port.BlobLen(b) >= 0) {
+            i = EdWs(b, i);
+            if (emon.Port.BlobU8(b, i) == 93) {
+                return 0;
+            }
+            if (emon.Port.BlobU8(b, i) != 123) {
+                return EdFail(t, TbEngines(), i);
+            }
+            int ep = EdField(t, b, i, TfEngine());
+            int cp = EdField(t, b, i, TfCaps());
+            int rp = EdField(t, b, i, TfRole());
+            if ((ep < 0) || (EdFirst(b, ep) != 34)) {
+                return EdFail(t, TbEngines(), i);
+            }
+            if ((cp < 0) || (EdIntAt(t, b, cp) == 0)) {
+                return EdFail(t, TbEngines(), i);
+            }
+            int caps = t.Ival;
+            if ((rp < 0) || (EdFirst(b, rp) != 58)) {
+                return EdFail(t, TbEngines(), i);
+            }
+            int es = EdWs(b, ep);
+            int ee = EdEnd(t, b, es, 0);
+            int rs = EdWs(b, rp);
+            int re = EdEnd(t, b, rs, 0);
+            int eng = Engines.EngFind(b, es + 1, ee - 1);
+            int role = Engines.EroleFind(b, rs + 1, re);
+            if (eng < 0) {
+                EdFail(t, TbEngineUnknown(), i);
+                emon.Port.TextAscii(t.Msg, " ");
+                emon.Port.TextCp(t.Msg, 34);
+                int k = es + 1;
+                while ((k < (ee - 1)) && ((k - es) < 65)) {
+                    if ((emon.Port.BlobU8(b, k) >= 32) && (emon.Port.BlobU8(b, k) < 127)) {
+                        emon.Port.TextCp(t.Msg, emon.Port.BlobU8(b, k));
+                    } else {
+                        emon.Port.TextCp(t.Msg, 63);
+                    }
+                    k += 1;
+                }
+                emon.Port.TextCp(t.Msg, 34);
+                return TbEngineUnknown();
+            }
+            if (role < 0) {
+                return EdFail(t, TbEngines(), i);
+            }
+            emon.Port.CellsPush(t.Etab, eng);
+            emon.Port.CellsPush(t.Etab, caps);
+            emon.Port.CellsPush(t.Etab, role);
+            i = EdEnd(t, b, i, 0);
+        }
+        return 0;
+    }
     public static int TrRead(emon.Transcriptctx.Tr t, byte[] b) {
         // Read `transcript.edn` from `b` into `t` (a new one): 0, or the reason it is no transcript (`tb`), its sentence in `msg`.
         if (EdUtf8(b) == 0) {
@@ -1072,6 +1233,7 @@ public static class Transcript {
         }
         int vp = EdField(t, b, top, TfVersion());
         int pp = EdField(t, b, top, TfProducer());
+        int kp = EdField(t, b, top, TfPkEngines());
         int ip = EdField(t, b, top, TfInputs());
         int ep = EdField(t, b, top, TfEntries());
         if ((vp < 0) || (EdIntAt(t, b, vp) == 0)) {
@@ -1082,6 +1244,12 @@ public static class Transcript {
         }
         if (pp >= 0) {
             EdProducer(t, b, pp);
+        }
+        if (kp >= 0) {
+            int r = EdEngines(t, b, kp);
+            if (r != 0) {
+                return r;
+            }
         }
         if (ip < 0) {
             return EdFail(t, TbNoInputs(), top);
@@ -1120,6 +1288,25 @@ public static class Transcript {
             i += 1;
         }
         return 0;
+    }
+    public static int TrAddEngine(emon.Transcriptctx.Tr t, int eng, int caps, int role) {
+        // One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
+        emon.Port.CellsPush(t.Etab, eng);
+        emon.Port.CellsPush(t.Etab, caps);
+        emon.Port.CellsPush(t.Etab, role);
+        return 0;
+    }
+    public static int TrNEngines(emon.Transcriptctx.Tr t) {
+        return emon.Port.CellsLen(t.Etab) / 3;
+    }
+    public static int TrEngEngine(emon.Transcriptctx.Tr t, int i) {
+        return emon.Port.CellsAt(t.Etab, 3 * i);
+    }
+    public static int TrEngCaps(emon.Transcriptctx.Tr t, int i) {
+        return emon.Port.CellsAt(t.Etab, (3 * i) + 1);
+    }
+    public static int TrEngRole(emon.Transcriptctx.Tr t, int i) {
+        return emon.Port.CellsAt(t.Etab, (3 * i) + 2);
     }
     public static int TrAddEntry(emon.Transcriptctx.Tr t, int round, emon.Port.Cells src, int reqAt, int reqLen, int ansAt, int ansLen, int bitmap) {
         // An entry: the round, the request record at `req-at` of `src`, the answer record at `ans-at`, and whether it has a bitmap (the host keeps the pixels).
@@ -1325,12 +1512,50 @@ public static class Transcript {
         }
         return 0;
     }
+    internal static int TwPkEngines(emon.Transcriptctx.Tr t, System.Text.StringBuilder @out) {
+        // ` :pk-engines [{...} ...]` and a newline, when the run had an engine table; nothing otherwise.
+        int n = emon.Port.CellsLen(t.Etab);
+        int at = 0;
+        if (n == 0) {
+            return 0;
+        }
+        emon.Port.TextAscii(@out, " :");
+        TfEmitName(@out, TfPkEngines());
+        emon.Port.TextAscii(@out, " [");
+        while (at < n) {
+            if (at > 0) {
+                emon.Port.TextAscii(@out, " ");
+            }
+            emon.Port.TextAscii(@out, "{:");
+            TfEmitName(@out, TfEngine());
+            emon.Port.TextAscii(@out, " \"");
+            if (Engines.EngEmitName(@out, emon.Port.CellsAt(t.Etab, at)) == 0) {
+                emon.Port.TextAscii(@out, "unknown");
+            }
+            emon.Port.TextAscii(@out, "\" :");
+            TfEmitName(@out, TfCaps());
+            emon.Port.TextAscii(@out, " ");
+            emon.Port.TextI32(@out, emon.Port.CellsAt(t.Etab, at + 1));
+            emon.Port.TextAscii(@out, " :");
+            TfEmitName(@out, TfRole());
+            emon.Port.TextAscii(@out, " :");
+            if (Engines.EroleEmitName(@out, emon.Port.CellsAt(t.Etab, at + 2)) == 0) {
+                emon.Port.TextAscii(@out, "unknown");
+            }
+            emon.Port.TextAscii(@out, "}");
+            at += 3;
+        }
+        emon.Port.TextAscii(@out, "]");
+        emon.Port.TextCp(@out, 10);
+        return 0;
+    }
     public static int TrWrite(emon.Transcriptctx.Tr t, System.Text.StringBuilder @out) {
         // Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.
         emon.Port.TextAscii(@out, "{:");
         TfEmitName(@out, TfVersion());
         emon.Port.TextAscii(@out, " 1");
         emon.Port.TextCp(@out, 10);
+        TwPkEngines(t, @out);
         if (emon.Port.CellsLen(t.Prod) > 0) {
             emon.Port.TextAscii(@out, " :");
             TfEmitName(@out, TfProducer());

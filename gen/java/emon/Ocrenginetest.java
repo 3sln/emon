@@ -25,7 +25,7 @@ public final class Ocrenginetest {
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
         Ocrengine.oeTag(r, scratch, 0);
-        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocridentity.oiTessLen(), "default identity extends the key");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 112, "default identity extends the key");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record header includes identity");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "one legacy language");
     }

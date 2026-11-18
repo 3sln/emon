@@ -4,6 +4,7 @@
 package transcript
 
 import (
+	"emon/engines"
 	"emon/oil"
 	"emon/port"
 	"emon/transcriptctx"
@@ -158,6 +159,18 @@ func TfAns() int32 {
 func TfBitmap() int32 {
 	return 11
 }
+func TfPkEngines() int32 {
+	return 12
+}
+func TfEngine() int32 {
+	return 13
+}
+func TfCaps() int32 {
+	return 14
+}
+func TfRole() int32 {
+	return 15
+}
 func TfEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "emon-transcript")
@@ -201,6 +214,22 @@ func TfEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 11 {
 		port.TextAscii(t, "bitmap")
+		return 1
+	}
+	if code == 12 {
+		port.TextAscii(t, "pk-engines")
+		return 1
+	}
+	if code == 13 {
+		port.TextAscii(t, "engine")
+		return 1
+	}
+	if code == 14 {
+		port.TextAscii(t, "caps")
+		return 1
+	}
+	if code == 15 {
+		port.TextAscii(t, "role")
 		return 1
 	}
 	return 0
@@ -375,6 +404,66 @@ func TfFind(b []byte, from int32, to int32) int32 {
 			}
 		}
 	}
+	if (to - from) == 10 {
+		if port.BlobU8(b, from+0) == 112 {
+			if port.BlobU8(b, from+1) == 107 {
+				if port.BlobU8(b, from+2) == 45 {
+					if port.BlobU8(b, from+3) == 101 {
+						if port.BlobU8(b, from+4) == 110 {
+							if port.BlobU8(b, from+5) == 103 {
+								if port.BlobU8(b, from+6) == 105 {
+									if port.BlobU8(b, from+7) == 110 {
+										if port.BlobU8(b, from+8) == 101 {
+											if port.BlobU8(b, from+9) == 115 {
+												return 12
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (to - from) == 6 {
+		if port.BlobU8(b, from+0) == 101 {
+			if port.BlobU8(b, from+1) == 110 {
+				if port.BlobU8(b, from+2) == 103 {
+					if port.BlobU8(b, from+3) == 105 {
+						if port.BlobU8(b, from+4) == 110 {
+							if port.BlobU8(b, from+5) == 101 {
+								return 13
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (to - from) == 4 {
+		if port.BlobU8(b, from+0) == 99 {
+			if port.BlobU8(b, from+1) == 97 {
+				if port.BlobU8(b, from+2) == 112 {
+					if port.BlobU8(b, from+3) == 115 {
+						return 14
+					}
+				}
+			}
+		}
+	}
+	if (to - from) == 4 {
+		if port.BlobU8(b, from+0) == 114 {
+			if port.BlobU8(b, from+1) == 111 {
+				if port.BlobU8(b, from+2) == 108 {
+					if port.BlobU8(b, from+3) == 101 {
+						return 15
+					}
+				}
+			}
+		}
+	}
 	return -1
 }
 
@@ -464,6 +553,12 @@ func TbInputs() int32 {
 }
 func TbUnused() int32 {
 	return 28
+}
+func TbEngines() int32 {
+	return 29
+}
+func TbEngineUnknown() int32 {
+	return 30
 }
 func TbEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
@@ -580,6 +675,14 @@ func TbEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 28 {
 		port.TextAscii(t, "recorded entries were never asked for")
+		return 1
+	}
+	if code == 29 {
+		port.TextAscii(t, "a row of :pk-engines is not a map with an :engine string, an integer :caps and a keyword :role")
+		return 1
+	}
+	if code == 30 {
+		port.TextAscii(t, "a row of :pk-engines names an engine that is not in the engine table:")
 		return 1
 	}
 	return 0
@@ -1082,6 +1185,66 @@ func edEntries(t *transcriptctx.Tr, b []byte, pos int32) int32 {
 	return 0
 }
 
+func edEngines(t *transcriptctx.Tr, b []byte, pos int32) int32 {
+	// The `:pk-engines` vector at `pos`: each a map with an `:engine` (a string naming an engine of the table), an integer `:caps` and a keyword `:role`. 0, or the reason (`tb`).
+	if edFirst(b, pos) != 91 {
+		return edFail(t, TbEngines(), edWs(b, pos))
+	}
+	var i int32 = edWs(b, pos) + 1
+	for port.BlobLen(b) >= 0 {
+		i = edWs(b, i)
+		if port.BlobU8(b, i) == 93 {
+			return 0
+		}
+		if port.BlobU8(b, i) != 123 {
+			return edFail(t, TbEngines(), i)
+		}
+		var ep int32 = edField(t, b, i, TfEngine())
+		var cp int32 = edField(t, b, i, TfCaps())
+		var rp int32 = edField(t, b, i, TfRole())
+		if (ep < 0) || (edFirst(b, ep) != 34) {
+			return edFail(t, TbEngines(), i)
+		}
+		if (cp < 0) || (edIntAt(t, b, cp) == 0) {
+			return edFail(t, TbEngines(), i)
+		}
+		var caps int32 = t.Ival
+		if (rp < 0) || (edFirst(b, rp) != 58) {
+			return edFail(t, TbEngines(), i)
+		}
+		var es int32 = edWs(b, ep)
+		var ee int32 = edEnd(t, b, es, 0)
+		var rs int32 = edWs(b, rp)
+		var re int32 = edEnd(t, b, rs, 0)
+		var eng int32 = engines.EngFind(b, es+1, ee-1)
+		var role int32 = engines.EroleFind(b, rs+1, re)
+		if eng < 0 {
+			edFail(t, TbEngineUnknown(), i)
+			port.TextAscii(t.Msg, " ")
+			port.TextCp(t.Msg, 34)
+			var k int32 = es + 1
+			for (k < (ee - 1)) && ((k - es) < 65) {
+				if (port.BlobU8(b, k) >= 32) && (port.BlobU8(b, k) < 127) {
+					port.TextCp(t.Msg, port.BlobU8(b, k))
+				} else {
+					port.TextCp(t.Msg, 63)
+				}
+				k += 1
+			}
+			port.TextCp(t.Msg, 34)
+			return TbEngineUnknown()
+		}
+		if role < 0 {
+			return edFail(t, TbEngines(), i)
+		}
+		port.CellsPush(t.Etab, eng)
+		port.CellsPush(t.Etab, caps)
+		port.CellsPush(t.Etab, role)
+		i = edEnd(t, b, i, 0)
+	}
+	return 0
+}
+
 func TrRead(t *transcriptctx.Tr, b []byte) int32 {
 	// Read `transcript.edn` from `b` into `t` (a new one): 0, or the reason it is no transcript (`tb`), its sentence in `msg`.
 	if edUtf8(b) == 0 {
@@ -1101,6 +1264,7 @@ func TrRead(t *transcriptctx.Tr, b []byte) int32 {
 	}
 	var vp int32 = edField(t, b, top, TfVersion())
 	var pp int32 = edField(t, b, top, TfProducer())
+	var kp int32 = edField(t, b, top, TfPkEngines())
 	var ip int32 = edField(t, b, top, TfInputs())
 	var ep int32 = edField(t, b, top, TfEntries())
 	if (vp < 0) || (edIntAt(t, b, vp) == 0) {
@@ -1111,6 +1275,12 @@ func TrRead(t *transcriptctx.Tr, b []byte) int32 {
 	}
 	if pp >= 0 {
 		edProducer(t, b, pp)
+	}
+	if kp >= 0 {
+		var r int32 = edEngines(t, b, kp)
+		if r != 0 {
+			return r
+		}
 	}
 	if ip < 0 {
 		return edFail(t, TbNoInputs(), top)
@@ -1151,6 +1321,30 @@ func TrAddProducer(t *transcriptctx.Tr, key *port.Cells, val *port.Cells) int32 
 		i += 1
 	}
 	return 0
+}
+
+func TrAddEngine(t *transcriptctx.Tr, eng int32, caps int32, role int32) int32 {
+	// One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
+	port.CellsPush(t.Etab, eng)
+	port.CellsPush(t.Etab, caps)
+	port.CellsPush(t.Etab, role)
+	return 0
+}
+
+func TrNEngines(t *transcriptctx.Tr) int32 {
+	return port.CellsLen(t.Etab) / 3
+}
+
+func TrEngEngine(t *transcriptctx.Tr, i int32) int32 {
+	return port.CellsAt(t.Etab, 3*i)
+}
+
+func TrEngCaps(t *transcriptctx.Tr, i int32) int32 {
+	return port.CellsAt(t.Etab, (3*i)+1)
+}
+
+func TrEngRole(t *transcriptctx.Tr, i int32) int32 {
+	return port.CellsAt(t.Etab, (3*i)+2)
 }
 
 func TrAddEntry(t *transcriptctx.Tr, round int32, src *port.Cells, reqAt int32, reqLen int32, ansAt int32, ansLen int32, bitmap int32) int32 {
@@ -1368,12 +1562,51 @@ func twEngines(t *transcriptctx.Tr, out *strings.Builder) int32 {
 	return 0
 }
 
+func twPkEngines(t *transcriptctx.Tr, out *strings.Builder) int32 {
+	// ` :pk-engines [{...} ...]` and a newline, when the run had an engine table; nothing otherwise.
+	var n int32 = port.CellsLen(t.Etab)
+	var at int32 = 0
+	if n == 0 {
+		return 0
+	}
+	port.TextAscii(out, " :")
+	TfEmitName(out, TfPkEngines())
+	port.TextAscii(out, " [")
+	for at < n {
+		if at > 0 {
+			port.TextAscii(out, " ")
+		}
+		port.TextAscii(out, "{:")
+		TfEmitName(out, TfEngine())
+		port.TextAscii(out, " \"")
+		if engines.EngEmitName(out, port.CellsAt(t.Etab, at)) == 0 {
+			port.TextAscii(out, "unknown")
+		}
+		port.TextAscii(out, "\" :")
+		TfEmitName(out, TfCaps())
+		port.TextAscii(out, " ")
+		port.TextI32(out, port.CellsAt(t.Etab, at+1))
+		port.TextAscii(out, " :")
+		TfEmitName(out, TfRole())
+		port.TextAscii(out, " :")
+		if engines.EroleEmitName(out, port.CellsAt(t.Etab, at+2)) == 0 {
+			port.TextAscii(out, "unknown")
+		}
+		port.TextAscii(out, "}")
+		at += 3
+	}
+	port.TextAscii(out, "]")
+	port.TextCp(out, 10)
+	return 0
+}
+
 func TrWrite(t *transcriptctx.Tr, out *strings.Builder) int32 {
 	// Write `transcript.edn` (FORMAT VERSION 1) to `out`: the same bytes on every host for the same entries.
 	port.TextAscii(out, "{:")
 	TfEmitName(out, TfVersion())
 	port.TextAscii(out, " 1")
 	port.TextCp(out, 10)
+	twPkEngines(t, out)
 	if port.CellsLen(t.Prod) > 0 {
 		port.TextAscii(out, " :")
 		TfEmitName(out, TfProducer())

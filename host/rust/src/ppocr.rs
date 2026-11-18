@@ -81,6 +81,11 @@ fn unsupported(req: &Request) -> Answer {
     }
 }
 impl Ocr for PpOcr {
+    fn engines(&self) -> Vec<i32> {
+        let mut e = self.incumbent.engines();
+        e.push(crate::emon::engines::eng_ppocr());
+        e
+    }
     fn producer(&self) -> Vec<(String, String)> {
         let mut p = self.incumbent.producer();
         p.extend(vec![

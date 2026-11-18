@@ -1,0 +1,98 @@
+;; THE AUTHORED PACK CATALOGUE (K1, D900; pkg1 section 3, D885, D896). The one source of every model pack emon knows: id, revision, engine, kind, languages and
+;; scripts, files with SHA-256 and byte count, licence and upstream. `bb packs --emit` generates kin/packdata.kin (what kin resolves and every host verifies
+;; against) and release/packs/packs.json (for hooks and tools); `bb packs --emit --check` is the drift gate, run by `bb ci core`.
+;;
+;;   :id        <engine>-<variant>-<lang|role>; unique; a pack is immutable and superseded, never mutated (a changed byte is a new :rev, and its hash a new identity)
+;;   :engine    a name of kin's engine table (`en` in kin/engines.kin), or :any for a pack every engine may read (a lexicon)
+;;   :kind      :recognizer (per language), :osd, :detector, :classifier, :lexicon (`pkind` in kin/engines.kin)
+;;   :langs     the language codes emon packs into one cell: the REQUEST's three letters (ISO 639-3, and emon.ocrtess's `chs`/`cht` for Chinese), recognizers only
+;;   :scripts   ISO 15924, as emon.ocrport names them
+;;   :files     the bytes a pack is: file name, SHA-256 of the file, its size
+;;
+;; ABSORBED: tools/tessdata/models.edn (tessdata_fast) and tools/ppocr/assets.edn (PP-OCRv5 mobile). Those two files STAY, byte for byte, as the pinned INPUTS of the
+;; Tesseract and PP requested identities (tools/tessdata/identity.clj and tools/ppocr/identity.clj hash them into the policy cells every transcript is keyed by);
+;; `bb packs --check` holds them to this catalogue, entry by entry, so there is one set of numbers and a disagreement fails. Retiring them is an identity
+;; re-key (every transcript), which K1 does not do.
+{:schema 1
+ :packs
+ [
+  {:id "tess-fast-eng" :rev 1 :engine :tesseract :kind :recognizer :langs ["eng"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "eng.traineddata" :sha256 "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2" :bytes 4113088}]}
+  {:id "tess-osd" :rev 1 :engine :tesseract :kind :osd :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "osd.traineddata" :sha256 "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff" :bytes 10562727}]}
+  {:id "tess-fast-spa" :rev 1 :engine :tesseract :kind :recognizer :langs ["spa"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "spa.traineddata" :sha256 "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464" :bytes 2294433}]}
+  {:id "tess-fast-fra" :rev 1 :engine :tesseract :kind :recognizer :langs ["fra"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "fra.traineddata" :sha256 "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca" :bytes 1130365}]}
+  {:id "tess-fast-deu" :rev 1 :engine :tesseract :kind :recognizer :langs ["deu"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "deu.traineddata" :sha256 "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d" :bytes 1525436}]}
+  {:id "tess-fast-por" :rev 1 :engine :tesseract :kind :recognizer :langs ["por"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "por.traineddata" :sha256 "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb" :bytes 1982756}]}
+  {:id "tess-fast-ita" :rev 1 :engine :tesseract :kind :recognizer :langs ["ita"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "ita.traineddata" :sha256 "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827" :bytes 2701314}]}
+  {:id "tess-fast-nld" :rev 1 :engine :tesseract :kind :recognizer :langs ["nld"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "nld.traineddata" :sha256 "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6" :bytes 6050296}]}
+  {:id "tess-fast-rus" :rev 1 :engine :tesseract :kind :recognizer :langs ["rus"] :scripts ["Cyrl"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "rus.traineddata" :sha256 "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225" :bytes 3861738}]}
+  {:id "tess-fast-ukr" :rev 1 :engine :tesseract :kind :recognizer :langs ["ukr"] :scripts ["Cyrl"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "ukr.traineddata" :sha256 "d59e53e2bded32f4445f124b4b00240fcac7e8044c003ab822ccb94f0b3db59b" :bytes 3825102}]}
+  {:id "tess-fast-ara" :rev 1 :engine :tesseract :kind :recognizer :langs ["ara"] :scripts ["Arab"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "ara.traineddata" :sha256 "e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729" :bytes 1432056}]}
+  {:id "tess-fast-heb" :rev 1 :engine :tesseract :kind :recognizer :langs ["heb"] :scripts ["Hebr"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "heb.traineddata" :sha256 "11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db" :bytes 961404}]}
+  {:id "tess-fast-hin" :rev 1 :engine :tesseract :kind :recognizer :langs ["hin"] :scripts ["Deva"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "hin.traineddata" :sha256 "4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825" :bytes 1122751}]}
+  {:id "tess-fast-urd" :rev 1 :engine :tesseract :kind :recognizer :langs ["urd"] :scripts ["Arab"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "urd.traineddata" :sha256 "62e8250ce2a994106e313a82e26a516a39e2cf159d0ce3c5b5008387fd0d555f" :bytes 1398718}]}
+  {:id "tess-fast-fas" :rev 1 :engine :tesseract :kind :recognizer :langs ["fas"] :scripts ["Arab"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "fas.traineddata" :sha256 "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505" :bytes 431500}]}
+  {:id "tess-fast-chs" :rev 1 :engine :tesseract :kind :recognizer :langs ["chs"] :scripts ["Hani"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "chi_sim.traineddata" :sha256 "a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730" :bytes 2469156}]}
+  {:id "tess-fast-cht" :rev 1 :engine :tesseract :kind :recognizer :langs ["cht"] :scripts ["Hani"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "chi_tra.traineddata" :sha256 "529c5b5797d64b126065cd55f2bb4c7fd7b15790798091b1ff259941a829330b" :bytes 2366642}]}
+  {:id "tess-fast-jpn" :rev 1 :engine :tesseract :kind :recognizer :langs ["jpn"] :scripts ["Jpan"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "jpn.traineddata" :sha256 "1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d" :bytes 2471260}]}
+  {:id "tess-fast-kor" :rev 1 :engine :tesseract :kind :recognizer :langs ["kor"] :scripts ["Hang"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "kor.traineddata" :sha256 "6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2" :bytes 1677415}]}
+  {:id "tess-fast-khm" :rev 1 :engine :tesseract :kind :recognizer :langs ["khm"] :scripts ["Khmr"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "khm.traineddata" :sha256 "47f110575341b322052f3becbefee61a3ecf1ef549352b5d4d33d28afe30d099" :bytes 1446926}]}
+  {:id "tess-fast-amh" :rev 1 :engine :tesseract :kind :recognizer :langs ["amh"] :scripts ["Ethi"] :licence "Apache-2.0"
+   :upstream {:repo "tesseract-ocr/tessdata_fast" :revision "87416418657359cb625c412a48b6e1d6d41c29bd"}
+   :files [{:name "amh.traineddata" :sha256 "3ec3311833a108e07d58a1152b00c0cf1848752e4f85769d46e8ca2b718a2ccc" :bytes 5470094}]}
+  {:id "pp5-det-mobile" :rev 1 :engine :ppocr :kind :detector :licence "Apache-2.0"
+   :upstream {:repo "RapidAI/RapidOCR" :revision "v3.10.0" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx"}
+   :files [{:name "ch_PP-OCRv5_det_mobile.onnx" :sha256 "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae" :bytes 4819576}]}
+  {:id "pp5-cls-mobile" :rev 1 :engine :ppocr :kind :classifier :licence "Apache-2.0"
+   :upstream {:repo "RapidAI/RapidOCR" :revision "v3.10.0" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx"}
+   :files [{:name "ch_ppocr_mobile_v2.0_cls_mobile.onnx" :sha256 "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c" :bytes 585532}]}
+  {:id "pp5-rec-en-mobile" :rev 1 :engine :ppocr :kind :recognizer :langs ["eng"] :scripts ["Latn"] :licence "Apache-2.0"
+   :upstream {:repo "RapidAI/RapidOCR" :revision "v3.10.0" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/en_PP-OCRv5_rec_mobile.onnx"}
+   :files [{:name "en_PP-OCRv5_rec_mobile.onnx" :sha256 "c3461add59bb4323ecba96a492ab75e06dda42467c9e3d0c18db5d1d21924be8" :bytes 7872351}]}
+ ]
+
+ ;; Not packs: the native runtime a PP adapter loads travels in the adapter's own archive (pkg1 section 0 item 4), never in the pack store. Pinned here so that the
+ ;; one catalogue holds every downloaded byte; nothing resolves or generates from this section.
+ :runtimes
+ [{:id "onnxruntime-1.22.0-aarch64-apple-darwin" :engine :ppocr :licence "MIT" :target "aarch64-apple-darwin"
+   :upstream {:repo "microsoft/onnxruntime" :revision "v1.22.0" :url "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-arm64-1.22.0.tgz"}
+   :files [{:name "onnxruntime-osx-arm64-1.22.0.tgz" :sha256 "cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07" :bytes 25943843}]}]}
