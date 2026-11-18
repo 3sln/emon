@@ -71,6 +71,17 @@ their SHA-256 pins. GitHub release URLs may require a same-origin proxy for
 browser CORS. There is no default CDN or automatic model acquisition.
 See [browser and Node configuration](ppocr-web.md) for the full example.
 
+## PP-OCR alone
+
+`--ocr-engine=ppocr-alone` (Rust-native hosts, experimental) has PP-OCR read every
+OCR request, with no Tesseract reading beside it. PP-OCR answers detector segments,
+one box per piece of a row (an item's name, its quantity and its price). Kin joins
+the segments of one row into one line before the paragraph, table and column stages
+read them; the last word of each segment but a row's last keeps a `gap` word break
+as a cell cut. This applies only to a page read by segment engines alone: a page the
+default engine also read, or any Tesseract page, is untouched. Its born-digital
+behaviour, Model and cost tradeoffs are those of the PP-OCR reading above (D900).
+
 ## Size, memory and measured tradeoffs
 
 The ONNX graphs total 13,277,459 bytes uncompressed; the pinned English
