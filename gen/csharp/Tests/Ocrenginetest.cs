@@ -28,7 +28,7 @@ public static class Ocrenginetest {
         Plan.RqOcrLang(r, 101, 110, 103, 0);
         Plan.RqOcrEnd(r, at);
         Ocrengine.OeTag(r, scratch, 0);
-        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocridentity.OiTessLen(), "default identity extends the key");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + 112, "default identity extends the key");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), emon.Port.CellsLen(r), "record header includes identity");
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "one legacy language");
     }

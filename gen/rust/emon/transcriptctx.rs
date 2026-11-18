@@ -5,6 +5,7 @@
 pub struct Tr {
     pub inputs: crate::port::Cells,
     pub prod: crate::port::Cells,
+    pub etab: crate::port::Cells,
     pub ents: crate::port::Cells,
     pub names: crate::port::Cells,
     pub idx: crate::port::Cells,
@@ -21,6 +22,7 @@ impl Tr {
         Tr {
             inputs: crate::port::Cells::new(),
             prod: crate::port::Cells::new(),
+            etab: crate::port::Cells::new(),
             ents: crate::port::Cells::new(),
             names: crate::port::Cells::new(),
             idx: crate::port::Cells::new(),

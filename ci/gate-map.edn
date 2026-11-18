@@ -28,6 +28,8 @@
   {:id "lang-test"     :cmd ["bb" "lang-test"]                    :gate "lang-test"     :secs 1   :why "the generator's own refusals (emit-ascii, defenum, defctx, fd): under a second"}
   {:id "api-diff"      :cmd ["bb" "api-diff"]                     :gate "api-diff"      :secs 2   :why "the public API is the frozen one (D527)"}
   {:id "release-audit" :cmd ["bb" "release-audit"]                :gate "release-audit" :secs 1   :why "licences, inventory and notices (D526)"}
+  {:id "packs"         :cmd ["bb" "packs" "--emit" "--check"]                           :secs 1   :why "the pack catalogue (release/packs/packs.edn) is sound, agrees with the pin files it absorbed, and kin/packdata.kin and packs.json are what it generates (D898)"}
+  {:id "packs-selftest" :cmd ["bb" "packs" "--self-test"]                               :secs 1   :why "each refusal of the catalogue checks fires on a planted failure (D898)"}
   {:id "version"       :cmd ["bb" "version" "--check" "@version" "--source-only"]                       :secs 1   :why "central version and placeholder inventory agree; staged artifacts are stamped (D886)"}
   {:id "version-selftest" :cmd ["bb" "version" "--self-test"] :secs 1 :why "one-file bump and staged version stamping (D886)"}
   {:id "release-notes-selftest"  :cmd ["bb" "release-notes" "--self-test"]                    :secs 1   :why "the release notes tool's parsing and rendering (D547)"}
@@ -97,7 +99,7 @@
   {:glob "SPEC.md" :gates [] :why "the specification; no gate reads it (embedders and hosts hold the names it lists in their own sources)"}
   {:glob "LICENSE" :gates [] :why "the fast core's release-audit holds it"}
   {:glob "THIRD_PARTY_NOTICES.md" :gates [] :why "generated from release/third-party.edn; the fast core's release-audit holds it"}
-  {:glob "release/**" :gates [] :why "the inventory and licence texts; the fast core's release-audit holds them"}
+  {:glob "release/**" :gates [] :why "the inventory and licence texts (the fast core's release-audit holds them) and the pack catalogue (its `bb packs --emit --check` step holds it)"}
   {:glob "api/**" :gates [] :why "the frozen surface; the fast core's api-diff holds it"}
   {:glob "version.edn" :gates [] :why "the fast core checks the central version and tracked placeholders; package checks stamped manifests"}
   {:glob ".gitignore" :gates [] :why "no gate reads it"}
@@ -117,7 +119,7 @@
   ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
   {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
    :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
-  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrtess,ocrscript,ocridentity,ocrporttest,ocrengine,ocrenginetest,oil,oiltest,oilnumerictest,oilregistry,oilsrc,oilsrctest,oilfixturetest,ocalib,ocalibdata,ocalibtest}.kin"
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrtess,ocrscript,ocridentity,ocrporttest,ocrengine,ocrenginetest,engines,enginestest,adapters,adapterstest,packdata,oil,oiltest,oilnumerictest,oilregistry,oilsrc,oilsrctest,oilfixturetest,ocalib,ocalibdata,ocalibtest}.kin"
    :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
   {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
   {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]
@@ -172,7 +174,7 @@
   {:glob "kin/scripts/{ink,trace,png-bench}" :gates [] :why "reports and live recorders (bb ink, bb trace, bb png-bench): not gates"}
 
   ;; ---- the tools --------------------------------------------------------------------------------------------------------------------------------------
-  {:glob "tools/{api_diff,release_audit,version,rederive,ci,oil_check}.clj" :gates [] :why "release, CI and OIL source-consumer audits: the fast core runs each"}
+  {:glob "tools/{api_diff,release_audit,version,rederive,ci,oil_check,packs}.clj" :gates [] :why "release, CI, OIL source-consumer and pack catalogue audits: the fast core runs each"}
   {:glob "tools/release/**" :gates [] :why "the release tools (P11.9, P11.10, D547, D550): `bb release-notes`, `release-verify`, `release-ops` and `publish`, run by release.yml, release-run.yml and verify.yml; not gates. The fast core runs each one's --self-test (pure logic over synthetic data; nothing is published or pushed)"}
   {:glob "tools/cli.clj" :gates [] :why "`bb cli` (P11.4b, D541): builds and packs the `emon` command and `--check`s the archive (needs bb native, pdfium and cargo; prints SKIP without them); not a gate yet, it joins `bb package` (P11.4)"}
   {:glob "tools/{corpus.clj,corpus_link.clj,corpus_test.clj,corpus_roundtrip.clj,samples.clj,pdfinfo.clj,shards/**}" :gates [] :why "corpus transport, the corpus-link/corpus-guard symlink tool and live tools: not gates (corpus-test is its own non-gate)"}

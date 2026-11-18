@@ -457,8 +457,11 @@
       wasm-exports (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" (slurp "host/wasm/src/wasm.rs"))))
       ;; `emon_clock` is the browser's clock for `stage-ms` (D501): a native host (the C binding) has its own monotonic clock in the Machine
       plumbing #{"emon_alloc" "emon_free" "emon_out_ptr" "emon_out_len" "emon_out_free" "emon_clock"}
+      ;; K2 (D899): the Tesseract-shaped policy exports are gone from the C binding (an adapter receives its request and a registry routes it; `emon_ocr_request` reads a request's fields).
+      ;; The browser still exports them: tesseract.js and the PP-OCR web adapter are driven from JS, which has no registry.
+      browser-only #{"emon_ocr_block_type" "emon_ocr_identity_at" "emon_ocr_lang_first" "emon_ocr_models" "emon_ocr_observed" "emon_ocr_word_lang"}
       alias {"emon_model_free" "emon_free_model" "emon_stats" "emon_model_stats" "emon_finish_intake" "emon_finish_intake"}
-      wasm-missing (for [w (sort wasm-exports) :when (not (plumbing w)) :let [c (get alias w w)] :when (not (contains? defined c))] [w c])
+      wasm-missing (for [w (sort wasm-exports) :when (not (plumbing w)) :when (not (browser-only w)) :let [c (get alias w w)] :when (not (contains? defined c))] [w c])
       input-fields (every? #(re-find (re-pattern (str "\\b" % "\\b")) hcode) ["data" "source" "password" "read_at" "length"])
       problems (concat
                 (for [d (sort (remove defined declared))] (str "emon.h declares " d " and capi.rs does not define it"))
@@ -523,7 +526,7 @@
         ;; (EMON_PDFIUM_LIB, EMON_TESSDATA, `lib/` and `share/emon/tessdata` beside the library); the Engine layers and the ports still never see a path
         ;; D843: these three optional OCR fulfilment modules load/verify pinned model files, like tess.rs.
         ;; The image/CTC/calibration modules and every Engine/library module remain covered.
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/ppocr\.rs|/ppocr_runtime\.rs|/ppocr_native\.rs|/ppocr_abi\.rs|/ppocr\.go|/ffi/ppocr\.java|/ffi/ppocr\.cs|/ppocr_pipeline\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/ppocr\.rs|/ppocr_runtime\.rs|/adapter\.rs|/packs\.rs|/tess_adapter\.rs|/ppocr_abi\.rs|/ppocr\.go|/ffi/ppocr\.java|/ffi/ppocr\.cs|/ppocr_pipeline\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs") (g "host/c/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))

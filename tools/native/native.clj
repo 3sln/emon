@@ -343,7 +343,7 @@
   (zero? (count (filter (comp #{:fail} first) findings))))
 
 ;; ------------------------------------------------------------------------------------------------ the audit of a mobile LIBRARY (K6, D897)
-;; `bb mobile` ships ONE dynamic library per triple. What must hold of it, checked on the file (not on how it was made):
+;; `bb mobile` ships, per triple, the core dynamic library and (K2, D899) the Tesseract adapter library. What must hold of it, checked on the file (not on how it was made):
 ;;   Android .so   an ELF of the right machine; SONAME libemon.so; every LOAD segment aligned to 16 KB (Google Play requires it of 64-bit apps; the pinned pdfium
 ;;                 of 64-bit ABIs is held to it too) and GNU_RELRO ending on a 16 KB boundary or alone in its segment (developer.android.com/guide/practices/page-sizes);
 ;;                 no executable stack; NEEDED is libc.so, libm.so and libdl.so and nothing else (no libc++_shared.so: the C++ runtime is inside); no undefined libc++ or
@@ -449,24 +449,30 @@
     @out))
 
 (defn audit-mobile-lib
-  "The shipped library of a mobile triple (`bb mobile`): [] when it has not been built (the caller notes that)."
+  "The shipped libraries of a mobile triple (`bb mobile`): the core library (exports = emon.h), pdfium, and (K2, D899) the Tesseract adapter library (exports = emon_ocr_adapter_v1
+  and nothing else; the C++ runtime inside, as Tesseract needs it). [] when it has not been built (the caller notes that)."
   [t dir]
-  (let [cfg (triple-cfg t) lib (str dir "/lib/" (if (= :android (:os cfg)) "libemon.so" "libemon.dylib"))
-        pd (str dir "/lib/" (if (= :android (:os cfg)) "libpdfium.so" "libpdfium.dylib"))
+  (let [cfg (triple-cfg t) android? (= :android (:os cfg))
+        lib (str dir "/lib/" (if android? "libemon.so" "libemon.dylib"))
+        ad (str dir "/lib/emon/adapters/" (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
+        pd (str dir "/lib/" (if android? "libpdfium.so" "libpdfium.dylib"))
         exports (header-functions)]
     (cond
       (not (fs/exists? lib)) nil
-      (= :android (:os cfg))
+      android?
       (let [machine ({"arm64" "AArch64" "arm" "ARM" "x86_64" "Advanced Micro Devices X86-64"} (:arch cfg))
             sys #{"libc.so" "libm.so" "libdl.so"}
             wide? (not= "arm" (:arch cfg))]
         (concat (audit-android-lib lib {:machine machine :page 0x4000 :needed-ok sys :exports exports :soname "libemon.so"})
+                (when (fs/exists? ad) (audit-android-lib ad {:machine machine :page 0x4000 :needed-ok sys :exports #{"emon_ocr_adapter_v1"} :soname "libemon_ocr_tesseract.so"}))
                 ;; pdfium: upstream's own build; 16 KB for the 64-bit ABIs Google Play requires it of, loads only the system's
                 (when (fs/exists? pd) (audit-android-lib pd {:machine machine :page (if wide? 0x4000 0x1000) :needed-ok sys :soname "libpdfium.so"}))))
       :else
-      (concat (audit-ios-lib lib {:platform (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR") :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon.dylib" :exports exports})
-              ;; pdfium: upstream's own build (iOS 17.0), install name rewritten by `bb pdfium-fetch`
-              (when (fs/exists? pd) (audit-ios-lib pd {:platform (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR") :minos-max "17.0" :install-name "@rpath/libpdfium.dylib"}))))))
+      (let [plat (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR")]
+        (concat (audit-ios-lib lib {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon.dylib" :exports exports})
+                (when (fs/exists? ad) (audit-ios-lib ad {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon_ocr_tesseract.dylib" :exports #{"emon_ocr_adapter_v1"}}))
+                ;; pdfium: upstream's own build (iOS 17.0), install name rewritten by `bb pdfium-fetch`
+                (when (fs/exists? pd) (audit-ios-lib pd {:platform plat :minos-max "17.0" :install-name "@rpath/libpdfium.dylib"})))))))
 
 ;; ------------------------------------------------------------------------------------------------ licence texts
 (defn licences! [check?]

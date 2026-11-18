@@ -715,9 +715,55 @@ pub struct Transcript {
     // replay depends on the answers, not on whose engine gave them. Empty for a run with no live port that
     // identifies itself, which leaves the file as it always was.
     pub producer: Vec<(String, String)>,
+    // THE ENGINE TABLE (D898): the engines this run had, `(engine, caps, role)` in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+    // when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
+    pub engines: Vec<(i32, i32, i32)>,
 }
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
+
+// The platform class of the process (kin's `pcls`, `emon.engines`): the OS family that runs emon, which decides which engines the table lets run and what a turnkey
+// package chooses (D898).
+pub fn platform_class() -> i32 {
+    use crate::emon::engines as ke;
+    if cfg!(target_arch = "wasm32") {
+        ke::pcls_web()
+    } else if cfg!(target_os = "macos") {
+        ke::pcls_macos()
+    } else if cfg!(target_os = "ios") {
+        ke::pcls_ios()
+    } else if cfg!(target_os = "windows") {
+        ke::pcls_windows()
+    } else if cfg!(target_os = "android") {
+        ke::pcls_android()
+    } else {
+        ke::pcls_linux()
+    }
+}
+
+// THE ENGINE TABLE OF A RECORDING (D898): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
+// producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
+// identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
+pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
+    use crate::emon::engines as ke;
+    let class = platform_class();
+    let mut avail = Cells::new();
+    for (k, v) in producer {
+        if k == "engine" || k == "ocr-engine" {
+            for name in v.split('+') {
+                let e = ke::eng_find(name.as_bytes(), 0, name.len() as i32);
+                if e >= 0 {
+                    cells_push(&mut avail, e);
+                }
+            }
+        }
+    }
+    let mut rows = Cells::new();
+    if ke::pk_record_engines(&mut rows, class, &mut avail) != 0 {
+        return Vec::new();
+    }
+    (0..cells_len(&rows) / 3).map(|i| (cells_at(&rows, 3 * i), cells_at(&rows, 3 * i + 1), cells_at(&rows, 3 * i + 2))).collect()
+}
 
 // THE FILE IS KIN'S (P10.9, `kin/transcript.kin`, D438): the format (version 1, byte for byte), the kind names, the escaping of the producer, the reader
 // and its refusals, the map a replay is answered from and the count of entries it never asked for. This file keeps what is not observable: the
@@ -755,6 +801,9 @@ impl Transcript {
         let mut tr = Tr::new();
         for (i, l) in &self.inputs {
             kt::tr_add_input(&mut tr, *i, *l);
+        }
+        for (e, c, r) in &self.engines {
+            kt::tr_add_engine(&mut tr, *e, *c, *r);
         }
         for (k, v) in &self.producer {
             kt::tr_add_producer(&mut tr, &mut cps(k), &mut cps(v));
@@ -796,6 +845,9 @@ impl Transcript {
         let mut t = Transcript::default();
         for i in 0..kt::tr_n_inputs(&mut tr) {
             t.inputs.push((kt::tr_in_index(&mut tr, i), kt::tr_in_length(&mut tr, i)));
+        }
+        for i in 0..kt::tr_n_engines(&mut tr) {
+            t.engines.push((kt::tr_eng_engine(&mut tr, i), kt::tr_eng_caps(&mut tr, i), kt::tr_eng_role(&mut tr, i)));
         }
         let mut p = 0;
         while kt::tr_p_more(&mut tr, p) == 1 {

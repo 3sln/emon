@@ -2,7 +2,7 @@
   (:require [emon.lang :refer [I32 Cells]]
             [emon.ofuse :refer [of-rule of-pp-choice of-pp-year of-pp-code]]
             [emon.ocrengine :refer [oe-register oe-tag oe-select oe-id-count oe-id-len oe-id-value oe-role oe-request-slot]]
-            [emon.ocridentity :refer [oi-tess-len]]
+            [emon.ocridentity :refer [oi-tess-count]]
             [emon.evidence :refer [or-new or-set or-get orf-engine orf-eix orf-observed-hi]]
             [emon.plan :refer [rq-ocr rq-ocr-view rq-ocr-lang rq-ocr-end view-base]]
             [emon.ocrport :refer [op-lang-first op-lang-count op-lang-at op-identity-at op-request-engine op-pp-lang-first op-pp-lang-count op-pp-lang-at]]
@@ -29,7 +29,7 @@
     (rq-ocr-lang r 101 110 103 0)
     (rq-ocr-end r at)
     (oe-tag r scratch 0)
-    (assert-eq (cells-len r) (+ 15 (oi-tess-len)) "default identity extends the key")
+    (assert-eq (cells-len r) (+ 15 (oi-tess-count 0)) "default identity extends the key")
     (assert-eq (cells-at r 0) (cells-len r) "record header includes identity")
     (assert-eq (op-lang-count r) 1 "one legacy language")))
 

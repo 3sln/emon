@@ -16,8 +16,9 @@ use crate::engine::{parse_options, ChunkCache, Engine, Error, HtmlAssets, HtmlOp
 use crate::plan::{self, Answer, Bitmaps, PlanError, Range, Replayer, Request, Transcript};
 use crate::port::Cells;
 use crate::source::ByteSource;
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use crate::adapter::{Begun, Completion, Engines, Mailbox, Router};
 
 // What a session call can fail with: the engine's own error, or the caller's mistake (`usage`).
 pub enum Fault {
@@ -39,6 +40,8 @@ pub enum Step {
     Bytes(Vec<(u64, u64)>),
     // requests the caller owes (`ocr`, with `js-ocr=1`; `render` and `crop`, with `js-render=1`): each a record `[len kind id arg...]`
     Requests(Vec<Vec<i32>>),
+    // only async adapters' work is outstanding (K2, D899): wait for a completion (`Completer::wait`) and step again
+    Waiting,
 }
 
 // The `ocr` port of a session whose caller has an engine: its presence makes the decode answers keep their pixels (the engine reads
@@ -72,6 +75,36 @@ pub struct Session {
     in_round: bool,
     external: BTreeSet<i32>,
     done: bool,
+    // the registry's OCR adapters (K2, D899): the session answers the requests they are registered for itself; what they answer later arrives in the mailbox
+    router: Option<Router>,
+    mailbox: Arc<Mailbox>,
+    // token of an async adapter's work -> the request it is for
+    pending: HashMap<u64, i32>,
+    tokens: Arc<Mutex<HashSet<u64>>>,
+}
+
+// What may be done from any thread while a session steps (`emon_complete`, `emon_wait`): hand an async adapter's answer to the session, or wait for one.
+#[derive(Clone)]
+pub struct Completer {
+    router: Option<Router>,
+    mailbox: Arc<Mailbox>,
+    tokens: Arc<Mutex<HashSet<u64>>>,
+}
+
+impl Completer {
+    // The answer to the work `token` names (`Completion::Answer`: the OIL record; `Refused`: unsupported or failed, the page is unread). Err when the token is none of this session's.
+    pub fn complete(&self, token: u64, c: Completion) -> Result<(), String> {
+        let ours = self.tokens.lock().unwrap_or_else(|e| e.into_inner()).contains(&token);
+        match (&self.router, ours) {
+            (Some(r), true) if r.complete(token, c) => Ok(()),
+            _ => Err(format!("token {} is not waited for by this session", token)),
+        }
+    }
+
+    // Wait for a completion: true when one is here (step to take it), false when the time ran out.
+    pub fn wait(&self, timeout: std::time::Duration) -> bool {
+        self.mailbox.wait(timeout)
+    }
 }
 
 impl Session {
@@ -80,6 +113,13 @@ impl Session {
     // requests the caller's. The bound on the input's length is checked BEFORE the cache of its chunks is allocated: a chunk of 1 and a
     // length of 2 GiB would ask for gigabytes (the engine checks it again, against the same limit).
     pub fn open(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str) -> Result<Session, Fault> {
+        Session::open_with(length, chunk, intake_only, password, options, None)
+    }
+
+    // `open`, with the engines an embedder registered (K2, D899): when they have OCR adapters the session answers the `ocr` requests those are registered for itself, and only
+    // the bytes, the requests nobody registered for (with `js-ocr=1`) and WAITING come out of `step`.
+    pub fn open_with(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str, engines: Option<&Engines>) -> Result<Session, Fault> {
+        let router = engines.and_then(|e| e.router());
         let mut p = parse_options(options).map_err(Fault::Usage)?;
         if let Some(c) = chunk {
             p.config.chunk_size = c;
@@ -94,8 +134,10 @@ impl Session {
         let engine = Engine::new(p.config.clone());
         let idx = 0usize;
         let run = engine.start_pushed(idx, cache.clone(), password, &p.options, intake_only)?;
-        let keep = p.record || p.js_ocr;
-        let ocr = if p.js_ocr { Some(OcrPort(Arc::new(HostOcr))) } else { None };
+        let has_router = router.is_some();
+        // the decode answers keep their pixels when something reads them: the caller's engine, or an adapter
+        let keep = p.record || p.js_ocr || has_router;
+        let ocr = if let Some(r) = &router { Some(OcrPort(Arc::new(r.clone()))) } else if p.js_ocr { Some(OcrPort(Arc::new(HostOcr))) } else { None };
         let source: Arc<dyn ByteSource> = cache.clone();
         let local = Box::new(crate::engine::port_fulfiller(source, idx, keep, p.record, ocr, None));
         let mut recording = None;
@@ -103,9 +145,40 @@ impl Session {
             let mut t = Transcript::default();
             t.inputs = vec![(idx as i32, ulen as i32)];
             t.producer = p.producer.clone();
+            // the engines that answer say so in the transcript (`:producer`, and the engine table written first: D898), as the Engine's own recording does
+            if let Some(r) = &router {
+                let mut prod = r.producer_pairs();
+                for (k, v) in &p.producer {
+                    if !prod.iter().any(|(k2, _)| k2 == k) {
+                        prod.push((k.clone(), v.clone()));
+                    }
+                }
+                t.engines = plan::engine_rows(&prod);
+                t.producer = prod;
+            }
             recording = Some(t);
         }
-        Ok(Session { cache, run: Some(run), idx, js_ocr: p.js_ocr, ocr_engine: p.options.ocr_engine, js_render: p.js_render, limits: p.config.limits.clone(), files: BTreeMap::new(), replay: false, replayer: None, recording, local, in_round: false, external: BTreeSet::new(), done: false })
+        Ok(Session {
+            cache,
+            run: Some(run),
+            idx,
+            js_ocr: p.js_ocr,
+            ocr_engine: p.options.ocr_engine,
+            js_render: p.js_render,
+            limits: p.config.limits.clone(),
+            files: BTreeMap::new(),
+            replay: false,
+            replayer: None,
+            recording,
+            local,
+            in_round: false,
+            external: BTreeSet::new(),
+            done: false,
+            router,
+            mailbox: Mailbox::new(),
+            pending: HashMap::new(),
+            tokens: Arc::new(Mutex::new(HashSet::new())),
+        })
     }
 
     // SPEC 13.1: intake round 0 reads the first and the last chunk. The ranges to read and `provide` first.
@@ -146,8 +219,19 @@ impl Session {
 
     // The requests the caller fulfils (kin's `pl-route`): `ocr`, when it has an engine (`js-ocr=1`), and `render` and `crop`, when it has a
     // renderer (`js-render=1`, P11.4c). Without a renderer they are answered `unsupported` here like any request no port is configured for.
-    fn is_external(&self, kind: i32) -> bool {
-        matches!(plan::route(kind, self.js_ocr, self.js_render), plan::Route::Ocr | plan::Route::Render)
+    fn is_external(&self, req: &Request) -> bool {
+        // an `ocr` request an adapter is registered for is answered here, whatever `js-ocr` says: the caller owes what nobody registered for (K2, kin's `ad-route`)
+            if let Some(r) = &self.router {
+            if r.claims(req) {
+                return false;
+            }
+        }
+        matches!(plan::route(req.kind(), self.js_ocr, self.js_render), plan::Route::Ocr | plan::Route::Render)
+    }
+
+    // What `emon_complete` and `emon_wait` use from any thread.
+    pub fn completer(&self) -> Completer {
+        Completer { router: self.router.clone(), mailbox: self.mailbox.clone(), tokens: self.tokens.clone() }
     }
 
     // The value of limit `kind` in force for this conversion (the override, else kin's default): the caller reads the bound it must
@@ -190,6 +274,9 @@ impl Session {
                 let reqs: Vec<Request> = run.requests().to_vec();
                 let mut local: Vec<&Request> = Vec::new();
                 for r in &reqs {
+                    if s.pending.values().any(|id| *id == r.id()) {
+                        continue;
+                    }
                     if !run.has_answer(r.id()) && !s.external.contains(&r.id()) {
                         local.push(r);
                     }
@@ -215,6 +302,16 @@ impl Session {
                 }
                 // 2. the local requests, answered here
                 for req in &local {
+                    if let Some(r) = s.router.clone().filter(|r| r.claims(req)) {
+                        match r.begin(req, run.bitmaps(), s.recording.is_some(), &s.mailbox).map_err(|e| run.error_of(e))? {
+                            Begun::Done(a) => run.offer(a)?,
+                            Begun::Pending(t) => {
+                                s.pending.insert(t, req.id());
+                                s.tokens.lock().unwrap_or_else(|e| e.into_inner()).insert(t);
+                            }
+                        }
+                        continue;
+                    }
                     let a = (s.local)(req, run.bitmaps()).map_err(|e| run.error_of(e))?;
                     run.offer(a)?;
                 }
@@ -227,6 +324,21 @@ impl Session {
                 }
                 if !owed.is_empty() {
                     return Ok(Step::Requests(owed));
+                }
+                // 3b. what async adapters have answered since: taken in, and while any is still outstanding the caller is told to wait
+                if !s.pending.is_empty() {
+                    let router = s.router.clone().expect("work is pending only with a router");
+                    let arrived = s.mailbox.take();
+                    if arrived.is_empty() {
+                        return Ok(Step::Waiting);
+                    }
+                    for (token, meta, c) in arrived {
+                        s.pending.remove(&token);
+                        s.tokens.lock().unwrap_or_else(|e| e.into_inner()).remove(&token);
+                        let a = router.finish(meta, c).map_err(|e| run.error_of(e))?;
+                        run.offer(a)?;
+                    }
+                    continue;
                 }
                 // 4. the round is answered: the unit is re-run on the answers
                 let entries = run.commit()?;
@@ -253,7 +365,7 @@ impl Session {
                 plan::Next::Requests(reqs, _) => {
                     s.external.clear();
                     for r in &reqs {
-                        if !s.replay && s.is_external(r.kind()) {
+                        if !s.replay && s.is_external(r) {
                             s.external.insert(r.id());
                         }
                     }
@@ -368,6 +480,17 @@ impl Session {
         let run = self.run.take().ok_or_else(|| Fault::Usage("the session is finished".to_string()))?;
         let (i, _) = run.into_intake()?;
         Ok(intake_line(&i))
+    }
+}
+
+// A session that goes while an async adapter still works on its requests tells the adapter to stop: a late answer is ignored.
+impl Drop for Session {
+    fn drop(&mut self) {
+        if let Some(r) = &self.router {
+            for t in self.pending.keys() {
+                r.cancel(*t);
+            }
+        }
     }
 }
 

@@ -1,21 +1,23 @@
 // WHERE THE NATIVE PORTS ARE (D552; the CLI's lookup of D541, for a library that is not an executable). A BINDING, like `tess.rs`: it names files and directories
 // (the pdfium library, the Tesseract models) of the C library's and the pod's own archive; the Engine layers never see a path (D058).
 //
-//   pdfium    an explicit path (`emon_set_native_paths`, the pod's `:pdfium`), then $EMON_PDFIUM_LIB, then NEXT TO THE LIBRARY (the directory libemon was
+//   pdfium    an explicit path (`emon_engines_pdfium`, the pod's `:pdfium`), then $EMON_PDFIUM_LIB, then NEXT TO THE LIBRARY (the directory libemon was
 //             loaded from; for a static link the executable's), then next to the executable: in each directory D, D/libpdfium.*, D/lib/libpdfium.* and
 //             D/../lib/libpdfium.* (the archive's layout is lib/libemon.* beside lib/libpdfium.*; the pod's is emon-pod, lib/libpdfium.*).
 //             MOBILE (K6, D897): inside an app the libraries are not files "next to" each other: an Android APK maps them (dladdr names `base.apk!/lib/...`) and an
 //             iOS app carries them as frameworks. When nothing is found by file, the loader is asked for the library by name: `libpdfium.so` (Android: the app's
 //             own native-library directory is in the loader's search path) or `@rpath/libpdfium.dylib` and `@rpath/libpdfium.framework/libpdfium` (iOS).
-//   models    an explicit directory, then $EMON_TESSDATA, then `share/emon/tessdata` (D/share/emon/tessdata or D/../share/emon/tessdata, same D), then
-//             $TESSDATA_PREFIX and the usual system places (the Rust host's `TessOcr::new(None)`).
+//   models    (the pod, which links Tesseract: the `tesseract` feature) an explicit directory, then $EMON_TESSDATA, then `share/emon/tessdata` (D/share/emon/tessdata or
+//             D/../share/emon/tessdata, same D), then $TESSDATA_PREFIX and the usual system places (the Rust host's `TessOcr::new(None)`).
+//   packs     (the C library, K2, D899) `share/emon/packs` one directory above `lib/` (the archive's), or beside the executable; $EMON_MODELS is searched by `packs.rs`.
+//   adapters  (the C library) `$EMON_ADAPTER_DIR`, then `lib/emon/adapters/` beside or above the library: every `libemon_ocr_*` (`emon_ocr_*.dll`) in it; in an app, by name from the
+//             loader (`libemon_ocr_tesseract.so`, `@rpath/libemon_ocr_tesseract.dylib`).
 //
 // A place that is NAMED (explicit, or the environment variable) and is wrong is an error and is never replaced by the next one. Nothing found
 // is not an error: the port is absent (`emon_capabilities` has no bit for it) and a request for it is answered `unsupported` (D199).
 //
 // Assembled into the crate beside `capi.rs` (`#[path = "native.rs"] mod native;` in it) by kin/scripts/emon-bind-build and tools/package.clj.
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 const PDFIUM_LIB: &str = "libpdfium.dylib";
@@ -24,8 +26,6 @@ const PDFIUM_LIB: &str = "libpdfium.so";
 #[cfg(windows)]
 const PDFIUM_LIB: &str = "pdfium.dll";
 
-// the process-wide explicit places (`emon_set_native_paths`)
-pub static SET: Mutex<(Option<String>, Option<String>)> = Mutex::new((None, None));
 
 fn nonempty_env(k: &str) -> Option<String> {
     std::env::var(k).ok().filter(|s| !s.is_empty())
@@ -76,6 +76,7 @@ fn bases() -> Vec<PathBuf> {
     v
 }
 
+#[allow(dead_code)]
 fn has_models(d: &Path) -> bool {
     std::fs::read_dir(d).map(|r| r.filter_map(|e| e.ok()).any(|e| e.file_name().to_string_lossy().ends_with(".traineddata"))).unwrap_or(false)
 }
@@ -93,8 +94,7 @@ fn named_pdfium(e: &str) -> Result<PathBuf, String> {
 
 /// The pdfium library to load: Ok(Some) the file, Ok(None) nowhere, Err a named place that is wrong.
 pub fn find_pdfium(explicit: Option<&str>) -> Result<Option<PathBuf>, String> {
-    let set = SET.lock().unwrap_or_else(|e| e.into_inner()).0.clone();
-    if let Some(e) = explicit.map(|s| s.to_string()).filter(|s| !s.is_empty()).or(set).or_else(|| nonempty_env("EMON_PDFIUM_LIB")) {
+    if let Some(e) = explicit.map(|s| s.to_string()).filter(|s| !s.is_empty()).or_else(|| nonempty_env("EMON_PDFIUM_LIB")) {
         return named_pdfium(&e).map(Some);
     }
     for b in bases() {
@@ -137,10 +137,10 @@ fn loader_pdfium() -> Option<PathBuf> {
     None
 }
 
+#[allow(dead_code)]
 /// The models directory: Ok(Some) it, Ok(None) nowhere in the lookup order, Err a named place that is wrong.
 pub fn find_tessdata(explicit: Option<&str>) -> Result<Option<PathBuf>, String> {
-    let set = SET.lock().unwrap_or_else(|e| e.into_inner()).1.clone();
-    if let Some(e) = explicit.map(|s| s.to_string()).filter(|s| !s.is_empty()).or(set).or_else(|| nonempty_env("EMON_TESSDATA")) {
+    if let Some(e) = explicit.map(|s| s.to_string()).filter(|s| !s.is_empty()).or_else(|| nonempty_env("EMON_TESSDATA")) {
         let p = PathBuf::from(&e);
         return if has_models(&p) { Ok(Some(p)) } else { Err(format!("no *.traineddata in {}", e)) };
     }
@@ -198,4 +198,81 @@ pub fn tesseract_ready() -> bool {
 #[cfg(not(feature = "tesseract"))]
 pub fn tesseract_ready() -> bool {
     false
+}
+
+/// The archive's pack directory (`share/emon/packs`, one directory above `lib/` or beside the executable), when it has packs.
+pub fn find_packs_dir() -> Option<PathBuf> {
+    for b in bases() {
+        let up = b.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| b.clone());
+        for c in [b.join("share").join("emon").join("packs"), up.join("share").join("emon").join("packs")] {
+            if c.is_dir() {
+                return Some(c);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn is_adapter_name(n: &str) -> bool {
+    n.starts_with("emon_ocr_") && n.ends_with(".dll")
+}
+#[cfg(not(windows))]
+fn is_adapter_name(n: &str) -> bool {
+    n.starts_with("libemon_ocr_") && (n.ends_with(".so") || n.ends_with(".dylib"))
+}
+
+/// The adapter libraries to register by default, in a stable order: `$EMON_ADAPTER_DIR` (a place you NAME that is wrong is an error), else `emon/adapters` in each directory D
+/// next to the library or the executable (D/emon/adapters, D/lib/emon/adapters, D/../lib/emon/adapters), else, in an app, the ones the loader knows by name.
+pub fn find_adapter_libs() -> Result<Vec<PathBuf>, String> {
+    let list = |d: &Path| -> Vec<PathBuf> {
+        let mut v: Vec<PathBuf> = std::fs::read_dir(d).map(|r| r.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file() && p.file_name().map(|n| is_adapter_name(&n.to_string_lossy())).unwrap_or(false)).collect()).unwrap_or_default();
+        v.sort();
+        v
+    };
+    if let Some(e) = nonempty_env("EMON_ADAPTER_DIR") {
+        let d = PathBuf::from(&e);
+        if !d.is_dir() {
+            return Err(format!("EMON_ADAPTER_DIR names {}, which is not a directory", e));
+        }
+        return Ok(list(&d));
+    }
+    for b in bases() {
+        let up = b.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| b.clone());
+        for c in [b.join("emon").join("adapters"), b.join("lib").join("emon").join("adapters"), up.join("lib").join("emon").join("adapters")] {
+            let v = list(&c);
+            if !v.is_empty() {
+                return Ok(v);
+            }
+        }
+    }
+    Ok(loader_adapters())
+}
+
+/// Adapter libraries the platform's loader opens by name, where an app bundle is not a directory of files (Android, iOS).
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn loader_adapters() -> Vec<PathBuf> {
+    use std::ffi::{c_char, c_int, c_void, CString};
+    extern "C" {
+        fn dlopen(path: *const c_char, flags: c_int) -> *mut c_void;
+        fn dlclose(h: *mut c_void) -> c_int;
+    }
+    let names: &[&str] = if cfg!(target_os = "android") { &["libemon_ocr_tesseract.so"] } else { &["@rpath/libemon_ocr_tesseract.dylib", "@rpath/libemon_ocr_tesseract.framework/libemon_ocr_tesseract"] };
+    let mut out = Vec::new();
+    for n in names {
+        if let Ok(c) = CString::new(*n) {
+            // RTLD_LAZY (1): only asks whether the loader can open it; `Engines::load` opens it again for real
+            let h = unsafe { dlopen(c.as_ptr(), 1) };
+            if !h.is_null() {
+                unsafe { dlclose(h) };
+                out.push(PathBuf::from(*n));
+                break;
+            }
+        }
+    }
+    out
+}
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn loader_adapters() -> Vec<PathBuf> {
+    Vec::new()
 }

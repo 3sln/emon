@@ -8,10 +8,11 @@
 ;;   bb mobile --triple T --check        build, `bb native --audit`, smoke: what the CI jobs run
 ;;   bb mobile --list                    the mobile triples
 ;;
-;; WHAT IT IS. The C library of docs/hosts/c.md (host/c, emon.h) for a phone: ONE dynamic library per triple, `libemon.so` (Android) or `libemon.dylib` (iOS), with
-;; Tesseract and Leptonica (and their codecs) linked statically from `bb native` and the C++ runtime statically too (Android: nothing is loaded but libc, libm and
-;; libdl). pdfium is the pinned pdfium-binaries library of the platform, shipped beside it and loaded at run time (host/c/src/native.rs: by file, then by name).
-;; There is NO libemon.a: Dart build hooks bundle dynamic libraries only (dart.dev/tools/hooks, code assets `DynamicLoadingBundled`), and a static Tesseract slice
+;; WHAT IT IS. The C library of docs/hosts/c.md (host/c, emon.h) for a phone (K2, D899): TWO dynamic libraries per triple, `libemon.so` / `libemon.dylib`, the CORE library (no OCR engine:
+;; pdfium loaded at run time, the pack fetch), and `lib/emon/adapters/libemon_ocr_tesseract.*`, the Tesseract ADAPTER library with Tesseract and Leptonica (and their codecs) linked statically from
+;; `bb native` and the C++ runtime statically too (Android: nothing is loaded but libc, libm and libdl, in either). An app that reads scans another way ships the core alone. pdfium is the pinned
+;; pdfium-binaries library of the platform, shipped beside them and loaded at run time (host/c/src/native.rs: by file, then by name). The English and orientation models are PACKS in
+;; share/emon/packs/<id>/<file>. There is NO libemon.a: Dart build hooks bundle dynamic libraries only (dart.dev/tools/hooks, code assets `DynamicLoadingBundled`), and a static Tesseract slice
 ;; would be a hundred megabytes of archive nobody can link a Flutter app against.
 ;;
 ;; SAME PIPELINE AS THE DESKTOP: the crate is assembled from the same sources as `bb package --host c` (tools/package.clj: gen/rust, host/rust/src, host/c/src) and
@@ -77,17 +78,19 @@
 (def ios-sdk (:sdk cfg))
 (def target-dir (str root "/.cache/mobile/" triple))
 (def stage-dir (str root "/.cache/mobile/stage/" triple))
+(def adapter-stage-dir (str root "/.cache/mobile/stage/" triple "-adapter"))
 (def native-prefix (str root "/.cache/native/" triple))
 (def pdfium-dir (when cfg (str root "/.cache/pdfium/" (str/replace (:version pdfium-pin) "/" "-") "/" (:pdfium cfg))))
 (def pdfium-file (when cfg (str pdfium-dir "/" (get-in pdfium-pin [:platforms (:pdfium cfg) :lib]))))
 (def lib-name (if android? "libemon.so" "libemon.dylib"))
+(def adapter-name (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
 (def pdfium-name (if android? "libpdfium.so" "libpdfium.dylib"))
 (def archive-name (str "emon-c-" version "-" triple))
 (def archive (str root "/dist/c/" archive-name ".tar.gz"))
 
 ;; ------------------------------------------------------------------------------------------------ the crate (as `bb package --host c` assembles it)
 ;; keep equal to `rust-host-files` of tools/package.clj (`--check-sources` below compares them)
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "ppocr_native"])
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter"])
 
 (defn package-host-files [] (some->> (slurp "tools/package.clj") (re-find #"\(def rust-host-files (\[[^\]]*\])") second edn/read-string))
 
@@ -102,81 +105,102 @@
   (when-not (and (fs/exists? dst) (= (fs/size src) (fs/size dst)) (= (sha256 src) (sha256 dst))) (fs/copy src dst {:replace-existing true})))
 (defn stamp [s] (str/replace s "0.0.0-dev" version))
 
-(defn stage-crate! []
+;; K2 (D899): TWO crates per triple, from the same sources. The CORE library (libemon: emon.h, pdfium at run time, the pack fetch, no Tesseract) and the Tesseract ADAPTER library
+;; (libemon_ocr_tesseract: Tesseract and Leptonica statically, exporting only `emon_ocr_adapter_v1`).
+(defn stage-crate! [kind]
   (when-not (= (package-host-files) rust-host-files) (die "tools/package.clj's rust-host-files differ from tools/native/mobile.clj's: keep them equal"))
-  (let [mods (remove law-or-probe-lower? (listing "gen/rust/emon" ".rs"))
+  (let [dir (if (= kind :core) stage-dir adapter-stage-dir)
+        mods (remove law-or-probe-lower? (listing "gen/rust/emon" ".rs"))
         cargo (slurp "release/pkg/rust/Cargo.toml")
         lib "[lib]\nname = \"emon\"\npath = \"src/lib.rs\"\n"
         _ (when-not (str/includes? cargo lib) (die "release/pkg/rust/Cargo.toml has no [lib] table of the expected form"))
-        cargo (str/replace cargo lib (str lib "crate-type = [\"cdylib\"]\n"))
+        cargo (if (= kind :core)
+                (str/replace cargo lib (str lib "crate-type = [\"cdylib\"]\n"))
+                (str/replace cargo lib "[lib]\nname = \"emon_ocr_tesseract\"\npath = \"src/lib.rs\"\ncrate-type = [\"cdylib\"]\n"))
         files (merge
                (into {} (for [m mods] [(str "src/emon/" m ".rs") {:file (str "gen/rust/emon/" m ".rs")}]))
                {"src/emon.rs" {:text (str (str/join "\n" (map #(str "pub mod " % ";") mods)) "\n")}}
                (into {} (for [f rust-host-files :when (not= f "lib")] [(str "src/" f ".rs") {:file (str "host/rust/src/" f ".rs")}]))
-               {"src/lib.rs" {:text (str (str/replace (slurp "host/rust/src/lib.rs") "PPOCR_NATIVE_HOST: bool = false" "PPOCR_NATIVE_HOST: bool = true")
-                                         "\n// the C binding (P9.4), assembled in by tools/native/mobile.clj from host/c/src/capi.rs\npub mod capi;\n")}
-                "src/capi.rs" {:file "host/c/src/capi.rs"} "src/native.rs" {:file "host/c/src/native.rs"}
-                "Cargo.toml" {:text cargo} "Cargo.lock" {:file "host/rust/Cargo.lock"}})]
-    (fs/create-dirs stage-dir)
-    (doseq [[rel src] files :let [dst (str stage-dir "/" rel)]]
+               (if (= kind :core)
+                 {"src/lib.rs" {:text (str (str/replace (slurp "host/rust/src/lib.rs") "PPOCR_NATIVE_HOST: bool = false" "PPOCR_NATIVE_HOST: bool = true")
+                                           "\n// the C binding (P9.4), assembled in by tools/native/mobile.clj from host/c/src/capi.rs\npub mod capi;\n")}
+                  "src/capi.rs" {:file "host/c/src/capi.rs"} "src/native.rs" {:file "host/c/src/native.rs"}}
+                 {"src/lib.rs" {:text (slurp "host/rust/src/lib.rs")}})
+               {"Cargo.toml" {:text cargo} "Cargo.lock" {:file "host/rust/Cargo.lock"}})]
+    (fs/create-dirs dir)
+    (doseq [[rel src] files :let [dst (str dir "/" rel)]]
       (if (:text src) (put-text! dst (stamp (:text src)))
           (if (re-find #"\.(rs|toml|lock)$" rel) (put-text! dst (stamp (slurp (:file src)))) (put-file! dst (:file src)))))
     ;; the sources of the stage are exactly these (a removed module must not linger)
-    (doseq [f (fs/glob (str stage-dir "/src") "**") :when (fs/regular-file? f)
-            :when (not (contains? files (str (fs/relativize stage-dir f))))]
+    (doseq [f (fs/glob (str dir "/src") "**") :when (fs/regular-file? f)
+            :when (not (contains? files (str (fs/relativize dir f))))]
       (fs/delete f))))
 
 ;; ------------------------------------------------------------------------------------------------ the library
-(defn rustc-flags []
+;; The rustc arguments of a library. COMMON to both: stripped, named, and (Android) 16 KB aligned with the archives' own symbols unexported. The CORE library has pdfium loaded at
+;; run time and no link flags (it needs nothing but libc, libm and libdl). The ADAPTER has the static Tesseract, Leptonica and codecs of `bb native`, and, on Android, the NDK's static
+;; C++ runtime named last (rustc links with -nodefaultlibs, so the driver's own `-static-libstdc++` adds nothing; the audit fails a library that leaves a C++ runtime symbol undefined).
+(defn rustc-flags [kind]
   (let [link (str/split (str/trim (slurp (str native-prefix "/link.rustflags"))) #"\s+")
-        common ["--cfg" "pdfium" "--cfg" "pdfium_dl" "-C" "strip=symbols"]]
-    (concat common
+        so (if (= kind :core) "libemon" "libemon_ocr_tesseract")]
+    (concat (if (= kind :core) ["--cfg" "pdfium" "--cfg" "pdfium_dl" "-C" "strip=symbols"] ["-C" "strip=symbols"])
             (if android?
-              ;; soname; 16 KB pages (NDK r28 does it by default, said anyway: Google Play requires it for 64-bit apps, and the audit checks it); the C++ runtime
-              ;; static (libc++_static and libc++abi, named last); the archives' own symbols are not exported
-              ["-C" "link-arg=-Wl,-soname,libemon.so" "-C" "link-arg=-Wl,-z,max-page-size=16384" "-C" "link-arg=-Wl,-z,common-page-size=16384"
+              ["-C" (str "link-arg=-Wl,-soname," so ".so") "-C" "link-arg=-Wl,-z,max-page-size=16384" "-C" "link-arg=-Wl,-z,common-page-size=16384"
                "-C" "link-arg=-Wl,--exclude-libs,ALL" "-C" "link-arg=-Wl,--build-id=none"]
-              ["-C" "link-arg=-Wl,-install_name,@rpath/libemon.dylib"])
-            link
-            ;; Android: rustc links with -nodefaultlibs, so the driver's own `-static-libstdc++` adds nothing: the NDK's static C++ runtime is named here, after the
-            ;; archives that need it (the audit fails a library that leaves a C++ runtime symbol undefined)
-            (when android? ["-l" "static=c++_static" "-l" "static=c++abi"]))))
+              ["-C" (str "link-arg=-Wl,-install_name,@rpath/" so ".dylib")])
+            (when (= kind :adapter) link)
+            (when (and android? (= kind :adapter)) ["-l" "static=c++_static" "-l" "static=c++abi"]))))
 
-(defn build-lib! []
+(defn build-crate! [kind]
   (let [need (fn [f why] (when-not (fs/exists? f) (die f " is missing: " why)))]
     (need (str native-prefix "/link.rustflags") (str "run `bb native --triple " triple "`"))
     (need (str pdfium-dir "/.verified") (str "run `bb pdfium-fetch --platform " (:pdfium cfg) "`"))
-    (let [env (cond-> {"CARGO_TARGET_DIR" (str stage-dir "/target")}
-                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++"))
+    (let [dir (if (= kind :core) stage-dir adapter-stage-dir)
+          env (cond-> {"CARGO_TARGET_DIR" (str dir "/target")}
+                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++")
+                                ;; the C of `ring` (the pack fetch's TLS, feature `packs-fetch`) is built by cc-rs, which looks for `<triple>-clang` and finds none on the PATH: name the NDK's
+                                (str "CC_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/" (ndk-clang-triple) "-clang")
+                                (str "AR_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/llvm-ar"))
                 (not android?) (assoc "IPHONEOS_DEPLOYMENT_TARGET" (:ios-deployment cfg)))
           have (str/split-lines (:out (sh {} "rustup" "target" "list" "--installed")))]
       (when-not (some #{(:rust cfg)} (map str/trim have)) (die "the Rust target " (:rust cfg) " is not installed in the active toolchain: rustup target add " (:rust cfg)))
-      (stage-crate!)
-      (say "cargo rustc --target " (:rust cfg) " (" (count (rustc-flags)) " rustc arguments)")
-      (let [cmd (fn [offline] (concat ["cargo" "rustc" "--release" "--lib" "--locked" "--target" (:rust cfg) "--features" "tesseract"] offline ["--"] (rustc-flags)))
-            r (let [r (apply sh {:dir stage-dir :env env :ok? false} (cmd ["--offline"]))] (if (zero? (:exit r)) r (apply sh {:dir stage-dir :env env} (cmd []))))]
+      (stage-crate! kind)
+      (say "cargo rustc " (name kind) " --target " (:rust cfg) " (" (count (rustc-flags kind)) " rustc arguments)")
+      (let [features (if (= kind :core) "packs-fetch" "tesseract-adapter")
+            cmd (fn [offline] (concat ["cargo" "rustc" "--release" "--lib" "--locked" "--target" (:rust cfg) "--features" features] offline ["--"] (rustc-flags kind)))
+            r (let [r (apply sh {:dir dir :env env :ok? false} (cmd ["--offline"]))] (if (zero? (:exit r)) r (apply sh {:dir dir :env env} (cmd []))))]
         (when-not (zero? (:exit r)) (die "cargo rustc failed")))
-      (let [built (str stage-dir "/target/" (:rust cfg) "/release/" lib-name)]
+      (let [built (str dir "/target/" (:rust cfg) "/release/" (if (= kind :core) lib-name adapter-name))]
         (when-not (fs/exists? built) (die "cargo made no " built))
         built))))
 
+(defn build-lib! [] (build-crate! :core))
+
 ;; ------------------------------------------------------------------------------------------------ what a triple ships
 ;; ONE list: {path in the archive -> source}. K2 (core + adapter libraries) adds its libraries here; the archive, the audit and the sizes follow.
-(defn artifacts [lib]
+(def packs-catalogue (delay (edn/read-string (slurp "release/packs/packs.edn"))))
+(defn pack-dir-of [file]
+  (or (some (fn [p] (when (and (= :tesseract (:engine p)) (some #(= file (:name %)) (:files p))) (:id p))) (:packs @packs-catalogue))
+      (die "the pack catalogue has no Tesseract pack with the file " file)))
+
+(defn artifacts [{:keys [lib adapter]}]
   (merge {(str "lib/" lib-name) lib
+          (str "lib/emon/adapters/" adapter-name) adapter
           (str "lib/" pdfium-name) pdfium-file
           "include/emon.h" (str root "/host/c/include/emon.h")
+          "include/emon_adapter.h" (str root "/host/c/include/emon_adapter.h")
           "LICENSE" (str root "/LICENSE")
           "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
           "README.md" (str root "/release/pkg/README.md")}
-         (into {} (for [d (:data pins)] [(str "share/emon/tessdata/" (:file d)) (str native-prefix "/share/tessdata/" (:file d))]))))
+         ;; the models are PACKS (D885, D899): share/emon/packs/<id>/<file>, where emon_engines_defaults looks
+         (into {} (for [d (:data pins)] [(str "share/emon/packs/" (pack-dir-of (:file d)) "/" (:file d)) (str native-prefix "/share/tessdata/" (:file d))]))))
 
-(defn assemble! [lib]
+(defn assemble! [libs]
   (fs/delete-tree target-dir)
-  (doseq [[rel src] (artifacts lib) :when (re-find #"^(lib|include|share)/" rel)]
+  (doseq [[rel src] (artifacts libs) :when (re-find #"^(lib|include|share)/" rel)]
     (put-file! (str target-dir "/" rel) src))
   ;; Strip what the linker kept (rustc's `strip=symbols` leaves the section names of Android's .comment note): the audit and the sizes are of this file
-  (when android? (sh {} (str (ndk-bin) "/llvm-strip") "--strip-unneeded" (str target-dir "/lib/" lib-name)))
+  (when android? (doseq [f [(str "lib/" lib-name) (str "lib/emon/adapters/" adapter-name)]] (sh {} (str (ndk-bin) "/llvm-strip") "--strip-unneeded" (str target-dir "/" f))))
   (spit (str target-dir "/manifest.edn")
         (with-out-str
           (clojure.pprint/pprint
@@ -188,10 +212,10 @@
                               :let [rel (str (fs/relativize target-dir f))] :when (not= rel "manifest.edn")]
                           {:file rel :bytes (fs/size f) :sha256 (sha256 f)}))}))))
 
-(defn pack! [lib]
+(defn pack! [libs]
   (let [tmp (str root "/.cache/mobile/stage/" triple "-archive") d (str tmp "/" archive-name)]
     (fs/delete-tree tmp)
-    (doseq [[rel src] (artifacts lib)]
+    (doseq [[rel src] (artifacts libs)]
       (fs/create-dirs (fs/parent (str d "/" rel)))
       (fs/copy src (str d "/" rel) {:replace-existing true :copy-attributes true}))
     (fs/create-dirs (fs/parent archive))
@@ -207,9 +231,9 @@
 
 (defn build! []
   (let [t0 (System/currentTimeMillis)
-        lib (build-lib!)]
-    (assemble! lib)
-    (pack! (str target-dir "/lib/" lib-name))
+        libs {:lib (build-crate! :core) :adapter (build-crate! :adapter)}]
+    (assemble! libs)
+    (pack! libs)
     (say (format "built %s in %.0f s" triple (/ (- (System/currentTimeMillis) t0) 1000.0)))
     (report-sizes!)))
 
@@ -265,7 +289,7 @@
           (say "  ok       samples/align-justify.pdf -> HTML byte for byte the golden, inside the iOS simulator")
           (let [sout (str smoke-dir "/scan.out.html")
                 r (spawn exe scan-in sout "native")]
-            (when-not (zero? (:exit r)) (die "the native (pdfium + Tesseract) run failed in the simulator (exit " (:exit r) "): " (:out r) (:err r)))
+            (when-not (zero? (:exit r)) (die "the native (pdfium + the Tesseract adapter) run failed in the simulator (exit " (:exit r) "): " (:out r) (:err r)))
             (say "  ran      " (str/trim (:out r)))
             (when-not (str/includes? (slurp sout) scan-word) (die "the scan's HTML lacks " (pr-str scan-word) ": pdfium or Tesseract did not read it"))
             (say "  ok       samples/scan-plain.pdf read by pdfium and Tesseract inside the iOS simulator: the heading " (pr-str scan-word) " is there")))
@@ -289,7 +313,9 @@
                 shell (fn [cmd] (adb "-s" ser "shell" (str "cd " dir " && LD_LIBRARY_PATH=" dir "/lib " cmd "; echo EXIT=$?")))]
             (adb "-s" ser "shell" (str "rm -rf " dir " && mkdir -p " dir "/lib " dir "/share/emon"))
             (doseq [f ["libemon.so" "libpdfium.so"]] (push (str target-dir "/lib/" f) (str dir "/lib/")))
-            (push (str target-dir "/share/emon/tessdata") (str dir "/share/emon/"))
+            (adb "-s" ser "shell" (str "mkdir -p " dir "/lib/emon"))
+            (push (str target-dir "/lib/emon/adapters") (str dir "/lib/emon/"))
+            (push (str target-dir "/share/emon/packs") (str dir "/share/emon/"))
             (push exe (str dir "/smoke")) (push pdf-in (str dir "/in.pdf")) (push scan-in (str dir "/scan.pdf"))
             (let [r (shell "./smoke in.pdf out.html")]
               (say "  ran      " (str/trim (str/replace (:out r) "EXIT=0" "")) " (" ser ", page size " (str/trim (:out (adb "-s" ser "shell" "getconf" "PAGE_SIZE"))) ")")

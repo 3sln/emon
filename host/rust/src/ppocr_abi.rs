@@ -1,5 +1,7 @@
-//! Version 1 C ABI around the unchanged qualified Rust port.
+//! PP-OCR as a native OCR adapter library (K2, D899): `emon_ocr_adapter_v1` (host/c/include/emon_adapter.h) around the unchanged qualified Rust port, and, until the host
+//! registries move to the adapter ABI (K3), the four `emon_ppocr_*_v1` functions the Go, Java and C# wrappers and `tools/ppocr/hosts.*` call (host/native/include/emon_ppocr.h).
 //! Callers own input buffers for the call; returned cells belong to this library.
+use crate::adapter::{port_adapter, AdapterStatus, OcrAdapter, PortInfo};
 use crate::{
     plan::{Bitmaps, Request},
     port::Bitmap,
@@ -140,4 +142,48 @@ pub unsafe extern "C" fn emon_ppocr_free_v1(cells: *mut i32, count: usize) {
             cells, count,
         )));
     }
+}
+
+// THE ADAPTER ABI (emon_adapter.h): the same port, registered by `emon_engines_load` with the PACK DIRECTORY holding the three ONNX models (`ch_PP-OCRv5_det_mobile.onnx`,
+// `ch_ppocr_mobile_v2.0_cls_mobile.onnx`, `en_PP-OCRv5_rec_mobile.onnx`: the catalogue's files, verified by core before they are linked there, and again by `PpOcr::new`).
+// It answers PP-OCR's requests; the registry routes Tesseract's to Tesseract's adapter, so the incumbent this port holds for its lexicon (until `lex-eng`, K4) is never asked
+// to read.
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_adapter_v1(_config: *const c_char, packs_dir: *const c_char, st: *mut AdapterStatus) -> *const OcrAdapter {
+    let fail = |reason: &str, message: &str| -> *const OcrAdapter {
+        if !st.is_null() {
+            (*st).set(reason, message);
+        }
+        std::ptr::null()
+    };
+    let dir = if packs_dir.is_null() {
+        std::env::var("EMON_PPOCR_MODELS").unwrap_or_else(|_| ".cache/ppocr".to_string())
+    } else {
+        match CStr::from_ptr(packs_dir).to_str() {
+            Ok(d) => d.to_string(),
+            Err(_) => return fail("pack-dir-missing", "the pack directory is not UTF-8"),
+        }
+    };
+    let opened = catch_unwind(AssertUnwindSafe(|| PpOcr::new(Path::new(&dir))));
+    let port = match opened {
+        Ok(Ok(p)) => p,
+        Ok(Err(e)) => return fail("pack-missing", &e),
+        Err(_) => return fail("panic", "the PP-OCR adapter panicked while opening"),
+    };
+    // only what is PP-OCR's own: the model's identity, the lexicon and the runtime (the incumbent's pairs are Tesseract adapter's to give)
+    let producer: Vec<(String, String)> = Ocr::producer(&port).into_iter().filter(|(k, _)| k == "ocr-model" || k == "pp-lexicon" || k == "onnxruntime").collect();
+    let observed = producer.iter().find(|(k, _)| k == "ocr-model").map(|(_, v)| v.clone()).unwrap_or_default();
+    let caps = (crate::emon::engines::pk_engine_caps(crate::emon::engines::eng_ppocr())) as u32;
+    let info = PortInfo {
+        name: "ppocr".to_string(),
+        engine: crate::emon::oil::oen_ppocr() as u32,
+        caps,
+        measured: 32 | 256,
+        needs: (crate::emon::engines::pkind_detector() | crate::emon::engines::pkind_classifier() | crate::emon::engines::pkind_recognizer()) as u32,
+        flags: crate::adapter::ADAPTER_THREADSAFE,
+        config: observed.clone(),
+        observed,
+        producer,
+    };
+    port_adapter(info, Arc::new(port))
 }

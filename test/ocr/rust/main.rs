@@ -147,7 +147,7 @@ fn main() {
     let cfg = Config::default();
     assert_eq!(emon::plan::pk_ocr(), KIND_OCR);
 
-    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new() };
+    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new(), engines: Vec::new() };
     let mut replayer: Option<Replayer> = None;
     if mode == "replay" {
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
@@ -189,6 +189,7 @@ fn main() {
             eprintln!("tesseract {}", tess::version());
             let mut t = tess::Tess::new(&tessdata, dpi);
             transcript.producer = t.producer();
+            transcript.engines = plan::engine_rows(&transcript.producer);
             let page = read_pgm(&pgm);
             let mut f = SyncFulfiller::new(|req: &Request, bm: &Bitmaps| -> Result<Answer, PlanError> {
                 match req.kind() {

@@ -597,10 +597,18 @@ public static class Planrun {
         /// `:producer {...}` when there are any and never read back for a replay. Empty leaves the file as it always was.
         /// </summary>
         public List<string[]> Producer = new List<string[]>();
+        /// <summary>
+        /// The ENGINE TABLE (D898): the engines the run had, {engine, caps, role} in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+        /// when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
+        /// </summary>
+        public List<int[]> Engines = new List<int[]>();
 
         // the transcript as kin holds it (`Tr`), the bitmaps left behind: the entry at a place has one when its flag says
         internal Transcriptctx.Tr Kin() {
             Transcriptctx.Tr tr = InputsKin(Inputs);
+            foreach (int[] e in Engines) {
+                emon.Transcript.TrAddEngine(tr, e[0], e[1], e[2]);
+            }
             foreach (string[] kv in Producer) {
                 emon.Transcript.TrAddProducer(tr, Cps(kv[0]), Cps(kv[1]));
             }
@@ -669,6 +677,9 @@ public static class Planrun {
         var t = new Transcript();
         for (int i = 0; i < emon.Transcript.TrNInputs(tr); i++) {
             t.Inputs.Add(new int[] {emon.Transcript.TrInIndex(tr, i), emon.Transcript.TrInLength(tr, i)});
+        }
+        for (int i = 0; i < emon.Transcript.TrNEngines(tr); i++) {
+            t.Engines.Add(new int[] {emon.Transcript.TrEngEngine(tr, i), emon.Transcript.TrEngCaps(tr, i), emon.Transcript.TrEngRole(tr, i)});
         }
         for (int p = 0; emon.Transcript.TrPMore(tr, p) == 1; p = emon.Transcript.TrPNext(tr, p)) {
             var k = new System.Text.StringBuilder();

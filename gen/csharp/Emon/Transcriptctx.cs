@@ -7,6 +7,7 @@ public static class Transcriptctx {
     public sealed class Tr {
         public emon.Port.Cells Inputs = emon.Port.NewCells();
         public emon.Port.Cells Prod = emon.Port.NewCells();
+        public emon.Port.Cells Etab = emon.Port.NewCells();
         public emon.Port.Cells Ents = emon.Port.NewCells();
         public emon.Port.Cells Names = emon.Port.NewCells();
         public emon.Port.Cells Idx = emon.Port.NewCells();
@@ -23,6 +24,7 @@ public static class Transcriptctx {
             Tr c = new Tr();
             emon.Port.CellsCopyInto(c.Inputs, this.Inputs);
             emon.Port.CellsCopyInto(c.Prod, this.Prod);
+            emon.Port.CellsCopyInto(c.Etab, this.Etab);
             emon.Port.CellsCopyInto(c.Ents, this.Ents);
             emon.Port.CellsCopyInto(c.Names, this.Names);
             emon.Port.CellsCopyInto(c.Idx, this.Idx);

@@ -38,11 +38,16 @@ Tesseract engines, orientation data and PDF renderer. `TESSDATA_PREFIX` above
 selects the add-on's pinned English lexicon for the adapter only; pass the CLI's
 `--tessdata` explicitly if you need another incumbent language configuration.
 
-The C library and babashka pod use the same environment variables and
-`ocr-engine=ppocr` conversion option. Use their native-capability builds.
-Rust embedders can wrap their incumbent with `emon::ppocr_native::PpOcr::open`
-and set the typed `Options::ocr_engine` to `OcrEngine::PpOcr`; the existing
-`tesseract` feature supplies the incumbent, with no ORT link dependency.
+The babashka pod uses the same environment variables and the `ocr-engine=ppocr`
+conversion option. The C library registers the PP adapter library like any
+adapter (K2, D899): `emon_engines_load(engines, path_to_libemon_ocr_ppocr, NULL, &err)`
+beside the Tesseract adapter, with the PP-OCR packs (`pp5-det-mobile`,
+`pp5-cls-mobile`, `pp5-rec-en-mobile`) in the pack directory, and the option
+`ocr-engine=ppocr` then composes the two (docs/hosts/c.md). Rust embedders call
+`emon::adapter::ppocr_hybrid(incumbent)` (their Tesseract port registered as
+Tesseract, the adapter library loaded from `$EMON_PPOCR_LIB`) and set the typed
+`Options::ocr_engine` to `OcrEngine::PpOcr`; the existing `tesseract` feature
+supplies the incumbent, with no ORT link dependency.
 Go, Java and C# gain no required package dependency. Set the variables before
 starting your application, then wrap its incumbent OCR port with Go `NewPpOcr`
 (cgo and build tag `ppocr`), Java `emon.ffi.PpOcr.open` (JDK 22+ FFM with native

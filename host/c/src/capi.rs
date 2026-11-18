@@ -29,10 +29,12 @@
 // status such as `bad-xref`, a limit's `pages`, a plan error's `transcript-miss`), `message` the sentence.
 #![allow(clippy::missing_safety_doc, non_camel_case_types)]
 
+use crate::adapter::{self as adapters, Completion, Engines, OcrAdapter};
 use crate::engine::{parse_options, Config, Engine, Error, HtmlOptions, JsonOptions, Model, Options, Parsed, RunStats};
+use crate::packs;
 use crate::session as shared;
 // the session's failure (the engine's error, or the caller's mistake) is this ABI's `Fail` too
-use crate::session::{Fault as Fail, Session, Step};
+use crate::session::{Completer, Fault as Fail, Session, Step};
 use crate::source::{ByteSource, Input};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -141,9 +143,26 @@ pub struct emon_model {
     _private: [u8; 0],
 }
 
-// What `emon_convert` and `emon_open` take in `flags`.
-pub const EMON_NATIVE: u32 = 1;
+// The engines an embedder registered (K2, D899): OCR adapters, the renderer, the packs. Opaque to C: `adapter::Engines`.
+#[repr(C)]
+pub struct emon_engines {
+    _private: [u8; 0],
+}
+
+// What `emon_open` takes in `flags`.
 pub const EMON_OPEN_INTAKE: u32 = 1;
+// What `emon_step` answers beyond DONE, NEED_BYTES and NEED_REQUESTS: only async adapters' work is outstanding.
+pub const EMON_WAITING: c_int = 3;
+// How packs come (kin's `pfetch`).
+pub const EMON_PACKS_NEVER: c_int = 1;
+pub const EMON_PACKS_CACHE: c_int = 2;
+pub const EMON_PACKS_AUTO: c_int = 3;
+
+// The session handle C holds: the session, and the part of it `emon_complete` and `emon_wait` use from any thread while another steps.
+struct CSession {
+    s: Session,
+    done: Completer,
+}
 
 // The categories (`emon_error.code`), one per kind of the Rust host's `Error` (D040), and `usage` for what the caller got wrong.
 const E_USAGE: c_int = 1;
@@ -359,20 +378,22 @@ pub extern "C" fn emon_version() -> *const c_char {
     VERSION.as_ptr() as *const c_char
 }
 
-// The native ports THIS PROCESS CAN USE, as a bit set: 1 pdfium (render, crop: built in, and the library is found and loads), 2 Tesseract (ocr:
-// built in, and a models directory is found), 4 OpenJPEG and jbig2dec (decode-img). See `native` below for where each is looked for.
+// What THIS LIBRARY has, as a bit set: 1 pdfium (render, crop: built in, and the library is found and loads), 4 OpenJPEG and jbig2dec (decode-img). Tesseract is not a bit: it is an
+// adapter library, and what adapters an embedder has is `emon_engines_describe`'s to say (K2, D899). See `native` below for where pdfium is looked for.
 #[no_mangle]
 pub extern "C" fn emon_capabilities() -> u32 {
     capabilities()
+}
+
+// The pod (a binary over this library) links Tesseract itself, under the `tesseract` feature: whether it finds models.
+pub fn tesseract_ready() -> bool {
+    native::tesseract_ready()
 }
 
 pub fn capabilities() -> u32 {
     let mut c = 0;
     if matches!(native::pdfium_ready(None), Ok(true)) {
         c |= 1;
-    }
-    if native::tesseract_ready() {
-        c |= 2;
     }
     if cfg!(codecs) {
         c |= 4;
@@ -383,25 +404,6 @@ pub fn capabilities() -> u32 {
 // Where the native ports are looked for: host/c/src/native.rs (a binding, like tess.rs: D058 keeps paths out of the Engine layers).
 #[path = "native.rs"]
 mod native;
-
-// Name the places the native ports are looked for, before the first conversion with EMON_NATIVE (process-wide). NULL or "" for either leaves it
-// to the environment and the library's own place (see `native`). A place that is wrong is -EMON_ERR_USAGE and changes nothing.
-#[no_mangle]
-pub unsafe extern "C" fn emon_set_native_paths(pdfium: *const c_char, tessdata: *const c_char, err: *mut emon_error) -> c_int {
-    guarded(err, || {
-        let opt = |p: *const c_char| -> Result<Option<String>, Fail> { if p.is_null() { Ok(None) } else { text(p).map(|t| if t.is_empty() { None } else { Some(t) }) } };
-        let (pd, td) = (opt(pdfium)?, opt(tessdata)?);
-        if let Some(p) = &pd {
-            native::find_pdfium(Some(p)).map_err(Fail::Usage)?;
-            native::pdfium_ready(Some(p)).map_err(Fail::Usage)?;
-        }
-        if let Some(d) = &td {
-            native::find_tessdata(Some(d)).map_err(Fail::Usage)?;
-        }
-        *native::SET.lock().unwrap_or_else(|e| e.into_inner()) = (pd, td);
-        Ok(0)
-    })
-}
 
 // The numbers of the plan/fulfil protocol, kin's (the same table as the browser's `emon_const`):
 // 0 kind render, 1 decode, 2 ocr, 3 bytes, 4 crop, 5 decode-img; 10 status ok, 11 failed, 12 unsupported, 13 limit; 14, 15 the ocr word flags.
@@ -479,8 +481,9 @@ pub fn html_options(list: &str) -> Result<HtmlOptions, String> {
     shared::parse_html(list)
 }
 
+// PP-OCR's hybrid for the pod, which links Tesseract itself: its port registered as Tesseract beside the PP adapter library (`adapter::ppocr_hybrid`).
 pub fn ppocr_config(cfg: &mut Config) -> Result<(), String> {
-    cfg.ocr = Some(crate::OcrPort(std::sync::Arc::new(crate::ppocr_native::PpOcr::open(None, cfg.ocr.clone())?)));
+    cfg.ocr = Some(adapters::ppocr_hybrid(cfg.ocr.take())?);
     Ok(())
 }
 
@@ -496,8 +499,9 @@ pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option
     })
 }
 
-// The Rust host's own ports, for the ones this build has and finds (D127, D211, D336; `native` above). A build without them, or a process that does
-// not find them, has none, and a request for one is answered `unsupported` (D199): `emon_capabilities` says which are here.
+// The pod's own ports (it links Tesseract statically, under the `tesseract` feature) and pdfium, for the ones this build has and finds (D127, D211, D336; `native` above). A
+// build without them, or a process that does not find them, has none, and a request for one is answered `unsupported` (D199). The C library does NOT call this: its ports are
+// the engines an embedder registers (`emon_engines_*`, K2, D899).
 #[allow(unused_variables)]
 fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), Fail> {
     #[cfg(feature = "tesseract")]
@@ -566,18 +570,24 @@ unsafe fn make_input(inp: *const emon_input) -> Result<Input, Fail> {
     Ok(input)
 }
 
-// The text parsed by kin, and the Engine's configuration with the native ports when asked. The step API's own switches (`record`,
-// `js-ocr`) belong to a session: a one-shot refuses them rather than ignoring them.
-fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
+// The text parsed by kin, and the Engine's configuration with the engines the caller registered: its OCR adapters (one router over them: a request goes to the adapter of its
+// engine, kin's `ad-route`), its renderer. The step API's own switches (`record`, `js-ocr`) belong to a session: a one-shot refuses them rather than ignoring them.
+unsafe fn one_shot_setup(p: &Parsed, engines: *const emon_engines) -> Result<(Engine, Options), Fail> {
     if p.record || p.js_ocr || p.js_render {
         return Err(Fail::Usage("record=1, js-ocr=1 and js-render=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
     }
     let mut cfg = p.config.clone();
-    if flags & EMON_NATIVE != 0 || p.options.ocr_engine.uses_pp() {
-        native_ports(&mut cfg, None, None)?;
-    }
-    if p.options.ocr_engine.uses_pp() {
-        ppocr_config(&mut cfg).map_err(Fail::Usage)?;
+    if let Some(e) = engines_ref(engines) {
+        if let Some(r) = e.router() {
+            cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(r)));
+        }
+        if let Some(r) = e.renderer() {
+            cfg.renderer = Some(r);
+        }
+        #[cfg(codecs)]
+        {
+            cfg.pdf_codecs = Some(std::sync::Arc::new(crate::pdfcodecs::Codecs::new()));
+        }
     }
     Ok((Engine::new(cfg), p.options.clone()))
 }
@@ -609,16 +619,17 @@ unsafe fn converted<'a>(m: *const emon_model) -> Result<&'a Converted, Fail> {
     (m as *const Converted).as_ref().ok_or_else(|| Fail::Usage("the model is NULL".to_string()))
 }
 
-// ONE-SHOT: convert one input to a Model. `options`: kin's `key=value` text (NULL or empty: the defaults). `flags`: EMON_NATIVE.
+// ONE-SHOT: convert one input to a Model. `options`: kin's `key=value` text (NULL or empty: the defaults). `engines`: the adapters and renderer to use (NULL: none, a request for one
+// is answered `unsupported` and a page that needed OCR is unread).
 #[no_mangle]
-pub unsafe extern "C" fn emon_convert(input: *const emon_input, options: *const c_char, flags: u32, out: *mut *mut emon_model, err: *mut emon_error) -> c_int {
+pub unsafe extern "C" fn emon_convert(input: *const emon_input, options: *const c_char, engines: *const emon_engines, out: *mut *mut emon_model, err: *mut emon_error) -> c_int {
     guarded(err, || {
         if out.is_null() {
             return Err(Fail::Usage("an output pointer is NULL".to_string()));
         }
         let p = parse_options(&text(options)?).map_err(Fail::Usage)?;
         let input = make_input(input)?;
-        let (engine, opts) = one_shot_setup(&p, flags)?;
+        let (engine, opts) = one_shot_setup(&p, engines)?;
         let (m, stats) = on_worker(|| engine.convert_stats(input, &opts))?;
         *out = model_ptr(m, stats);
         Ok(0)
@@ -627,9 +638,9 @@ pub unsafe extern "C" fn emon_convert(input: *const emon_input, options: *const 
 
 // ONE-SHOT, the common case in one call: bytes in, the canonical JSON out.
 #[no_mangle]
-pub unsafe extern "C" fn emon_convert_json(input: *const emon_input, options: *const c_char, flags: u32, pretty: c_int, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+pub unsafe extern "C" fn emon_convert_json(input: *const emon_input, options: *const c_char, engines: *const emon_engines, pretty: c_int, out: *mut emon_buf, err: *mut emon_error) -> c_int {
     let mut m: *mut emon_model = std::ptr::null_mut();
-    let r = emon_convert(input, options, flags, &mut m, err);
+    let r = emon_convert(input, options, engines, &mut m, err);
     if r != 0 {
         return r;
     }
@@ -640,9 +651,9 @@ pub unsafe extern "C" fn emon_convert_json(input: *const emon_input, options: *c
 
 // ONE-SHOT: bytes in, the HTML out (`html_options`: the drivers' `--html=` list).
 #[no_mangle]
-pub unsafe extern "C" fn emon_convert_html(input: *const emon_input, options: *const c_char, flags: u32, html_options: *const c_char, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+pub unsafe extern "C" fn emon_convert_html(input: *const emon_input, options: *const c_char, engines: *const emon_engines, html_options: *const c_char, out: *mut emon_buf, err: *mut emon_error) -> c_int {
     let mut m: *mut emon_model = std::ptr::null_mut();
-    let r = emon_convert(input, options, flags, &mut m, err);
+    let r = emon_convert(input, options, engines, &mut m, err);
     if r != 0 {
         return r;
     }
@@ -653,11 +664,11 @@ pub unsafe extern "C" fn emon_convert_html(input: *const emon_input, options: *c
 
 // Stage 0 of the input alone: the line `FORMAT MAJOR.MINOR pages=N encrypted=BOOL bytes=N` (the driver's `--out=intake`).
 #[no_mangle]
-pub unsafe extern "C" fn emon_intake(input: *const emon_input, options: *const c_char, flags: u32, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+pub unsafe extern "C" fn emon_intake(input: *const emon_input, options: *const c_char, out: *mut emon_buf, err: *mut emon_error) -> c_int {
     guarded(err, || {
         let p = parse_options(&text(options)?).map_err(Fail::Usage)?;
         let input = make_input(input)?;
-        let (engine, _) = one_shot_setup(&p, flags)?;
+        let (engine, _) = one_shot_setup(&p, std::ptr::null())?;
         let v = on_worker(|| engine.intake(input))?;
         let line = v.iter().map(shared::intake_line).collect::<Vec<_>>().join("\n");
         out_buf(out, buf_of(line.into_bytes()))?;
@@ -754,22 +765,31 @@ pub unsafe extern "C" fn emon_model_asset_bytes(m: *const emon_model, i: c_int, 
 // input-bytes check, the error mapping. What is here is this ABI's: the handle, the shapes of the header, the worker thread.
 
 unsafe fn session<'a>(s: *mut emon_session) -> Result<&'a mut Session, Fail> {
-    (s as *mut Session).as_mut().ok_or_else(|| Fail::Usage("the session is NULL".to_string()))
+    (s as *mut CSession).as_mut().map(|c| &mut c.s).ok_or_else(|| Fail::Usage("the session is NULL".to_string()))
+}
+
+// What may be called from any thread while another steps: a field of the handle, reached without forming a reference to the whole of it.
+unsafe fn completer<'a>(s: *mut emon_session) -> Result<&'a Completer, Fail> {
+    if s.is_null() {
+        return Err(Fail::Usage("the session is NULL".to_string()));
+    }
+    Ok(&(*(s as *mut CSession)).done)
 }
 
 // Open a session over an input of `length` bytes read in chunks of `chunk` bytes (0: the options' `chunk`, 64 KiB). `flags`:
-// EMON_OPEN_INTAKE for stage 0 only (then `emon_finish_intake`). The options are kin's text; `record=1` keeps a transcript
-// (`emon_transcript`), `js-ocr=1` makes the `ocr` requests the caller's.
+// EMON_OPEN_INTAKE for stage 0 only (then `emon_finish_intake`). `engines`: the adapters the session answers its `ocr` requests with itself (NULL: none; K2, D899). The options
+// are kin's text; `record=1` keeps a transcript (`emon_transcript`), `js-ocr=1` makes the `ocr` requests nobody registered an adapter for the caller's.
 #[no_mangle]
-pub unsafe extern "C" fn emon_open(length: u64, chunk: u32, flags: u32, password: *const u8, password_len: usize, options: *const c_char, out: *mut *mut emon_session, err: *mut emon_error) -> c_int {
+pub unsafe extern "C" fn emon_open(length: u64, chunk: u32, flags: u32, engines: *const emon_engines, password: *const u8, password_len: usize, options: *const c_char, out: *mut *mut emon_session, err: *mut emon_error) -> c_int {
     guarded(err, || {
         if out.is_null() {
             return Err(Fail::Usage("an output pointer is NULL".to_string()));
         }
         let options = text(options)?;
         let password = if password_len > 0 { Some(bytes(password, password_len).to_vec()) } else { None };
-        let s = Session::open(length, if chunk != 0 { Some(chunk as usize) } else { None }, flags & EMON_OPEN_INTAKE != 0, password, &options)?;
-        *out = Box::into_raw(Box::new(s)) as *mut emon_session;
+        let s = Session::open_with(length, if chunk != 0 { Some(chunk as usize) } else { None }, flags & EMON_OPEN_INTAKE != 0, password, &options, engines_ref(engines))?;
+        let done = s.completer();
+        *out = Box::into_raw(Box::new(CSession { s, done })) as *mut emon_session;
         Ok(0)
     })
 }
@@ -778,7 +798,7 @@ pub unsafe extern "C" fn emon_open(length: u64, chunk: u32, flags: u32, password
 pub unsafe extern "C" fn emon_close(s: *mut emon_session) {
     if !s.is_null() {
         // a Run holds kin's arenas; dropping it on the worker keeps its (deep) drop off the caller's small stack
-        let b = AssertSend(Box::from_raw(s as *mut Session));
+        let b = AssertSend(Box::from_raw(s as *mut CSession));
         let _ = catch_unwind(AssertUnwindSafe(|| on_worker(move || drop(b.into_inner()))));
     }
 }
@@ -850,7 +870,8 @@ pub unsafe extern "C" fn emon_replay_end(s: *mut emon_session, err: *mut emon_er
 
 // Run kin until it needs something of the caller. Answers 0 DONE (then `emon_finish`), 1 NEED_BYTES (`out->ranges`: read each and
 // `emon_provide` it, then step again), 2 NEED_REQUESTS (`out->requests`: fulfil each, `emon_answer` / `emon_answer_ocr`, then step
-// again), or `-code` with `err` filled (nothing else is valid afterwards but `emon_close`).
+// again), 3 WAITING (only the registered adapters' async work is outstanding: `emon_wait`, then step again; K2), or `-code` with `err` filled
+// (nothing else is valid afterwards but `emon_close`). The `ocr` requests an adapter is registered for are answered inside the step.
 #[no_mangle]
 pub unsafe extern "C" fn emon_step(s: *mut emon_session, out: *mut emon_step_out, err: *mut emon_error) -> c_int {
     guarded(err, || {
@@ -861,6 +882,7 @@ pub unsafe extern "C" fn emon_step(s: *mut emon_session, out: *mut emon_step_out
         *out = emon_step_out { ranges: std::ptr::null_mut(), nranges: 0, requests: std::ptr::null_mut(), nrequests: 0, cells: std::ptr::null_mut(), ncells: 0 };
         match on_worker(|| s.step())? {
             Step::Done => Ok(0),
+            Step::Waiting => Ok(EMON_WAITING),
             Step::Bytes(v) => {
                 put_ranges(out, &v)?;
                 Ok(1)
@@ -950,36 +972,6 @@ pub unsafe extern "C" fn emon_bitmap_png(s: *mut emon_session, id: i32, out: *mu
     })
 }
 
-// An `ocr` request's policy is kin's (`emon.ocrport`): the index of the argument its first language is at.
-#[no_mangle]
-pub unsafe extern "C" fn emon_ocr_lang_first(cells: *const i32, ncells: usize) -> c_int {
-    catch_unwind(AssertUnwindSafe(|| shared::ocr_lang_first(ints(cells, ncells)))).unwrap_or(-1)
-}
-
-// The installed models that read the request: `installed` holds their names as code points separated by 0; `out` is the int32 indices into
-// that list (see `op-models`). Answers how many.
-#[no_mangle]
-pub unsafe extern "C" fn emon_ocr_models(request: *const i32, nrequest: usize, installed: *const i32, ninstalled: usize, out: *mut emon_buf, err: *mut emon_error) -> c_int {
-    guarded(err, || {
-        let (n, indices) = shared::ocr_models(ints(request, nrequest), ints(installed, ninstalled));
-        let b: Vec<u8> = indices.iter().flat_map(|x| x.to_ne_bytes()).collect();
-        out_buf(out, buf_of(b))?;
-        Ok(n)
-    })
-}
-
-// A line's type from the engine's block type (Tesseract's PolyBlockType).
-#[no_mangle]
-pub extern "C" fn emon_ocr_block_type(poly: i32) -> c_int {
-    catch_unwind(|| shared::ocr_block_type(poly)).unwrap_or(-1)
-}
-
-// The language the engine read a word in (the model's name as code points), as a request spells it: one packed cell.
-#[no_mangle]
-pub unsafe extern "C" fn emon_ocr_word_lang(cells: *const i32, ncells: usize) -> c_int {
-    catch_unwind(AssertUnwindSafe(|| shared::ocr_word_lang(ints(cells, ncells)))).unwrap_or(-1)
-}
-
 // The transcript a recording session (`record=1`) made, as files (`transcript.edn` and PNGs): write them to a directory, or keep them.
 #[no_mangle]
 pub unsafe extern "C" fn emon_transcript(s: *mut emon_session, out: *mut emon_files, err: *mut emon_error) -> c_int {
@@ -1023,6 +1015,350 @@ pub unsafe extern "C" fn emon_finish_intake(s: *mut emon_session, out: *mut emon
         let s = session(s)?;
         let line = on_worker(|| s.finish_intake())?;
         out_buf(out, buf_of(line.into_bytes()))?;
+        Ok(0)
+    })
+}
+
+// ------------------------------------------------------------------------------------------------ the engines (K2, D899)
+//
+// The OCR adapters an embedder has (`host/c/include/emon_adapter.h`), the renderer, and where the packs are: an `emon_engines` handle (`adapter::Engines`) that the one-shot calls
+// and `emon_open` take. A conversion given engines answers the requests they are registered for itself; one given NULL has none. Registration failures happen HERE, with a name to
+// route on (`adapter-abi-unsupported`, `adapter-runtime-missing`, `pack-dir-missing`, ...), never in the middle of a conversion.
+
+unsafe fn engines_ref<'a>(e: *const emon_engines) -> Option<&'a Engines> {
+    (e as *const Engines).as_ref()
+}
+
+unsafe fn engines_arg<'a>(e: *const emon_engines) -> Result<&'a Engines, RegFail> {
+    engines_ref(e).ok_or_else(|| RegFail::Usage("the engines are NULL".to_string()))
+}
+
+// A registration's failure: a usage mistake, or a refusal with a name of its own.
+enum RegFail {
+    Usage(String),
+    Named(String, String),
+}
+
+impl From<Fail> for RegFail {
+    fn from(f: Fail) -> RegFail {
+        match f {
+            Fail::Usage(m) => RegFail::Usage(m),
+            Fail::Engine(e) => RegFail::Named(e.name(), e.to_string()),
+        }
+    }
+}
+
+impl From<adapters::RegError> for RegFail {
+    fn from(r: adapters::RegError) -> RegFail {
+        RegFail::Named(r.name, r.message)
+    }
+}
+
+unsafe fn guarded_n(err: *mut emon_error, f: impl FnOnce() -> Result<c_int, RegFail>) -> c_int {
+    if !err.is_null() {
+        *err = emon_error { code: 0, name: std::ptr::null_mut(), message: std::ptr::null_mut() };
+    }
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(Ok(v)) => v,
+        Ok(Err(RegFail::Usage(m))) => fill(err, Fail::Usage(m)),
+        Ok(Err(RegFail::Named(name, message))) => {
+            if !err.is_null() {
+                *err = emon_error { code: E_USAGE, name: cstring(&name), message: cstring(&message) };
+            }
+            -E_USAGE
+        }
+        Err(p) => fill(err, Fail::Engine(Error::Internal(shared::panic_message(p)))),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_new(out: *mut *mut emon_engines, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        if out.is_null() {
+            return Err(RegFail::Usage("an output pointer is NULL".to_string()));
+        }
+        *out = Box::into_raw(Box::new(Engines::new())) as *mut emon_engines;
+        Ok(0)
+    })
+}
+
+// Free the registry: every adapter is closed. Not while a session or a call that was given it is running.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_free(e: *mut emon_engines) {
+    if !e.is_null() {
+        let b = AssertSend(Box::from_raw(e as *mut Engines));
+        let _ = catch_unwind(AssertUnwindSafe(|| on_worker(move || drop(b.into_inner()))));
+    }
+}
+
+// Register an adapter given as callbacks (`emon_adapter.h`): the struct is copied, its `ctx` stays yours, its `close` is called when the registry goes.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_add_ocr(e: *mut emon_engines, a: *const OcrAdapter, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        let a = a.as_ref().ok_or_else(|| RegFail::Usage("the adapter is NULL".to_string()))?;
+        Ok(e.add_adapter(*a)? as c_int)
+    })
+}
+
+// Register an adapter library: its `emon_ocr_adapter_v1` is found by dlopen / LoadLibrary and opened with `config` (key=value lines, or NULL) and the pack directory of its engine.
+// Answers the adapter's index (the registration order, which is the preference order).
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_load(e: *mut emon_engines, path: *const c_char, config: *const c_char, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        let path = text(path)?;
+        if path.is_empty() {
+            return Err(RegFail::Usage("the adapter's path is empty".to_string()));
+        }
+        let cfg = if config.is_null() { None } else { Some(text(config)?) };
+        Ok(e.load(&path, cfg.as_deref())? as c_int)
+    })
+}
+
+// The built-in pdfium renderer: `lib_or_dir` names the library (a file, or the directory that holds it); NULL or "" looks where `emon_engines_defaults` does. Not found, or not pdfium,
+// is `adapter-runtime-missing`.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_pdfium(e: *mut emon_engines, lib_or_dir: *const c_char, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        let p = if lib_or_dir.is_null() { String::new() } else { text(lib_or_dir)? };
+        let named = if p.is_empty() { None } else { Some(p.as_str()) };
+        register_pdfium(e, named, true)?;
+        Ok(0)
+    })
+}
+
+#[allow(unused_variables)]
+fn register_pdfium(e: &Engines, named: Option<&str>, required: bool) -> Result<bool, RegFail> {
+    #[cfg(pdfium)]
+    {
+        match native::find_pdfium(named) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return if required { Err(RegFail::Named("adapter-runtime-missing".to_string(), "pdfium was not found (name it, or set EMON_PDFIUM_LIB)".to_string())) } else { Ok(false) };
+            }
+            Err(m) => return Err(RegFail::Named("adapter-runtime-missing".to_string(), m)),
+        }
+        match native::pdfium_ready(named) {
+            Ok(true) => {
+                e.set_renderer(std::sync::Arc::new(crate::pdfium::Pdfium::new()));
+                Ok(true)
+            }
+            Ok(false) => if required { Err(RegFail::Named("adapter-runtime-missing".to_string(), "pdfium is not usable here".to_string())) } else { Ok(false) },
+            Err(m) => Err(RegFail::Named("adapter-runtime-missing".to_string(), m)),
+        }
+    }
+    #[cfg(not(pdfium))]
+    {
+        if required {
+            Err(RegFail::Named("adapter-runtime-missing".to_string(), "this build of libemon has no pdfium renderer".to_string()))
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+// The pack directory: where packs are looked for first and where fetched and provided ones are kept (`<dir>/<pack id>/<file>`), and how packs come: `mode` is EMON_PACKS_NEVER (nothing
+// is fetched), EMON_PACKS_CACHE (what is cached is used) or EMON_PACKS_AUTO (fetch on demand). `dir` NULL or "": the user's cache directory. Name it before registering adapters.
+// `EMON_OFFLINE=1` is `never` whatever the mode says (D885, D896).
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_packs(e: *mut emon_engines, dir: *const c_char, mode: c_int, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        if !(EMON_PACKS_NEVER..=EMON_PACKS_AUTO).contains(&mode) {
+            return Err(RegFail::Usage(format!("the pack mode {} is none of EMON_PACKS_NEVER, _CACHE, _AUTO", mode)));
+        }
+        let d = if dir.is_null() { String::new() } else { text(dir)? };
+        if !d.is_empty() {
+            e.set_packs_dir_text(&d)?;
+        }
+        e.packs().set_mode(mode);
+        Ok(0)
+    })
+}
+
+// The turnkey registry (D885, D895): what is next to the library. Packs: `share/emon/packs` (read-only) and `$EMON_MODELS`, fetched on demand (EMON_PACKS_AUTO) when this build can
+// fetch and `$EMON_PACKS_FETCH` (never, cache, auto) does not say otherwise; the adapters in `lib/emon/adapters/` (and `$EMON_ADAPTER_DIR`), or, in an app, by name from the loader
+// (libemon_ocr_tesseract.so, @rpath/libemon_ocr_tesseract.dylib); pdfium, as `emon_engines_pdfium(NULL)` finds it, when it is there. Nothing found is not an error: the engines
+// are the ones that were. An adapter that is found and cannot be opened is.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_defaults(e: *mut emon_engines, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        if let Some(d) = native::find_packs_dir() {
+            e.packs().add_dir(&d);
+        }
+        let mode = e.turnkey_mode().map_err(RegFail::Usage)?;
+        e.packs().set_mode(mode);
+        let libs = native::find_adapter_libs().map_err(RegFail::Usage)?;
+        for l in libs {
+            e.load(&l.to_string_lossy(), None)?;
+        }
+        register_pdfium(e, None, false)?;
+        Ok(0)
+    })
+}
+
+// How long a one-shot call waits for an async adapter, per request, in milliseconds (default 60000): then the request is `failed` and the page unread.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_set_timeout(e: *mut emon_engines, ms: i32, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        engines_arg(e)?.set_timeout_ms(ms as i64);
+        Ok(0)
+    })
+}
+
+// Allow adapters that send the pixels off the device (`EMON_ADAPTER_REMOTE`). The default is no: documents may hold personal data. Before registering them.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_allow_remote(e: *mut emon_engines, allow: c_int, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        engines_arg(e)?.allow_remote(allow != 0);
+        Ok(0)
+    })
+}
+
+// What adapters and packs reported since the last call, one line each: why a request was left unread (`tesseract: unsupported pack-missing:tess-fast-deu`), a pack that did
+// not verify (`pack-hash-mismatch:<id>`). For the app's log.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_notes(e: *mut emon_engines, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let e = engines_ref(e).ok_or_else(|| Fail::Usage("the engines are NULL".to_string()))?;
+        let t = e.take_notes().join("\n");
+        out_buf(out, buf_of(t.into_bytes()))?;
+        Ok(0)
+    })
+}
+
+// `engines()` (D896): every engine of kin's table that runs here, as JSON: {"platform","mode","offline","store","engines":[{"name","kind","impl","state" (built-in, installed,
+// downloadable, unavailable),"registered","calibrated","caps","oen","role","needs":[{"id","kind","bytes","licence","installed"}],"download_bytes","reason"}]}.
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_describe(e: *const emon_engines, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let e = engines_ref(e).ok_or_else(|| Fail::Usage("the engines are NULL".to_string()))?;
+        out_buf(out, buf_of(on_worker(|| e.describe_json()).into_bytes()))?;
+        Ok(0)
+    })
+}
+
+// `prepare(options)` (D896): the packs a conversion with these options needs and which are missing, as JSON: {"verdict" (ready, partial, downloadable, blocked),"mode","offline",
+// "engines","languages","osd","packs":[{"id","state" (installed, missing),"engine","kind","bytes","licence","rev"}],"unsupported":[{"engine","language"}],"missing","missing_bytes"}.
+// Fetches nothing.
+#[no_mangle]
+pub unsafe extern "C" fn emon_prepare(e: *const emon_engines, options: *const c_char, out: *mut emon_buf, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let e = engines_ref(e).ok_or_else(|| Fail::Usage("the engines are NULL".to_string()))?;
+        let o = text(options)?;
+        let j = on_worker(|| e.prepare_json(&o)).map_err(Fail::Usage)?;
+        out_buf(out, buf_of(j.into_bytes()))?;
+        Ok(0)
+    })
+}
+
+// The app's `onPackNeeded` (D896): called, on the thread that is converting, for a pack a request needs that is not here (and that `never` and `EMON_OFFLINE=1` have not already
+// refused). It fills `out->action`: EMON_PACK_FETCH, PROVIDE (with `data`/`len`, or `path`: a file, or a directory of the pack's files), DECLINE (the page is unread with
+// `pack-missing:<id>`) or SUBSTITUTE (`engine`: another implementation of the same OIL engine). Answer 0, or non-zero for DECLINE. NULL removes it. With none, a turnkey
+// (EMON_PACKS_AUTO) fetches.
+#[no_mangle]
+pub unsafe extern "C" fn emon_on_pack_needed(e: *mut emon_engines, f: Option<packs::PackNeededFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        engines_arg(e)?.packs().set_hook(f, ctx);
+        Ok(0)
+    })
+}
+
+// Progress and cancel (D896): one stream for the fetches the library starts and the ones the app asks for (`emon_packs_ensure`): START, PROGRESS (bytes done of total), DONE, FAILED,
+// CANCELLED. A PROGRESS callback that answers non-zero cancels the fetch (the pack stays missing). NULL removes it.
+#[no_mangle]
+pub unsafe extern "C" fn emon_on_pack_event(e: *mut emon_engines, f: Option<packs::PackEventFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        engines_arg(e)?.packs().set_events(f, ctx);
+        Ok(0)
+    })
+}
+
+// Fetch packs ahead of time (`packs.ensure`): `ids` is a comma list of pack ids (`tess-fast-eng,tess-osd`; see emon_prepare). Blocks, reports through `emon_on_pack_event`, stops at
+// the first failure. Only in EMON_PACKS_AUTO and not offline; every file is verified against the catalogue's SHA-256 before it is kept.
+#[no_mangle]
+pub unsafe extern "C" fn emon_packs_ensure(e: *mut emon_engines, ids: *const c_char, err: *mut emon_error) -> c_int {
+    guarded_n(err, || {
+        let e = engines_arg(e)?;
+        let list = text(ids)?;
+        let mut codes = Vec::new();
+        for name in list.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            codes.push(packs::pack_find(name).ok_or_else(|| RegFail::Named("unknown-pack".to_string(), format!("unknown pack: {:?}", name)))?);
+        }
+        on_worker(|| e.packs().ensure(&codes)).map_err(|m| if m.starts_with("pack-") { RegFail::Named(m.split(':').next().unwrap_or("pack-fetch-failed").to_string(), m) } else { RegFail::Usage(m) })?;
+        Ok(0)
+    })
+}
+
+// Stop the fetch that is running (any thread). The pack is missing; the page that needed it is unread.
+#[no_mangle]
+pub unsafe extern "C" fn emon_packs_cancel(e: *mut emon_engines) {
+    if let Some(e) = engines_ref(e) {
+        e.packs().cancel();
+    }
+}
+
+// Block until an async adapter has something for the session, or `timeout_ms` has passed (negative: no limit). 1: something is here, `emon_step` takes it; 0: timed out.
+#[no_mangle]
+pub unsafe extern "C" fn emon_wait(s: *mut emon_session, timeout_ms: i32, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let c = completer(s)?;
+        let d = if timeout_ms < 0 { std::time::Duration::from_secs(60 * 60 * 24 * 365) } else { std::time::Duration::from_millis(timeout_ms as u64) };
+        Ok(c.wait(d) as c_int)
+    })
+}
+
+// The answer to the work an adapter was `start`-ed on, from any thread (`emon_adapter.h`: for a callback adapter whose engine answers through the program's own loop). `cells` is
+// the OIL answer record; or `failure`: EMON_ERR_UNSUPPORTED (the page is unread, `failure->name` says why) or any other code (failed, unread). The token is the one `start` was given.
+#[no_mangle]
+pub unsafe extern "C" fn emon_complete(s: *mut emon_session, token: u64, cells: *const i32, ncells: usize, failure: *const emon_error, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        let c = completer(s)?;
+        let done = match failure.as_ref() {
+            None => Completion::Answer(ints(cells, ncells).to_vec()),
+            Some(f) => Completion::Refused { status: if f.code == E_UNSUPPORTED { adapters::ADAPTER_UNSUPPORTED } else { adapters::ADAPTER_FAILED }, reason: if f.name.is_null() { String::new() } else { CStr::from_ptr(f.name).to_string_lossy().to_string() } },
+        };
+        c.complete(token, done).map_err(Fail::Usage)?;
+        Ok(0)
+    })
+}
+
+// The fields of an `ocr` request record (what an adapter is handed), by kin's names, so a caller that implements an adapter does not learn the layout. `langs` are the languages
+// and scripts it names (up to 8, 7 letters each). Answers 0, or `usage` when `request` is not an `ocr` request record.
+#[repr(C)]
+pub struct emon_ocr_request_info {
+    pub id: i32,
+    pub bitmap: i32,
+    pub engine: i32,
+    pub psm: i32,
+    pub flags: i32,
+    pub dpi: i32,
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+    pub nlangs: i32,
+    pub langs: [[c_char; 8]; 8],
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn emon_ocr_request(request: *const i32, nrequest: usize, out: *mut emon_ocr_request_info, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        if out.is_null() {
+            return Err(Fail::Usage("an output pointer is NULL".to_string()));
+        }
+        let r = adapters::parse_request(ints(request, nrequest)).ok_or_else(|| Fail::Usage("not an ocr request record".to_string()))?;
+        let mut o = emon_ocr_request_info { id: r.id, bitmap: r.bitmap, engine: r.engine, psm: r.psm, flags: r.flags, dpi: r.dpi, x: r.x, y: r.y, w: r.w, h: r.h, nlangs: 0, langs: [[0; 8]; 8] };
+        for (i, l) in r.langs.iter().take(8).enumerate() {
+            for (j, b) in l.bytes().take(7).enumerate() {
+                o.langs[i][j] = b as c_char;
+            }
+            o.nlangs += 1;
+        }
+        *out = o;
         Ok(0)
     })
 }

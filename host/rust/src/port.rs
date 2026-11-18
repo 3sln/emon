@@ -1082,15 +1082,21 @@ const SHA384_H: [u64; 8] = [
 ];
 
 
-fn sha256(data: &[u8]) -> [u8; 32] {
-    let mut h = SHA256_H;
-    let mut msg = data.to_vec();
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0);
+// SHA-256, streaming: `Sha256::new()`, `update` any number of times, `finish`. `sha256` is the one-shot over a slice (kin's `crypto-sha256`). The pack
+// verification of the adapters (`packs.rs`) hashes files of many megabytes through it without a copy.
+pub(crate) struct Sha256 {
+    h: [u32; 8],
+    buf: [u8; 64],
+    fill: usize,
+    len: u64,
+}
+
+impl Sha256 {
+    pub(crate) fn new() -> Sha256 {
+        Sha256 { h: SHA256_H, buf: [0u8; 64], fill: 0, len: 0 }
     }
-    msg.extend_from_slice(&((data.len() as u64).wrapping_mul(8)).to_be_bytes());
-    for chunk in msg.chunks(64) {
+
+    fn block(h: &mut [u32; 8], chunk: &[u8]) {
         let mut w = [0u32; 64];
         for i in 0..16 {
             w[i] = u32::from_be_bytes([chunk[4 * i], chunk[4 * i + 1], chunk[4 * i + 2], chunk[4 * i + 3]]);
@@ -1100,7 +1106,7 @@ fn sha256(data: &[u8]) -> [u8; 32] {
             let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
             w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
         }
-        let mut v = h;
+        let mut v = *h;
         for i in 0..64 {
             let s1 = v[4].rotate_right(6) ^ v[4].rotate_right(11) ^ v[4].rotate_right(25);
             let ch = (v[4] & v[5]) ^ (!v[4] & v[6]);
@@ -1121,11 +1127,51 @@ fn sha256(data: &[u8]) -> [u8; 32] {
             h[i] = h[i].wrapping_add(v[i]);
         }
     }
-    let mut out = [0u8; 32];
-    for i in 0..8 {
-        out[4 * i..4 * i + 4].copy_from_slice(&h[i].to_be_bytes());
+
+    pub(crate) fn update(&mut self, mut data: &[u8]) {
+        self.len = self.len.wrapping_add(data.len() as u64);
+        if self.fill > 0 {
+            let take = std::cmp::min(64 - self.fill, data.len());
+            self.buf[self.fill..self.fill + take].copy_from_slice(&data[..take]);
+            self.fill += take;
+            data = &data[take..];
+            if self.fill < 64 {
+                return;
+            }
+            let b = self.buf;
+            Sha256::block(&mut self.h, &b);
+            self.fill = 0;
+        }
+        while data.len() >= 64 {
+            Sha256::block(&mut self.h, &data[..64]);
+            data = &data[64..];
+        }
+        self.buf[..data.len()].copy_from_slice(data);
+        self.fill = data.len();
     }
-    out
+
+    pub(crate) fn finish(mut self) -> [u8; 32] {
+        let bits = self.len.wrapping_mul(8);
+        let mut pad = vec![0x80u8];
+        while (self.fill + pad.len()) % 64 != 56 {
+            pad.push(0);
+        }
+        pad.extend_from_slice(&bits.to_be_bytes());
+        let keep = self.len;
+        self.update(&pad);
+        self.len = keep;
+        let mut out = [0u8; 32];
+        for i in 0..8 {
+            out[4 * i..4 * i + 4].copy_from_slice(&self.h[i].to_be_bytes());
+        }
+        out
+    }
+}
+
+pub(crate) fn sha256(data: &[u8]) -> [u8; 32] {
+    let mut s = Sha256::new();
+    s.update(data);
+    s.finish()
 }
 
 fn sha512(data: &[u8], is384: bool) -> [u8; 64] {

@@ -29,6 +29,9 @@ type Transcript struct {
 	// written as `:producer {...}` when there are any and never read back for a replay: a replay depends on the answers, not on whose engine gave
 	// them. Empty leaves the file as it always was.
 	Producer [][2]string
+	// Engines is the ENGINE TABLE (D898): the engines the run had, [engine, caps, role] in kin's `emon.engines` terms, written first in the file as
+	// `:pk-engines` when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
+	Engines [][3]int32
 }
 
 // TranscriptFile is the name of the records file.
@@ -100,6 +103,9 @@ func inputsKin(inputs [][2]int32) *transcriptctx.Tr {
 // kin is the transcript as kin holds it (`Tr`), the bitmaps left behind: the entry at a place has one when its flag says.
 func (t *Transcript) kin() *transcriptctx.Tr {
 	tr := inputsKin(t.Inputs)
+	for _, e := range t.Engines {
+		transcript.TrAddEngine(tr, e[0], e[1], e[2])
+	}
 	for _, kv := range t.Producer {
 		transcript.TrAddProducer(tr, cps(kv[0]), cps(kv[1]))
 	}
@@ -146,6 +152,9 @@ func TranscriptFromFiles(files map[string][]byte) (*Transcript, error) {
 	t := &Transcript{}
 	for i := int32(0); i < transcript.TrNInputs(tr); i++ {
 		t.Inputs = append(t.Inputs, [2]int32{transcript.TrInIndex(tr, i), transcript.TrInLength(tr, i)})
+	}
+	for i := int32(0); i < transcript.TrNEngines(tr); i++ {
+		t.Engines = append(t.Engines, [3]int32{transcript.TrEngEngine(tr, i), transcript.TrEngCaps(tr, i), transcript.TrEngRole(tr, i)})
 	}
 	for p := int32(0); transcript.TrPMore(tr, p) == 1; p = transcript.TrPNext(tr, p) {
 		var k, v strings.Builder

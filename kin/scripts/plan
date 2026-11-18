@@ -154,8 +154,10 @@
           tam (fresh "tampered")]
       (fs/create-dirs tam)
       (doseq [f (fs/list-dir t)] (fs/copy f (str tam "/" (fs/file-name f))))
-      (check (str/includes? edn "[12 3 3 1 6 ") "the OCR request is where the tamper expects it")
-      (spit (str tam "/transcript.edn") (str/replace-first edn "[12 3 3 1 6 " "[12 3 3 1 7 "))
+      ;; the request's first cell is its length, which since D893 includes the requested-identity trailer (128), so the tamper finds it by shape: `[len 3 3 1 6 `
+      (let [hdr (re-find #"\[\d+ 3 3 1 6 " edn)]
+        (check (some? hdr) "the OCR request is where the tamper expects it")
+        (spit (str tam "/transcript.edn") (str/replace-first edn hdr (str/replace hdr " 6 " " 7 "))))
       (let [nop (fresh "nopng")]
         (fs/create-dirs nop)
         (doseq [f (fs/list-dir t)] (fs/copy f (str nop "/" (fs/file-name f))))

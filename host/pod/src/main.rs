@@ -31,7 +31,7 @@
 //
 // NO CRATE IS ADDED: bencode, EDN, JSON-to-EDN and base64 are written here (small, and the pod's wire is what a test reads). The conversion runs
 // on a thread with a 32 MiB stack. NOTHING but protocol goes to stdout; diagnostics go to stderr.
-use emon::capi::{capabilities, category_code, category_name, html_options, native_config_at};
+use emon::capi::{capabilities, category_code, category_name, html_options, native_config_at, tesseract_ready};
 use emon::{parse_options, Engine, Error, Input, Model};
 use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
@@ -763,7 +763,7 @@ fn invoke(var: &str, args: &[Edn]) -> Result<Edn, PodError> {
         "capabilities" => Ok(map(vec![
             ("version", s("0.0.0-dev")),
             ("pdfium", Edn::Bool(capabilities() & 1 != 0)),
-            ("tesseract", Edn::Bool(capabilities() & 2 != 0)),
+            ("tesseract", Edn::Bool(tesseract_ready())),
             ("codecs", Edn::Bool(capabilities() & 4 != 0)),
         ])),
         other => Err(PodError::usage(format!("emon has no var {}", other))),

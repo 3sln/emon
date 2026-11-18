@@ -598,10 +598,18 @@ public final class Planrun {
          * `:producer {...}` when there are any and never read back for a replay. Empty leaves the file as it always was.
          */
         public List<String[]> producer = new ArrayList<>();
+        /**
+         * The ENGINE TABLE (D898): the engines the run had, {engine, caps, role} in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+         * when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
+         */
+        public List<int[]> engines = new ArrayList<>();
 
         // the transcript as kin holds it (`Tr`), the bitmaps left behind: the entry at a place has one when its flag says
         Transcriptctx.Tr kin() {
             Transcriptctx.Tr tr = inputsKin(inputs);
+            for (int[] e : engines) {
+                emon.Transcript.trAddEngine(tr, e[0], e[1], e[2]);
+            }
             for (String[] kv : producer) {
                 emon.Transcript.trAddProducer(tr, cps(kv[0]), cps(kv[1]));
             }
@@ -671,6 +679,9 @@ public final class Planrun {
         Transcript t = new Transcript();
         for (int i = 0; i < emon.Transcript.trNInputs(tr); i++) {
             t.inputs.add(new int[] {emon.Transcript.trInIndex(tr, i), emon.Transcript.trInLength(tr, i)});
+        }
+        for (int i = 0; i < emon.Transcript.trNEngines(tr); i++) {
+            t.engines.add(new int[] {emon.Transcript.trEngEngine(tr, i), emon.Transcript.trEngCaps(tr, i), emon.Transcript.trEngRole(tr, i)});
         }
         for (int p = 0; emon.Transcript.trPMore(tr, p) == 1; p = emon.Transcript.trPNext(tr, p)) {
             StringBuilder k = new StringBuilder(), v = new StringBuilder();

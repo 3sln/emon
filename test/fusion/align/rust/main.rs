@@ -75,7 +75,7 @@ fn main() {
     assert_eq!(emon::plan::pk_ocr(), KIND_OCR);
     assert_eq!(emon::plan::pk_render(), KIND_RENDER);
 
-    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new() };
+    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new(), engines: Vec::new() };
     let mut replayer: Option<Replayer> = None;
     if mode == "replay" {
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();

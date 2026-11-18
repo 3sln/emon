@@ -7,7 +7,6 @@ import (
 	"emon/evidence"
 	"emon/model"
 	"emon/ocr"
-	"emon/ocridentity"
 	"emon/oil"
 	"emon/oilfixturetest"
 	"emon/plan"
@@ -174,7 +173,7 @@ func TestWithThePolicyTheFramesSecondRoundAsksForOcrOfItsBitmap(emonT *testing.T
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 3+(300*256), "symbols, OSD, and the 300 dpi it assumed as a hint")
 	port.AssertEq(emonT, ocr.OcfDpi(plan.RqArg(rq, 0, 2)), 300, "read back")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 5), 0, "the whole bitmap")
-	port.AssertEq(emonT, plan.RqNargs(rq, 0), (7+4)+ocridentity.OiTessLen(), "and no language: no locale was given")
+	port.AssertEq(emonT, plan.RqNargs(rq, 0), (7+4)+112, "and no language: no locale was given")
 }
 
 func TestALocaleHintNamesTheLanguage(emonT *testing.T) {
@@ -189,7 +188,7 @@ func TestALocaleHintNamesTheLanguage(emonT *testing.T) {
 	plan.AnDecode(ans, 260, 463, 894, 1, 20000, 1, 1)
 	port.AssertEq(emonT, pagePol(0, ans, rq, 2, loc, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), plan.UsRequests(), "it asks")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 2), 3+(200*256), "the stated 200 dpi")
-	port.AssertEq(emonT, plan.RqNargs(rq, 0), (8+4)+ocridentity.OiTessLen(), "one language")
+	port.AssertEq(emonT, plan.RqNargs(rq, 0), (8+4)+112, "one language")
 	port.AssertEq(emonT, plan.RqArg(rq, 0, 7), 1684370688, "`de-CH` is `deu`")
 }
 

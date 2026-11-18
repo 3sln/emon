@@ -1493,6 +1493,7 @@ impl Engine {
                 t.inputs = this_input.clone();
                 if let Some(p) = &self.cfg.ocr {
                     t.producer = p.0.producer();
+                    t.engines = plan::engine_rows(&t.producer);
                 }
                 recording = Some(t);
             }

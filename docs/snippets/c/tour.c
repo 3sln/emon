@@ -33,13 +33,13 @@ int main(void) {
 
     /* Stage 0 alone is cheap: "pdf 1.4 pages=3 encrypted=false bytes=1234". */
     emon_buf line = {0};
-    if (emon_intake(&in, options, 0, &line, &err) == 0) {
+    if (emon_intake(&in, options, &line, &err) == 0) {
         printf("%s\n", (const char *)line.data);
         emon_free_buf(&line);
     }
 
     emon_model *model = NULL;
-    if (emon_convert(&in, options, 0, &model, &err) < 0) {
+    if (emon_convert(&in, options, NULL, &model, &err) < 0) {
         /* err.name is the stable name to route on, err.code its category */
         fprintf(stderr, "%s (%s): %s\n", err.name, emon_error_category(err.code), err.message);
         emon_free_error(&err);

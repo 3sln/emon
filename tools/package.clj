@@ -122,7 +122,7 @@
 
 ;; ------------------------------------------------------------------------------------------------------ the Rust crate
 
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "ppocr_native"]) ; not pdfcodecs: it links jbig2dec (D526)
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter"]) ; not pdfcodecs: it links jbig2dec (D526)
 
 (defn- rust-src-files
   "The source of the crate: the generated modules (not laws or probes), the module list, and the host files."
@@ -448,19 +448,21 @@
 
 (defn- native-lib-names []
   (let [os (str/lower-case (System/getProperty "os.name"))]
-    (cond (str/includes? os "mac") {:dyn "libemon.dylib" :static "libemon.a" :pod "emon-pod"}
-          (str/includes? os "linux") {:dyn "libemon.so" :static "libemon.a" :pod "emon-pod"}
+    (cond (str/includes? os "mac") {:dyn "libemon.dylib" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.dylib"}
+          (str/includes? os "linux") {:dyn "libemon.so" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.so"}
           :else (skip! (str "the C library and the pod are packaged on macOS and Linux (this is " os ")")))))
 
 (defonce native-built (atom nil))
 (defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
 (defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
+(defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D899), when the full pipeline built it
 
-;; THE FULL PIPELINE (D552; D541's recipe for the CLI): libemon and emon-pod are built with Tesseract and Leptonica linked STATICALLY from `bb native`
-;; (EMON_NATIVE, .cache/native/<triple>/link.rustflags), the crate's `tesseract` feature, and pdfium LOADED AT RUN TIME (`--cfg pdfium --cfg pdfium_dl`,
-;; `pdfium::load`). The archives carry the pinned pdfium (lib/) and the eng and osd models (share/emon/tessdata/), where the library and the pod look
-;; for them. Without .cache/native or the pinned pdfium the build is the plain one (no ports; `emon_capabilities()` is 0) and says so loudly;
-;; EMON_PACKAGE_REQUIRE_NATIVE=1 (the release workflow's) makes that a failure.
+;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
+;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
+;; built from the same sources with the static Tesseract and Leptonica of `bb native` (EMON_NATIVE, .cache/native/<triple>/link.rustflags) and exporting only `emon_ocr_adapter_v1`
+;; (emon_adapter.h). The pod, a binary, still links Tesseract itself (the `tesseract` feature). The archives carry the pinned pdfium (lib/), the adapter (lib/emon/adapters/) and the
+;; English and orientation packs (share/emon/packs/<id>/<file>), where the library looks for them. Without .cache/native or the pinned pdfium the core library is built as it is
+;; and the adapter is not; EMON_PACKAGE_REQUIRE_NATIVE=1 (the release workflow's) makes that a failure.
 (def native-pins (edn/read-string (slurp (str root "/tools/native/native.edn"))))
 (def pdfium-pin (edn/read-string (slurp (str root "/tools/pdfium/pdfium.edn"))))
 
@@ -494,10 +496,11 @@
                     (say "  NOTE c/pod: built WITHOUT pdfium and Tesseract (" (:why inputs) "): emon_capabilities() is 0 in this build; a release is built with them"))
                   (say "  c/pod: the full pipeline: static Tesseract and Leptonica from " (fs/relativize root (:prefix inputs)) ", pdfium loaded at run time"))
               cargo (slurp (str root "/release/pkg/rust/Cargo.toml"))
-              lib "[lib]\nname = \"emon\"\npath = \"src/lib.rs\"\n"
-              _ (when-not (str/includes? cargo lib) (bad! "release/pkg/rust/Cargo.toml has no [lib] table of the expected form"))
-              cargo (str/replace cargo lib
-                                 (str lib "crate-type = [\"cdylib\", \"staticlib\", \"rlib\"]\n\n[[bin]]\nname = \"emon-pod\"\npath = \"src/pod.rs\"\n"))
+              lib-table "[lib]\nname = \"emon\"\npath = \"src/lib.rs\"\n"
+              _ (when-not (str/includes? cargo lib-table) (bad! "release/pkg/rust/Cargo.toml has no [lib] table of the expected form"))
+              base-cargo cargo
+              cargo (str/replace cargo lib-table
+                                 (str lib-table "crate-type = [\"cdylib\", \"staticlib\", \"rlib\"]\n\n[[bin]]\nname = \"emon-pod\"\npath = \"src/pod.rs\"\n"))
               files (-> (rust-src-files)
                         (dissoc "src/lib.rs")
                         (assoc "src/lib.rs" {:text (str (str/replace (slurp (str root "/host/rust/src/lib.rs")) "PPOCR_NATIVE_HOST: bool = false" "PPOCR_NATIVE_HOST: bool = true")
@@ -509,29 +512,41 @@
                                "Cargo.lock" "host/rust/Cargo.lock"))]
           (stage! dir files ["src"])
           ;; THE LIBRARY gets the flags ALONE (`cargo rustc --lib -- FLAGS`, not RUSTFLAGS): RUSTFLAGS reach every dependency, and each of the 18 crates of the
-          ;; graph would then bundle its own copy of Tesseract and Leptonica into libemon.a (242 MiB instead of about 34). THE POD is a binary, which links
-          ;; each static library once whatever the dependencies say, so it is built the way the CLI is (RUSTFLAGS, D541) into a target directory of its own.
+          ;; graph would then bundle its own copy of Tesseract and Leptonica into libemon.a. THE POD is a binary, which links each static library once whatever the dependencies say,
+          ;; so it is built the way the CLI is (RUSTFLAGS, D541) into a target directory of its own. THE ADAPTER (K2) is a library of a crate of its own (libemon_ocr_tesseract): the flags alone too.
           (let [full? (not (:why inputs))
+                mac? (str/includes? (str/lower-case (System/getProperty "os.name")) "mac")
                 env (when full? {"MACOSX_DEPLOYMENT_TARGET" (or (System/getenv "MACOSX_DEPLOYMENT_TARGET") "12.0")})
                 ;; Windows (D558): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries: no VC++ redistributable
                 crt (when (str/includes? (host-triple) "windows-msvc") ["-C" "target-feature=+crt-static"])
-                flags (when full? (concat ["--cfg" "pdfium" "--cfg" "pdfium_dl"] crt (str/split (str/trim (slurp (str (:prefix inputs) "/link.rustflags"))) #"\s+")))
+                cfgs (when full? ["--cfg" "pdfium" "--cfg" "pdfium_dl"])
+                link (when full? (str/split (str/trim (slurp (str (:prefix inputs) "/link.rustflags"))) #"\s+"))
+                flags (concat cfgs crt link)
                 ;; cargo's own flags, then (after `--`) rustc's; offline first, the registry only when a crate is not cached
-                attempt (fn [env pre post]
+                attempt (fn [dir env pre post]
                           (let [go (fn [offline] (apply run {:dir dir :ok? false :env env} (concat ["cargo"] pre ["--locked"] offline (when (seq post) (cons "--" post)))))
                                 r (go ["--offline"])]
                             (if (zero? (:exit r)) r (go []))))
-                ;; the shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
+                ;; a shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
                 ;; works where it was built and nowhere else; @rpath/ (macOS) and a soname (Linux) make `-Wl,-rpath,DIR` the way it is found
-                ident (if (str/includes? (str/lower-case (System/getProperty "os.name")) "mac")
-                        ["-C" "link-arg=-Wl,-install_name,@rpath/libemon.dylib"]
-                        ["-C" "link-arg=-Wl,-soname,libemon.so"])
-                lib (attempt env (concat ["rustc" "--release" "--lib"] (when full? ["--features" "tesseract"])) (concat ident flags))
+                ident (fn [n] (if mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/lib" n ".dylib")] ["-C" (str "link-arg=-Wl,-soname,lib" n ".so")]))
+                ;; the core library: pdfium at run time, the pack fetch, no Tesseract
+                lib (attempt dir env ["rustc" "--release" "--lib" "--features" "packs-fetch"] (concat (ident "emon") cfgs crt))
                 pod (when (zero? (:exit lib))
-                      (attempt (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
+                      (attempt dir (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
                                (concat ["build" "--release" "--bin" "emon-pod"] (when full? ["--features" "tesseract"])) []))
-                r (if (zero? (:exit lib)) pod lib)]
+                r (if (zero? (:exit lib)) pod lib)
+                ;; the Tesseract adapter library, from the same sources and its own manifest
+                adir (stage-dir :native-adapter)
+                adapter (when (and full? (zero? (:exit r)))
+                          (let [acargo (str/replace base-cargo lib-table (str "[lib]\nname = \"emon_ocr_tesseract\"\npath = \"src/lib.rs\"\ncrate-type = [\"cdylib\"]\n"))
+                                afiles (-> (rust-src-files)
+                                           (assoc "Cargo.toml" {:text acargo} "Cargo.lock" "host/rust/Cargo.lock"))]
+                            (stage! adir afiles ["src"])
+                            (attempt adir env ["rustc" "--release" "--lib" "--features" "tesseract-adapter"] (concat (ident "emon_ocr_tesseract") crt flags))))]
             (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40)))
+            (when (and adapter (not (zero? (:exit adapter)))) (bad! "cargo build of the Tesseract adapter library failed\n" (tail (str (:out adapter) "\n" (:err adapter)) 40)))
+            (reset! native-adapter-dir (when adapter (str adir "/target/release")))
             (reset! native-pod-dir (str dir "/target-pod/release"))
             (reset! native-full (when full? inputs)))
           (reset! native-built (str dir "/target/release"))))))
@@ -558,18 +573,43 @@
     (run {:dir tmp} "tar" "-czf" tgz name)
     tgz))
 
+(def packs-catalogue (delay (edn/read-string (slurp (str root "/release/packs/packs.edn")))))
+
+(defn- pack-dir-of
+  "The catalogue's pack id that holds the Tesseract file `file` (`eng.traineddata` -> `tess-fast-eng`)."
+  [file]
+  (or (some (fn [p] (when (and (= :tesseract (:engine p)) (some #(= file (:name %)) (:files p))) (:id p))) (:packs @packs-catalogue))
+      (bad! "the pack catalogue has no Tesseract pack with the file " file)))
+
+(defn- native-extras-c
+  "The entries of the C archive the full pipeline adds (K2, D899): pdfium in lib/, the Tesseract adapter library in lib/emon/adapters/, the models as packs in
+  share/emon/packs/<id>/<file> (where `emon_engines_defaults` looks)."
+  []
+  (when-let [{:keys [pdfium data]} @native-full]
+    (let [{:keys [adapter]} (native-lib-names)]
+      (merge {(str "lib/" (fs/file-name pdfium)) pdfium}
+             (when @native-adapter-dir {(str "lib/emon/adapters/" adapter) (str @native-adapter-dir "/" adapter)})
+             (into {} (for [{:keys [file src]} data] [(str "share/emon/packs/" (pack-dir-of file) "/" file) src]))))))
+
+(defn- exported-symbols
+  "The names a shared library defines and exports (nm -g), without the leading underscore of macOS."
+  [f]
+  (let [r (run {:ok? false} "nm" "-g" (if (str/includes? (str f) ".dylib") "-U" "--defined-only") (str f))]
+    (->> (str/split-lines (:out r)) (keep #(second (re-find #"\s[TtDdBbRrSs]\s+_?(\S+)$" %))) set)))
+
 (defn build-c! []
-  (let [{:keys [dyn static]} (native-lib-names)
+  (let [{:keys [dyn static adapter]} (native-lib-names)
         rel (build-native!)
         triple (host-triple)
         name (str "emon-c-" version "-" triple)
         tgz (archive! :c name (merge {"include/emon.h" (str root "/host/c/include/emon.h")
+                                      "include/emon_adapter.h" (str root "/host/c/include/emon_adapter.h")
                                       (str "lib/" dyn) (str rel "/" dyn)
                                       (str "lib/" static) (str rel "/" static)
                                       "LICENSE" (str root "/LICENSE")
                                       "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
                                       "README.md" (str root "/release/pkg/README.md")}
-                                     (native-extras)))
+                                     (native-extras-c)))
         names (tar-list tgz)]
     (when (some #(re-find #"test_hooks|emon_test" %) names) (bad! "the C archive carries a test header"))
     (when (str/includes? (slurp (str root "/host/c/include/emon.h")) "emon_test_panic") (bad! "emon.h declares emon_test_panic"))
@@ -581,6 +621,15 @@
       (when (and (zero? (:exit r)) (not (str/includes? (:out r) (if mac? "@rpath/libemon.dylib" "libemon.so"))))
         (bad! dyn " is named by an absolute path, not @rpath/ or its soname:\n" (:out r)))
       (when (and (zero? (:exit r)) (re-find #"/deps/" (:out r))) (bad! dyn " carries its build path in its name")))
+    ;; K2 (D899): THE CORE LIBRARY HAS NO TESSERACT, no Leptonica and no codec of theirs (the adapter library has all of them), and the adapter exports one function
+    (doseq [f [dyn static]]
+      (let [nm (run {:ok? false} "nm" (str rel "/" f))]
+        (when (re-find #"(?m)\b_?(TessBaseAPI[A-Za-z0-9_]*|pixRead[A-Za-z0-9_]*|pixCreate[A-Za-z0-9_]*)\b" (:out nm)) (bad! f " carries Tesseract or Leptonica: the core library has none (K2)"))))
+    (when @native-adapter-dir
+      (let [exports (exported-symbols (str @native-adapter-dir "/" adapter))]
+        (when-not (= #{"emon_ocr_adapter_v1"} exports) (bad! adapter " exports " (pr-str (sort exports)) ", not exactly emon_ocr_adapter_v1")))
+      (let [nm (run {:ok? false} "nm" (str @native-adapter-dir "/" adapter))]
+        (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! adapter " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))))
     ;; bb native --audit's rule, held to the product (D540): no jbig2dec, JBIG-KIT or OpenJPEG symbol in either library, and no pdfium linked
     (when @native-full
       (doseq [f [dyn static]]
@@ -926,7 +975,7 @@
         app (str tmp "/app")
         {:keys [dyn]} (native-lib-names)
         cc (or (first (filter have? ["cc" "clang" "gcc"])) (skip! "no C compiler"))
-        sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm" "-lc++"] ["-lpthread" "-ldl" "-lm" "-lstdc++"])] ; the C++ runtime: libemon.a holds Tesseract (D552)
+        sys (if (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) ["-framework" "Security" "-framework" "CoreFoundation" "-liconv" "-lm"] ["-lpthread" "-ldl" "-lm"])] ; no C++ runtime: Tesseract is the adapter library, not libemon.a (K2)
     (put-sample! app)
     (spit (str app "/main.c")
           (str/replace (str "#include <string.h>\n" (slurp (snippet-file "c/quickstart.c")))
@@ -958,9 +1007,9 @@
         ;; the full pipeline (D552): a scan is drawn by the archive's pdfium and read by its static Tesseract, with NO EMON_* in the environment
         ;; (the shared library finds lib/libpdfium.* and ../share/emon/tessdata next to itself); the static link finds them through the environment
         ;; (the executable is not beside them). A plain archive (built without .cache/native) says so and skips this.
-        (if (fs/exists? (str dir "/share/emon/tessdata/eng.traineddata"))
+        (if (fs/exists? (str dir "/share/emon/packs/tess-fast-eng/eng.traineddata"))
           (let [napp (str tmp "/app-native")
-                clean {"EMON_PDFIUM_LIB" "" "EMON_TESSDATA" "" "TESSDATA_PREFIX" ""}]
+                clean {"EMON_PDFIUM_LIB" "" "EMON_ADAPTER_DIR" "" "EMON_MODELS" "" "EMON_PACKS_FETCH" "" "EMON_OFFLINE" "1" "EMON_TESSDATA" "" "TESSDATA_PREFIX" ""}]
             (fs/create-dirs napp)
             (fs/copy scan-pdf (str napp "/scan.pdf") {:replace-existing true})
             (spit (str napp "/native.c") (slurp (snippet-file "c/native.c")))
@@ -969,7 +1018,11 @@
             (scan-html-ok! "c (shared)" napp)
             (fs/delete (str napp "/scan.html"))
             (apply run {:dir napp} (concat [cc] flags ["-o" (str napp "/c-native-static") (str napp "/native.c") (str dir "/lib/libemon.a")] sys))
-            (run {:dir napp :env (assoc clean "EMON_PDFIUM_LIB" (str dir "/lib") "EMON_TESSDATA" (str dir "/share/emon/tessdata"))} (str napp "/c-native-static"))
+            (run {:dir napp :env (assoc clean "EMON_PDFIUM_LIB" (str dir "/lib") "EMON_ADAPTER_DIR" (str dir "/lib/emon/adapters") "EMON_MODELS" (str dir "/share/emon/packs"))} (str napp "/c-native-static"))
+            ;; the engines API of the docs (docs/snippets/c/engines.c): compiled, linked both ways and run from the archive's directory with nothing to fetch
+            (spit (str napp "/engines.c") (slurp (snippet-file "c/engines.c")))
+            (apply run {:dir napp} (concat [cc] flags ["-o" (str napp "/c-engines") (str napp "/engines.c") (str "-L" dir "/lib") "-lemon" (str "-Wl,-rpath," dir "/lib")]))
+            (run {:dir dir :env {"EMON_OFFLINE" "1"}} (str napp "/c-engines"))
             (scan-html-ok! "c (static)" napp))
           (say "  NOTE c: the archive was built without pdfium and Tesseract, so the native snippet was not run"))
         a))))

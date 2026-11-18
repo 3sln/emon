@@ -106,7 +106,7 @@ public static class Retargettest {
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), Plan.PuViewId(0, 32), "of the kin-made view, by its id from view-base");
         emon.Testport.AssertThat(Plan.RqArg(rq, 0, 0) >= Plan.ViewBase(), "an id the hosts know for a view");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 3, "psm 3");
-        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (9 + 4) + Ocridentity.OiTessLen(), "the pixel box, then the two cells of the hash");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (9 + 4) + 112, "the pixel box, then the two cells of the hash");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 7), emon.Port.CellsAt(rtp, Retarget.RtpHash()), "the hash's high half is the bulk form's");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 8), emon.Port.CellsAt(rtp, Retarget.RtpHash() + 1), "and its low half");
         emon.Port.BitmapSetU8(v, 3, 4, 0, 201);
@@ -909,7 +909,7 @@ public static class Retargettest {
         emon.Testport.AssertEq(Retarget.RtAskReceiptBlock(0, vid, 300, 0, ans, loc, bms, rtp, rq), 1, "one read of the enlarged raster");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 0), vid, "the enlarged raster owns the read");
         emon.Testport.AssertEq(Plan.RqArg(rq, 0, 1), 6, "the view keeps block segmentation");
-        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (9 + 4) + Ocridentity.OiTessLen(), "a view request includes both hash cells");
+        emon.Testport.AssertEq(Plan.RqNargs(rq, 0), (9 + 4) + 112, "a view request includes both hash cells");
         int hi = Plan.RqArg(rq, 0, 7);
         int lo = Plan.RqArg(rq, 0, 8);
         emon.Port.BitmapSetU8(emon.Port.BmsGet(bms, vid), 0, 0, 0, 255);

@@ -1,8 +1,8 @@
-/* The mobile smoke program (K6, D897): a C program built for a mobile triple against the shipped libemon (`bb mobile --smoke`). It is the docs' quickstart over
+/* The mobile smoke program (K6, D897; K2, D899): a C program built for a mobile triple against the shipped libraries (`bb mobile --smoke`). It is the docs' quickstart over
  * arguments: it reads a PDF, converts it to HTML with the library and writes the bytes, so the caller can compare them with a golden.
  *   smoke IN.pdf OUT.html            one-shot conversion with `ocr=never` (born-digital: no engine needed)
- *   smoke IN.pdf OUT.html native [PDFIUM_PATH TESSDATA_DIR]
- *                                    the library's own pdfium and Tesseract (EMON_NATIVE); paths optional (NULL: found beside the library, or by name)
+ *   smoke IN.pdf OUT.html native [PDFIUM_PATH [ADAPTER_PATH [PACKS_DIR]]]
+ *                                    the engines: the turnkey set next to the library (emon_engines_defaults: pdfium, lib/emon/adapters/, share/emon/packs/), or the paths named
  * Prints `emon VERSION caps=N` and exits 0 on success. Compiled with -std=c11 -Wall -Werror. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,18 +24,26 @@ static int slurp(const char *path, unsigned char **out, size_t *len) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3) { fprintf(stderr, "usage: smoke IN.pdf OUT.html [native [PDFIUM TESSDATA]]\n"); return 2; }
+    if (argc < 3) { fprintf(stderr, "usage: smoke IN.pdf OUT.html [native [PDFIUM [ADAPTER [PACKS]]]]\n"); return 2; }
     int native = argc > 3 && strcmp(argv[3], "native") == 0;
     emon_error err = {0};
+    emon_engines *engines = NULL;
     if (native) {
         const char *pd = argc > 4 && argv[4][0] ? argv[4] : NULL;
-        const char *td = argc > 5 && argv[5][0] ? argv[5] : NULL;
-        if (emon_set_native_paths(pd, td, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+        const char *ad = argc > 5 && argv[5][0] ? argv[5] : NULL;
+        const char *pk = argc > 6 && argv[6][0] ? argv[6] : NULL;
+        if (emon_engines_new(&engines, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+        if (pk && emon_engines_packs(engines, pk, EMON_PACKS_NEVER, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+        if (ad || pd) {
+            if (ad && emon_engines_load(engines, ad, NULL, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+            if (emon_engines_pdfium(engines, pd, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+        } else if (emon_engines_defaults(engines, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
     }
     printf("emon %s caps=%u\n", emon_version(), emon_capabilities());
-    if (native && (!(emon_capabilities() & EMON_CAP_PDFIUM) || !(emon_capabilities() & EMON_CAP_TESSERACT))) {
-        fprintf(stderr, "pdfium or Tesseract not found (caps=%u)\n", emon_capabilities());
-        return 4;
+    if (native) {
+        emon_buf d = {0};
+        if (emon_engines_describe(engines, &d, &err) == 0) { printf("%s\n", (const char *)d.data); emon_free_buf(&d); }
+        if (!(emon_capabilities() & EMON_CAP_PDFIUM)) { fprintf(stderr, "pdfium was not found (caps=%u)\n", emon_capabilities()); return 4; }
     }
     unsigned char *pdf = NULL;
     size_t len = 0;
@@ -44,7 +52,7 @@ int main(int argc, char **argv) {
     in.data = pdf;
     in.len = len;
     emon_buf html = {0};
-    if (emon_convert_html(&in, native ? NULL : "ocr=never", native ? EMON_NATIVE : 0, NULL, &html, &err) < 0) {
+    if (emon_convert_html(&in, native ? NULL : "ocr=never", engines, NULL, &html, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);
         return 6;
@@ -54,6 +62,7 @@ int main(int argc, char **argv) {
     fwrite(html.data, 1, html.len, out);
     fclose(out);
     emon_free_buf(&html);
+    emon_engines_free(engines);
     free(pdf);
     return 0;
 }

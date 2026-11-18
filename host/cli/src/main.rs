@@ -269,9 +269,8 @@ fn convert(args: Vec<String>) {
     }
 
     if opts.ocr_engine.uses_pp() && !never {
-        let port = emon::ppocr_native::PpOcr::open(None, cfg.ocr.take())
-            .unwrap_or_else(|e| die(3, &e));
-        cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
+        // PP-OCR (the hybrid, or alone: kin routes by the engine each request names): Tesseract (linked here) registered as an adapter beside the PP adapter library, a router over the two (K2, D899)
+        cfg.ocr = Some(emon::adapter::ppocr_hybrid(cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
     }
 
     // the document
