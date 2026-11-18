@@ -1246,9 +1246,9 @@ public final class Transcript {
             edProducer(t, b, pp);
         }
         if (kp >= 0) {
-            int r = edEngines(t, b, kp);
-            if (r != 0) {
-                return r;
+            int er = edEngines(t, b, kp);
+            if (er != 0) {
+                return er;
             }
         }
         if (ip < 0) {

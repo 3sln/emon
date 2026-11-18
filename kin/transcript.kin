@@ -498,8 +498,8 @@
       (if (!= (fd t ival) 1) (return (ed-fail t (tb-version) top)))
       (if (>= pp 0) (ed-producer t b pp))
       (if (>= kp 0)
-        (let [^I32 r (ed-engines t b kp)]
-          (if (!= r 0) (return r))))
+        (let [^I32 er (ed-engines t b kp)]
+          (if (!= er 0) (return er))))
       (if (< ip 0) (return (ed-fail t (tb-no-inputs) top)))
       (let [^I32 r (ed-inputs t b ip)]
         (if (!= r 0) (return r)))

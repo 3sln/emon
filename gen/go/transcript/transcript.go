@@ -1277,9 +1277,9 @@ func TrRead(t *transcriptctx.Tr, b []byte) int32 {
 		edProducer(t, b, pp)
 	}
 	if kp >= 0 {
-		var r int32 = edEngines(t, b, kp)
-		if r != 0 {
-			return r
+		var er int32 = edEngines(t, b, kp)
+		if er != 0 {
+			return er
 		}
 	}
 	if ip < 0 {

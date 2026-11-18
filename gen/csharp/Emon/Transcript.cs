@@ -1246,9 +1246,9 @@ public static class Transcript {
             EdProducer(t, b, pp);
         }
         if (kp >= 0) {
-            int r = EdEngines(t, b, kp);
-            if (r != 0) {
-                return r;
+            int er = EdEngines(t, b, kp);
+            if (er != 0) {
+                return er;
             }
         }
         if (ip < 0) {

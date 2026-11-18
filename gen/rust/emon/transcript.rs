@@ -1245,9 +1245,9 @@ pub fn tr_read(t: &mut crate::emon::transcriptctx::Tr, b: &[u8]) -> i32 {
         ed_producer(t, b, pp);
     }
     if kp >= 0 {
-        let r: i32 = ed_engines(t, b, kp);
-        if r != 0 {
-            return r;
+        let er: i32 = ed_engines(t, b, kp);
+        if er != 0 {
+            return er;
         }
     }
     if ip < 0 {

@@ -14529,3 +14529,44 @@ Defaults:
 Every pack, including app-provided bytes, is verified against the catalogue's SHA-256 before use.
 
 - [ ] **Signed off** (maintainer)
+
+### D900 — K1: the engine table, roles, turnkey defaults and pack catalogue are kin; the transcript records its engine table first
+
+Foundation for the Dart/Flutter evaluation release (D895) and `prepare()` (D896). Kin owns which engines exist, what each may declare and do, which packs each needs and what a turnkey package chooses; a host loads adapters and fetches and verifies bytes, and decides none of it. The coordinator renumbers this entry.
+
+**The engine table** (`kin/engines.kin`, module `emon.engines`): one row per registered engine.
+
+| Engine | OIL engine | Kind | Implementation | Runs on | Calibrated | Needs |
+|---|---|---|---|---|---|---|
+| `tesseract` | tesseract | ocr | native adapter | every class | yes | recognizer, osd |
+| `ppocr` | ppocr | ocr | native adapter | macos ios linux windows android | yes | detector, classifier, recognizer |
+| `ppocr-web` | ppocr | ocr | platform plugin | web | yes | the same |
+| `apple-vision` | apple-vision | ocr | native adapter | macos ios | no | none |
+| `windows-media-ocr` | windows-media-ocr | ocr | native adapter | windows | no | none |
+| `mlkit-text` | mlkit-text | ocr | platform plugin | android | no | none |
+| `pdfium` | (renderer) | render | built in | every class | n/a | none |
+
+- **Capabilities** are the OIL bits an engine can declare (`caps`): the ceiling, which an adapter's `describe` narrows at registration. Tesseract's is held by a law to what `oil-tess-begin` sets; PP's is what `ppocr.rs` declares; the platform engines' follow dart1 4.2 and are the least certain column until each adapter exists.
+- **Roles** per engine and platform class: the roles it may take and its default. Tesseract is the incumbent everywhere (ruling 8) or a sole reader; PP-OCR is the challenger or a sole reader; an uncalibrated platform engine is a reader or a voter and never an incumbent or an inserting challenger (ruling 3), and its default is reader, selected explicitly (D895). A law holds the table to D892's hybrid roles (`oe-roles`).
+- **Platform classes**: macos, ios, linux, windows, android, web.
+- `ppocr-web` is `ppocr` under ONNX Runtime Web (D891) as a row of its own: a distinct runtime, class and implementation, answering as the same OIL engine.
+
+**The turnkey defaults** (`en-turnkey`, D885 plus D895), per class: the default engine is Tesseract on every class; the class's own OS engine (`apple-vision` on macos and ios, `windows-media-ocr` on windows, `mlkit-text` on android, none on linux and web) is selectable explicitly and never automatic; the PP-OCR runtime of the class (`ppocr`, `ppocr-web` on the web) is the hybrid partner; packs are fetched `auto`; the renderer is pdfium. `eng` and `osd` are the bundled packs. Core and bare adapters never fetch, and `EMON_OFFLINE=1` or `never` wins (D885, D896): those are modes the hosts apply, not table rows.
+
+**The pack catalogue.**
+- `release/packs/packs.edn` is the authored source: 24 packs (20 tessdata_fast language models, tessdata OSD, and PP-OCRv5's detector, classifier and English recognizer), each with id, rev, engine, kind, languages, scripts, files (SHA-256 and bytes), licence and upstream, plus the ONNX Runtime archive as a runtime (not a pack).
+- `bb packs --emit` writes `kin/packdata.kin` (pack ids, licences, rows, languages, scripts, files with SHA-256 as eight big-endian words, file names) and `release/packs/packs.json`. `bb packs --emit --check` is the drift check and joins `bb ci core`, with `bb packs --self-test` (planted failures). Engine and kind names are read from `kin/engines.kin`, so a name is defined once.
+- **Absorbed, not deleted.** `tools/tessdata/models.edn` and `tools/ppocr/assets.edn` are inputs of the Tesseract and PP requested identities: `identity.clj` hashes their bytes into the policy cells every transcript is keyed by, so deleting them would re-key every OCR transcript. They stay byte for byte, and `bb packs --check` holds them to the catalogue entry by entry and in both directions. Retiring them is an identity re-key and a separate step.
+- Chinese packs are `tess-fast-chs` and `tess-fast-cht`, in emon's own request codes (ruling 7); the file names stay tessdata's.
+
+**Pack resolution** (`pk-resolve`): the platform class, the OSD flag, the languages (none means English), the engines asked for (none means the class's turnkey default) and the installed packs give the required packs in the catalogue's order, each `installed` or `missing`, then the (engine, language) pairs no pack reads, `unsupported`, by engine and language. The result does not depend on the order or repetition of the inputs. `pk-parse-engines` and `pk-parse-packs` read comma-separated names and refuse an unknown one by name; `pk-resolve` refuses an unknown engine, pack or class, a renderer, an engine that does not run on the class, and a bad language, and `pk-explain` writes the sentence. The `ocr-engines`, `packs-fetch`, `ocr.timeout-ms`, `ocr.concurrency`, `ocr.retries` and `ocr.remote` options of pkg1 are NOT added to `emon.config` here: they belong with the K2 registry that reads them.
+
+**The engine table in the transcript.** A transcript gains `:pk-engines`, written first in the file: one map per engine the recording had, `{:engine "tesseract" :caps 7339791 :role :incumbent}`. A replay reads it back and needs no adapter to know which engines were available. A transcript with none writes none, so every committed transcript stays valid and byte-identical on read and write again (the law over all 129 holds); new recordings carry it: the Rust recorder asks kin (`pk-record-engines`) for the rows of the engines its OCR port reports (`Ocr::engines`) on its platform class. The Rust, Go, Java and C# `Transcript` types carry the rows through. An engine the table does not know is refused by name (`tb-engine-unknown`). The committed OCR transcripts were NOT retrofitted: they predate the table, no gate needs it, and retrofitting 89 files would only add churn.
+
+`bb hosts` grants `emon.engines` to the Rust recording path (`engine.rs`) and the three engine ports (`tess.rs`, `ppocr.rs`, `ppocr_native.rs`); no host keeps a table of its own.
+
+**kin 09a5316 (D887) fixed the Go "imported and not used" of cross-module flat-array accessors** (kin D1191). The `oi-tess-len` workaround is removed, six laws call `oi-tess-count` directly, and the note under "Found in kin" is marked fixed.
+
+**Laws** (`kin/enginestest.kin`, 21, and `kin/transcripttest.kin`'s corpus law over all 129 committed transcripts): the table's rows, where each engine runs, capabilities against what the adapters write, roles against the rulings and `oe-roles`, the turnkey default of every class, every pack of the catalogue and its agreement with the table, the hashes hosts verify, resolution for each engine and option combination (default, OSD, PP-OCR, unreadable languages, hybrid, partly installed, platform engines), input-order independence, the refusals, names end to end, `pk-record-engines`, and the transcript's write, read, round trip and refusals. The resolver laws failed on their first run (7 of 21: the working cells of `pk-resolve` were one cell short) and pass with the fix. The brief asked for laws first; these were written against a first cut of the module, so a staged red run exists only for that bug. A law over a module that did not exist cannot run at all. For the transcript, with the reader stubbed out in a scratch copy of the generated Rust, the round-trip law fails (`two engines: got 0, want 2`): `:pk-engines` is read past.
+
+- [ ] **Signed off** (maintainer)
