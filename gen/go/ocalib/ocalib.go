@@ -17,7 +17,7 @@ func OcalProbability(engine int32, calibration int32, kind int32, raw int32) int
 	var i int32 = 0
 	var first int32 = -1
 	var hit int32 = -1
-	for i < 9 {
+	for i < 12 {
 		if (ocalibdata.OcdRows[i*5+0] == engine) && (ocalibdata.OcdRows[i*5+1] == calibration) && (ocalibdata.OcdRows[i*5+2] == kind) {
 			if first < 0 {
 				first = ocalibdata.OcdRows[i*5+4]

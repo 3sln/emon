@@ -14,6 +14,8 @@ import java.util.List;
 
 public final class Options {
     public boolean ppOcr;
+    /** kin's code of the `ocr-engine` option (K8, D900): 0 tesseract, 1 ppocr (what `ppOcr` says), 2 apple-vision, 3 windows-media-ocr. The platform engines read alone and run only on their platform; a replay names the same engine. */
+    public int ocrEngine;
     /** SPEC 13's OCR setting (D038): `never` asks for no OCR; `auto` and `always` OCR an image and a scanned PDF page, `always` also fuses a born-digital one. */
     public enum OcrPolicy {
         ALWAYS, AUTO, NEVER;
@@ -99,6 +101,7 @@ public final class Options {
         o.keepEvidence = keepEvidence;
         o.ocrScope = ocrScope;
         o.ppOcr = ppOcr;
+        o.ocrEngine = ocrEngine;
         o.noRetarget = noRetarget;
         o.tablesScored = tablesScored;
         return o;
@@ -263,7 +266,8 @@ public final class Options {
         }
         Options o = new Options();
         o.ocr = OcrPolicy.of(c.ocr);
-        o.ppOcr = c.oengine != 0;
+        o.ppOcr = c.oengine == 1;
+        o.ocrEngine = c.oengine;
         o.assets = Assets.values()[c.level];
         o.assetDpi = c.dpi;
         o.assetPixels = c.pixels;

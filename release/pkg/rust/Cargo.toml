@@ -27,6 +27,13 @@ path = "src/lib.rs"
 tesseract = []
 # libemon_ocr_tesseract: that Tesseract as a native OCR adapter library (host/rust/src/tess_adapter.rs; emon_adapter.h). Built by `bb package`, not by a dependent crate.
 tesseract-adapter = ["tesseract"]
+# Apple Vision as an `Ocr` port (host/rust/src/vision.rs; macOS and iOS) and as the native adapter library libemon_ocr_vision (vision-adapter). They declare the Objective-C shim of
+# host/vision (compiled by tools/native/vision.clj) and need its link flags and the system frameworks, so `bb package` and `bb mobile` build them, not a dependent crate.
+vision = []
+vision-adapter = ["vision"]
+# Windows.Media.Ocr (host/rust/src/winocr.rs) as an `Ocr` port and as the native adapter library libemon_ocr_winocr (winocr-adapter). Windows only: the `windows` crate is a target dependency.
+winocr = ["dep:windows"]
+winocr-adapter = ["winocr"]
 # fetch the model packs adapters read with (host/rust/src/packs.rs): an HTTPS client. Off by default: a core crate never fetches (D885); every pack is verified against the catalogue's SHA-256.
 packs-fetch = ["dep:ureq"]
 
@@ -39,6 +46,10 @@ zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 # the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
 ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
+
+# Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", optional = true, default-features = false, features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "System_Profile", "Win32_System_WinRT"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(ppocr)", "cfg(pdfium)", "cfg(codecs)", 'cfg(feature, values("__test_hooks"))'] }

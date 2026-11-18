@@ -27,11 +27,32 @@ public final class Ocalibtest {
         emon.Testport.assertEq(Ocalib.ocalWord(2, 0, 600), 422, "57 correct of 135");
         emon.Testport.assertEq(Ocalib.ocalWord(2, 0, 799), 422, "same pooled bin");
         emon.Testport.assertEq(Ocalib.ocalWord(2, 0, 800), 521, "next frozen bin");
-        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 1000), -1, "unfitted engine is not a zero probability");
+        emon.Testport.assertEq(Ocalib.ocalWord(5, 0, 1000), -1, "an unfitted engine (Windows.Media.Ocr has no confidence to fit) is not a zero probability");
     }
     public static void testWordCalibrationPreservesAbsenceAndRefusesUnknownClass() {
         emon.Testport.assertEq(Ocalib.ocalWord(2, 0, -1), -1, "absent PP raw score remains absent");
         emon.Testport.assertEq(Ocalib.ocalWord(1, 9, 800), -1, "unknown Tesseract calibration class is unfitted");
         emon.Testport.assertEq(Ocalib.ocalWord(2, 9, 800), -1, "unknown PP calibration class is unfitted");
+    }
+    public static void testAppleVisionWordCalibrationIsMonotoneAtEveryPermille() {
+        int i = 0;
+        int previous = 0;
+        while (i < 1001) {
+            int p = Ocalib.ocalWord(3, 0, i);
+            emon.Testport.assertThat(p >= previous, "weighted isotonic calibration");
+            emon.Testport.assertThat(p >= 0, "a fitted engine has a probability at every raw value");
+            previous = p;
+            i += 1;
+        }
+    }
+    public static void testAppleVisionWordCalibrationStepsAreTheFrozenFit() {
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 300), 409, "the quantized 300");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 500), 661, "the quantized 500");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 1000), 796, "the quantized 1000");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 0), 409, "below the first step the first step holds");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, 999), 661, "a step holds up to the next");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 0, -1), -1, "an absent raw value stays absent");
+        emon.Testport.assertEq(Ocalib.ocalWord(3, 9, 500), -1, "another calibration class is unfitted: the map is the accurate level with language correction");
+        emon.Testport.assertEq(Ocalib.ocalWord(1, 0, 500), 500, "Tesseract keeps the policy scale of P13.2");
     }
 }

@@ -1,0 +1,87 @@
+;; Request languages as an engine's own locale tags (D883 ruling 7: `emon.ocrtess` resolves a request's languages for Tesseract only; every other engine has its table here).
+;; A request names languages in emon's codes (ISO 639-3 packed in a cell, `eng`, and `chs` and `cht` for the two Chinese models) or a script (ISO 15924, `Latn`); an
+;; adapter asks `ol-locales` for the engine's tags, a comma-joined list, and reads with the ones its platform supports (K8, D900).
+;;   engine 3  Apple Vision: BCP-47 tags of `VNRecognizeTextRequest.supportedRecognitionLanguages` (macOS 12+, iOS 15+): en-US fr-FR it-IT de-DE es-ES pt-BR zh-Hans zh-Hant
+;;             ja-JP ko-KR ru-RU uk-UA th-TH vi-VT (and a script's set: Latn reads the six Latin languages, Hani both Chinese scripts)
+;;   engine 5  Windows.Media.Ocr: the Windows language tags (Windows.Globalization.Language), read from the installed language packs
+(ns emon.ocrloc
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-push cells-drop]]
+            [kin.lang :refer [defdata defn return let set while if do comment + < == and]]))
+
+;; engine, language cell, offset and length in `ol-chars`.
+(defdata ^:pub ol-rows
+  :emitter kin.lang/flat-array
+  :stride 4
+  :data [3 1701734144 0 5   ;; eng
+         3 1718771968 5 5   ;; fra
+         3 1684370688 10 5   ;; deu
+         3 1936744704 15 5   ;; spa
+         3 1769234688 20 5   ;; ita
+         3 1886351872 25 5   ;; por
+         3 1667789568 30 7   ;; chs
+         3 1667789824 37 7   ;; cht
+         3 1785753088 44 5   ;; jpn
+         3 1802465792 49 5   ;; kor
+         3 1920299776 54 5   ;; rus
+         3 1969975808 59 5   ;; ukr
+         3 1952997632 64 5   ;; tha
+         3 1986618624 69 5   ;; vie
+         3 1281455214 74 35   ;; Latn
+         3 1214344809 109 15   ;; Hani
+         3 1248878958 124 5   ;; Jpan
+         3 1214344807 129 5   ;; Hang
+         3 1132032620 134 11   ;; Cyrl
+         3 1416126825 145 5   ;; Thai
+         5 1701734144 150 5   ;; eng
+         5 1718771968 155 5   ;; fra
+         5 1684370688 160 5   ;; deu
+         5 1936744704 165 5   ;; spa
+         5 1769234688 170 5   ;; ita
+         5 1886351872 175 5   ;; por
+         5 1667789568 180 10   ;; chs
+         5 1667789824 190 10   ;; cht
+         5 1785753088 200 5   ;; jpn
+         5 1802465792 205 5   ;; kor
+         5 1920299776 210 5   ;; rus
+         5 1969975808 215 5   ;; ukr
+         5 1952997632 220 5   ;; tha
+         5 1986618624 225 5   ;; vie
+         5 1281455214 230 35   ;; Latn
+         5 1214344809 265 21   ;; Hani
+         5 1248878958 286 5   ;; Jpan
+         5 1214344807 291 5   ;; Hang
+         5 1132032620 296 11   ;; Cyrl
+         5 1416126825 307 5   ;; Thai
+         ]
+  :accessors {^I32 ol-row-count [^I32 ignored]
+              ^I32 ol-row-at [^I32 ignored ^I32 row ^I32 col]})
+
+(defdata ^:pub ol-chars
+  :emitter kin.lang/flat-array
+  :data [101 110 45 85 83 102 114 45 70 82 100 101 45 68 69 101 115 45 69 83 105 116 45 73 84 112 116 45 66 82 122 104
+         45 72 97 110 115 122 104 45 72 97 110 116 106 97 45 74 80 107 111 45 75 82 114 117 45 82 85 117 107 45 85 65
+         116 104 45 84 72 118 105 45 86 84 101 110 45 85 83 44 102 114 45 70 82 44 105 116 45 73 84 44 100 101 45 68
+         69 44 101 115 45 69 83 44 112 116 45 66 82 122 104 45 72 97 110 115 44 122 104 45 72 97 110 116 106 97 45 74
+         80 107 111 45 75 82 114 117 45 82 85 44 117 107 45 85 65 116 104 45 84 72 101 110 45 85 83 102 114 45 70 82
+         100 101 45 68 69 101 115 45 69 83 105 116 45 73 84 112 116 45 66 82 122 104 45 72 97 110 115 45 67 78 122 104
+         45 72 97 110 116 45 84 87 106 97 45 74 80 107 111 45 75 82 114 117 45 82 85 117 107 45 85 65 116 104 45 84
+         72 118 105 45 86 78 101 110 45 85 83 44 102 114 45 70 82 44 105 116 45 73 84 44 100 101 45 68 69 44 101 115
+         45 69 83 44 112 116 45 66 82 122 104 45 72 97 110 115 45 67 78 44 122 104 45 72 97 110 116 45 84 87 106 97
+         45 74 80 107 111 45 75 82 114 117 45 82 85 44 117 107 45 85 65 116 104 45 84 72]
+  :accessors {^I32 ol-char-at [^I32 ignored ^I32 i]})
+
+(defn ^:pub ^I32 ol-locales [^I32 engine ^I32 lang ^:mut ^Cells out]
+  (comment "The engine's locale tags for the request language `lang`, as code points of one comma-joined list pushed on `out` (which is cleared first). The number of tags; 0 when the engine has none for it.")
+  (cells-drop out 0)
+  (let [^:mut ^I32 i 0]
+    (while (< i (ol-row-count 0))
+      (do (if (and (== (ol-row-at 0 i 0) engine) (== (ol-row-at 0 i 1) lang))
+            (let [^I32 off (ol-row-at 0 i 2) ^I32 n (ol-row-at 0 i 3) ^:mut ^I32 k 0 ^:mut ^I32 tags 1]
+              (while (< k n)
+                (do (cells-push out (ol-char-at 0 (+ off k)))
+                    (if (== (ol-char-at 0 (+ off k)) 44) (set tags (+ tags 1)))
+                    (set k (+ k 1))))
+              (return tags)))
+          (set i (+ i 1)))))
+  (return 0))

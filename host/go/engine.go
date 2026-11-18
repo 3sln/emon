@@ -243,6 +243,9 @@ func (f Furniture) mode() int32 { return int32(f) }
 type Options struct {
 	// PpOcr selects the experimental additive PP reading when true.
 	PpOcr bool
+	// OcrEngine is kin's code of the `ocr-engine` option (K8, D900): 0 tesseract, 1 ppocr (what PpOcr says), 2 apple-vision, 3 windows-media-ocr. The platform engines read alone and
+	// only run on their platform; a replay names the same engine, because a request says which engine it is for.
+	OcrEngine int32
 	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial
 	// (a drop cap) joins its first word when the letter could be a word of its own (SPEC 10.9).
 	Locale string
@@ -376,7 +379,8 @@ func ocrPolicyOf(code int32) OcrPolicy {
 func optionsOf(c *enctx.Cfg) Options {
 	o := Options{
 		Ocr:             ocrPolicyOf(c.Ocr),
-		PpOcr:           c.Oengine != 0,
+		PpOcr:           c.Oengine == 1,
+		OcrEngine:       c.Oengine,
 		Assets:          Assets(c.Level),
 		AssetDPI:        c.Dpi,
 		AssetPixels:     c.Pixels,
@@ -1049,7 +1053,10 @@ func finished(r int32, doc *enctx.Doc, m *arenas, info Intake, opts Options) out
 func cfgOf(opts Options) *enctx.Cfg {
 	c := enctx.NewCfg()
 	c.Ocr = opts.Ocr.code()
-	c.Oengine = boolInt(opts.PpOcr)
+	c.Oengine = opts.OcrEngine
+	if c.Oengine == 0 {
+		c.Oengine = boolInt(opts.PpOcr)
+	}
 	c.Scope = opts.OcrScope.code()
 	c.Furn = opts.Furniture.mode()
 	c.Level = opts.Assets.level()

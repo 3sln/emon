@@ -43,7 +43,7 @@ pub fn cal_lookup_engine(kind: i32, cls: i32, engine: i32, raw: i32) -> i32 {
         i = 0;
         first = -1;
         hit = -1;
-        while i < 30 {
+        while i < 40 {
             if (CD_ROWS[(i * 5 + 0) as usize] == kind) && (CD_ROWS[(i * 5 + 1) as usize] == want_class) && (CD_ROWS[(i * 5 + 2) as usize] == want_engine) {
                 if first < 0 {
                     first = CD_ROWS[(i * 5 + 4) as usize];

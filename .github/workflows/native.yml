@@ -13,6 +13,10 @@
 #   macOS with Xcode), builds libemon over them (`bb mobile`), audits the library (`bb native --audit`: 16 KB ELF alignment, exports = emon.h, no stray dependency), runs the smoke
 #   program (iOS simulator: run; Android: linked, and run on an emulator when a runner has one) and uploads emon-c-mobile-<triple> (dist/c/emon-c-<version>-<triple>.tar.gz, named as
 #   the desktop C archives are). `mobile: false` leaves it out; verify.yml's call leaves it out until K5 adds the five archives to the release's asset list (tools/release/ops.clj).
+# K8 (P13.21, D900): the `platform` jobs below build the platform OCR adapter libraries and smoke-test them on the platform that has the engine: `vision` (Apple Vision; one macOS runner each for
+#   Apple silicon and Intel: `bb vision`, which builds libemon_ocr_vision.dylib and audits it, then a conversion of samples/scan-plain.pdf with `ocr-engine=apple-vision`) and `winocr`
+#   (Windows.Media.Ocr; `bb winocr --check`: type-check, build and audit emon_ocr_winocr.dll, then the same conversion with `ocr-engine=windows-media-ocr`). The iOS slices of the Vision adapter
+#   are built, audited and (in the simulator) smoke-tested by the `mobile` job. `platform: false` leaves them out; verify.yml's call leaves them out until K5 lists the adapters in the release.
 # Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
 name: native
 
@@ -31,6 +35,10 @@ on:
         description: also build, audit, smoke-test and upload the Android and iOS libemon archives (bb mobile)
         type: boolean
         default: true
+      platform:
+        description: also build, audit, smoke-test and upload the Apple Vision and Windows.Media.Ocr adapter libraries (bb vision, bb winocr)
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       ref:
@@ -43,6 +51,10 @@ on:
         default: true
       mobile:
         description: also build the mobile (Android, iOS) libemon archives (bb mobile); off for callers until the release flow lists them (K5)
+        type: boolean
+        default: false
+      platform:
+        description: also build the platform OCR adapter libraries (Apple Vision, Windows.Media.Ocr); off for callers until the release flow lists them (K5)
         type: boolean
         default: false
 
@@ -263,5 +275,105 @@ jobs:
         with:
           name: emon-c-mobile-${{ matrix.triple }}
           path: emon/dist/c/emon-c-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # APPLE VISION (K8, P13.21, D900): libemon_ocr_vision.dylib for the two macOS architectures, each built on a runner of its own architecture. `bb vision` assembles the crate, compiles the
+  # Objective-C shim with the runner's Xcode, links Vision, Foundation, CoreGraphics and ImageIO, and AUDITS the library: one architecture, platform macOS, minos 12.0, system libraries only,
+  # exactly one export (emon_ocr_adapter_v1). The smoke converts samples/scan-plain.pdf with `ocr-engine=apple-vision` through the reference driver. A hosted runner is a virtual machine and
+  # Apple's text model may not run in it: if the conversion does not, the step says so and does not fail the job (the library was built and audited, which is what this job is for);
+  # the maintainer's Mac, and the iOS simulator in the `mobile` job, are where it runs.
+  vision:
+    name: vision (${{ matrix.triple }})
+    if: inputs.platform != false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-apple-darwin, runner: macos-15 }
+          - { triple: x86_64-apple-darwin,  runner: macos-15-intel }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref || 'main' }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+      - name: bb vision (build the adapter library and audit it)
+        run: bb vision --triple ${{ matrix.triple }}
+      - name: Smoke (a scan read with ocr-engine=apple-vision)
+        continue-on-error: true
+        run: |
+          EMON_RS_VISION=1 kin/scripts/emon-rs-build > /dev/null
+          .cache/emon-rs-vision/target/release/emon-rs --ocr-engine=apple-vision samples/scan-plain.pdf > "$RUNNER_TEMP/scan-vision.html"
+          grep -q "Adaptive Sampling" "$RUNNER_TEMP/scan-vision.html"
+          echo "read by Apple Vision: the heading is in the HTML"
+      - name: Sizes
+        run: ls -l .cache/vision/lib/${{ matrix.triple }}/libemon_ocr_vision.dylib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emon-ocr-vision-${{ matrix.triple }}
+          path: emon/.cache/vision/lib/${{ matrix.triple }}/libemon_ocr_vision.dylib
+          if-no-files-found: error
+          retention-days: 7
+
+  # WINDOWS.MEDIA.OCR (K8, P13.21, D900): emon_ocr_winocr.dll, Rust over the `windows` crate, built and smoke-tested on a Windows runner (it cannot run anywhere else; off Windows it is only
+  # type-checked: `bb winocr --cargo-check`). `bb winocr --check` does four things: type-check the adapter, build the DLL with the C runtime linked statically (/MT), audit it (`dumpbin`:
+  # exactly one export, no C or C++ runtime DLL among the imports) and convert samples/scan-plain.pdf with `ocr-engine=windows-media-ocr` through the reference driver
+  # (`EMON_RS_WINOCR=1 kin/scripts/emon-rs-build`), requiring the heading in the HTML. Windows.Media.Ocr reads with an installed OCR language pack: the step before adds English's
+  # (a Windows capability); a runner without it fails the smoke with a sentence that says so, which is what the smoke is for.
+  winocr:
+    name: winocr (windows-latest)
+    if: inputs.platform != false
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Preserve byte-pinned source files (Windows)
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref || 'main' }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+          targets: x86_64-pc-windows-msvc
+      - name: MSVC environment (dumpbin, the linker)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      # the bash steps see Git's usr/bin first, whose `link` is the coreutils one: rustc must be told which link.exe is the linker
+      - name: MSVC link.exe for rustc
+        shell: pwsh
+        run: |
+          $link = (Get-Command link.exe -All | Where-Object { $_.Source -like '*MSVC*' } | Select-Object -First 1).Source
+          Write-Output "linker: $link"
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$link" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: English OCR language pack (a Windows capability)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Get-WindowsCapability -Online -Name "Language.OCR*en-US*" | Format-Table Name, State
+          Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
+      - name: bb winocr --check (type-check, build, audit, smoke)
+        run: bb winocr --check
+      - name: Sizes
+        run: ls -l .cache/winocr/lib/x86_64-pc-windows-msvc/emon_ocr_winocr.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emon-ocr-winocr-x86_64-pc-windows-msvc
+          path: emon/.cache/winocr/lib/x86_64-pc-windows-msvc/emon_ocr_winocr.dll
           if-no-files-found: error
           retention-days: 7

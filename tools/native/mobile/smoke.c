@@ -1,8 +1,9 @@
 /* The mobile smoke program (K6, D897; K2, D899): a C program built for a mobile triple against the shipped libraries (`bb mobile --smoke`). It is the docs' quickstart over
  * arguments: it reads a PDF, converts it to HTML with the library and writes the bytes, so the caller can compare them with a golden.
  *   smoke IN.pdf OUT.html            one-shot conversion with `ocr=never` (born-digital: no engine needed)
- *   smoke IN.pdf OUT.html native [PDFIUM_PATH [ADAPTER_PATH [PACKS_DIR]]]
- *                                    the engines: the turnkey set next to the library (emon_engines_defaults: pdfium, lib/emon/adapters/, share/emon/packs/), or the paths named
+ *   smoke IN.pdf OUT.html native [PDFIUM_PATH [ADAPTER_PATH [PACKS_DIR [OPTIONS]]]]
+ *                                    the engines: the turnkey set next to the library (emon_engines_defaults: pdfium, lib/emon/adapters/, share/emon/packs/), or the paths named;
+ *                                    OPTIONS is the conversion's option text: `ocr-engine=apple-vision` reads with the Vision adapter of lib/emon/adapters/ (K8, D900)
  * Prints `emon VERSION caps=N` and exits 0 on success. Compiled with -std=c11 -Wall -Werror. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +53,8 @@ int main(int argc, char **argv) {
     in.data = pdf;
     in.len = len;
     emon_buf html = {0};
-    if (emon_convert_html(&in, native ? NULL : "ocr=never", engines, NULL, &html, &err) < 0) {
+    const char *options = native ? (argc > 7 && argv[7][0] ? argv[7] : NULL) : "ocr=never";
+    if (emon_convert_html(&in, options, engines, NULL, &html, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);
         return 6;

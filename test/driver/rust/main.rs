@@ -358,6 +358,26 @@ fn main() {
             usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_LIVE=1)");
         }
     }
+    if opts.ocr_engine == emon::OcrEngine::AppleVision && replay.is_none() {
+        if tess.is_some() { usage("ocr-engine=apple-vision cannot use --tesseract or --tessdata"); }
+        #[cfg(feature = "vision")]
+        {
+            let port = emon::vision::VisionOcr::new().unwrap_or_else(|e| usage(&e));
+            cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
+        }
+        #[cfg(not(feature = "vision"))]
+        usage("ocr-engine=apple-vision is unsupported in this build (EMON_RS_VISION=1 kin/scripts/emon-rs-build, macOS)");
+    }
+    if opts.ocr_engine == emon::OcrEngine::WindowsMediaOcr && replay.is_none() {
+        if tess.is_some() { usage("ocr-engine=windows-media-ocr cannot use --tesseract or --tessdata"); }
+        #[cfg(all(feature = "winocr", windows))]
+        {
+            let port = emon::winocr::WinOcr::new().unwrap_or_else(|e| usage(&e));
+            cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
+        }
+        #[cfg(not(all(feature = "winocr", windows)))]
+        usage("ocr-engine=windows-media-ocr is unsupported in this build (EMON_RS_WINOCR=1 kin/scripts/emon-rs-build, Windows)");
+    }
     if let Some(dir) = &tess {
         #[cfg(feature = "tesseract")]
         {

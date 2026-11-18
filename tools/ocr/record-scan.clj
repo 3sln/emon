@@ -3,8 +3,11 @@
 ;; (brew: tesseract, leptonica; EMON_TESS_LIB is the directory of the libraries, default /opt/homebrew/lib), and is what produced
 ;; test/ocr/scan/ID/.
 ;;
-;;     bb tools/ocr/record-scan.clj [--keep-bitmaps] [--px] [VARIANT/]ID...   each ID is test/corpus/synth/VARIANT/ID.pdf (VARIANT scan, scan-color or
+;;     bb tools/ocr/record-scan.clj [--engine=apple-vision] [--keep-bitmaps] [--px] [VARIANT/]ID...   each ID is test/corpus/synth/VARIANT/ID.pdf (VARIANT scan, scan-color or
 ;;                                                                       scan-ovl; scan when left out); the directory is ID for scan, VARIANT--ID else (D459)
+;;
+;; --engine=apple-vision (K8, D900; macOS): the same with Apple's Vision (`emon-rs --ocr-engine=apple-vision`), into test/ocr/vision/ID. The transcript says whose engine answered, in its
+;; engine table and the observed identity (the OS build and the Vision revision); a replay needs `--ocr-engine=apple-vision` too, because a request names its engine.
 ;;
 ;; Each document goes through the Engine with the Tesseract `Ocr` port (`emon-rs --tesseract --record`), and the transcript the
 ;; run wrote is committed AS A REPLAY INPUT: `transcript.edn` (the decode and the OCR request and answer of every page, and the
@@ -22,33 +25,35 @@
 ;; OCR from them, so a slim transcript of such a page is not what the engine did (the replay "never asked for" 3 recorded entries).
 (def px? (some #{"--px"} args))
 (def keep? (or px? (some #{"--keep-bitmaps"} args)))
+(def vision? (some #{"--engine=apple-vision"} args))
 (def ids (vec (remove #(str/starts-with? % "--") args)))
 (when (empty? ids)
   (println "usage: bb tools/ocr/record-scan.clj [--keep-bitmaps] ID...")
   (System/exit 2))
 
 (shell {:out :string :err :string} "kin/scripts/emit")
-(let [r (sh {:err :inherit :out :string :extra-env {"EMON_RS_LIVE" "1"}} "kin/scripts/emon-rs-build")]
+(let [r (sh {:err :inherit :out :string :extra-env (if vision? {"EMON_RS_VISION" "1"} {"EMON_RS_LIVE" "1"})} "kin/scripts/emon-rs-build")]
   (when-not (zero? (:exit r)) (System/exit (:exit r))))
-(def bin ".cache/emon-rs-live/target/release/emon-rs")
+(def bin (if vision? ".cache/emon-rs-vision/target/release/emon-rs" ".cache/emon-rs-live/target/release/emon-rs"))
+(def engine-flag (if vision? "--ocr-engine=apple-vision" "--tesseract"))
 
 (defn strip-bitmaps [edn] (str/replace edn #" :bitmap \"[^\"]*\"" ""))
 
 (doseq [spec ids]
   (let [[variant id] (if (str/includes? spec "/") (str/split spec #"/" 2) ["scan" spec])
         pdf (str "test/corpus/synth/" variant "/" id ".pdf")
-        out (str (if px? "test/ocr/scan-px/" "test/ocr/scan/") (if (= variant "scan") id (str variant "--" id)))
+        out (str (cond vision? "test/ocr/vision/" px? "test/ocr/scan-px/" :else "test/ocr/scan/") (if (= variant "scan") id (str variant "--" id)))
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)
     (fs/create-dirs out)
-    (let [r (sh {:err :inherit} bin "--tesseract" (str "--record=" out) pdf)]
+    (let [r (sh {:err :inherit} bin engine-flag (str "--record=" out) pdf)]
       (when-not (zero? (:exit r))
         (println "FAIL" id "exited" (:exit r))
         (System/exit (:exit r)))
       (when-not keep?
         (spit (str out "/transcript.edn") (strip-bitmaps (slurp (str out "/transcript.edn"))))
         (doseq [f (fs/glob out "bitmap-*.png")] (fs/delete f)))
-      (let [rp (sh {:err :inherit} bin (str "--replay=" out) pdf)]
+      (let [rp (apply sh {:err :inherit} (concat [bin] (when vision? ["--ocr-engine=apple-vision"]) [(str "--replay=" out) pdf]))]
         (when-not (and (zero? (:exit rp)) (= (:out r) (:out rp)))
           (println "FAIL" id "the replay is not the recording")
           (System/exit 1))))

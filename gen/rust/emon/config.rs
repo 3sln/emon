@@ -42,15 +42,17 @@ pub static CK_ROWS: [i32; 110] = [
     2, 0, 0, 177, 6,
     2, 0, 0, 183, 10
 ];
-pub static CV_CHARS: [i32; 88] = [
+pub static CV_CHARS: [i32; 117] = [
     97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
     111, 108, 105, 99, 121, 107, 101, 101, 112, 100, 114, 111, 112, 110, 111, 110,
     101, 105, 109, 97, 103, 101, 115, 102, 105, 103, 117, 114, 101, 115, 111, 110,
     111, 102, 102, 102, 117, 108, 108, 119, 105, 116, 110, 101, 115, 115, 108, 101,
     103, 97, 99, 121, 115, 99, 111, 114, 101, 100, 116, 101, 115, 115, 101, 114,
-    97, 99, 116, 112, 112, 111, 99, 114
+    97, 99, 116, 112, 112, 111, 99, 114, 97, 112, 112, 108, 101, 45, 118, 105,
+    115, 105, 111, 110, 119, 105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105,
+    97, 45, 111, 99, 114
 ];
-pub static CV_ROWS: [i32; 68] = [
+pub static CV_ROWS: [i32; 76] = [
     1, 2, 0, 6,
     1, 1, 6, 4,
     1, 0, 10, 5,
@@ -67,7 +69,9 @@ pub static CV_ROWS: [i32; 68] = [
     20, 0, 62, 6,
     20, 1, 68, 6,
     21, 0, 74, 9,
-    21, 1, 83, 5
+    21, 1, 83, 5,
+    21, 2, 88, 12,
+    21, 3, 100, 17
 ];
 pub(crate) const K_LOCALE: i32 = 0;
 pub(crate) const K_OCR: i32 = 1;
@@ -182,7 +186,7 @@ pub fn cf_limit_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
 pub(crate) fn cf_word(t: &mut crate::port::Cells, from: i32, to: i32, key: i32) -> i32 {
     // The code of the word t[from, to) is for enum key `key`, or -1.
     let mut r: i32 = 0;
-    while r < 17 {
+    while r < 19 {
         if CV_ROWS[(r * 4 + 0) as usize] == key {
             let nl: i32 = CV_ROWS[(r * 4 + 3) as usize];
             let off: i32 = CV_ROWS[(r * 4 + 2) as usize];
@@ -275,14 +279,14 @@ pub(crate) fn cf_fail_enum(k: i32, c: &mut crate::emon::enctx::Cfg) -> i32 {
     let mut m: i32 = 0;
     let mut seen: i32 = 0;
     let mut r: i32 = 0;
-    while r < 17 {
+    while r < 19 {
         if CV_ROWS[(r * 4 + 0) as usize] == k {
             m += 1;
         }
         r += 1;
     }
     r = 0;
-    while r < 17 {
+    while r < 19 {
         if CV_ROWS[(r * 4 + 0) as usize] == k {
             if seen > 0 {
                 if seen == (m - 1) {

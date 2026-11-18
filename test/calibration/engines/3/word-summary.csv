@@ -1,0 +1,10 @@
+scope,group,unit,n,mean_conf,accuracy,ece,brier,ece_cv,brier_cv
+all,all,all,8801,0.7503,0.7522,0.0158,0.1778,,
+all,all,word,8801,0.7503,0.7522,0.0158,0.1778,,
+all,all,word/ocr,8801,0.7503,0.7522,0.0158,0.1778,,
+category,receipt,all,8801,0.7503,0.7522,0.0158,0.1778,,
+category,receipt,word,8801,0.7503,0.7522,0.0158,0.1778,,
+category,receipt,word/ocr,8801,0.7503,0.7522,0.0158,0.1778,,
+run,heldout,all,8801,0.7503,0.7522,0.0158,0.1778,,
+run,heldout,word,8801,0.7503,0.7522,0.0158,0.1778,,
+run,heldout,word/ocr,8801,0.7503,0.7522,0.0158,0.1778,,

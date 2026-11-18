@@ -44,7 +44,7 @@ public final class Calib {
             i = 0;
             first = -1;
             hit = -1;
-            while (i < 30) {
+            while (i < 40) {
                 if ((Calibdata.CD_ROWS[i * 5 + 0] == kind) && (Calibdata.CD_ROWS[i * 5 + 1] == wantClass) && (Calibdata.CD_ROWS[i * 5 + 2] == wantEngine)) {
                     if (first < 0) {
                         first = Calibdata.CD_ROWS[i * 5 + 4];

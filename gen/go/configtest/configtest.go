@@ -238,7 +238,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 17, 17, "seventeen words")
+	port.AssertEq(emonT, 19, 17, "seventeen words")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -488,5 +488,9 @@ func TestOptionalOcrEngineIsExplicitAndDefaultsToTesseract(emonT *testing.T) {
 	port.AssertEq(emonT, c.Oengine, 1, "explicit optional engine")
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins")
 	port.AssertEq(emonT, c.Oengine, 0, "explicit Tesseract")
-	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses")
+	port.AssertEq(emonT, c.Oengine, 2, "the platform engines read alone: their own codes, not PP's")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses")
+	port.AssertEq(emonT, c.Oengine, 3, "code 3")
+	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr")
 }

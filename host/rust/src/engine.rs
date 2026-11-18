@@ -170,12 +170,13 @@ impl OcrPolicy {
     }
 }
 
-/// Optional OCR port selection; Tesseract remains the default.
+/// Optional OCR port selection; Tesseract remains the default. `PpOcr` is the hybrid; Apple Vision and Windows.Media.Ocr read alone, when named (K8, D900): their requests say so,
+/// and the registry sends them to the platform's adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OcrEngine { Tesseract, PpOcr }
+pub enum OcrEngine { Tesseract, PpOcr, AppleVision, WindowsMediaOcr }
 impl OcrEngine {
-    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1 } }
-    fn from_code(code: i32) -> Self { if code == 1 { Self::PpOcr } else { Self::Tesseract } }
+    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::AppleVision => 2, Self::WindowsMediaOcr => 3 } }
+    fn from_code(code: i32) -> Self { match code { 1 => Self::PpOcr, 2 => Self::AppleVision, 3 => Self::WindowsMediaOcr, _ => Self::Tesseract } }
 }
 
 // THE `Ocr` PORT (SPEC 7.2; D008, D095, D211): fulfils one `ocr` request. A host brings its engine (Tesseract through
@@ -434,7 +435,7 @@ fn config_of(c: &Cfg) -> Config {
 // host has. An Err is the sentence a driver prints after `usage`.
 pub fn parse_options(text: &str) -> Result<Parsed, String> {
     let c = parse_cfg(text)?;
-    if c.oengine != 0 && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST
+    if c.oengine == 1 && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST
         && !(cfg!(feature = "tesseract") && !cfg!(target_arch = "wasm32")) {
         return Err("ocr-engine=ppocr is unsupported in this Rust build".into());
     }

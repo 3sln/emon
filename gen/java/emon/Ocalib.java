@@ -15,7 +15,7 @@ public final class Ocalib {
         int i = 0;
         int first = -1;
         int hit = -1;
-        while (i < 9) {
+        while (i < 12) {
             if ((Ocalibdata.OCD_ROWS[i * 5 + 0] == engine) && (Ocalibdata.OCD_ROWS[i * 5 + 1] == calibration) && (Ocalibdata.OCD_ROWS[i * 5 + 2] == kind)) {
                 if (first < 0) {
                     first = Ocalibdata.OCD_ROWS[i * 5 + 4];

@@ -257,4 +257,75 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ofuse.ofRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion");
         emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
     }
+    public static void testPlatformEnginesHaveTheirOwnRequestedConfiguration() {
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+        emon.Testport.assertEq(Ocrengine.oeConfigValue(3, 0), 97, "it begins with the engine's name");
+        emon.Testport.assertEq(Ocrengine.oeConfigValue(3, 89), 110, "and ends with the language policy (latin)");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
+        emon.Testport.assertEq(Ocrengine.oeConfigValue(5, 0), 119, "it begins with the engine's name");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(4), 0, "ML Kit has none here: it is the platform plugin's");
+    }
+    public static void testAppleVisionSelectionRetagsEveryRequestWithItsConfiguration() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrLang(r, 101, 110, 103, 0);
+        Plan.rqOcrEnd(r, at);
+        Ocrengine.oeTag(r, scratch, 4);
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "the trailer is Vision's, not Tesseract's");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "the record length includes it");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 11), -3100, "identity marker");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 12), 2, "requested identity version");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 13), 3, "Apple Vision's engine");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 14), 90, "its configuration's length");
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "the request says which engine reads it");
+        emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "the language is still the one language");
+        emon.Testport.assertEq(Ocrport.opLangAt(r, 0), 1701734144, "English");
+        Ocrengine.oeTag(r, scratch, 4);
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "idempotent: one trailer");
+    }
+    public static void testWindowsSelectionRetagsWithTheWindowsConfiguration() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrLang(r, 101, 110, 103, 0);
+        Plan.rqOcrEnd(r, at);
+        Ocrengine.oeTag(r, scratch, 6);
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 5, "Windows.Media.Ocr");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(5), "its trailer");
+        Ocrengine.oeTag(r, scratch, 4);
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "a later selection replaces it, never stacks");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "one trailer");
+    }
+    public static void testAnEngineSelectionReachesEveryOcrRequestOfABatch() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int a = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrLang(r, 101, 110, 103, 0);
+        Plan.rqOcrEnd(r, a);
+        int b = Plan.rqOcr(r, 13, 7, 7, 1, 5, 6, 40, 12);
+        Plan.rqOcrLang(r, 101, 110, 103, 0);
+        Plan.rqOcrEnd(r, b);
+        Ocrengine.oeTag(r, scratch, 4);
+        int first = 15 + Ocrengine.oeConfigLen(3);
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 0), first, "the first request's length");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), first + (15 + Ocrengine.oeConfigLen(3)), "two records, each with exactly one trailer");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, first + 13), 3, "and the second names Vision too");
+    }
+    public static void testEvidenceNamesThePlatformEngineAndItsConfiguration() {
+        emon.Port.Cells table = emon.Port.newCells();
+        emon.Port.Cells runs = emon.Port.newCells();
+        emon.Port.Cells lines = emon.Port.newCells();
+        emon.Port.Cells words = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        StringBuilder out = emon.Testport.newText();
+        int a = Evidence.orNew(runs, 1, 0);
+        Evidence.orSet(runs, a, Evidence.orfEngine(), 3);
+        emon.Testport.assertEq(Ocrengine.oeRegister(table, runs, lines, words, 4, scratch), 0, "registered");
+        emon.Testport.assertEq(emon.Port.cellsLen(table), 7, "one engine, one row");
+        emon.Testport.assertEq(Ocrengine.oeEvidence(out, table, scratch), 0, "written");
+        emon.Testport.assertText(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+    }
 }

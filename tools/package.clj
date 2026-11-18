@@ -122,7 +122,7 @@
 
 ;; ------------------------------------------------------------------------------------------------------ the Rust crate
 
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter"]) ; not pdfcodecs: it links jbig2dec (D526)
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter" "platform" "vision" "vision_adapter" "winocr" "winocr_adapter"]) ; not pdfcodecs: it links jbig2dec (D526)
 
 (defn- rust-src-files
   "The source of the crate: the generated modules (not laws or probes), the module list, and the host files."
@@ -456,6 +456,7 @@
 (defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
 (defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
 (defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D899), when the full pipeline built it
+(defonce native-vision-lib (atom nil)) ; the path of libemon_ocr_vision.dylib (K8, D900), built on a macOS host: tools/native/vision_adapter.clj builds and audits it
 
 ;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
 ;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
@@ -547,6 +548,13 @@
             (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40)))
             (when (and adapter (not (zero? (:exit adapter)))) (bad! "cargo build of the Tesseract adapter library failed\n" (tail (str (:out adapter) "\n" (:err adapter)) 40)))
             (reset! native-adapter-dir (when adapter (str adir "/target/release")))
+            ;; Apple Vision (K8, D900): the macOS archive's other adapter. Needs no native prefix and no pdfium; the shim, the Rust port and adapter are built over the same sources and audited
+            ;; as they are built (one arch, the deployment target, system libraries only, exactly one export). Never in a build that is not on macOS.
+            (reset! native-vision-lib
+                    (when (and mac? (zero? (:exit r)))
+                      (let [v (run {:ok? false} "bb" "tools/native/vision_adapter.clj" "--triple" (host-triple) "--out" (str (stage-dir :native-vision)))]
+                        (when-not (zero? (:exit v)) (bad! "the Apple Vision adapter library failed to build\n" (tail (str (:out v) "\n" (:err v)) 40)))
+                        (str/trim (:out v)))))
             (reset! native-pod-dir (str dir "/target-pod/release"))
             (reset! native-full (when full? inputs)))
           (reset! native-built (str dir "/target/release"))))))
@@ -589,6 +597,7 @@
     (let [{:keys [adapter]} (native-lib-names)]
       (merge {(str "lib/" (fs/file-name pdfium)) pdfium}
              (when @native-adapter-dir {(str "lib/emon/adapters/" adapter) (str @native-adapter-dir "/" adapter)})
+             (when @native-vision-lib {"lib/emon/adapters/libemon_ocr_vision.dylib" @native-vision-lib})
              (into {} (for [{:keys [file src]} data] [(str "share/emon/packs/" (pack-dir-of file) "/" file) src]))))))
 
 (defn- exported-symbols

@@ -236,6 +236,13 @@
               (do (println (format "         %s (%s) converted in %.1f s" n what secs))
                   (compare-html! (str n ".pdf (" what ")") (:out r) (slurp (sample n "html"))))
               (fail! n ".pdf: exit " (:exit r) " " (:err r)))))
+        ;; the platform's own recogniser (K8, D900): explicit, never chosen for the app. A Mac's reads with Apple's Vision, a Windows machine's with Windows.Media.Ocr (it needs an OCR language
+        ;; pack). A runner or machine whose OS recogniser cannot run is a NOTE with its reason, not a failure of the archive: the engine is the OS's.
+        (when-let [engine (cond (= "Darwin" (System/getProperty "os.name")) "apple-vision" (str/includes? (System/getProperty "os.name") "Windows") "windows-media-ocr")]
+          (let [r (run root exe "convert" (sample "scan-plain" "pdf") "--ocr-engine" engine)]
+            (cond (not (zero? (:exit r))) (println (str "  NOTE --ocr-engine " engine " did not read here (exit " (:exit r) "): " (str/trim (str (:err r)))))
+                  (not (str/includes? (:out r) "Adaptive Sampling")) (println (str "  NOTE --ocr-engine " engine " ran but the scan's heading is not in what it read"))
+                  :else (ok! "scan-plain.pdf with --ocr-engine " engine ": read by the platform's own recogniser, the heading is there"))))
         ;; -o and --assets dir
         (let [o (str tmp "/figs.html")
               r (run root exe "convert" (sample "figures-charts" "pdf") "-o" o "--assets" "dir" "--ocr" "never")]

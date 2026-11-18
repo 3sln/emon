@@ -1,0 +1,87 @@
+;; Laws for the platform engines' OIL answers (K8, D900; D883 rulings 3 and 4): what Apple Vision and Windows.Media.Ocr say, what they do not, and what kin does with an engine that
+;; has no confidence of its own. The adapters build these records with the same `emon.oil` builders (host/rust/src/vision.rs, winocr.rs), so the shapes below are theirs: a LINE
+;; confidence that every word of the line inherits (Vision: `ck` 2, `lconf`, no `wconf`), word alternatives from the line's other candidates (`walts`), a quad and its angle,
+;; and no confidence at all (Windows: `ck` 0, words carry -1, never a number nobody measured).
+(ns emon.oilvisiontest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-at cells-len]]
+            [emon.oil :refer [oil-begin oil-end oil-line oil-word oil-word-cp oil-walt oil-walt-cp oil-record-check-bitmap oil-get oil-nlines oil-nwords oil-first-word
+                              oil-native-check oh-ck oh-lg oh-caps oh-native
+                              oc-quad oc-angle oc-lconf oc-wlang oc-walts oc-wconf
+                              oen-apple-vision oen-windows-media-ocr oil-ck-line oil-ck-none lg-recognizer sg-single-line sg-page-auto]]
+            [emon.ocalib :refer [ocal-word ocal-or-prior]]
+            [emon.engines :refer [eng-apple-vision eng-windows-media-ocr pk-engine-caps pk-engine-oen pk-engine-needs]]
+            [kin.lang :refer [defn return let +  -]]))
+
+(defn ^I32 vision-caps [] (return (+ (+ (+ (+ (oc-quad) (oc-angle)) (oc-lconf)) (oc-wlang)) (oc-walts))))
+
+(deftest test-an-apple-vision-answer-is-valid-and-its-words-carry-their-lines-confidence
+  (let [^Cells c (new-cells) ^Cells scratch (new-cells)
+        ^I32 caps (vision-caps)
+        ^I32 at (oil-begin c 7 (oen-apple-vision) caps (+ (oc-quad) (oc-lconf)) (sg-page-auto) (oil-ck-line) 1701734144 (lg-recognizer))]
+    (assert-eq caps 1056992 "the ceiling of the engine table, and what vision.rs declares")
+    (oil-line c at 10 20 100 30 -1 2 1000 -1 0 0 0 0 0 0 0 10 20 110 20 110 50 10 50 0)
+    (oil-line c at 10 60 80 30 -1 1 500 -1 0 0 0 0 0 0 0 10 60 90 60 90 90 10 90 0)
+    (let [^I32 a (oil-word c at 10 20 40 30 0 1000 1701734144 0 -1 0)]
+      (oil-word-cp c at a 72) (oil-word-cp c at a 105)
+      (let [^I32 alt (oil-walt c at a 700)] (oil-walt-cp c alt 72) (oil-walt-cp c alt 108)))
+    (let [^I32 b (oil-word c at 60 20 40 30 0 1000 1701734144 0 -1 0)]
+      (oil-word-cp c at b 79) (oil-word-cp c at b 75))
+    (let [^I32 d (oil-word c at 10 60 80 30 1 500 1701734144 0 -1 0)]
+      (oil-word-cp c at d 33))
+    (oil-end c at)
+    (assert-eq (oil-record-check-bitmap c at 200 200 scratch) 0 "a valid record for its bitmap")
+    (assert-eq (oil-get c at (oh-ck)) 2 "one confidence per line")
+    (assert-eq (oil-get c at (oh-lg)) 2 "an OS recognizer line")
+    (assert-eq (oil-nlines c at) 2 "two lines")
+    (assert-eq (oil-nwords c at) 3 "three words")
+    (assert-eq (cells-at c (+ (oil-first-word c at) 5)) 1000 "a word has its line's confidence")
+    (assert-eq (oil-native-check caps (+ (oc-quad) (oc-lconf))) 1 "what it measures is what it declares")
+    (assert-eq (oil-native-check caps (oc-wconf)) 0 "it measures no word confidence, and cannot claim one")))
+
+(deftest test-an-answer-with-no-alternatives-is-a-smaller-record-of-the-same-engine
+  (let [^Cells c (new-cells) ^Cells scratch (new-cells)
+        ^I32 caps (- (vision-caps) (oc-walts))
+        ^I32 at (oil-begin c 8 (oen-apple-vision) caps (+ (oc-quad) (oc-lconf)) (sg-single-line) (oil-ck-line) 0 (lg-recognizer))]
+    (oil-line c at 0 0 50 20 -1 1 1000 -1 0 0 0 0 0 0 0 0 0 50 0 50 20 0 20 0)
+    (let [^I32 w (oil-word c at 0 0 50 20 0 1000 0 0 -1 0)]
+      (oil-word-cp c at w 120))
+    (oil-end c at)
+    (assert-eq (oil-record-check-bitmap c at 100 100 scratch) 0 "valid without the alternatives group")
+    (assert-eq (oil-get c at (oh-caps)) (- 1056992 1048576) "caps say the group is absent")))
+
+(deftest test-a-record-that-reaches-past-its-bitmap-is-refused
+  (let [^Cells c (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (oil-begin c 9 (oen-apple-vision) (vision-caps) (+ (oc-quad) (oc-lconf)) (sg-page-auto) (oil-ck-line) 0 (lg-recognizer))]
+    (oil-line c at 90 0 50 20 -1 0 1000 -1 0 0 0 0 0 0 0 90 0 140 0 140 20 90 20 0)
+    (oil-end c at)
+    (assert-eq (oil-record-check-bitmap c at 100 100 scratch) -1 "a line box past the edge of its bitmap")))
+
+(deftest test-a-windows-answer-carries-no-confidence-and-no-number-is-invented
+  (let [^Cells c (new-cells) ^Cells scratch (new-cells)
+        ^I32 caps (oc-wlang)
+        ^I32 at (oil-begin c 11 (oen-windows-media-ocr) caps 0 (sg-page-auto) (oil-ck-none) 1701734144 (lg-recognizer))]
+    (oil-line c at 5 5 80 20 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    (let [^I32 w (oil-word c at 5 5 80 20 0 777 1701734144 0 -1 0)]
+      (oil-word-cp c at w 111) (oil-word-cp c at w 107))
+    (oil-end c at)
+    (assert-eq (oil-record-check-bitmap c at 100 100 scratch) 0 "a valid record")
+    (assert-eq (oil-get c at (oh-ck)) 0 "confidence kind none")
+    (assert-eq (cells-at c (+ (oil-first-word c at) 5)) -1 "the word's confidence is absent, whatever the caller passed")
+    (assert-eq (oil-get c at (oh-native)) 0 "it measures nothing it can put a number on")))
+
+(deftest test-what-each-platform-engine-cannot-say-is-not-in-its-ceiling
+  (assert-eq (pk-engine-caps (eng-apple-vision)) 1056992 "Vision: quad angle lconf wlang walts")
+  (assert-eq (pk-engine-oen (eng-apple-vision)) 3 "answers as engine 3")
+  (assert-eq (pk-engine-needs (eng-apple-vision)) 0 "needs no pack")
+  (assert-eq (pk-engine-caps (eng-apple-vision)) (vision-caps) "the bits, named")
+  (assert-eq (oil-native-check (pk-engine-caps (eng-apple-vision)) (oc-wconf)) 0 "no word confidence in the ceiling")
+  (assert-eq (pk-engine-caps (eng-windows-media-ocr)) 9216 "Windows: deskew wlang")
+  (assert-eq (pk-engine-needs (eng-windows-media-ocr)) 0 "needs no pack")
+  (assert-eq (pk-engine-oen (eng-windows-media-ocr)) 5 "answers as engine 5"))
+
+(deftest test-no-engine-without-a-confidence-is-ever-calibrated
+  (assert-eq (ocal-word (oen-windows-media-ocr) 0 500) -1 "Windows.Media.Ocr has no map: ruling 3, uncalibrated for good")
+  (assert-eq (ocal-word (oen-windows-media-ocr) 0 -1) -1 "no raw value")
+  (assert-eq (ocal-or-prior (ocal-word (oen-windows-media-ocr) 0 500) 500) 500 "ranking and voting may use the prior, nothing else may"))

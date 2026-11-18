@@ -172,12 +172,15 @@
   (assert-eq (oe-role (pk-engine-oen (eng-windows-media-ocr))) 0 "nor Windows OCR")
   (assert-eq (oe-role (pk-engine-oen (eng-mlkit-text))) 0 "nor ML Kit")
   (assert-eq (pk-role-mask (eng-tesseract) (pcls-ios)) 5 "Tesseract is the incumbent or the sole reader")
-  (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "an uncalibrated engine reads or votes")
+  (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)")
+  (assert-eq (pk-engine-calibrated (eng-apple-vision)) 1 "a frozen reliability map keyed by its identity (D883 ruling 3, K8)")
+  (assert-eq (pk-engine-calibrated (eng-windows-media-ocr)) 0 "Windows.Media.Ocr has no confidence to calibrate, for good")
+  (assert-eq (bit-and (pk-role-mask (eng-apple-vision) (pcls-ios)) (erole-incumbent)) 0 "never the incumbent")
   (assert-eq (pk-role-default (eng-apple-vision) (pcls-windows)) 0 "no role on the wrong class"))
 
 ;; ------------------------------------------------------------------ the turnkey defaults
 
-(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 platform ^I32 pp]
+(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 platform ^I32 platform-calibrated ^I32 pp]
   (let [^I32 eng (pk-default-engine pclass)]
     (assert-eq eng (eng-tesseract) "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
@@ -186,7 +189,7 @@
     (assert-eq (pk-platform-engine pclass) platform "the class's own engine")
     (if (!= platform 0)
       (do (assert-eq (pk-engine-on platform pclass) 1 "the platform engine runs on the class")
-          (assert-eq (pk-engine-calibrated platform) 0 "uncalibrated (D895)")
+          (assert-eq (pk-engine-calibrated platform) platform-calibrated "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map")
           (assert-that (!= platform eng) "and never the automatic choice")))
     (assert-eq (pk-pp-engine pclass) pp "the PP-OCR runtime of the class")
     (assert-eq (pk-engine-on pp pclass) 1 "runs on it")
@@ -195,12 +198,12 @@
     (return 0)))
 
 (deftest test-the-turnkey-default-of-every-platform-class
-  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-linux) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-web) 0 (eng-ppocr-web))
+  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-linux) 0 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-web) 0 0 (eng-ppocr-web))
   (assert-eq (pk-default-engine 0) 0 "an unknown class has no default")
   (assert-eq (pk-default-engine 7) 0 "nor class 7")
   (assert-eq (pk-default-fetch 7) 0 "and no fetch policy")

@@ -153,10 +153,13 @@ public final class Enginestest {
         emon.Testport.assertEq(Ocrengine.oeRole(Engines.pkEngineOen(Engines.engWindowsMediaOcr())), 0, "nor Windows OCR");
         emon.Testport.assertEq(Ocrengine.oeRole(Engines.pkEngineOen(Engines.engMlkitText())), 0, "nor ML Kit");
         emon.Testport.assertEq(Engines.pkRoleMask(Engines.engTesseract(), Engines.pclsIos()), 5, "Tesseract is the incumbent or the sole reader");
-        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsMacos()), 12, "an uncalibrated engine reads or votes");
+        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsMacos()), 12, "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)");
+        emon.Testport.assertEq(Engines.pkEngineCalibrated(Engines.engAppleVision()), 1, "a frozen reliability map keyed by its identity (D883 ruling 3, K8)");
+        emon.Testport.assertEq(Engines.pkEngineCalibrated(Engines.engWindowsMediaOcr()), 0, "Windows.Media.Ocr has no confidence to calibrate, for good");
+        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsIos()) & Engines.eroleIncumbent(), 0, "never the incumbent");
         emon.Testport.assertEq(Engines.pkRoleDefault(Engines.engAppleVision(), Engines.pclsWindows()), 0, "no role on the wrong class");
     }
-    public static int enTurnkeyClass(int emonT, int pclass, int platform, int pp) {
+    public static int enTurnkeyClass(int emonT, int pclass, int platform, int platformCalibrated, int pp) {
         int eng = Engines.pkDefaultEngine(pclass);
         emon.Testport.assertEq(eng, Engines.engTesseract(), "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)");
         emon.Testport.assertEq(Engines.pkEngineOn(eng, pclass), 1, "the default runs on the class");
@@ -165,7 +168,7 @@ public final class Enginestest {
         emon.Testport.assertEq(Engines.pkPlatformEngine(pclass), platform, "the class's own engine");
         if (platform != 0) {
             emon.Testport.assertEq(Engines.pkEngineOn(platform, pclass), 1, "the platform engine runs on the class");
-            emon.Testport.assertEq(Engines.pkEngineCalibrated(platform), 0, "uncalibrated (D895)");
+            emon.Testport.assertEq(Engines.pkEngineCalibrated(platform), platformCalibrated, "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map");
             emon.Testport.assertThat(platform != eng, "and never the automatic choice");
         }
         emon.Testport.assertEq(Engines.pkPpEngine(pclass), pp, "the PP-OCR runtime of the class");
@@ -175,12 +178,12 @@ public final class Enginestest {
         return 0;
     }
     public static void testTheTurnkeyDefaultOfEveryPlatformClass() {
-        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engAppleVision(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsIos(), Engines.engAppleVision(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsLinux(), 0, Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsWindows(), Engines.engWindowsMediaOcr(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsAndroid(), Engines.engMlkitText(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsWeb(), 0, Engines.engPpocrWeb());
+        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engAppleVision(), 1, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsIos(), Engines.engAppleVision(), 1, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsLinux(), 0, 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsWindows(), Engines.engWindowsMediaOcr(), 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsAndroid(), Engines.engMlkitText(), 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsWeb(), 0, 0, Engines.engPpocrWeb());
         emon.Testport.assertEq(Engines.pkDefaultEngine(0), 0, "an unknown class has no default");
         emon.Testport.assertEq(Engines.pkDefaultEngine(7), 0, "nor class 7");
         emon.Testport.assertEq(Engines.pkDefaultFetch(7), 0, "and no fetch policy");

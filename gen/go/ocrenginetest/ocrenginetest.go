@@ -10,6 +10,7 @@ import (
 	"emon/ofuse"
 	"emon/plan"
 	"emon/port"
+	"strings"
 	"testing"
 )
 
@@ -280,4 +281,80 @@ func TestEngineTableSeparatesObservedIdentitiesAndDeduplicatesRuns(emonT *testin
 func TestUncalibratedCandidateCanNeverInsertOrReplace(emonT *testing.T) {
 	port.AssertEq(emonT, ofuse.OfRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion")
 	port.AssertEq(emonT, ofuse.OfRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement")
+}
+
+func TestPlatformEnginesHaveTheirOwnRequestedConfiguration(emonT *testing.T) {
+	port.AssertEq(emonT, ocrengine.OeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin")
+	port.AssertEq(emonT, ocrengine.OeConfigValue(3, 0), 97, "it begins with the engine's name")
+	port.AssertEq(emonT, ocrengine.OeConfigValue(3, 89), 110, "and ends with the language policy (latin)")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed")
+	port.AssertEq(emonT, ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(4), 0, "ML Kit has none here: it is the platform plugin's")
+}
+
+func TestAppleVisionSelectionRetagsEveryRequestWithItsConfiguration(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var at int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrLang(r, 101, 110, 103, 0)
+	plan.RqOcrEnd(r, at)
+	ocrengine.OeTag(r, scratch, 4)
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(3), "the trailer is Vision's, not Tesseract's")
+	port.AssertEq(emonT, port.CellsAt(r, 0), port.CellsLen(r), "the record length includes it")
+	port.AssertEq(emonT, port.CellsAt(r, 11), -3100, "identity marker")
+	port.AssertEq(emonT, port.CellsAt(r, 12), 2, "requested identity version")
+	port.AssertEq(emonT, port.CellsAt(r, 13), 3, "Apple Vision's engine")
+	port.AssertEq(emonT, port.CellsAt(r, 14), 90, "its configuration's length")
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 3, "the request says which engine reads it")
+	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "the language is still the one language")
+	port.AssertEq(emonT, ocrport.OpLangAt(r, 0), 1701734144, "English")
+	ocrengine.OeTag(r, scratch, 4)
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(3), "idempotent: one trailer")
+}
+
+func TestWindowsSelectionRetagsWithTheWindowsConfiguration(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var at int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrLang(r, 101, 110, 103, 0)
+	plan.RqOcrEnd(r, at)
+	ocrengine.OeTag(r, scratch, 6)
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 5, "Windows.Media.Ocr")
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(5), "its trailer")
+	ocrengine.OeTag(r, scratch, 4)
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks")
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(3), "one trailer")
+}
+
+func TestAnEngineSelectionReachesEveryOcrRequestOfABatch(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var a int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrLang(r, 101, 110, 103, 0)
+	plan.RqOcrEnd(r, a)
+	var b int32 = plan.RqOcr(r, 13, 7, 7, 1, 5, 6, 40, 12)
+	plan.RqOcrLang(r, 101, 110, 103, 0)
+	plan.RqOcrEnd(r, b)
+	ocrengine.OeTag(r, scratch, 4)
+	var first int32 = 15 + ocrengine.OeConfigLen(3)
+	port.AssertEq(emonT, port.CellsAt(r, 0), first, "the first request's length")
+	port.AssertEq(emonT, port.CellsLen(r), first+(15+ocrengine.OeConfigLen(3)), "two records, each with exactly one trailer")
+	port.AssertEq(emonT, port.CellsAt(r, first+13), 3, "and the second names Vision too")
+}
+
+func TestEvidenceNamesThePlatformEngineAndItsConfiguration(emonT *testing.T) {
+	var table *port.Cells = port.NewCells()
+	var runs *port.Cells = port.NewCells()
+	var lines *port.Cells = port.NewCells()
+	var words *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var out *strings.Builder = port.NewText()
+	var a int32 = evidence.OrNew(runs, 1, 0)
+	evidence.OrSet(runs, a, evidence.OrfEngine(), 3)
+	port.AssertEq(emonT, ocrengine.OeRegister(table, runs, lines, words, 4, scratch), 0, "registered")
+	port.AssertEq(emonT, port.CellsLen(table), 7, "one engine, one row")
+	port.AssertEq(emonT, ocrengine.OeEvidence(out, table, scratch), 0, "written")
+	port.AssertText(emonT, out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table")
 }

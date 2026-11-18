@@ -16,6 +16,41 @@
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
+;; The requested configuration of the platform engines (K8, D900; D883 2.3): what makes two runs the same reading, as the transcript key holds it. Apple Vision: the
+;; text recogniser at the accurate level with language correction, whatever revision the OS has (the revision it ran is the observed identity), reading with the request's languages
+;; or, when the request names none, the Latin-script ones (no language is assumed, D038, and an unaccented page reads as it does with English alone). Windows.Media.Ocr: the
+;; engine of the installed language pack. Nothing the app can vary is left out, and nothing the OS decides is put in.
+;;   apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin
+;;   windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed
+(defdata ^:pub oe-vision-config
+  :emitter kin.lang/flat-array
+  :data [97 112 112 108 101 45 118 105 115 105 111 110 59 86 78 82 101 99 111 103 110 105 122 101 84 101 120 116 82 101 113 117 101 115 116 59 114 101 118 61 108 97 116 101 115 116 59 108 101 118 101 108 61 97 99 99 117 114 97 116 101 59 108 99 61 49 59 108 97 110 103 61 114 101 113 117 101 115 116 45 101 108 115 101 45 108 97 116 105 110]
+  :accessors {^I32 oe-vision-count [^I32 ignored]
+              ^I32 oe-vision-at [^I32 ignored ^I32 i]})
+
+(defdata ^:pub oe-winocr-config
+  :emitter kin.lang/flat-array
+  :data [119 105 110 100 111 119 115 45 109 101 100 105 97 45 111 99 114 59 87 105 110 100 111 119 115 46 77 101 100 105 97 46 79 99 114 46 79 99 114 69 110 103 105 110 101 59 108 97 110 103 61 105 110 115 116 97 108 108 101 100]
+  :accessors {^I32 oe-winocr-count [^I32 ignored]
+              ^I32 oe-winocr-at [^I32 ignored ^I32 i]})
+
+;; The configuration text of an engine, as code points: PP's frozen policy hash, a platform engine's configuration. Tesseract's is `emon.ocridentity`'s (its policy hash
+;; changes with the Tesseract inputs); 0 cells for an engine this does not configure.
+(defn ^I32 oe-cfg-count [^I32 engine]
+  (if (== engine 2) (return (oe-id-count 0)))
+  (if (== engine 3) (return (oe-vision-count 0)))
+  (if (== engine 5) (return (oe-winocr-count 0)))
+  (return 0))
+
+(defn ^I32 oe-cfg-at [^I32 engine ^I32 i]
+  (if (== engine 2) (return (oe-id-at 0 i)))
+  (if (== engine 3) (return (oe-vision-at 0 i)))
+  (return (oe-winocr-at 0 i)))
+
+;; For the adapters: what the request must say (flat-array accessors are not for hosts to call: kin may inline them).
+(defn ^:pub ^I32 oe-config-len [^I32 engine] (return (oe-cfg-count engine)))
+(defn ^:pub ^I32 oe-config-value [^I32 engine ^I32 i] (return (oe-cfg-at engine i)))
+
 ;; Host adapters cannot call flat-array accessors directly: kin may inline them.
 (defn ^:pub ^I32 oe-id-len []
   (return (oe-id-count 0)))
@@ -51,7 +86,7 @@
 
 (defn ^:pub ^I32 oe-select [^:mut ^Cells requests ^I32 at ^I32 engine]
   (comment "Select an engine immediately after closing the last request. Allocation slots never select engines.")
-  (if (!= engine 2) (return 0))
+  (if (== (oe-cfg-count engine) 0) (return 0))
   (let [^I32 end (cells-len requests)
         ^:mut ^I32 k 10 ^:mut ^I32 first -1]
     (while (< (+ (+ at k) 3) end)
@@ -63,10 +98,10 @@
     (if (< first 0) (return -1))
     (cells-drop requests first)
     (cells-push requests -3100) (cells-push requests 2) (cells-push requests engine)
-    (cells-push requests (oe-id-count 0))
+    (cells-push requests (oe-cfg-count engine))
     (set k 0)
-    (while (< k (oe-id-count 0))
-      (do (cells-push requests (oe-id-at 0 k)) (set k (+ k 1))))
+    (while (< k (oe-cfg-count engine))
+      (do (cells-push requests (oe-cfg-at engine k)) (set k (+ k 1))))
     (cells-set requests at (- (cells-len requests) at)))
   (return 0))
 
@@ -100,7 +135,9 @@
           (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
         (if (== (cells-at requests (+ at 1)) (pk-ocr))
           (do (if (== mode 1) (oe-select scratch out 2))
-              (if (== mode 2) (oe-context scratch out))))
+              (if (== mode 2) (oe-context scratch out))
+              (if (== mode 4) (oe-select scratch out 3))
+              (if (== mode 6) (oe-select scratch out 5))))
         (set at (+ at n))))
     (cells-drop requests 0) (set i 0)
     (while (< i (cells-len scratch))
@@ -118,7 +155,11 @@
     (if (or (== engine 2) (and (== engine 1) (== context 2)))
       (do (set i 0)
           (while (< i (oe-id-count 0))
-            (do (cells-push out (oe-id-at 0 i)) (set i (+ i 1)))))))
+            (do (cells-push out (oe-id-at 0 i)) (set i (+ i 1))))))
+    (if (or (== engine 3) (== engine 5))
+      (do (set i 0)
+          (while (< i (oe-cfg-count engine))
+            (do (cells-push out (oe-cfg-at engine i)) (set i (+ i 1)))))))
   (return 0))
 
 (defn ^:pub ^I32 oe-register [^:mut ^Cells table ^:mut ^Cells runs ^:mut ^Cells lines ^:mut ^Cells words ^I32 context ^:mut ^Cells scratch]

@@ -450,12 +450,13 @@
 
 (defn audit-mobile-lib
   "The shipped libraries of a mobile triple (`bb mobile`): the core library (exports = emon.h), pdfium, and (K2, D899) the Tesseract adapter library (exports = emon_ocr_adapter_v1
-  and nothing else; the C++ runtime inside, as Tesseract needs it). [] when it has not been built (the caller notes that)."
+  and nothing else; the C++ runtime inside, as Tesseract needs it) and, on iOS (K8, D900), the Apple Vision adapter library. [] when it has not been built (the caller notes that)."
   [t dir]
   (let [cfg (triple-cfg t) android? (= :android (:os cfg))
         lib (str dir "/lib/" (if android? "libemon.so" "libemon.dylib"))
         ad (str dir "/lib/emon/adapters/" (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
         pd (str dir "/lib/" (if android? "libpdfium.so" "libpdfium.dylib"))
+        vad (str dir "/lib/emon/adapters/libemon_ocr_vision.dylib") ; Apple Vision (K8, D900): iOS only
         exports (header-functions)]
     (cond
       (not (fs/exists? lib)) nil
@@ -471,6 +472,8 @@
       (let [plat (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR")]
         (concat (audit-ios-lib lib {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon.dylib" :exports exports})
                 (when (fs/exists? ad) (audit-ios-lib ad {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon_ocr_tesseract.dylib" :exports #{"emon_ocr_adapter_v1"}}))
+                ;; the Vision adapter: the same rules (one arm64 slice, the platform, the deployment target, system libraries only, exactly the one export of emon_adapter.h)
+                (when (fs/exists? vad) (audit-ios-lib vad {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon_ocr_vision.dylib" :exports #{"emon_ocr_adapter_v1"}}))
                 ;; pdfium: upstream's own build (iOS 17.0), install name rewritten by `bb pdfium-fetch`
                 (when (fs/exists? pd) (audit-ios-lib pd {:platform plat :minos-max "17.0" :install-name "@rpath/libpdfium.dylib"})))))))
 

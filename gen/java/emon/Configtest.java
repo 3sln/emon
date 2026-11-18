@@ -215,7 +215,7 @@ public final class Configtest {
         tKeyName(0, 21, "ocr-engine");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(17, 17, "seventeen words");
+        emon.Testport.assertEq(19, 17, "seventeen words");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -450,6 +450,10 @@ public final class Configtest {
         emon.Testport.assertEq(c.oengine, 1, "explicit optional engine");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins");
         emon.Testport.assertEq(c.oengine, 0, "explicit Tesseract");
-        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses");
+        emon.Testport.assertEq(c.oengine, 2, "the platform engines read alone: their own codes, not PP's");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses");
+        emon.Testport.assertEq(c.oengine, 3, "code 3");
+        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr");
     }
 }

@@ -57,6 +57,10 @@ pack that is not there is answered `unsupported` with `pack-missing:<id>`: unrea
 the `packs-fetch` feature. A new registry is `NEVER` (core and bare adapters never fetch); `emon_engines_defaults` is `AUTO`
 (or `$EMON_PACKS_FETCH`). `EMON_OFFLINE=1` is `NEVER` whatever you say, and wins over a hook.
 
+**The platform's own OCR** (DEVLOG D900). The macOS and iOS archives carry a second adapter library, `lib/emon/adapters/libemon_ocr_vision.dylib` (Apple Vision: no pack, no model), which
+`emon_engines_defaults` registers with Tesseract's. It is explicit: a conversion reads with it only when its options say `ocr-engine=apple-vision`; the Windows adapter is `emon_ocr_winocr.dll`
+(`ocr-engine=windows-media-ocr`). What they say and do not say, and why they are explicit, is [the platform's own OCR](../platform-ocr.md).
+
 **Your app decides** (DEVLOG D896):
 
 - `emon_engines_describe` is `engines()`: every engine that runs on this platform and its state, as JSON: `built-in`, `installed`,

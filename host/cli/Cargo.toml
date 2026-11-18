@@ -18,6 +18,10 @@ path = "src/main.rs"
 
 [features]
 tesseract = []
+# Apple Vision (host/rust/src/vision.rs, K8, D900), macOS only: the CLI links the shim of host/vision (tools/native/vision.clj) and registers the port beside Tesseract's
+vision = []
+# Windows.Media.Ocr (host/rust/src/winocr.rs, K8), Windows only: the CLI of a Windows machine registers the port beside Tesseract's
+winocr = ["dep:windows"]
 # the pack fetch of the adapters (host/rust/src/packs.rs): an HTTPS client. The CLI links Tesseract itself and reads `share/emon/tessdata`; it does not enable it.
 packs-fetch = ["dep:ureq"]
 
@@ -29,6 +33,10 @@ zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
 # the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
 ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
+
+# Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", optional = true, default-features = false, features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "System_Profile", "Win32_System_WinRT"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(pdfium_dl)", "cfg(codecs)", "cfg(ppocr)"] }

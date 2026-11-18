@@ -37,19 +37,21 @@ fn test_a_kind_with_no_row_goes_through_as_it_is() {
 }
 #[test]
 fn test_the_table_is_sorted_and_monotone_in_the_raw_score() {
-    // Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
-    // and the calibrated value never falls (isotonic), and a value is a confidence.
-    let n: i32 = 30;
+    // Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
+    // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D900) are a group of their own.
+    let n: i32 = 40;
     let mut i: i32 = 1;
     crate::testport::assert_that(n > 0, "the table has a row (the identity table has one that no node matches)");
     while i < n {
         let k0: i32 = CD_ROWS[((i - 1) * 5 + 0) as usize];
         let c0: i32 = CD_ROWS[((i - 1) * 5 + 1) as usize];
+        let e0: i32 = CD_ROWS[((i - 1) * 5 + 2) as usize];
         let k1: i32 = CD_ROWS[(i * 5 + 0) as usize];
         let c1: i32 = CD_ROWS[(i * 5 + 1) as usize];
-        crate::testport::assert_that((k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class");
-        if (k0 == k1) && (c0 == c1) {
-            crate::testport::assert_that(CD_ROWS[((i - 1) * 5 + 3) as usize] < CD_ROWS[(i * 5 + 3) as usize], "raw-lo rises within a kind and class");
+        let e1: i32 = CD_ROWS[(i * 5 + 2) as usize];
+        crate::testport::assert_that((k0 < k1) || ((k0 == k1) && ((c0 < c1) || ((c0 == c1) && (e0 <= e1)))), "sorted by kind, then class, then engine");
+        if (k0 == k1) && ((c0 == c1) && (e0 == e1)) {
+            crate::testport::assert_that(CD_ROWS[((i - 1) * 5 + 3) as usize] < CD_ROWS[(i * 5 + 3) as usize], "raw-lo rises within a kind, class and engine");
             crate::testport::assert_that(CD_ROWS[((i - 1) * 5 + 4) as usize] <= CD_ROWS[(i * 5 + 4) as usize], "calibrated never falls with the raw score");
         }
         crate::testport::assert_that((CD_ROWS[(i * 5 + 4) as usize] >= 0) && (CD_ROWS[(i * 5 + 4) as usize] <= 1000), "a calibrated value is 0..1000");
@@ -61,7 +63,7 @@ fn test_every_step_of_the_table_answers_with_its_own_value() {
     // At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
     // for the class the row names (an `any` row is read through a class that has no row of its own: a class code
     // the table never names, 9, falls back to `any`).
-    let n: i32 = 30;
+    let n: i32 = 40;
     let mut i: i32 = 0;
     while i < n {
         if CD_ROWS[(i * 5 + 1) as usize] == -1 {
@@ -73,7 +75,7 @@ fn test_every_step_of_the_table_answers_with_its_own_value() {
 #[test]
 fn test_the_lookup_clamps_at_both_ends_of_a_step_function() {
     // Below a row's first step the first step's value; above the last the last's (no extrapolation).
-    let n: i32 = 30;
+    let n: i32 = 40;
     let mut i: i32 = 0;
     while i < n {
         if CD_ROWS[(i * 5 + 1) as usize] == -1 {
@@ -136,4 +138,13 @@ fn test_node_map_is_engine_specific_with_pooled_fallback() {
     crate::testport::assert_eq(cal_lookup_engine(3, 1, 2, 508), cal_lookup(3, 9, 508), "PP has no Tesseract-specific fit");
     crate::testport::assert_eq(cal_lookup_engine(3, 1, 100, 508), cal_lookup(3, 9, 508), "unknown engine uses pooled fallback");
     crate::testport::assert_eq(cal_lookup_engine(3, 1, 2, -1), -1, "absence survives engine lookup");
+}
+#[test]
+fn test_apple_vision_nodes_have_their_own_fitted_rows_and_fall_back_to_the_pooled_map() {
+    // K8, D900: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 3, 231), 250, "a table's OCR map for engine 3");
+    crate::testport::assert_that(cal_lookup_engine(3, 1, 3, 947) != cal_lookup_engine(3, 1, 1, 947), "is not Tesseract's");
+    crate::testport::assert_eq(cal_lookup_engine(3, 1, 1, 508), cal_lookup(3, 1, 508), "and Tesseract's is untouched");
+    crate::testport::assert_eq(cal_lookup_engine(2, 1, 3, 500), cal_lookup(2, 9, 500), "a kind with too few Vision nodes uses the pooled map");
+    crate::testport::assert_eq(cal_lookup_engine(3, 0, 3, 508), cal_lookup(3, 0, 508), "so does the text layer's class");
 }

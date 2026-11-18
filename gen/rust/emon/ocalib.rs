@@ -13,7 +13,7 @@ pub fn ocal_probability(engine: i32, calibration: i32, kind: i32, raw: i32) -> i
     let mut i: i32 = 0;
     let mut first: i32 = -1;
     let mut hit: i32 = -1;
-    while i < 9 {
+    while i < 12 {
         if (OCD_ROWS[(i * 5 + 0) as usize] == engine) && (OCD_ROWS[(i * 5 + 1) as usize] == calibration) && (OCD_ROWS[(i * 5 + 2) as usize] == kind) {
             if first < 0 {
                 first = OCD_ROWS[(i * 5 + 4) as usize];
