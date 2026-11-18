@@ -1,0 +1,205 @@
+;; THE ADAPTER POLICY (K2, D900; D883 section 2, D885, D896; pkg1 sections 1.2 to 1.7).
+;;
+;; A native OCR adapter (`host/c/include/emon_adapter.h`) is a library or a set of callbacks an embedder registers; the host loads it, calls it, fetches and verifies
+;; the pack bytes it reads. WHAT IS DECIDED, and decided once for every host, is here, so no host keeps a rule of its own that could drift:
+;;
+;;   REGISTRATION   `ad-register-check`: an adapter is accepted when the ABI is one this library speaks, the engine it says it is exists in `emon.engines`' table, what it
+;;                  declares (`caps`, `measured`, `needs`, `flags`) is within what the table lets that engine declare, and nothing it does not define is set. A refusal is a
+;;                  reason (`adr`) and happens at registration, never in the middle of a conversion.
+;;   ROUTING        `ad-route`: a request addresses an OIL engine (the requested-identity trailer: `op-request-engine`; 0 is the Tesseract of every request that
+;;                  predates the trailer); it goes to the first adapter registered for that engine. Nobody registered: the caller owes it (the step API with `js-ocr`), or it is
+;;                  `unsupported`.
+;;   THE ANSWER     `ad-answer-check`: what an adapter gave back is held to what it registered. The header's engine is the adapter's, and is the engine the request named, and the
+;;                  capabilities it declares are within the registered ones. A violation is `ocr-adapter-invalid`, an error that fails the conversion: a buggy adapter must not
+;;                  quietly degrade the output (pkg1 1.7).
+;;   UNREAD         `ad-refusal`: an adapter that cannot read a request (`unsupported`: a language it has no pack for, a crop below its minimum) or fails (`failed`) is the answer
+;;                  `[4 ocr id status]`, never an empty reading: the page is UNREAD, not blank (D038). Another engine of the configuration may still read it.
+;;   PACKS          `ad-pack-action`: what to do about a pack a request needs (D896). A pack that is present is used. `never` and an offline process win over every hook. In
+;;                  `auto` with no hook the pack is fetched (a turnkey package); in `cache` nothing is fetched. A hook answers `fetch`, `provide`, `decline` or `substitute`.
+;;   PREPARE        `ad-verdict`: what a `prepare()` of the options says of the resolution `emon.engines` made: ready, partial (some language no pack reads), downloadable or blocked.
+;;   ENGINES        `ad-engine-state`: what `engines()` says of one engine: built in, installed, downloadable or unavailable.
+(ns emon.adapters
+  (:require [emon.lang :refer [I32 Cells defenum]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.plan :refer [pk-ocr ps-failed ps-unsupported an-fail]]
+            [emon.engines :refer [ekind-ocr eimpl-builtin pfetch-never pfetch-cache pfetch-auto pstate-missing pstate-unsupported
+                                  pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-caps pk-engine-needs
+                                  pk-rows pk-row-state]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or bit-and]]))
+
+;; ----------------------------------------------------------------------------------------------- the numbers
+
+;; The adapter ABI this library speaks (`EMON_ADAPTER_ABI`). An adapter built against a newer one is refused (`adr-abi`); a smaller number is an older adapter, which a
+;; newer library may still read because the struct only ever grows.
+(defn ^:pub ^I32 ad-abi [] (return 1))
+
+;; The flags an adapter may set, one bit each (`EMON_ADAPTER_*`): it answers asynchronously, it sends the pixels off the device, it is safe to call from several threads.
+(defn ^:pub ^I32 adf-async [] (return 1))
+(defn ^:pub ^I32 adf-remote [] (return 2))
+(defn ^:pub ^I32 adf-threadsafe [] (return 4))
+(defn ^:pub ^I32 adf-known [] (return 7))
+
+;; How an adapter says a read went (`EMON_ADAPTER_OK`, `_UNSUPPORTED`, `_FAILED`).
+(defn ^:pub ^I32 ads-ok [] (return 0))
+(defn ^:pub ^I32 ads-unsupported [] (return 1))
+(defn ^:pub ^I32 ads-failed [] (return 2))
+
+;; Why a registration is refused. The spelling is the error's name.
+(defenum ^:pub adr
+  [[adr-ok 0 "ok"]
+   [adr-abi 1 "adapter-abi-unsupported"]
+   [adr-engine 2 "adapter-engine-unknown"]
+   [adr-caps 3 "adapter-caps-beyond-engine"]
+   [adr-native 4 "adapter-native-beyond-caps"]
+   [adr-needs 5 "adapter-needs-beyond-engine"]
+   [adr-flags 6 "adapter-flags-unknown"]])
+
+;; Why an answer is refused: `ocr-adapter-invalid` with this reason.
+(defenum ^:pub ada
+  [[ada-ok 0 "ok"]
+   [ada-engine 1 "the answer names an engine the adapter is not"]
+   [ada-request 2 "the request was for another engine"]
+   [ada-caps 3 "the answer declares capabilities the adapter did not register"]])
+
+;; What to do about a pack a request needs.
+(defenum ^:pub pact
+  [[pact-use 1 "use"]
+   [pact-fetch 2 "fetch"]
+   [pact-provided 3 "provided"]
+   [pact-unread 4 "unread"]
+   [pact-substitute 5 "substitute"]])
+
+;; What an app's `onPackNeeded` hook answers (D896).
+(defenum ^:pub pdec
+  [[pdec-fetch 1 "fetch"]
+   [pdec-provide 2 "provide"]
+   [pdec-decline 3 "decline"]
+   [pdec-substitute 4 "substitute"]])
+
+;; What a `prepare()` says.
+(defenum ^:pub pver
+  [[pver-ready 1 "ready"]
+   [pver-partial 2 "partial"]
+   [pver-downloadable 3 "downloadable"]
+   [pver-blocked 4 "blocked"]])
+
+;; What `engines()` says of an engine (D896).
+(defenum ^:pub est
+  [[est-builtin 1 "built-in"]
+   [est-installed 2 "installed"]
+   [est-downloadable 3 "downloadable"]
+   [est-unavailable 4 "unavailable"]])
+
+;; ----------------------------------------------------------------------------------------------- registration
+
+(defn ^:pub ^I32 ad-oen-eng [^I32 oen]
+  (comment "The engine of the table (`eng`) an OCR adapter of the OIL engine `oen` is, or -1: the first row of the table that is an OCR engine with that OIL code.")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 eng 0]
+    (while (< i (pk-engine-count))
+      (do (set eng (pk-engine-at i))
+          (if (and (== (pk-engine-oen eng) oen) (== (pk-engine-kind eng) (ekind-ocr))) (return eng))
+          (set i (+ i 1)))))
+  (return -1))
+
+(defn ^:pub ^I32 ad-register-check [^I32 abi ^I32 oen ^I32 caps ^I32 measured ^I32 needs ^I32 flags]
+  (comment "0 when an adapter that says it is built for `abi`, answers as the OIL engine `oen`, declares `caps` (of which `measured` are measured, not derived) and reads with the pack")
+  (comment "kinds `needs`, and sets `flags`, may be registered; else the reason (`adr`). The table's row of the engine is the ceiling: an adapter may declare less, never more.")
+  (if (< abi 1) (return (adr-abi)))
+  (if (> abi (ad-abi)) (return (adr-abi)))
+  (let [^I32 eng (ad-oen-eng oen)]
+    (if (< eng 0) (return (adr-engine)))
+    (if (!= (bit-and caps (pk-engine-caps eng)) caps) (return (adr-caps)))
+    (if (!= (bit-and measured caps) measured) (return (adr-native)))
+    (if (!= (bit-and needs (pk-engine-needs eng)) needs) (return (adr-needs))))
+  (if (!= (bit-and flags (adf-known)) flags) (return (adr-flags)))
+  (return (adr-ok)))
+
+;; ----------------------------------------------------------------------------------------------- routing
+
+(defn ^:pub ^I32 ad-request-oen [^I32 oen]
+  (comment "The OIL engine a request addresses: its trailer's, and Tesseract for a request that has none (0).")
+  (if (== oen 0) (return 1))
+  (return oen))
+
+(defn ^:pub ^I32 ad-route-unsupported [] (return -1))
+(defn ^:pub ^I32 ad-route-caller [] (return -2))
+
+(defn ^:pub ^I32 ad-route [^I32 oen ^Cells registered ^I32 caller-owes]
+  (comment "Where a request of the OIL engine `oen` goes: the index (in `registered`, the registration order, one OIL engine code each) of the first adapter for that engine; else")
+  (comment "`ad-route-caller` when the caller owes the requests nobody registered for (`caller-owes` 1: the step API with js-ocr=1); else `ad-route-unsupported`.")
+  (let [^I32 want (ad-request-oen oen) ^:mut ^I32 i 0]
+    (while (< i (cells-len registered))
+      (do (if (== (cells-at registered i) want) (return i))
+          (set i (+ i 1)))))
+  (if (== caller-owes 1) (return (ad-route-caller)))
+  (return (ad-route-unsupported)))
+
+;; ----------------------------------------------------------------------------------------------- the answer
+
+(defn ^:pub ^I32 ad-answer-check [^I32 reg-oen ^I32 reg-caps ^I32 req-oen ^I32 ans-oen ^I32 ans-caps]
+  (comment "0 when an answer is what the adapter registered (it answers as its engine, to a request that named its engine, within its registered capabilities); else the reason (`ada`).")
+  (if (!= ans-oen reg-oen) (return (ada-engine)))
+  (if (!= (ad-request-oen req-oen) reg-oen) (return (ada-request)))
+  (if (!= (bit-and ans-caps reg-caps) ans-caps) (return (ada-caps)))
+  (return (ada-ok)))
+
+(defn ^:pub ^I32 ad-refusal [^:mut ^Cells out ^I32 id ^I32 adapter-status]
+  (comment "The answer of an `ocr` request the adapter did not read: `unsupported` for `ads-unsupported`, `failed` for anything else. Four cells and no reading, so the page is unread, never")
+  (comment "blank (D038). Answers where the record starts in `out`.")
+  (let [^:mut ^I32 st (ps-failed)]
+    (if (== adapter-status (ads-unsupported)) (set st (ps-unsupported)))
+    (return (an-fail out (pk-ocr) id st))))
+
+;; ----------------------------------------------------------------------------------------------- packs
+
+(defn ^:pub ^I32 ad-pack-action [^I32 present ^I32 mode ^I32 offline ^I32 hook ^I32 decision]
+  (comment "D896: what to do about a pack a request needs. `present`: 1 when it is installed and verified. `mode`: `pfetch` (never, cache, auto). `offline`: 1 under EMON_OFFLINE=1.")
+  (comment "`hook`: 1 when the app set an `onPackNeeded`. `decision`: what it answered (`pdec`); ignored when there is no hook.")
+  (comment "`never` and `offline` win over every hook, and the hook is not even asked. `cache` allows no fetch, so a `fetch` answer is a refusal. Without a hook `auto` fetches.")
+  (if (== present 1) (return (pact-use)))
+  (if (== offline 1) (return (pact-unread)))
+  (if (== mode (pfetch-never)) (return (pact-unread)))
+  (if (== hook 0)
+    (do (if (== mode (pfetch-auto)) (return (pact-fetch)))
+        (return (pact-unread))))
+  (if (== decision (pdec-fetch))
+    (do (if (== mode (pfetch-auto)) (return (pact-fetch)))
+        (return (pact-unread))))
+  (if (== decision (pdec-provide)) (return (pact-provided)))
+  (if (== decision (pdec-substitute)) (return (pact-substitute)))
+  (return (pact-unread)))
+
+(defn ^:pub ^I32 ad-asks-hook [^I32 present ^I32 mode ^I32 offline ^I32 hook]
+  (comment "1 when the app's hook is consulted for a pack: it is missing, nothing wins over the hook (`never`, offline) and there is a hook.")
+  (if (== present 1) (return 0))
+  (if (== offline 1) (return 0))
+  (if (== mode (pfetch-never)) (return 0))
+  (return hook))
+
+;; ----------------------------------------------------------------------------------------------- prepare and engines
+
+(defn ^:pub ^I32 ad-verdict [^Cells rows ^I32 mode ^I32 offline]
+  (comment "What `prepare()` says of the rows `emon.engines`' `pk-resolve` left in `rows`: ready (nothing missing, every language readable), partial (nothing missing, but some")
+  (comment "language no pack reads: those pages are unread), downloadable (packs missing, and `auto` may fetch them) or blocked (packs missing and nothing may be fetched).")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 missing 0 ^:mut ^I32 unreadable 0]
+    (while (< i (pk-rows rows))
+      (do (if (== (pk-row-state rows i) (pstate-missing)) (set missing (+ missing 1)))
+          (if (== (pk-row-state rows i) (pstate-unsupported)) (set unreadable (+ unreadable 1)))
+          (set i (+ i 1))))
+    (if (> missing 0)
+      (do (if (and (== mode (pfetch-auto)) (== offline 0)) (return (pver-downloadable)))
+          (return (pver-blocked))))
+    (if (> unreadable 0) (return (pver-partial)))
+    (return (pver-ready))))
+
+(defn ^:pub ^I32 ad-engine-state [^I32 registered ^I32 impl ^I32 needs ^I32 missing ^I32 mode ^I32 offline]
+  (comment "What `engines()` says of an engine of the table: `registered` 1 when an adapter (or the built-in renderer) is here for it; `impl`: `eimpl`; `needs`: the pack kinds the")
+  (comment "engine reads with that THIS conversion's options require (0: none, an OS engine); `missing`: how many of those packs are not installed.")
+  (comment "Not registered: unavailable (nobody here to run it). Built in, or needing no pack: built in. All its packs installed: installed. Packs missing: downloadable when")
+  (comment "`auto` may fetch them, else unavailable (the packs cannot come).")
+  (if (== registered 0) (return (est-unavailable)))
+  (if (== impl (eimpl-builtin)) (return (est-builtin)))
+  (if (== needs 0) (return (est-builtin)))
+  (if (== missing 0) (return (est-installed)))
+  (if (and (== mode (pfetch-auto)) (== offline 0)) (return (est-downloadable)))
+  (return (est-unavailable)))

@@ -87,7 +87,7 @@
 
 ;; ------------------------------------------------------------------------------------------------ the crate (as `bb package --host c` assembles it)
 ;; keep equal to `rust-host-files` of tools/package.clj (`--check-sources` below compares them)
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "ppocr_native"])
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs"])
 
 (defn package-host-files [] (some->> (slurp "tools/package.clj") (re-find #"\(def rust-host-files (\[[^\]]*\])") second edn/read-string))
 

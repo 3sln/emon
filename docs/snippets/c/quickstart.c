@@ -20,7 +20,7 @@ int main(void) {
     in.len = len;
     emon_buf html = {0};
     emon_error err = {0};
-    if (emon_convert_html(&in, NULL, 0, NULL, &html, &err) < 0) {
+    if (emon_convert_html(&in, NULL, NULL, NULL, &html, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);
         return 1;

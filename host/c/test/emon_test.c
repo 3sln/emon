@@ -77,7 +77,7 @@ static int64_t mem_read(void *ctx, uint64_t off, uint8_t *buf, size_t len) {
 static emon_model *step_convert(const uint8_t *d, size_t n, uint32_t chunk, const char *options, const char *replay_dir_unused, emon_error *err, size_t *steps) {
     (void)replay_dir_unused;
     emon_session *s = NULL;
-    if (emon_open(n, chunk, 0, NULL, 0, options, &s, err) < 0) return NULL;
+    if (emon_open(n, chunk, 0, NULL, NULL, 0, options, &s, err) < 0) return NULL;
     for (;;) {
         emon_step_out o = {0};
         int st = emon_step(s, &o, err);
@@ -112,7 +112,7 @@ static void *small_thread(void *p) {
     small *t = p;
     emon_input in = bytes_input(t->d, t->n);
     emon_error err = {0};
-    t->rc = emon_convert_json(&in, NULL, 0, 0, &t->json, &err);
+    t->rc = emon_convert_json(&in, NULL, NULL, 0, &t->json, &err);
     emon_free_error(&err);
     return NULL;
 }
@@ -150,17 +150,17 @@ int main(void) {
 
     /* one-shot: bytes in, JSON and HTML out */
     emon_input in = bytes_input(doc, n);
-    check(emon_convert_json(&in, "ocr=never\n", 0, 1, &b, &err) == 0 && same(&b, golden, gn), "emon_convert_json (pretty) of h-plain is test/para/h-plain.json");
+    check(emon_convert_json(&in, "ocr=never\n", NULL, 1, &b, &err) == 0 && same(&b, golden, gn), "emon_convert_json (pretty) of h-plain is test/para/h-plain.json");
     check(b.data && b.data[b.len] == 0, "an emon_buf is NUL-terminated after len");
     emon_free_buf(&b);
     check(b.data == NULL && b.len == 0, "emon_free_buf clears the buffer");
     emon_free_buf(&b);
-    check(emon_convert_html(&in, NULL, 0, NULL, &b, &err) == 0 && same(&b, html_golden, hn), "emon_convert_html of h-plain is test/slice/h-plain.html");
+    check(emon_convert_html(&in, NULL, NULL, NULL, &b, &err) == 0 && same(&b, html_golden, hn), "emon_convert_html of h-plain is test/slice/h-plain.html");
     emon_free_buf(&b);
 
     /* the Model: its outputs, many times, and its stats */
     emon_model *m = NULL;
-    check(emon_convert(&in, "keep-evidence=1\n", 0, &m, &err) == 0 && m != NULL, "emon_convert gives a Model");
+    check(emon_convert(&in, "keep-evidence=1\n", NULL, &m, &err) == 0 && m != NULL, "emon_convert gives a Model");
     emon_buf j1 = {0}, j2 = {0};
     check(emon_model_json(m, 1, &j1, &err) == 0 && emon_model_json(m, 1, &j2, &err) == 0 && j1.len == j2.len && memcmp(j1.data, j2.data, j1.len) == 0, "a Model renders the same JSON twice");
     emon_free_buf(&j1);
@@ -180,21 +180,21 @@ int main(void) {
     emon_source src = {n, mem_read, &ms};
     emon_input lin = {0};
     lin.source = &src;
-    check(emon_convert_json(&lin, "chunk=512\n", 0, 1, &b, &err) == 0 && same(&b, golden, gn) && ms.calls > 0, "a lazy source (chunk=512) gives the same JSON");
+    check(emon_convert_json(&lin, "chunk=512\n", NULL, 1, &b, &err) == 0 && same(&b, golden, gn) && ms.calls > 0, "a lazy source (chunk=512) gives the same JSON");
     printf("     (%zu reads, %zu of %zu bytes)\n", ms.calls, ms.bytes, n);
     emon_free_buf(&b);
     memsrc bad = {doc, n, 0, 0, 1};
     src.ctx = &bad;
-    check(emon_convert_json(&lin, "chunk=512\n", 0, 0, &b, &err) == -EMON_ERR_IO && err_is(&err, EMON_ERR_IO, "io"), "a failed read is io");
+    check(emon_convert_json(&lin, "chunk=512\n", NULL, 0, &b, &err) == -EMON_ERR_IO && err_is(&err, EMON_ERR_IO, "io"), "a failed read is io");
     emon_free_error(&err);
     memsrc shortsrc = {doc, n / 2, 0, 0, -1};
     emon_source src2 = {n, mem_read, &shortsrc};
     lin.source = &src2;
-    check(emon_convert_json(&lin, "chunk=512\n", 0, 0, &b, &err) == -EMON_ERR_SOURCE_CHANGED && err_is(&err, EMON_ERR_SOURCE_CHANGED, "source-changed"), "a source that gives fewer bytes than its length is source-changed");
+    check(emon_convert_json(&lin, "chunk=512\n", NULL, 0, &b, &err) == -EMON_ERR_SOURCE_CHANGED && err_is(&err, EMON_ERR_SOURCE_CHANGED, "source-changed"), "a source that gives fewer bytes than its length is source-changed");
     emon_free_error(&err);
 
     /* stage 0 */
-    check(emon_intake(&in, NULL, 0, &b, &err) == 0 && b.len > 4 && memcmp(b.data, "pdf ", 4) == 0 && strstr((char *)b.data, "encrypted=false"), "emon_intake: the stage 0 line");
+    check(emon_intake(&in, NULL, &b, &err) == 0 && b.len > 4 && memcmp(b.data, "pdf ", 4) == 0 && strstr((char *)b.data, "encrypted=false"), "emon_intake: the stage 0 line");
     printf("     (%s)\n", (char *)b.data);
     emon_free_buf(&b);
 
@@ -204,40 +204,40 @@ int main(void) {
     uint8_t *plain = slurp("test/pdf/p3/plain.pdf", &pn);
     uint8_t *notpdf = slurp("test/pdf/notpdf.pdf", &xn);
     emon_input li = bytes_input(locked, ln);
-    check(emon_convert_json(&li, NULL, 0, 0, &b, &err) == -EMON_ERR_PASSWORD_REQUIRED && err_is(&err, EMON_ERR_PASSWORD_REQUIRED, "password-required"), "a locked PDF: password-required");
+    check(emon_convert_json(&li, NULL, NULL, 0, &b, &err) == -EMON_ERR_PASSWORD_REQUIRED && err_is(&err, EMON_ERR_PASSWORD_REQUIRED, "password-required"), "a locked PDF: password-required");
     emon_free_error(&err);
     li.password = (const uint8_t *)"wrong";
     li.password_len = 5;
-    check(emon_convert_json(&li, NULL, 0, 0, &b, &err) == -EMON_ERR_PASSWORD_INCORRECT && err_is(&err, EMON_ERR_PASSWORD_INCORRECT, "password-incorrect"), "a wrong password: password-incorrect");
+    check(emon_convert_json(&li, NULL, NULL, 0, &b, &err) == -EMON_ERR_PASSWORD_INCORRECT && err_is(&err, EMON_ERR_PASSWORD_INCORRECT, "password-incorrect"), "a wrong password: password-incorrect");
     emon_free_error(&err);
     li.password = (const uint8_t *)"user-secret";
     li.password_len = 11;
     emon_buf locked_json = {0}, plain_json = {0};
     emon_input pi = bytes_input(plain, pn);
-    check(emon_convert_json(&li, NULL, 0, 0, &locked_json, &err) == 0 && emon_convert_json(&pi, NULL, 0, 0, &plain_json, &err) == 0 && same(&locked_json, plain_json.data, plain_json.len),
+    check(emon_convert_json(&li, NULL, NULL, 0, &locked_json, &err) == 0 && emon_convert_json(&pi, NULL, NULL, 0, &plain_json, &err) == 0 && same(&locked_json, plain_json.data, plain_json.len),
           "the right password opens the locked file to the plain twin's Model");
     emon_free_buf(&locked_json);
     emon_free_buf(&plain_json);
     emon_input ni = bytes_input(notpdf, xn);
-    check(emon_convert_json(&ni, NULL, 0, 0, &b, &err) == -EMON_ERR_UNSUPPORTED_FORMAT && err_is(&err, EMON_ERR_UNSUPPORTED_FORMAT, "unsupported-format"), "not a PDF: unsupported-format");
+    check(emon_convert_json(&ni, NULL, NULL, 0, &b, &err) == -EMON_ERR_UNSUPPORTED_FORMAT && err_is(&err, EMON_ERR_UNSUPPORTED_FORMAT, "unsupported-format"), "not a PDF: unsupported-format");
     emon_free_error(&err);
-    check(emon_convert_json(&in, "limit.input-bytes=100\n", 0, 0, &b, &err) == -EMON_ERR_LIMIT && err_is(&err, EMON_ERR_LIMIT, "input-bytes"), "limit.input-bytes=100: a typed breach, named by kin");
+    check(emon_convert_json(&in, "limit.input-bytes=100\n", NULL, 0, &b, &err) == -EMON_ERR_LIMIT && err_is(&err, EMON_ERR_LIMIT, "input-bytes"), "limit.input-bytes=100: a typed breach, named by kin");
     printf("     (%s)\n", err.message);
     emon_free_error(&err);
-    check(emon_convert_json(&in, "record=1\n", 0, 0, &b, &err) == -EMON_ERR_USAGE, "record=1 is a session's option: a one-shot refuses it");
+    check(emon_convert_json(&in, "record=1\n", NULL, 0, &b, &err) == -EMON_ERR_USAGE, "record=1 is a session's option: a one-shot refuses it");
     emon_free_error(&err);
-    check(emon_convert_json(&in, "js-render=1\n", 0, 0, &b, &err) == -EMON_ERR_USAGE, "js-render=1 is a session's option: a one-shot refuses it");
+    check(emon_convert_json(&in, "js-render=1\n", NULL, 0, &b, &err) == -EMON_ERR_USAGE, "js-render=1 is a session's option: a one-shot refuses it");
     emon_free_error(&err);
-    check(emon_convert_json(NULL, NULL, 0, 0, &b, &err) == -EMON_ERR_USAGE && emon_convert_json(&in, NULL, 0, 0, NULL, &err) == -EMON_ERR_USAGE, "NULL arguments are usage errors, not crashes");
+    check(emon_convert_json(NULL, NULL, NULL, 0, &b, &err) == -EMON_ERR_USAGE && emon_convert_json(&in, NULL, NULL, 0, NULL, &err) == -EMON_ERR_USAGE, "NULL arguments are usage errors, not crashes");
     emon_free_error(&err);
     emon_input empty = {0};
-    check(emon_convert_json(&empty, NULL, 0, 0, &b, NULL) < 0, "an empty input is an error (and a NULL emon_error is allowed)");
+    check(emon_convert_json(&empty, NULL, NULL, 0, &b, NULL) < 0, "an empty input is an error (and a NULL emon_error is allowed)");
     /* stderr is captured around the next two calls (D554): a named limit reached INSIDE kin is an answer and prints nothing; a real panic still prints */
     fflush(stderr);
     int saved_stderr = dup(2);
     FILE *captured = tmpfile();
     dup2(fileno(captured), 2);
-    int pages_rc = emon_convert_json(&in, "limit.pages=0\n", 0, 0, &b, &err);
+    int pages_rc = emon_convert_json(&in, "limit.pages=0\n", NULL, 0, &b, &err);
     int lim_named = pages_rc == -EMON_ERR_LIMIT && err_is(&err, EMON_ERR_LIMIT, "pages");
     emon_free_error(&err);
     fflush(stderr);
@@ -267,11 +267,11 @@ int main(void) {
     emon_free_model(sm);
 
     emon_session *s = NULL;
-    check(emon_open(n, 0, 0, NULL, 0, "bogus=1\n", &s, &err) == -EMON_ERR_USAGE && s == NULL, "emon_open: option text is parsed by kin");
+    check(emon_open(n, 0, 0, NULL, NULL, 0, "bogus=1\n", &s, &err) == -EMON_ERR_USAGE && s == NULL, "emon_open: option text is parsed by kin");
     emon_free_error(&err);
-    check(emon_open(n, 1, 0, NULL, 0, "limit.input-bytes=100\n", &s, &err) == -EMON_ERR_LIMIT && s == NULL, "emon_open: the input-bytes bound is checked on the length before a cache is made");
+    check(emon_open(n, 1, 0, NULL, NULL, 0, "limit.input-bytes=100\n", &s, &err) == -EMON_ERR_LIMIT && s == NULL, "emon_open: the input-bytes bound is checked on the length before a cache is made");
     emon_free_error(&err);
-    check(emon_open(n, 0, 0, NULL, 0, NULL, &s, &err) == 0 && s != NULL, "emon_open");
+    check(emon_open(n, 0, 0, NULL, NULL, 0, NULL, &s, &err) == 0 && s != NULL, "emon_open");
     emon_step_out so = {0};
     check(emon_answer(s, NULL, 0, &err) == -EMON_ERR_USAGE, "an answer when none is owed is a usage error");
     emon_free_error(&err);
@@ -285,10 +285,10 @@ int main(void) {
     emon_free_error(&err);
     emon_close(s);
     s = NULL;
-    check(emon_open(n, 0, 0, NULL, 0, "js-render=1\nlimit.pixels=1000\n", &s, &err) == 0 && s != NULL && emon_limit(s, 9, &lim, &err) == 0 && lim == 1000, "emon_open: js-render=1 and limit.pixels=1000 -- emon_limit says 1000");
+    check(emon_open(n, 0, 0, NULL, NULL, 0, "js-render=1\nlimit.pixels=1000\n", &s, &err) == 0 && s != NULL && emon_limit(s, 9, &lim, &err) == 0 && lim == 1000, "emon_open: js-render=1 and limit.pixels=1000 -- emon_limit says 1000");
     emon_close(s);
     s = NULL;
-    check(emon_open(n, 0, 0, NULL, 0, NULL, &s, &err) == 0 && s != NULL, "emon_open (again)");
+    check(emon_open(n, 0, 0, NULL, NULL, 0, NULL, &s, &err) == 0 && s != NULL, "emon_open (again)");
     int first = emon_step(s, &so, &err);
     check(first == EMON_NEED_BYTES && so.nranges > 0 && so.ranges[0].length > 0, "the first step needs bytes, and says which");
     emon_free_step(&so);
@@ -298,7 +298,7 @@ int main(void) {
 
     /* intake by the inverted API: prefetch is the first and last chunk */
     s = NULL;
-    check(emon_open(n, 512, EMON_OPEN_INTAKE, NULL, 0, NULL, &s, &err) == 0, "emon_open (intake)");
+    check(emon_open(n, 512, EMON_OPEN_INTAKE, NULL, NULL, 0, NULL, &s, &err) == 0, "emon_open (intake)");
     int pr = emon_prefetch(s, &so, &err);
     check(pr >= 1 && so.nranges == (size_t)pr, "emon_prefetch: the first and the last chunk");
     for (size_t i = 0; i < so.nranges; i++) emon_provide(s, so.ranges[i].offset, doc + so.ranges[i].offset, (size_t)so.ranges[i].length, &err);
@@ -320,7 +320,7 @@ int main(void) {
 
     /* a source that changed under the session */
     s = NULL;
-    emon_open(n, 512, 0, NULL, 0, NULL, &s, &err);
+    emon_open(n, 512, 0, NULL, NULL, 0, NULL, &s, &err);
     int lastst = 0;
     for (int guard = 0; guard < 1000; guard++) {
         lastst = emon_step(s, &so, &err);
@@ -334,7 +334,7 @@ int main(void) {
 
     /* record, and replay of that transcript */
     s = NULL;
-    emon_open(n, 0, 0, NULL, 0, "record=1\n", &s, &err);
+    emon_open(n, 0, 0, NULL, NULL, 0, "record=1\n", &s, &err);
     for (;;) {
         int st3 = emon_step(s, &so, &err);
         if (st3 <= 0) break;
@@ -347,7 +347,7 @@ int main(void) {
     emon_finish(s, &rm, &err);
     emon_close(s);
     s = NULL;
-    emon_open(n, 0, 0, NULL, 0, NULL, &s, &err);
+    emon_open(n, 0, 0, NULL, NULL, 0, NULL, &s, &err);
     for (size_t i = 0; i < tf.n; i++) emon_replay_file(s, tf.files[i].name, tf.files[i].data, tf.files[i].len, &err);
     check(emon_replay_end(s, &err) == 0, "the transcript replays: emon_replay_file, emon_replay_end");
     for (;;) {
@@ -368,7 +368,7 @@ int main(void) {
     check(tf.files == NULL && tf.n == 0, "emon_free_files clears it");
     emon_close(s);
     s = NULL;
-    emon_open(n, 0, 0, NULL, 0, NULL, &s, &err);
+    emon_open(n, 0, 0, NULL, NULL, 0, NULL, &s, &err);
     emon_replay_file(s, "transcript.edn", (const uint8_t *)"not edn", 7, &err);
     check(emon_replay_end(s, &err) < 0 && err.code == EMON_ERR_PLAN, "a bad transcript is a plan error");
     emon_free_error(&err);
@@ -379,7 +379,7 @@ int main(void) {
     uint8_t *adoc = slurp("test/assets/dct-rgb.pdf", &an);
     emon_input ai = bytes_input(adoc, an);
     emon_model *am = NULL;
-    check(emon_convert(&ai, "assets=images\n", 0, &am, &err) == 0 && emon_model_asset_count(am) == 1, "assets=images: the embedded JPEG is asset 0");
+    check(emon_convert(&ai, "assets=images\n", NULL, &am, &err) == 0 && emon_model_asset_count(am) == 1, "assets=images: the embedded JPEG is asset 0");
     emon_asset_info info;
     check(emon_model_asset_info(am, 0, &info, &err) == 0 && strcmp(info.media_type, "image/jpeg") == 0 && info.size > 100 && strlen(info.sha256) == 64, "emon_model_asset_info: name, media type, sha256, size");
     check(emon_model_asset_bytes(am, 0, &b, &err) == 0 && b.len == info.size && b.data[0] == 0xFF && b.data[1] == 0xD8, "emon_model_asset_bytes: the JPEG as the document has it");

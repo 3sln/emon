@@ -16,14 +16,16 @@ int main(void) {
     // docs:begin
     /* pdf, len: a scanned document's bytes */
     emon_error err = {0};
-    /* Optional: where pdfium and the models are. Without it: $EMON_PDFIUM_LIB and $EMON_TESSDATA, then lib/ and share/emon/tessdata of the archive. */
-    if (emon_set_native_paths(NULL, NULL, &err) < 0) {
+    /* The turnkey engines: what is next to the library. pdfium (lib/libpdfium.*), the adapter libraries (lib/emon/adapters/: Tesseract) and the
+       packs (share/emon/packs/: English and orientation), found as the archive lays them out; $EMON_PDFIUM_LIB, $EMON_ADAPTER_DIR and $EMON_MODELS name others. */
+    emon_engines *engines = NULL;
+    if (emon_engines_new(&engines, &err) < 0 || emon_engines_defaults(engines, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);
         return 1;
     }
-    if (!(emon_capabilities() & EMON_CAP_PDFIUM) || !(emon_capabilities() & EMON_CAP_TESSERACT)) {
-        fprintf(stderr, "pdfium or the Tesseract models were not found next to the library\n");
+    if (!(emon_capabilities() & EMON_CAP_PDFIUM)) {
+        fprintf(stderr, "pdfium was not found next to the library\n");
         return 1;
     }
 
@@ -31,7 +33,7 @@ int main(void) {
     in.data = pdf;
     in.len = len;
     emon_buf html = {0};
-    if (emon_convert_html(&in, NULL, EMON_NATIVE, NULL, &html, &err) < 0) { /* EMON_NATIVE: pdfium draws, Tesseract reads */
+    if (emon_convert_html(&in, NULL, engines, NULL, &html, &err) < 0) { /* the engines: pdfium draws, the Tesseract adapter reads */
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);
         return 1;
@@ -40,6 +42,7 @@ int main(void) {
     fwrite(html.data, 1, html.len, out);
     fclose(out);
     emon_free_buf(&html);
+    emon_engines_free(engines);
     // docs:end
     free(pdf);
     return 0;

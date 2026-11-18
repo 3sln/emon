@@ -17,7 +17,7 @@ int main(void) {
     /* pdf, len: the document, which only you can read. The engine never calls out: it says what it needs, you do it. */
     emon_session *s = NULL;
     emon_error err = {0};
-    if (emon_open(len, 0, 0, NULL, 0, "ocr=never", &s, &err) < 0) {
+    if (emon_open(len, 0, 0, NULL, NULL, 0, "ocr=never", &s, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         return 1;
     }

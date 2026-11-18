@@ -1,0 +1,269 @@
+;; Laws for `emon.adapters` (K2, D900; D883, D885, D896; pkg1 sections 1.2 to 1.7): registration, routing by engine id, the refusal of an unregistered engine, what an answer is held to,
+;; unread and never blank, the four decisions of a pack hook under each mode, `prepare()` and `engines()`.
+(ns emon.adapterstest
+  (:require [emon.lang :refer [I32 Cells Text]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text]]
+            [emon.port :refer [cells-len cells-at cells-push cells-drop]]
+            [emon.plan :refer [an-ok an-status ps-failed ps-unsupported pk-ocr rec-kind rec-id]]
+            [emon.oil :refer [oen-tesseract oen-ppocr oen-apple-vision]]
+            [emon.packdata :refer [pkid-tess-fast-eng pkid-tess-osd pkid-pp5-det-mobile]]
+            [emon.engines :refer [eng-tesseract eng-ppocr eng-apple-vision eimpl-builtin eimpl-native eimpl-plugin
+                                  ekind-ocr pcls-macos pcls-android pfetch-never pfetch-cache pfetch-auto
+                                  pkerr-ok pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-caps pk-engine-needs pk-resolve pk-rows pkf-osd]]
+            [emon.adapters :refer [ad-abi adf-async adf-remote adf-threadsafe adf-known ads-ok ads-unsupported ads-failed
+                                   adr-ok adr-abi adr-engine adr-caps adr-native adr-needs adr-flags adr-emit-name
+                                   ada-ok ada-engine ada-request ada-caps
+                                   pact-use pact-fetch pact-provided pact-unread pact-substitute pact-emit-name
+                                   pdec-fetch pdec-provide pdec-decline pdec-substitute
+                                   pver-ready pver-partial pver-downloadable pver-blocked
+                                   est-builtin est-installed est-downloadable est-unavailable
+                                   ad-oen-eng ad-register-check ad-request-oen ad-route ad-route-unsupported ad-route-caller ad-answer-check ad-refusal
+                                   ad-pack-action ad-asks-hook ad-verdict ad-engine-state]]
+            [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or bit-and]]))
+
+;; ------------------------------------------------------------------ fixtures
+
+(defn ^I32 ad-cells2 [^:mut ^Cells c ^I32 a ^I32 b]
+  (cells-drop c 0)
+  (cells-push c a)
+  (cells-push c b)
+  (return 0))
+
+(defn ^I32 ad-cells1 [^:mut ^Cells c ^I32 a]
+  (cells-drop c 0)
+  (cells-push c a)
+  (return 0))
+
+;; the tesseract adapter as it registers: the table's ceiling for its engine (the real adapter declares exactly this)
+(defn ^I32 ad-reg-tess [^I32 abi ^I32 caps ^I32 measured ^I32 needs ^I32 flags]
+  (return (ad-register-check abi (oen-tesseract) caps measured needs flags)))
+
+(defn ^I32 ad-resolve [^I32 pclass ^I32 flags ^Cells langs ^Cells engs ^Cells installed ^:mut ^Cells out]
+  (let [^Cells scratch (new-cells)]
+    (return (pk-resolve pclass flags langs engs installed out scratch))))
+
+;; ------------------------------------------------------------------ registration
+
+(deftest test-the-abi-and-its-flags-are-the-ones-the-header-declares
+  (assert-eq (ad-abi) 1 "EMON_ADAPTER_ABI is 1")
+  (assert-eq (adf-async) 1 "EMON_ADAPTER_ASYNC")
+  (assert-eq (adf-remote) 2 "EMON_ADAPTER_REMOTE")
+  (assert-eq (adf-threadsafe) 4 "EMON_ADAPTER_THREADSAFE")
+  (assert-eq (adf-known) 7 "the three")
+  (assert-eq (ads-ok) 0 "EMON_ADAPTER_OK")
+  (assert-eq (ads-unsupported) 1 "EMON_ADAPTER_UNSUPPORTED")
+  (assert-eq (ads-failed) 2 "EMON_ADAPTER_FAILED"))
+
+(deftest test-an-adapter-is-the-engine-of-the-table-its-oil-code-names
+  (assert-eq (ad-oen-eng (oen-tesseract)) (eng-tesseract) "Tesseract")
+  (assert-eq (ad-oen-eng (oen-ppocr)) (eng-ppocr) "PP-OCR is the native row, not the web one")
+  (assert-eq (ad-oen-eng (oen-apple-vision)) (eng-apple-vision) "Vision")
+  (assert-eq (ad-oen-eng 99) -1 "no such OIL engine")
+  (assert-eq (ad-oen-eng 0) -1 "0 is no engine"))
+
+(deftest test-every-engine-of-the-table-registers-with-exactly-its-ceiling
+  (let [^:mut ^I32 i 0 ^:mut ^I32 n 0 ^:mut ^I32 eng 0]
+    (while (< i (pk-engine-count))
+      (do (set eng (pk-engine-at i))
+          (if (== (pk-engine-kind eng) (ekind-ocr))
+            (do (assert-eq (ad-register-check (ad-abi) (pk-engine-oen eng) (pk-engine-caps eng) 0 (pk-engine-needs eng) 0) (adr-ok) "an adapter declaring what the table allows is accepted")
+                (assert-eq (ad-register-check (ad-abi) (pk-engine-oen eng) (pk-engine-caps eng) (pk-engine-caps eng) (pk-engine-needs eng) (adf-known)) (adr-ok) "and every flag, and every capability measured")
+                (assert-eq (ad-register-check (ad-abi) (pk-engine-oen eng) 0 0 0 0) (adr-ok) "declaring nothing is a smaller ceiling, not a violation")
+                (set n (+ n 1))))
+          (set i (+ i 1))))
+    (assert-that (>= n 6) "the table has at least six OCR engines")))
+
+(deftest test-an-adapter-may-declare-less-than-the-ceiling
+  (assert-eq (ad-reg-tess 1 1 1 1 0) (adr-ok) "a Tesseract that has blocks only")
+  (assert-eq (ad-reg-tess 1 2225423 2225423 3 4) (adr-ok) "the capabilities oil-tess-begin always sets, both recognizer and OSD, thread safe"))
+
+(deftest test-a-registration-is-refused-by-name-for-each-thing-it-gets-wrong
+  (assert-eq (ad-reg-tess 2 1 0 1 0) (adr-abi) "an ABI newer than this library's")
+  (assert-eq (ad-reg-tess 0 1 0 1 0) (adr-abi) "an ABI of 0 is no ABI")
+  (assert-eq (ad-register-check 1 99 1 0 1 0) (adr-engine) "an OIL engine the table does not have")
+  (assert-eq (ad-register-check 1 0 1 0 1 0) (adr-engine) "OIL engine 0")
+  (assert-eq (ad-register-check 1 (oen-ppocr) 8388608 0 0 0) (adr-caps) "a capability bit beyond what PP-OCR may declare")
+  (assert-eq (ad-register-check 1 (oen-ppocr) 8 8 0 0) (adr-caps) "baselines are Tesseract's, not PP-OCR's")
+  (assert-eq (ad-reg-tess 1 1 3 1 0) (adr-native) "measured capabilities the adapter does not declare")
+  (assert-eq (ad-register-check 1 (oen-apple-vision) 32 0 1 0) (adr-needs) "Vision reads with no pack")
+  (assert-eq (ad-reg-tess 1 1 0 4 0) (adr-needs) "a detector is not a Tesseract pack kind")
+  (assert-eq (ad-reg-tess 1 1 0 1 8) (adr-flags) "a flag the ABI does not define"))
+
+(deftest test-a-refusal-has-a-name-to-route-on
+  (let [^Text t (new-text)]
+    (adr-emit-name t (adr-abi))
+    (assert-text t "adapter-abi-unsupported" "the name a caller routes on")))
+
+;; ------------------------------------------------------------------ routing
+
+(deftest test-a-request-goes-to-the-adapter-of-its-engine
+  (let [^Cells reg (new-cells)]
+    (ad-cells2 reg (oen-tesseract) (oen-ppocr))
+    (assert-eq (ad-route (oen-tesseract) reg 0) 0 "Tesseract's request to the first")
+    (assert-eq (ad-route (oen-ppocr) reg 0) 1 "PP-OCR's request to the second")
+    (ad-cells2 reg (oen-ppocr) (oen-tesseract))
+    (assert-eq (ad-route (oen-tesseract) reg 0) 1 "by engine, not by position")
+    (assert-eq (ad-route (oen-ppocr) reg 0) 0 "the other way round")))
+
+(deftest test-a-request-that-names-no-engine-is-tesseracts
+  (let [^Cells reg (new-cells)]
+    (ad-cells1 reg (oen-tesseract))
+    (assert-eq (ad-request-oen 0) 1 "the trailer's engine is 0 when there is none: Tesseract")
+    (assert-eq (ad-route 0 reg 0) 0 "it goes to the Tesseract adapter")
+    (assert-eq (ad-request-oen (oen-ppocr)) 2 "a named engine is that engine")))
+
+(deftest test-the-first-adapter-registered-for-an-engine-answers
+  (let [^Cells reg (new-cells)]
+    (ad-cells2 reg (oen-tesseract) (oen-tesseract))
+    (assert-eq (ad-route (oen-tesseract) reg 0) 0 "registration order is preference")))
+
+(deftest test-a-request-for-an-engine-nobody-registered-is-unsupported-or-the-callers
+  (let [^Cells reg (new-cells)]
+    (ad-cells1 reg (oen-tesseract))
+    (assert-eq (ad-route (oen-ppocr) reg 0) (ad-route-unsupported) "unsupported, so the page is unread")
+    (assert-eq (ad-route (oen-ppocr) reg 1) (ad-route-caller) "the caller owes what nobody registered (js-ocr=1)")
+    (assert-eq (ad-route (oen-tesseract) reg 1) 0 "but what an adapter is registered for stays the adapter's")
+    (cells-drop reg 0)
+    (assert-eq (ad-route (oen-tesseract) reg 0) (ad-route-unsupported) "no adapter at all: unsupported")
+    (assert-eq (ad-route (oen-tesseract) reg 1) (ad-route-caller) "or the caller's")
+    (assert-that (< (ad-route-unsupported) 0) "neither is an index")
+    (assert-that (< (ad-route-caller) 0) "neither is an index")
+    (assert-that (!= (ad-route-caller) (ad-route-unsupported)) "and they differ")))
+
+;; ------------------------------------------------------------------ the answer
+
+(deftest test-an-answer-is-held-to-what-its-adapter-registered
+  (assert-eq (ad-answer-check (oen-tesseract) 7339791 (oen-tesseract) (oen-tesseract) 2225423) (ada-ok) "within the registered capabilities")
+  (assert-eq (ad-answer-check (oen-tesseract) 7339791 0 (oen-tesseract) 7339791) (ada-ok) "a request with no trailer was Tesseract's")
+  (assert-eq (ad-answer-check (oen-tesseract) 7339791 (oen-tesseract) (oen-ppocr) 24928) (ada-engine) "an answer in another engine's name")
+  (assert-eq (ad-answer-check (oen-ppocr) 24928 (oen-tesseract) (oen-ppocr) 24928) (ada-request) "an adapter handed another engine's request")
+  (assert-eq (ad-answer-check (oen-tesseract) 1 (oen-tesseract) (oen-tesseract) 3) (ada-caps) "capabilities the adapter never registered")
+  (assert-eq (ad-answer-check (oen-tesseract) 1 (oen-tesseract) (oen-tesseract) 0) (ada-ok) "fewer capabilities are fine"))
+
+;; ------------------------------------------------------------------ unread, never blank
+
+(deftest test-an-adapter-that-cannot-read-gives-four-cells-and-no-reading
+  (let [^Cells c (new-cells)]
+    (assert-eq (ad-refusal c 7 (ads-unsupported)) 0 "the record starts at 0")
+    (assert-eq (cells-len c) 4 "four cells: a header and a status, no reading")
+    (assert-eq (cells-at c 0) 4 "the length")
+    (assert-eq (rec-kind c 0) (pk-ocr) "an ocr answer")
+    (assert-eq (rec-id c 0) 7 "to request 7")
+    (assert-eq (an-status c 0) (ps-unsupported) "unsupported")
+    (assert-eq (an-ok c 0) 0 "which is not an ok answer: kin reads the page as unread, never as blank")))
+
+(deftest test-an-adapter-that-fails-is-failed-and-anything-else-it-says-is-failed-too
+  (let [^Cells c (new-cells)]
+    (ad-refusal c 3 (ads-failed))
+    (assert-eq (an-status c 0) (ps-failed) "failed")
+    (assert-eq (cells-len c) 4 "still no reading")
+    (cells-drop c 0)
+    (ad-refusal c 3 77)
+    (assert-eq (an-status c 0) (ps-failed) "a status the ABI does not define is a failure, not a reading")
+    (assert-eq (cells-len c) 4 "and no reading")))
+
+(deftest test-two-refusals-in-a-round-are-two-records
+  (let [^Cells c (new-cells)]
+    (ad-refusal c 1 (ads-unsupported))
+    (assert-eq (ad-refusal c 2 (ads-failed)) 4 "the second starts after the first")
+    (assert-eq (cells-len c) 8 "eight cells")
+    (assert-eq (rec-id c 4) 2 "its own request")))
+
+;; ------------------------------------------------------------------ packs
+
+(deftest test-a-pack-that-is-here-is-used-whatever-the-mode-and-the-hook
+  (assert-eq (ad-pack-action 1 (pfetch-never) 1 1 (pdec-decline)) (pact-use) "present beats never, offline and a hook that would decline")
+  (assert-eq (ad-pack-action 1 (pfetch-auto) 0 0 0) (pact-use) "present in auto")
+  (assert-eq (ad-pack-action 1 (pfetch-cache) 0 1 (pdec-fetch)) (pact-use) "present in cache"))
+
+(deftest test-never-and-offline-win-over-every-hook
+  (assert-eq (ad-pack-action 0 (pfetch-never) 0 1 (pdec-fetch)) (pact-unread) "never: a fetch answer is not honoured")
+  (assert-eq (ad-pack-action 0 (pfetch-never) 0 1 (pdec-provide)) (pact-unread) "never: nor a provide")
+  (assert-eq (ad-pack-action 0 (pfetch-never) 0 1 (pdec-substitute)) (pact-unread) "never: nor a substitute")
+  (assert-eq (ad-pack-action 0 (pfetch-never) 0 0 0) (pact-unread) "never with no hook: unread")
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 1 1 (pdec-fetch)) (pact-unread) "EMON_OFFLINE=1 in auto: unread")
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 1 0 0) (pact-unread) "EMON_OFFLINE=1 with no hook: unread")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 1 1 (pdec-provide)) (pact-unread) "EMON_OFFLINE=1 in cache: unread")
+  (assert-eq (ad-asks-hook 0 (pfetch-never) 0 1) 0 "the hook is not even asked under never")
+  (assert-eq (ad-asks-hook 0 (pfetch-auto) 1 1) 0 "nor offline"))
+
+(deftest test-a-turnkey-fetches-on-demand-when-the-app-set-no-hook
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 0 0) (pact-fetch) "auto with no hook fetches (D896)")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 0 0 0) (pact-unread) "cache with no hook fetches nothing")
+  (assert-eq (ad-asks-hook 0 (pfetch-auto) 0 0) 0 "no hook to ask"))
+
+(deftest test-the-hook-fetches
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 (pdec-fetch)) (pact-fetch) "fetch in auto")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 0 1 (pdec-fetch)) (pact-unread) "cache allows no fetch: a fetch answer is a refusal")
+  (assert-eq (ad-asks-hook 0 (pfetch-auto) 0 1) 1 "the hook is asked")
+  (assert-eq (ad-asks-hook 0 (pfetch-cache) 0 1) 1 "in cache too"))
+
+(deftest test-the-hook-provides
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 (pdec-provide)) (pact-provided) "provide in auto")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 0 1 (pdec-provide)) (pact-provided) "provide in cache: no network is involved"))
+
+(deftest test-the-hook-declines
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 (pdec-decline)) (pact-unread) "decline: the page is unread with pack-missing, never blank")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 0 1 (pdec-decline)) (pact-unread) "in cache"))
+
+(deftest test-the-hook-substitutes
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 (pdec-substitute)) (pact-substitute) "substitute in auto")
+  (assert-eq (ad-pack-action 0 (pfetch-cache) 0 1 (pdec-substitute)) (pact-substitute) "in cache"))
+
+(deftest test-an-answer-the-abi-does-not-define-is-a-refusal
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 0) (pact-unread) "0")
+  (assert-eq (ad-pack-action 0 (pfetch-auto) 0 1 9) (pact-unread) "9"))
+
+(deftest test-an-action-has-a-name
+  (let [^Text t (new-text)]
+    (pact-emit-name t (pact-unread))
+    (assert-text t "unread" "unread")))
+
+;; ------------------------------------------------------------------ prepare
+
+(deftest test-prepare-says-downloadable-when-the-turnkey-may-fetch
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "English is missing and auto may fetch it")
+    (assert-eq (ad-verdict out (pfetch-never) 0) (pver-blocked) "never may not")
+    (assert-eq (ad-verdict out (pfetch-cache) 0) (pver-blocked) "cache may not")
+    (assert-eq (ad-verdict out (pfetch-auto) 1) (pver-blocked) "nor offline")))
+
+(deftest test-prepare-says-ready-when-nothing-is-missing
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (ad-cells1 installed (pkid-tess-fast-eng))
+    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (ad-verdict out (pfetch-never) 0) (pver-ready) "ready, whatever the mode")
+    (assert-eq (ad-verdict out (pfetch-auto) 1) (pver-ready) "and offline")
+    (assert-eq (ad-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD wanted")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "OSD is the missing pack")
+    (cells-push installed (pkid-tess-osd))
+    (assert-eq (ad-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD installed")
+    (assert-eq (ad-verdict out (pfetch-never) 0) (pver-ready) "ready")))
+
+(deftest test-prepare-says-partial-when-a-language-has-no-pack-for-the-engine
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (ad-cells1 engs (eng-ppocr))
+    (ad-cells1 langs 1936744704)
+    (ad-cells2 installed (pkid-pp5-det-mobile) (pkid-pp5-det-mobile))
+    (assert-eq (ad-resolve (pcls-android) 0 langs engs installed out) (pkerr-ok) "Spanish with PP-OCR")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "the classifier is missing: downloadable, and Spanish is unreadable besides")
+    (assert-that (> (pk-rows out) 2) "the rows say both")))
+
+;; ------------------------------------------------------------------ engines
+
+(deftest test-an-engine-that-is-not-registered-is-unavailable
+  (assert-eq (ad-engine-state 0 (eimpl-native) 1 0 (pfetch-auto) 0) (est-unavailable) "nobody here to run it")
+  (assert-eq (ad-engine-state 0 (eimpl-plugin) 0 0 (pfetch-auto) 0) (est-unavailable) "a plugin the app did not register"))
+
+(deftest test-an-os-engine-and-the-renderer-are-built-in
+  (assert-eq (ad-engine-state 1 (eimpl-builtin) 0 0 (pfetch-never) 0) (est-builtin) "pdfium")
+  (assert-eq (ad-engine-state 1 (eimpl-native) 0 0 (pfetch-never) 0) (est-builtin) "Vision: no pack to wait for")
+  (assert-eq (ad-engine-state 1 (eimpl-plugin) 0 0 (pfetch-never) 1) (est-builtin) "ML Kit, whatever the mode"))
+
+(deftest test-an-engine-with-its-packs-is-installed-and-without-them-downloadable-or-not
+  (assert-eq (ad-engine-state 1 (eimpl-native) 1 0 (pfetch-never) 0) (est-installed) "all its packs are here")
+  (assert-eq (ad-engine-state 1 (eimpl-native) 1 1 (pfetch-auto) 0) (est-downloadable) "a pack missing and auto may fetch it")
+  (assert-eq (ad-engine-state 1 (eimpl-native) 1 1 (pfetch-cache) 0) (est-unavailable) "cache cannot")
+  (assert-eq (ad-engine-state 1 (eimpl-native) 1 1 (pfetch-never) 0) (est-unavailable) "never cannot")
+  (assert-eq (ad-engine-state 1 (eimpl-native) 1 1 (pfetch-auto) 1) (est-unavailable) "offline cannot"))

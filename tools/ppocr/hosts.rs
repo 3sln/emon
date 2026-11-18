@@ -29,10 +29,11 @@ fn main() {
         std::fs::write(&args[3], out).unwrap();
         return;
     }
-    let port: Box<dyn Ocr> = if args.get(1).map(String::as_str) == Some("native") {
-        Box::new(emon::ppocr_native::PpOcr::open(None, None).unwrap())
+    let port: Arc<dyn Ocr> = if args.get(1).map(String::as_str) == Some("native") {
+        // the PP adapter library, through the registry (`ppocr_hybrid` with no incumbent: PP-OCR alone)
+        emon::adapter::ppocr_hybrid(None).unwrap().0
     } else {
-        Box::new(emon::ppocr::PpOcr::new(std::path::Path::new(".cache/ppocr")).unwrap())
+        Arc::new(emon::ppocr::PpOcr::new(std::path::Path::new(".cache/ppocr")).unwrap())
     };
     for path in io::stdin().lock().lines() {
         let data = std::fs::read(path.unwrap()).unwrap();

@@ -523,7 +523,7 @@
         ;; (EMON_PDFIUM_LIB, EMON_TESSDATA, `lib/` and `share/emon/tessdata` beside the library); the Engine layers and the ports still never see a path
         ;; D843: these three optional OCR fulfilment modules load/verify pinned model files, like tess.rs.
         ;; The image/CTC/calibration modules and every Engine/library module remain covered.
-        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/ppocr\.rs|/ppocr_runtime\.rs|/ppocr_native\.rs|/ppocr_abi\.rs|/ppocr\.go|/ffi/ppocr\.java|/ffi/ppocr\.cs|/ppocr_pipeline\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
+        not-test (fn [fs] (remove #(re-find #"(?i)testport|/tess\.rs|/ppocr\.rs|/ppocr_runtime\.rs|/adapter\.rs|/packs\.rs|/tess_adapter\.rs|/ppocr_abi\.rs|/ppocr\.go|/ffi/ppocr\.java|/ffi/ppocr\.cs|/ppocr_pipeline\.rs|/c/src/native\.rs|/tess\.go|/ffi/tess\.java|/ffi/tess\.cs|_test\.go|/tests/" %) fs))]
     {:rust (not-test (concat (g "host/rust/src" "*.rs") (g "host/wasm/src" "*.rs") (g "host/c/src" "*.rs")))
      :js (g "host/js/src" "*.js")
      :go (not-test (concat (g "host/go" "*.go") (g "host/go/port" "*.go") (g "host/go/pngenc" "*.go") (g "host/go/planrun" "*.go")))

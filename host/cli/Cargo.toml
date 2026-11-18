@@ -18,6 +18,8 @@ path = "src/main.rs"
 
 [features]
 tesseract = []
+# the pack fetch of the adapters (host/rust/src/packs.rs): an HTTPS client. The CLI links Tesseract itself and reads `share/emon/tessdata`; it does not enable it.
+packs-fetch = []
 
 [dependencies]
 # the same pins as the Rust host (kin/scripts/emon-rs-build); the lock file is host/rust/Cargo.lock

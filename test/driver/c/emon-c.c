@@ -11,7 +11,8 @@
  *   --source=step    the inverted API (emon_open .. emon_step .. emon_finish) answering every NEED_BYTES from the file
  *   --async          the same, with chunk misses the loop fetches (--chunk=N sets the size): the shape of a browser's Blob
  *   --record=DIR / --replay=DIR   the transcript (the step API): written to / read from DIR
- *   --native         the one-shot with EMON_NATIVE: the library's own pdfium / Tesseract / codecs, when it was built with them (emon_capabilities)
+ *   --native         the engines next to the library (emon_engines_defaults: pdfium, the adapter libraries in lib/emon/adapters, the packs), for the one-shot and for the step session
+ *                    (which answers its adapters' `ocr` requests itself); with `--adapter=PATH` (repeatable) the adapter libraries you name instead (emon_engines_load); `--packs=DIR` the pack dir
  *   --KEY=VALUE      a key of kin's options grammar (emon_is_option_key): --ocr=never, --assets=images, --chunk=512, --limit.pages=5 ...
  *
  * The same flags, stdout and exit codes as the Rust driver (0 ok; 2 usage; 4 a named emon error, `error: NAME` and the sentence on stderr;
@@ -182,11 +183,14 @@ static void replay_dir_in(emon_session *s, const char *dir) {
     CHECK(emon_replay_end(s, &err));
 }
 
+/* the engines of --native: NULL without it */
+static emon_engines *g_engines = NULL;
+
 /* an intake (flags EMON_OPEN_INTAKE) or a conversion by the inverted API; out_model or out_line is filled */
 static void run_session(const stepargs *a, emon_model **out_model, emon_buf *out_line) {
     emon_error err = {0};
     emon_session *s = NULL;
-    CHECK(emon_open(a->length, 0, a->open_flags, a->password, a->password_len, a->options, &s, &err));
+    CHECK(emon_open(a->length, 0, a->open_flags, g_engines, a->password, a->password_len, a->options, &s, &err));
     if (a->replay_dir) replay_dir_in(s, a->replay_dir);
     if (a->open_flags & EMON_OPEN_INTAKE) {
         emon_step_out pf = {0};
@@ -198,6 +202,11 @@ static void run_session(const stepargs *a, emon_model **out_model, emon_buf *out
         emon_step_out o = {0};
         int st = emon_step(s, &o, &err);
         if (st < 0) fail(&err);
+        if (st == EMON_WAITING) {
+            /* only the registered adapters' async work is outstanding */
+            CHECK(emon_wait(s, 100, &err));
+            continue;
+        }
         if (st == EMON_DONE) break;
         if (st == EMON_NEED_BYTES) {
             provide_ranges(s, a->fd, o.ranges, o.nranges);
@@ -264,6 +273,8 @@ int main(int argc, char **argv) {
     const char *html_assets = NULL, *asset_prefix = NULL;
     char *html = strdup("");
     int pretty = 0, async = 0, stats = 0, assets_on = 0, native = 0;
+    const char *packs_dir = NULL, *adapters[16];
+    int nadapters = 0;
     sb kin = {0};
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -280,6 +291,8 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--async")) async = 1;
         else if (!strcmp(a, "--stats")) stats = 1;
         else if (!strcmp(a, "--native")) native = 1;
+        else if (!strncmp(a, "--adapter=", 10)) { if (nadapters == 16) usage("at most 16 --adapter"); adapters[nadapters++] = a + 10; native = 1; }
+        else if (!strncmp(a, "--packs=", 8)) packs_dir = a + 8;
         else if (!strncmp(a, "--record=", 9)) record = a + 9;
         else if (!strncmp(a, "--replay=", 9)) replay = a + 9;
         else if (a[0] == '-' && a[1] == '-' && strchr(a, '=')) {
@@ -327,7 +340,18 @@ int main(int argc, char **argv) {
     const uint8_t *pw = (const uint8_t *)password;
     size_t pwlen = password ? strlen(password) : 0;
 
-    if (native && (async || record || replay || !strcmp(source, "step"))) usage("--native is the one-shot's: a step session is fulfilled by its caller");
+    if (native) {
+        emon_error nerr = {0};
+        CHECK(emon_engines_new(&g_engines, &nerr));
+        if (packs_dir) CHECK(emon_engines_packs(g_engines, packs_dir, EMON_PACKS_NEVER, &nerr));
+        if (nadapters) {
+            for (int i = 0; i < nadapters; i++) CHECK(emon_engines_load(g_engines, adapters[i], NULL, &nerr));
+            emon_error perr = {0};
+            if (emon_engines_pdfium(g_engines, NULL, &perr) < 0) emon_free_error(&perr);
+        } else {
+            CHECK(emon_engines_defaults(g_engines, &nerr));
+        }
+    }
     int use_step = async || record || replay || !strcmp(source, "step");
     uint8_t *mem = NULL;
     size_t memlen = 0;
@@ -352,7 +376,7 @@ int main(int argc, char **argv) {
             stepargs a = {fd, flen, options, pw, pwlen, EMON_OPEN_INTAKE, NULL, NULL};
             run_session(&a, NULL, &line);
         } else {
-            CHECK(emon_intake(&in, options, 0, &line, &err));
+            CHECK(emon_intake(&in, options, &line, &err));
         }
         printf("%s\n", (char *)line.data);
         return 0;
@@ -363,7 +387,7 @@ int main(int argc, char **argv) {
         stepargs a = {fd, flen, options, pw, pwlen, 0, replay, record};
         run_session(&a, &model, NULL);
     } else {
-        CHECK(emon_convert(&in, options, native ? EMON_NATIVE : 0, &model, &err));
+        CHECK(emon_convert(&in, options, g_engines, &model, &err));
     }
 
     if (asset_dir) {
@@ -414,7 +438,7 @@ int main(int argc, char **argv) {
                 run_session(&a, NULL, &line);
                 r = 0;
             } else {
-                r = emon_intake(&in, options, 0, &line, &ierr);
+                r = emon_intake(&in, options, &line, &ierr);
             }
             if (r < 0) {
                 sb_str(&o, "error: ");
@@ -455,5 +479,6 @@ int main(int argc, char **argv) {
     if (o.n) fwrite(o.p, 1, o.n, stdout);
     fflush(stdout);
     emon_free_model(model);
+    emon_engines_free(g_engines);
     return 0;
 }

@@ -256,6 +256,11 @@ pub extern "C" fn emon_step(h: i32) -> i32 {
             put_ranges(&r);
             1
         }
+        // the browser has no native adapters, which are what a session waits for (K2, D900)
+        Some(Ok(Step::Waiting)) => {
+            put(Vec::new());
+            3
+        }
         Some(Ok(Step::Requests(owed))) => {
             let mut v: Vec<u8> = Vec::new();
             v.extend_from_slice(&(owed.len() as i32).to_le_bytes());

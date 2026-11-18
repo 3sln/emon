@@ -1,41 +1,114 @@
 # emon for C
 
-`libemon` and its header [`emon.h`](../../host/c/include/emon.h): the Rust host behind a C ABI. Get the archive
-`emon-c-<version>-<triple>.tar.gz` from the [GitHub releases](https://github.com/3sln/emon/releases):
+`libemon` and its header [`emon.h`](../../host/c/include/emon.h): the Rust host behind a C ABI. OCR engines are not in it: they are
+**adapters** behind a second header, [`emon_adapter.h`](../../host/c/include/emon_adapter.h), registered in an `emon_engines`
+that you give to the conversion calls. Get the archive `emon-c-<version>-<triple>.tar.gz` from the
+[GitHub releases](https://github.com/3sln/emon/releases):
 
     include/emon.h
-    lib/libemon.dylib | .so            the shared library
-    lib/libemon.a                      the static library
+    include/emon_adapter.h             the adapter ABI (version 1)
+    lib/libemon.dylib | .so | .dll     the core library: no Tesseract, no Leptonica
+    lib/libemon.a                      the static core library (desktop)
     lib/libpdfium.dylib | .so          pdfium, loaded at run time
-    share/emon/tessdata/               the English and orientation models (eng, osd)
+    lib/emon/adapters/libemon_ocr_tesseract.dylib | .so | emon_ocr_tesseract.dll
+                                       Tesseract 5.5.3 and Leptonica, as an adapter library
+    share/emon/packs/tess-fast-eng/eng.traineddata
+    share/emon/packs/tess-osd/osd.traineddata
+                                       the English and orientation model packs
 
 Link the shared library with `-I include -L lib -lemon` (and `-Wl,-rpath,<lib dir>` to run it from where it is: the library is
-named `@rpath/libemon.dylib` on macOS and has the soname `libemon.so` on Linux). The static library holds Tesseract and
-Leptonica, so it needs the C++ runtime and the system's own libraries too: `-lstdc++ -lpthread -ldl -lm` on Linux, `-framework
-Security -framework CoreFoundation -liconv -lm -lc++` on macOS. C11; the header is C++ safe.
+named `@rpath/libemon.dylib` on macOS and has the soname `libemon.so` on Linux). The core library is small and needs no C++
+runtime: only the platform's own libraries (`-lpthread -ldl -lm` on Linux for the static one, `-framework Security
+-framework CoreFoundation -liconv -lm` on macOS). C11; the header is C++ safe.
 
 On Windows (x64, Windows 10 or newer) the library is built with the static C runtime (`/MT`) and needs no Visual C++
 redistributable. A program that links the static library should be built with `/MT` too, so that the runtimes agree.
 
-**The released library has the whole pipeline.** Tesseract 5.5.3 and Leptonica are linked into it statically, and pdfium
-(`chromium/8076`) is loaded at run time from the file beside it, so a page that needs drawing and reading just works:
-`emon_capabilities()` has `EMON_CAP_PDFIUM` and `EMON_CAP_TESSERACT` set when both are found. There is still no JPEG 2000 or
-JBIG2 decoder (`EMON_CAP_CODECS` is 0). The ports are used when you pass the `EMON_NATIVE` flag to a one-shot call; without
-it, or with the step API, a request for a port is answered `unsupported` (or you answer it yourself, see below).
+## Engines, adapters and packs
 
-Where each is looked for, in order. A place you *name* that is wrong is an error, never replaced by the next one; nothing
-found at all is no capability bit and no error.
+Three things make a scan readable, and each is yours to register:
 
-| | pdfium | the Tesseract models |
+| | what it is | where it comes from |
 |---|---|---|
-| 1 | `emon_set_native_paths(pdfium, tessdata, &err)`: a file or the directory holding it / a directory with `*.traineddata` | the same call |
-| 2 | `$EMON_PDFIUM_LIB` | `$EMON_TESSDATA` |
-| 3 | next to the library (`lib/libpdfium.*` beside `lib/libemon.*`); a static link looks next to the executable | `share/emon/tessdata` one directory above `lib/` (the archive's), or beside the executable |
-| 4 | | `$TESSDATA_PREFIX` and the system's usual places |
+| **an OCR adapter** | an engine behind `emon_ocr_adapter` (`emon_adapter.h`): it is handed an `ocr` request and the pixels it names and answers with a reading in OIL, the engine-neutral interchange; or it says it cannot read (`unsupported`, `failed`), and the page is **unread, never blank** | a library that exports `emon_ocr_adapter_v1` (`emon_engines_load`): `libemon_ocr_tesseract`, `libemon_ocr_ppocr`; or a struct of callbacks of yours (`emon_engines_add_ocr`): a platform recognizer, a cloud service, a Dart plugin |
+| **pdfium** | the renderer, loaded at run time | `emon_engines_pdfium` |
+| **packs** | the model files an adapter reads with, content-addressed and immutable, each file listed with its SHA-256 in kin's catalogue (`release/packs/packs.edn`) | the pack directory you name (`emon_engines_packs`), `share/emon/packs` of the archive, `$EMON_MODELS`, a download, or bytes of your own |
 
-The same layout is the CLI's ([docs/cli.md](../cli.md)) and the pod's ([docs/hosts/pod.md](pod.md)); put the archive's
-directories anywhere together and they work. On macOS a downloaded library is quarantined until you run
-`xattr -dr com.apple.quarantine <dir>` (the files are not signed).
+`emon_engines_defaults` registers the turnkey set from what is next to the library, as the archive lays it out: the adapters
+in `lib/emon/adapters/`, the packs in `share/emon/packs/`, pdfium in `lib/`. Nothing found is not an error (the engines are the
+ones that were: a core-only library converts born-digital documents and leaves scans unread); an adapter that is found and cannot
+be opened is. Registration failures are errors **at registration**, with a name to route on (`adapter-abi-unsupported`,
+`adapter-runtime-missing`, `adapter-open-failed`, `adapter-remote-refused`, `pack-dir-missing`), never in the middle of a conversion.
+
+**A request goes to the adapter of its engine.** Kin addresses each `ocr` request to an OIL engine (Tesseract's, PP-OCR's) and a
+registry routes it by that, first registered first. A request nobody registered for is `unsupported` (the page is unread), or, in
+the step API with `js-ocr=1`, the caller's. What an adapter gives back is held to what it registered: the engine it answers as, the
+capabilities it declared, valid OIL for the bitmap. A reading that is not is `ocr-adapter-invalid` (reported as the error
+`fulfil-failed` with that in its message), which fails the conversion: a buggy adapter must not quietly degrade the output.
+
+**Packs are always verified.** Every pack file, wherever it came from (the pack directory, a directory you named, bytes or a path your
+hook provided, a download), is checked against the catalogue's SHA-256 and size before an adapter reads it. A file that does not
+match is never used; one in the pack directory is deleted and the pack is missing again (`pack-hash-mismatch:<id>`, in
+`emon_engines_notes`). Each adapter is given a flat directory of the verified files of the packs it reads. A request that needs a
+pack that is not there is answered `unsupported` with `pack-missing:<id>`: unread, never blank.
+
+**How packs come** (`emon_engines_packs(engines, dir, mode, &err)`): `EMON_PACKS_NEVER` fetches nothing and asks no hook;
+`EMON_PACKS_CACHE` uses what is cached and never the network; `EMON_PACKS_AUTO` fetches on demand, when this library was built with
+the `packs-fetch` feature. A new registry is `NEVER` (core and bare adapters never fetch); `emon_engines_defaults` is `AUTO`
+(or `$EMON_PACKS_FETCH`). `EMON_OFFLINE=1` is `NEVER` whatever you say, and wins over a hook.
+
+**Your app decides** (DEVLOG D896):
+
+- `emon_engines_describe` is `engines()`: every engine that runs on this platform and its state, as JSON: `built-in`, `installed`,
+  `downloadable` (with `download_bytes`) or `unavailable` (with `reason`), and the packs it needs with their size and licence.
+- `emon_prepare(engines, options, &json, &err)` is `prepare(options)`: the packs a conversion with those options needs and which
+  are missing, with a `verdict` (`ready`, `partial`, `downloadable`, `blocked`). Fetches nothing.
+- `emon_on_pack_needed` is the hook for a pack a request needs and is not here. It answers one of four: `EMON_PACK_FETCH` (the
+  library downloads it), `EMON_PACK_PROVIDE` (your bytes, or a path: from your own CDN or assets; verified like any other),
+  `EMON_PACK_DECLINE` (the page is unread) or `EMON_PACK_SUBSTITUTE` (another implementation of the same OIL engine; an engine that
+  would answer under another name leaves the request unread, because kin chose the engine when it planned the conversion). With no
+  hook, `AUTO` fetches.
+- `emon_packs_ensure` fetches packs ahead of time; `emon_on_pack_event` is one stream of START, PROGRESS, DONE, FAILED and CANCELLED for
+  the downloads the library starts and the ones you ask for, and a callback that answers non-zero to PROGRESS (or `emon_packs_cancel`,
+  from any thread) cancels the download.
+
+<!-- snippet: docs/snippets/c/engines.c -->
+```c
+emon_error err = {0};
+emon_engines *engines = NULL;
+emon_engines_new(&engines, &err);
+/* where packs live (the pack directory), and how they come: never fetch, use the cache, or fetch on demand. Name it before registering adapters. */
+emon_engines_packs(engines, "packs", EMON_PACKS_AUTO, &err);
+/* an adapter library (it exports emon_ocr_adapter_v1): Tesseract. Platform engines and your own callbacks register the same way (emon_engines_add_ocr). */
+if (emon_engines_load(engines, "lib/emon/adapters/libemon_ocr_tesseract.so", NULL, &err) < 0) {
+    fprintf(stderr, "%s: %s\n", err.name, err.message); /* adapter-runtime-missing, adapter-abi-unsupported, ... */
+    emon_free_error(&err);
+}
+emon_on_pack_needed(engines, on_pack_needed, NULL, &err);
+emon_on_pack_event(engines, on_pack_event, NULL, &err);
+
+/* engines(): every engine that runs here and its state: built-in, installed, downloadable (with size and licence) or unavailable */
+emon_buf json = {0};
+if (emon_engines_describe(engines, &json, &err) == 0) {
+    printf("%s\n", (const char *)json.data);
+    emon_free_buf(&json);
+}
+/* prepare(options): the packs a conversion needs, which are missing, and what that comes to. Fetches nothing. */
+if (emon_prepare(engines, "locale=de-DE", &json, &err) == 0) {
+    printf("%s\n", (const char *)json.data); /* "verdict":"downloadable" ... */
+    emon_free_buf(&json);
+}
+/* fetch ahead of time, with progress; every file is checked against the catalogue's SHA-256 before it is kept */
+emon_packs_ensure(engines, "tess-fast-eng,tess-osd", &err);
+emon_engines_free(engines);
+```
+
+**Implementing an adapter** is filling one struct (`emon_adapter.h` documents each function): `describe` (the OIL engine it answers as,
+its capabilities, the pack kinds it needs, its identity), `supports` (a cheap pre-check), `read` (one request in, an OIL answer out) or,
+for an engine that answers later, `start` and a call of `complete` (or your program's `emon_complete`), and `close`. `emon_ocr_request`
+reads the fields of the request record for you (the bitmap, the page-segmentation mode, the region, the languages), so you do not learn
+its layout. The core library checks what you register against kin's engine table (`emon.adapters`: a law each) and refuses a
+declaration beyond what the table lets that engine declare.
 
 ## Android and iOS
 
@@ -50,28 +123,32 @@ sources and the same pinned Tesseract, Leptonica, codecs and pdfium as the deskt
 | `aarch64-apple-ios` | `lib/libemon.dylib` | iOS device, arm64, iOS 13.0+ | `ios-device-arm64` |
 | `aarch64-apple-ios-sim` | `lib/libemon.dylib` | iOS simulator on Apple silicon, arm64 | `ios-simulator-arm64` |
 
-Each archive has `include/emon.h`, the library, pdfium (`lib/libpdfium.so` or `.dylib`, loaded at run time) and `share/emon/tessdata/` (`eng`, `osd`), the desktop
-layout. There is **no `libemon.a`**: Dart build hooks bundle dynamic libraries only (`DynamicLoadingBundled` code assets,
-[dart.dev/tools/hooks](https://dart.dev/tools/hooks), [`DynamicLoadingBundled`](https://pub.dev/documentation/code_assets/latest/code_assets/DynamicLoadingBundled-class.html)),
-and a static slice with Tesseract in it would be over a hundred megabytes. The Intel iOS simulator is not built (D885).
+Each archive has `include/emon.h` and `include/emon_adapter.h`, the core library `lib/libemon.so` or `.dylib`, pdfium (`lib/libpdfium.so` or `.dylib`, loaded at run time), the Tesseract
+adapter library (`lib/emon/adapters/libemon_ocr_tesseract.so` or `.dylib`) and the English and orientation packs in `share/emon/packs/`, the desktop layout. There is **no
+`libemon.a`**: Dart build hooks bundle dynamic libraries only (`DynamicLoadingBundled` code assets,
+[dart.dev/tools/hooks](https://dart.dev/tools/hooks), [`DynamicLoadingBundled`](https://pub.dev/documentation/code_assets/latest/code_assets/DynamicLoadingBundled-class.html)).
+The core library does not carry Tesseract (an app that reads scans another way pays nothing for it); the Tesseract adapter is a library of its own, which an app opts into.
+The Intel iOS simulator is not built (D885).
 
 What each library is, and what `bb native --audit --triple T` holds it to:
 
-- **Android.** NDK r28c (a build with an older NDK is refused), API level 24 (Android 7.0). 24 is where the pieces agree: pdfium-binaries builds pdfium for API 23, Leptonica's
+- **Android** (the core library and the adapter library alike). NDK r28c (a build with an older NDK is refused), API level 24 (Android 7.0). 24 is where the pieces agree: pdfium-binaries builds pdfium for API 23, Leptonica's
   `fmemopen` and `open_memstream` need 23, and 24 is the floor of the NDK's current defaults and of Flutter's `minSdkVersion`; a Dart hook asked for a lower
   `AndroidCodeConfig.targetNdkApi` should refuse the build (the library does not load below 24). The shared library has **16 KB page alignment**
   (`-Wl,-z,max-page-size=16384`; Google Play requires it of 64-bit apps targeting Android 15, [developer.android.com/guide/practices/page-sizes](https://developer.android.com/guide/practices/page-sizes)):
   every `LOAD` segment aligned to 0x4000 and `GNU_RELRO` ending on a 16 KB boundary (the audit checks the file, and the pinned 64-bit pdfium too; the 32-bit pdfium of armeabi-v7a is
   4 KB aligned upstream, which Play does not require of 32-bit code). The C++ runtime is linked statically, so the library needs only `libc.so`, `libm.so` and `libdl.so`:
-  no `libc++_shared.so` goes into the app. Its exports are exactly the functions of `emon.h`.
+  no `libc++_shared.so` goes into the app. The core library's exports are exactly the functions of `emon.h`, the adapter library's exactly `emon_ocr_adapter_v1`.
 - **iOS.** One arm64 slice, platform `IOS` (device) or `IOSSIMULATOR`, minimum iOS 13.0, install name `@rpath/libemon.dylib`, loading only `/usr/lib` and `/System/Library`
   (libSystem and libc++). The pinned pdfium is upstream's own build for iOS 17.0 (`libpdfium.dylib`, install name rewritten to `@rpath/libpdfium.dylib` by `bb pdfium-fetch`): on an older device
   libemon loads and finds no pdfium (`emon_capabilities()` has no `EMON_CAP_PDFIUM`; born-digital conversion is unaffected). Flutter embeds a code asset on iOS as a framework and signs it;
   the library is unsigned in the archive. The hook gives a device build the `aarch64-apple-ios` archive and a simulator build the `aarch64-apple-ios-sim` one (`IOSCodeConfig.targetSdk`).
 
-**Finding pdfium and the models inside an app.** An APK maps its libraries and an iOS app carries them as frameworks, so "beside the library" is not always a directory. After
-the places listed above, the library asks the loader for pdfium by name: `libpdfium.so` (Android) or `@rpath/libpdfium.dylib`, `@rpath/libpdfium.framework/libpdfium` (iOS).
-The models are files: copy `share/emon/tessdata` into the app's data directory and name it with `emon_set_native_paths(NULL, dir, &err)`.
+**Finding pdfium and the adapters inside an app.** An APK maps its libraries and an iOS app carries them as frameworks, so "beside the library" is not always a directory. After
+the places listed above, the library asks the loader for pdfium by name: `libpdfium.so` (Android) or `@rpath/libpdfium.dylib`, `@rpath/libpdfium.framework/libpdfium` (iOS), and
+`emon_engines_defaults` for the Tesseract adapter by name (`libemon_ocr_tesseract.so`, `@rpath/libemon_ocr_tesseract.dylib`). The packs are files: name a directory in the app's own
+storage with `emon_engines_packs(engines, dir, EMON_PACKS_AUTO, &err)` (the app's files directory; the library keeps what it fetches there), copy the archive's `share/emon/packs/` into it
+for a first run without a network, or answer `emon_on_pack_needed` with `EMON_PACK_PROVIDE` from the app's assets.
 
 Cross-compiling needs the Android NDK (`ANDROID_NDK_HOME`, from macOS or Linux) or Xcode (macOS), `rustup target add <triple>`, then
 `bb native --triple T`, `bb pdfium-fetch --platform <pdfium>`, `bb mobile --triple T --check` (build, audit, smoke). The smoke program (`tools/native/mobile/smoke.c`) is linked against every library;
@@ -164,106 +241,59 @@ emon_free_model(model);
 
 <!-- snippet: docs/snippets/c/native.c -->
 ```c
-/* pdf, len: a scanned document's bytes */
-emon_error err = {0};
-/* Optional: where pdfium and the models are. Without it: $EMON_PDFIUM_LIB and $EMON_TESSDATA, then lib/ and share/emon/tessdata of the archive. */
-if (emon_set_native_paths(NULL, NULL, &err) < 0) {
-    fprintf(stderr, "%s: %s\n", err.name, err.message);
-    emon_free_error(&err);
-    return 1;
-}
-if (!(emon_capabilities() & EMON_CAP_PDFIUM) || !(emon_capabilities() & EMON_CAP_TESSERACT)) {
-    fprintf(stderr, "pdfium or the Tesseract models were not found next to the library\n");
-    return 1;
-}
-
-emon_input in = {0};
-in.data = pdf;
-in.len = len;
-emon_buf html = {0};
-if (emon_convert_html(&in, NULL, EMON_NATIVE, NULL, &html, &err) < 0) { /* EMON_NATIVE: pdfium draws, Tesseract reads */
-    fprintf(stderr, "%s: %s\n", err.name, err.message);
-    emon_free_error(&err);
-    return 1;
-}
-FILE *out = fopen("scan.html", "wb");
-fwrite(html.data, 1, html.len, out);
-fclose(out);
-emon_free_buf(&html);
+(placeholder: `bb docs` writes the snippet)
 ```
 
 `bb package --check` compiles this against the built archive and runs it on `samples/scan-plain.pdf`, linked both ways, with no
-`EMON_*` variable in the environment (the shared library finds `lib/libpdfium.*` and `share/emon/tessdata` by itself; the static
+`EMON_*` variable in the environment (the shared library finds `lib/libpdfium.*`, `lib/emon/adapters/` and `share/emon/packs` by itself; the static
 link is given them through the environment, since the executable is not beside them), and requires the heading the OCR reads. It
 runs where `bb native` and `bb pdfium-fetch` have been run, and prints a NOTE and skips on a machine that has neither.
 
-## The step API: when the engine owns nothing and you own everything
+## The step API: when you own the byte source, and, if you want, the fulfilment
 
 `emon_open` / `emon_step` / `emon_finish` is the inverted loop of the browser binding, for a caller that owns the byte source
-(a network range reader, an object store, a memory-mapped file) and the fulfilment of what needs pixels. The engine never calls
-out: `emon_step` runs until it needs something and says what.
+(a network range reader, an object store, a memory-mapped file). The engine never calls out: `emon_step` runs until it needs
+something and says what. Given engines (`emon_open(..., engines, ...)`), **`emon_step` answers the `ocr` requests those adapters
+are registered for itself**, so a caller needs no loop of its own for OCR; the plain loop, in which the caller answers, is unchanged.
 
 <!-- snippet: docs/snippets/c/session.c -->
 ```c
-/* pdf, len: the document, which only you can read. The engine never calls out: it says what it needs, you do it. */
-emon_session *s = NULL;
-emon_error err = {0};
-if (emon_open(len, 0, 0, NULL, 0, "ocr=never", &s, &err) < 0) {
-    fprintf(stderr, "%s: %s\n", err.name, err.message);
-    return 1;
-}
-emon_step_out out = {0};
-int status;
-while ((status = emon_step(s, &out, &err)) > 0) {
-    if (status == EMON_NEED_BYTES) {
-        /* read each span of the source and hand it in; the engine reads only what it touches */
-        for (size_t i = 0; i < out.nranges; i++) {
-            uint64_t off = out.ranges[i].offset, want = out.ranges[i].length;
-            if (off + want > len) want = len - off;
-            emon_provide(s, off, pdf + off, (size_t)want, &err);
-        }
-    } else {
-        /* EMON_NEED_REQUESTS: out.requests, each to fulfil with emon_answer_ocr, emon_answer_render or emon_answer
-           (only with the options js-ocr=1 and js-render=1; without them the session answers `unsupported` itself) */
-    }
-    emon_free_step(&out);
-}
-if (status < 0) {
-    fprintf(stderr, "%s: %s\n", err.name, err.message);
-    emon_free_error(&err);
-    emon_close(s);
-    return 1;
-}
-emon_model *model = NULL;
-emon_finish(s, &model, &err); /* EMON_DONE: the Model, as for emon_convert */
-emon_close(s);
-emon_buf html = {0};
-emon_model_html(model, NULL, &html, &err);
-fwrite(html.data, 1, html.len, stdout);
-emon_free_buf(&html);
-emon_free_model(model);
+(placeholder: `bb docs` writes the snippet)
 ```
 
 `EMON_NEED_BYTES` lists the ranges of the source the engine missed: read them and `emon_provide` them; the unit that missed
 is re-run from scratch, so the bytes a conversion reads are the bytes it touched (`emon_prefetch` names the first and last chunk
 that stage 0 wants, so a remote source can fetch them in one go). `EMON_NEED_REQUESTS` lists the requests that need a port, which
-you owe only if the options say so: `js-render=1` makes the `render` and `crop` requests yours (answer with `emon_answer_render`:
-the whole page as RGB at the request's dpi and layer; a crop is cut from it by emon), `js-ocr=1` makes the `ocr` requests yours
-(`emon_bitmap_png` gives the image to read, and `emon_answer_ocr` takes your engine's reading in the flat integer form of
-`emon.ocrport`, whose policy functions `emon_ocr_models`, `emon_ocr_lang_first`, `emon_ocr_block_type` and `emon_ocr_word_lang`
-are kin's, so every host reads a scan the same way). A request you have no port for is answered `unsupported` by the session. The
-session does not use the library's own pdfium and Tesseract (the engine never calls out); if you only need scans read, the
-one-shot call above with `EMON_NATIVE` does it.
+you owe only if the options say so, and only for what nobody registered an adapter for: `js-render=1` makes the `render` and `crop`
+requests yours (answer with `emon_answer_render`: the whole page as RGB at the request's dpi and layer; a crop is cut from it by
+emon), `js-ocr=1` makes the `ocr` requests yours (`emon_bitmap_png` gives the image to read, `emon_ocr_request` the fields of the
+request, and `emon_answer_ocr` takes your engine's reading in the flat integer form of `emon.ocrport`, which kin validates). A
+request you have no port for is answered `unsupported` by the session, and the page is unread.
+
+**`EMON_WAITING`.** An adapter that answers later (`EMON_ADAPTER_ASYNC`: a service, a platform recognizer, an engine in another runtime)
+returns from `start` at once. While only that work is outstanding `emon_step` answers `EMON_WAITING`: block in `emon_wait(s,
+timeout_ms, &err)`, or run your own event loop, and step again. The answer arrives through the adapter's `complete`, or, for a callback
+adapter whose engine answers through your program's loop, through `emon_complete(s, token, cells, ncells, failure, &err)` from any
+thread (`token` is the one `start` was given; `failure` with code `EMON_ERR_UNSUPPORTED` or any other leaves the page unread). A
+conversion that fails or closes with work outstanding calls the adapter's `cancel`; a late answer is ignored. The one-shot calls wait
+for async adapters themselves (`emon_engines_set_timeout`, default 60 s, then the request is `failed`).
+
+The session does not render with the library's own pdfium (the render requests stay the caller's, with `js-render=1`); the one-shot
+calls do, when the engines have it.
 
 The session also records and replays (`record=1`, `emon_transcript`, `emon_replay_file`): a transcript recorded by any host
-replays on any other to the same bytes. The programs above need no port, and `bb package --check` compiles and runs each; the
-request-answering functions are described by the header and have no example here.
+replays on any other to the same bytes, and a recording made with adapters registered writes the engine table (`:pk-engines`) first. The
+programs above need no port, and `bb package --check` compiles and runs each; the request-answering functions are described by the
+header and have no example here.
 
 ## Notes
 
 - Limits can also be set for the process with `EMON_LIMIT_*` ([docs/options.md](../options.md#limits)); a `limit.NAME` option beats it.
 - `parallel=N` spreads the fulfilment of one conversion over N worker threads that emon starts and ends inside the call (the
-  one-shot calls, with ports built in); the step API leaves fulfilment to you and ignores it. The bytes are the serial run's.
+  one-shot calls, with the engines you gave); the step API answers its adapters' requests one at a time on the stepping thread. The bytes
+  are the serial run's.
+- `emon_capabilities()` is what the core library itself can do in this process: `EMON_CAP_PDFIUM` (built with the renderer and finds pdfium) and
+  `EMON_CAP_CODECS`. OCR is not a bit; `emon_engines_describe` says which engines you have.
 - `emon_version()` is the library's version; `emon_const(i)` returns kin's protocol numbers (the request kinds and statuses) for
   the step API.
 

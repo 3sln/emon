@@ -722,12 +722,11 @@ pub struct Transcript {
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
 
-// THE ENGINE TABLE OF A RECORDING (D898): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
-// producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
-// identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
-pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
+// The platform class of the process (kin's `pcls`, `emon.engines`): the OS family that runs emon, which decides which engines the table lets run and what a turnkey
+// package chooses (D898).
+pub fn platform_class() -> i32 {
     use crate::emon::engines as ke;
-    let class = if cfg!(target_arch = "wasm32") {
+    if cfg!(target_arch = "wasm32") {
         ke::pcls_web()
     } else if cfg!(target_os = "macos") {
         ke::pcls_macos()
@@ -739,7 +738,15 @@ pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
         ke::pcls_android()
     } else {
         ke::pcls_linux()
-    };
+    }
+}
+
+// THE ENGINE TABLE OF A RECORDING (D898): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
+// producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
+// identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
+pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
+    use crate::emon::engines as ke;
+    let class = platform_class();
     let mut avail = Cells::new();
     for (k, v) in producer {
         if k == "engine" || k == "ocr-engine" {
