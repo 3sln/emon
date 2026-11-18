@@ -7,6 +7,9 @@
 ;; pdfium is NOT built here: the pinned pdfium-binaries archives of tools/pdfium/pdfium.edn (every platform and wasm) are bundled as they
 ;; are (`bb pdfium-fetch --platform P`); this file maps each triple to its archive.
 ;;
+;; ONNX Runtime (the optional PP-OCR adapter's runtime) is NOT built here either: tools/ppocr/runtimes.edn pins Microsoft's own 1.22.0 packages (NuGet for the five desktop triples,
+;; Maven Central onnxruntime-android and the onnxruntime-c CocoaPods archive for the mobile ones), every library by SHA-256 (ORTPIN, D901); `bb native --check` requires one for each triple below.
+;;
 ;; To move a pin: change :version, :url and :sha256 together (the sha256 of the DOWNLOAD, computed by `shasum -a 256`), re-run
 ;; `bb native --force`, `bb native --licenses`, `bb release-audit --write`, and fix the version in release/third-party.edn.
 ;;

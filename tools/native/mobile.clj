@@ -6,6 +6,10 @@
 ;;   bb mobile --triple T --smoke        a C program (tools/native/mobile/smoke.c) built for T against the shipped library: LINKED for every triple;
 ;;                                       RUN where it can be: the iOS simulator (xcrun simctl), or a connected Android device or emulator of that ABI (adb)
 ;;   bb mobile --triple T --check        build, `bb native --audit`, smoke: what the CI jobs run
+;;   bb mobile --triple T --ort [--fetch]  install the pinned ONNX Runtime of T for the PP adapter (ORTPIN, D901) into .cache/ppocr/onnxruntime-<platform>-1.22.0/{lib,include}:
+;;                                       Android: the AAR's jni/<abi>/libonnxruntime.so (Maven Central, 16 KB aligned, NEEDED only libdl, liblog, libm, libc); iOS: the static
+;;                                       libonnxruntime.a of the device or simulator slice of the onnxruntime-c pod archive (onnxruntime.ai). Every file by SHA-256 in
+;;                                       tools/ppocr/runtimes.edn, which `bb native --check` requires for each triple. The PP adapter library for mobile (K2 follow-up) links these.
 ;;   bb mobile --list                    the mobile triples
 ;;
 ;; WHAT IT IS. The C library of docs/hosts/c.md (host/c, emon.h) for a phone (K2, D899): TWO dynamic libraries per triple, `libemon.so` / `libemon.dylib`, the CORE library (no OCR engine:
@@ -41,7 +45,7 @@
 (defn die [& xs] (binding [*out* *err*] (println (str "FAIL " (apply str xs)))) (System/exit 1))
 (defn say [& xs] (println (apply str xs)) (flush))
 (defn mobile-triples [] (sort (keys (filter (fn [[_ c]] (#{:android :ios} (:os c))) (:triples pins)))))
-(def triple (or (opt "--triple") (when-not (flag? "--list") (die "usage: bb mobile --triple T [--smoke | --check] | --list; T is one of " (str/join ", " (mobile-triples))))))
+(def triple (or (opt "--triple") (when-not (flag? "--list") (die "usage: bb mobile --triple T [--smoke | --check | --ort [--fetch]] | --list; T is one of " (str/join ", " (mobile-triples))))))
 (def cfg (when triple (or (let [c (get-in pins [:triples triple])] (when (#{:android :ios} (:os c)) c))
                           (die triple " is not a mobile triple: " (str/join ", " (mobile-triples))))))
 (def android? (= :android (:os cfg)))
@@ -342,6 +346,9 @@
 
 (cond
   (flag? "--list") (doseq [t (mobile-triples)] (println t "  " (select-keys (get-in pins [:triples t]) [:runner :pdfium])))
+  (flag? "--ort") (let [r (apply sh {:ok? false} "bb" "tools/ppocr/ort.clj" "--triple" triple (when (flag? "--fetch") ["--fetch"]))]
+                    (print (:out r)) (print (:err r)) (flush)
+                    (when-not (zero? (:exit r)) (die "installing the pinned ONNX Runtime of " triple " failed")))
   (flag? "--smoke") (smoke!)
   (flag? "--check") (do (build!)
                         (let [r (sh {:ok? false} "bb" "tools/native/native.clj" "--audit" "--triple" triple)]

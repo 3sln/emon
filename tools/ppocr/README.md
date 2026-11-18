@@ -13,11 +13,17 @@ do not establish default-use acceptance or comprehensive source correctness.
 `EMON_CS_SHARED_COMPILATION=false bb ppocr-fetch` downloads only the assets in
 `assets.edn`, verifies SHA-256 and size, and caches them in `.cache/ppocr`.
 It is not part of any gate. Re-running it with verified cached files is offline.
-`bb ppocr-check` verifies the cached assets, extracts the checked runtime archive,
+`bb ppocr-fetch` also installs ONNX Runtime 1.22.0 for this host (`tools/ppocr/ort.clj`): Microsoft's
+`Microsoft.ML.OnnxRuntime` NuGet package, verified whole by SHA-256 and extracted entry by entry,
+each against its own pin in `runtimes.edn`, into `.cache/ppocr/onnxruntime-<platform>-1.22.0/`.
+`runtimes.edn` also pins the mobile runtimes: Maven Central's `onnxruntime-android` AAR and the
+`onnxruntime-c` CocoaPods archive on onnxruntime.ai (`bb mobile --triple T --ort --fetch`).
+The GitHub release assets ORT was first pinned to went away on 2026-11-17 (D901).
+`bb ppocr-check` verifies the cached assets, re-extracts the pinned runtime package,
 compiles the C ABI ownership shim, runs the Rust CTC/geometry/runtime smoke
 checks and builds the raw calibration probe. It never downloads. The current
 reference checker uses the macOS arm64 runtime. The release builder has separate
-five-platform pins in `runtimes.edn`; the other four platforms need their CI
+five-platform pins in `runtimes.edn`, all from the one NuGet package; the other four platforms need their CI
 build/smoke checks and are not quality-qualified here. Model files and runtime binaries are carried only by the separate experimental
 [release add-on](../../docs/ppocr.md), never the default artifacts.
 

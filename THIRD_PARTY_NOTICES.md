@@ -237,8 +237,8 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
   carried by the separate experimental native PP-OCR archive. Separate experimental PP add-on only. PaddleOCR and RapidOCR retain their own Apache-2.0 terms and copyright. The English dictionary is extracted verbatim from the pinned recognizer metadata; classifier labels are 0 and 180. No separate root NOTICE file exists in the inspected PaddleOCR v3.0.0 tree; retain any future upstream NOTICE on a pin update. Not accepted or enabled by default.
   Licence text: [32](#licence-text-32), [3](#licence-text-3).
 
-- **ONNX Runtime CPU** 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07 - MIT - https://github.com/microsoft/onnxruntime/releases/tag/v1.22.0
-  carried by the separate experimental native PP-OCR archive. Pinned CPU runtime in the separate experimental PP add-on; five platform pins in tools/ppocr/runtimes.edn. Its distribution's complete ThirdPartyNotices.txt is retained; the generated Markdown normalizes trailing whitespace. Non-macOS-arm64 platforms require their CI smoke; no local qualification is claimed.
+- **ONNX Runtime CPU** 1.22.0; Microsoft.ML.OnnxRuntime 1.22.0 NuGet package SHA-256 d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a - MIT - https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.22.0
+  carried by the separate experimental native PP-OCR archive. Pinned CPU runtime in the separate experimental PP add-on, from Microsoft's own channels (NuGet.org for the five desktop platforms; Maven Central onnxruntime-android and the onnxruntime-c CocoaPods archive on download.onnxruntime.ai for the mobile ones), every library pinned by SHA-256 in tools/ppocr/runtimes.edn (ORTPIN, D901; the GitHub release assets it used to name are gone). Its distribution's complete ThirdPartyNotices.txt is retained; the generated Markdown normalizes trailing whitespace. Only macOS arm64 is locally qualified (bb ppocr-hosts); the others require their CI smoke.
   Licence text: [4](#licence-text-4), [15](#licence-text-15).
 
 - **pdfium** chromium/8076 (156.0.8076.0) - Apache-2.0 - https://pdfium.googlesource.com/pdfium/
@@ -1278,7 +1278,7 @@ Used by: PP-OCRv5 mobile detector and English recognizer; v2 orientation classif
 
 ### Licence text 4
 
-Used by: ONNX Runtime CPU 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07, onnxruntime-common 1.22.0, onnxruntime-web 1.22.0.
+Used by: ONNX Runtime CPU 1.22.0; Microsoft.ML.OnnxRuntime 1.22.0 NuGet package SHA-256 d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a, onnxruntime-common 1.22.0, onnxruntime-web 1.22.0.
 
 ````text
 MIT License
@@ -2047,7 +2047,7 @@ third-party/chromium/LICENSE.
 
 ### Licence text 15
 
-Used by: ONNX Runtime CPU 1.22.0; macOS arm64 archive SHA-256 cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07.
+Used by: ONNX Runtime CPU 1.22.0; Microsoft.ML.OnnxRuntime 1.22.0 NuGet package SHA-256 d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a.
 
 ````text
 THIRD PARTY SOFTWARE NOTICES AND INFORMATION

@@ -1,42 +1,138 @@
-{:version "1.22.0",
+;; ONNX Runtime 1.22.0: the runtime the optional PP-OCR adapter loads, pinned to MICROSOFT'S OWN distribution channels (ORTPIN, D901).
+;;
+;; WHY: the GitHub release assets this file used to name (github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-<os>-<arch>-1.22.0.tgz|zip)
+;; went away on 2026-11-17, when the repository stopped being publicly visible (D900, DEVLOG).  The pins here are the SAME release, 1.22.0, from the channels
+;; Microsoft still serves; nothing else changed (the policy identity, the model pins and every PP answer are the same, proved by `bb ppocr-hosts`, D901).
+;;
+;;   "nupkg"  NuGet.org Microsoft.ML.OnnxRuntime 1.22.0 (published 2025-05-09, owner Microsoft, repository commit f217402897f40ebba457e2421bc0a4702771968e = rel-1.22.0).
+;;            DESKTOP: runtimes/<rid>/native/ of the osx-arm64, osx-x64, linux-x64, linux-arm64 and win-x64 builds, and the C API headers (build/native/include).
+;;            Checked when pinned: `dotnet nuget verify --all` = Microsoft Corporation AUTHOR signature plus the NuGet.org REPOSITORY countersignature, exit 0; the
+;;            SHA-512 of the package equals the packageHash of NuGet's catalog entry (below).  :sha256 is ours (the pin); :sha512 is NuGet's own hash, hex.
+;;   "aar"    Maven Central com.microsoft.onnxruntime:onnxruntime-android:1.22.0 (jni/<abi>/libonnxruntime.so, headers/).  Its .aar.sha256 file on Maven Central equals
+;;            the pin, and its detached PGP signature (.aar.asc) verifies against the ONNX Runtime key 369E771178C41DE26253F280E96373C25092C07A (onnxruntime@microsoft.com).
+;;            The same AAR is also inside the nupkg (runtimes/android/native/onnxruntime.aar): the same bytes.
+;;   "pod"    The archive the CocoaPods spec onnxruntime-c 1.22.0 (trunk, authors ONNX Runtime, MIT) names: https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.22.0.zip
+;;            (Microsoft's own host; HTTP 200 on 2026-11-18).  The iOS slices are STATIC archives (static_framework: true), linked into the adapter, not loaded.
+;;
+;; Every file an installed runtime directory holds is pinned by SHA-256 and size here, per entry of the package (`bb tools/ppocr/ort.clj`): the package is
+;; downloaded once (`--fetch`), verified as a whole, and only the listed entries are extracted, each verified again, into .cache/ppocr/<:directory>/ with the layout of
+;; the old archives (lib/, include/, LICENSE, ThirdPartyNotices.txt; the versioned library name and its symlinks), so no consumer's path changed.
+;;
+;; To move a pin: change the package or entry, its :bytes and :sha256 together (shasum -a 256 of the DOWNLOAD), re-run `bb ppocr-fetch`, `bb ppocr-hosts`, and fix
+;; release/third-party.edn and release/packs/packs.edn.
+{:version "1.22.0"
+ :sources
+ {"nupkg"
+  {:file "Microsoft.ML.OnnxRuntime.1.22.0.nupkg",
+   :kind :nupkg,
+   :url "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.22.0/microsoft.ml.onnxruntime.1.22.0.nupkg",
+   :bytes 121402697,
+   :sha256 "d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a",
+   :sha512 "cdbddeaa42fa8473c6cd9800aecb931fd556754b38a2829324705717a6597d0b0fbf332875a004bf7bbaf73c2da8abb0509fc33dcf22fae2a8c97333770aab3e",
+   :include
+   [{:entry "build/native/include/cpu_provider_factory.h", :to "include/cpu_provider_factory.h", :bytes 416, :sha256 "e2f658eeace78d79a8df82f233dcdeea135db498a77766156054bfc0d1d06c21"}
+    {:entry "build/native/include/onnxruntime_c_api.h", :to "include/onnxruntime_c_api.h", :bytes 281604, :sha256 "ed5c8a336708866d21e0c3f5374229e6753088046fcbf69f81394fcbfd730609"}
+    {:entry "build/native/include/onnxruntime_cxx_api.h", :to "include/onnxruntime_cxx_api.h", :bytes 131225, :sha256 "7606924bbc40810a72fca54d8aff75c9564908301241eb835bc1814a3aee4ad8"}
+    {:entry "build/native/include/onnxruntime_cxx_inline.h", :to "include/onnxruntime_cxx_inline.h", :bytes 107011, :sha256 "7b5bd16dad3acc97920298eb35645275d9099c7a7e0ab4ffdec7ad253d9ce592"}
+    {:entry "build/native/include/onnxruntime_float16.h", :to "include/onnxruntime_float16.h", :bytes 18395, :sha256 "f6885fe69ca80eb9c46f2f0b951138bbef81646407705fdf2d6c23aa50ce632e"}
+    {:entry "build/native/include/onnxruntime_lite_custom_op.h", :to "include/onnxruntime_lite_custom_op.h", :bytes 63344, :sha256 "4748811e61bf5f11a58f2c11fd0b05b409651bd81fee58c039a32ec8933c477c"}
+    {:entry "build/native/include/onnxruntime_run_options_config_keys.h", :to "include/onnxruntime_run_options_config_keys.h", :bytes 3006, :sha256 "38cfec5817e67990f242bbf7177db730a4d60f5ed256b4832f02ac38c3fd6d06"}
+    {:entry "build/native/include/onnxruntime_session_options_config_keys.h", :to "include/onnxruntime_session_options_config_keys.h", :bytes 24033, :sha256 "15f39e425a5c7c5901298026d0358a446a73026a2a25a9eb697569dadc6e4a7a"}
+    {:entry "build/native/include/provider_options.h", :to "include/provider_options.h", :bytes 498, :sha256 "74f8accd5b30fbfe8abb24ca279e634657b446bf5b9be520badaaebcea63cade"}],
+   :notices
+   [{:entry "LICENSE", :to "LICENSE", :bytes 1094, :sha256 "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"}
+    {:entry "ThirdPartyNotices.txt", :to "ThirdPartyNotices.txt", :bytes 333022, :sha256 "e00f828e0a33de591a355ae6606d2625f5758da7d2c844db7821c9dd3e3647b6"}]},
+  "aar"
+  {:file "onnxruntime-android-1.22.0.aar",
+   :kind :zip,
+   :url "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.22.0/onnxruntime-android-1.22.0.aar",
+   :bytes 28515295,
+   :sha256 "04a4617a9c797cf49225595e45b5546081cb34c86ac817581141577d3b7dbfe2",
+   :include
+   [{:entry "headers/cpu_provider_factory.h", :to "include/cpu_provider_factory.h", :bytes 397, :sha256 "0de52d129c718c07ee71a16b4953d8d483df019746a11caad77a0650a2f4ed47"}
+    {:entry "headers/nnapi_provider_factory.h", :to "include/nnapi_provider_factory.h", :bytes 2646, :sha256 "49f7e0952e57b7e2942f69d8df61a9d99836f05b49a89700e1f5a16278c945e2"}
+    {:entry "headers/onnxruntime_c_api.h", :to "include/onnxruntime_c_api.h", :bytes 275409, :sha256 "d683537d0fdc29e977b5520f7f15d87a0ac212ae6d94fa9be8893a52655621ae"}
+    {:entry "headers/onnxruntime_cxx_api.h", :to "include/onnxruntime_cxx_api.h", :bytes 128360, :sha256 "28b21dfc371fb53d1ba67356adeb124f36643ee5ab6f1ad2e9afbf09eb4bf305"}
+    {:entry "headers/onnxruntime_cxx_inline.h", :to "include/onnxruntime_cxx_inline.h", :bytes 104233, :sha256 "c41b9a11aac46851f68f4bd888bb2444a0e1eb6b37eadb41bf15f5154b48ea31"}
+    {:entry "headers/onnxruntime_float16.h", :to "include/onnxruntime_float16.h", :bytes 17860, :sha256 "6c4db3d1954b266c4febe413351af86cac922e3448538e7e452e51d646e56a4a"}
+    {:entry "headers/onnxruntime_lite_custom_op.h", :to "include/onnxruntime_lite_custom_op.h", :bytes 62225, :sha256 "967e36eb375e975a3b88e599129394317f790a987f266d522fbe3d02c5211fd3"}
+    {:entry "headers/onnxruntime_run_options_config_keys.h", :to "include/onnxruntime_run_options_config_keys.h", :bytes 2952, :sha256 "973037c14b0f1af0854ae25cd676776f79dbcfd2a6791f6ee17a5374c2a62550"}
+    {:entry "headers/onnxruntime_session_options_config_keys.h", :to "include/onnxruntime_session_options_config_keys.h", :bytes 23667, :sha256 "301c304aa5082549148b59d64e70df951821eb111aea0690e3edeef6994ef182"}],
+   :notices []},
+  "pod"
+  {:file "pod-archive-onnxruntime-c-1.22.0.zip",
+   :kind :zip,
+   :url "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.22.0.zip",
+   :bytes 47124222,
+   :sha256 "90d9de5a139087a6b05a18125d01d01d198820e1731e6f0f11b38749b2ab181f",
+   :include
+   [{:entry "Headers/coreml_provider_factory.h", :to "include/coreml_provider_factory.h", :bytes 5247, :sha256 "d6430c47d2b076d4a40ba6523e78d75cc4c4b0e5604fb280168891331b057ade"}
+    {:entry "Headers/cpu_provider_factory.h", :to "include/cpu_provider_factory.h", :bytes 397, :sha256 "0de52d129c718c07ee71a16b4953d8d483df019746a11caad77a0650a2f4ed47"}
+    {:entry "Headers/onnxruntime_c_api.h", :to "include/onnxruntime_c_api.h", :bytes 275409, :sha256 "d683537d0fdc29e977b5520f7f15d87a0ac212ae6d94fa9be8893a52655621ae"}
+    {:entry "Headers/onnxruntime_cxx_api.h", :to "include/onnxruntime_cxx_api.h", :bytes 128360, :sha256 "28b21dfc371fb53d1ba67356adeb124f36643ee5ab6f1ad2e9afbf09eb4bf305"}
+    {:entry "Headers/onnxruntime_cxx_inline.h", :to "include/onnxruntime_cxx_inline.h", :bytes 104233, :sha256 "c41b9a11aac46851f68f4bd888bb2444a0e1eb6b37eadb41bf15f5154b48ea31"}
+    {:entry "Headers/onnxruntime_float16.h", :to "include/onnxruntime_float16.h", :bytes 17860, :sha256 "6c4db3d1954b266c4febe413351af86cac922e3448538e7e452e51d646e56a4a"}
+    {:entry "Headers/onnxruntime_lite_custom_op.h", :to "include/onnxruntime_lite_custom_op.h", :bytes 62225, :sha256 "967e36eb375e975a3b88e599129394317f790a987f266d522fbe3d02c5211fd3"}
+    {:entry "Headers/onnxruntime_run_options_config_keys.h", :to "include/onnxruntime_run_options_config_keys.h", :bytes 2952, :sha256 "973037c14b0f1af0854ae25cd676776f79dbcfd2a6791f6ee17a5374c2a62550"}
+    {:entry "Headers/onnxruntime_session_options_config_keys.h", :to "include/onnxruntime_session_options_config_keys.h", :bytes 23667, :sha256 "301c304aa5082549148b59d64e70df951821eb111aea0690e3edeef6994ef182"}],
+   :notices [{:entry "LICENSE", :to "LICENSE", :bytes 1073, :sha256 "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"}]}},
  :platforms
  {"aarch64-apple-darwin"
-  {:file "onnxruntime-osx-arm64-1.22.0.tgz",
+  {:source "nupkg",
+   :rid "osx-arm64",
    :directory "onnxruntime-osx-arm64-1.22.0",
-   :url
-   "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-arm64-1.22.0.tgz",
-   :bytes 25943843,
-   :sha256
-   "cab6dcbd77e7ec775390e7b73a8939d45fec3379b017c7cb74f5b204c1a1cc07"},
+   :libs [{:entry "runtimes/osx-arm64/native/libonnxruntime.dylib", :to "lib/libonnxruntime.1.22.0.dylib", :links ["lib/libonnxruntime.dylib"], :bytes 33514304, :sha256 "6c2f8af5def6e533f17383a4f07dc4eabbd4807d242a478b69f62fcfbe3c1dd3"}]},
   "x86_64-apple-darwin"
-  {:file "onnxruntime-osx-x86_64-1.22.0.tgz",
+  {:source "nupkg",
+   :rid "osx-x64",
    :directory "onnxruntime-osx-x86_64-1.22.0",
-   :url
-   "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-x86_64-1.22.0.tgz",
-   :bytes 27889590,
-   :sha256
-   "e4ec94a7696de74fb1b12846569aa94e499958af6ffa186022cfde16c9d617f0"},
+   :libs [{:entry "runtimes/osx-x64/native/libonnxruntime.dylib", :to "lib/libonnxruntime.1.22.0.dylib", :links ["lib/libonnxruntime.dylib"], :bytes 37737280, :sha256 "c3b6c4eb78c7f4b52fb51bfff605176a01cee050f829326bb073ddd22fb42849"}]},
   "x86_64-unknown-linux-gnu"
-  {:file "onnxruntime-linux-x64-1.22.0.tgz",
+  {:source "nupkg",
+   :rid "linux-x64",
    :directory "onnxruntime-linux-x64-1.22.0",
-   :url
-   "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz",
-   :bytes 7798730,
-   :sha256
-   "8344d55f93d5bc5021ce342db50f62079daf39aaafb5d311a451846228be49b3"},
+   :libs
+   [{:entry "runtimes/linux-x64/native/libonnxruntime.so", :to "lib/libonnxruntime.so.1.22.0", :links ["lib/libonnxruntime.so.1" "lib/libonnxruntime.so"], :bytes 21042416, :sha256 "3da6146e14e7b8aaec625dde11d6114c7457c87a5f93d744897da8781e35c673"}
+    {:entry "runtimes/linux-x64/native/libonnxruntime_providers_shared.so", :to "lib/libonnxruntime_providers_shared.so", :bytes 14632, :sha256 "e4706ea02be3999167f000bb1ff7391c86e95d2d96f78eb33225c14b172a8451"}]},
   "aarch64-unknown-linux-gnu"
-  {:file "onnxruntime-linux-aarch64-1.22.0.tgz",
+  {:source "nupkg",
+   :rid "linux-arm64",
    :directory "onnxruntime-linux-aarch64-1.22.0",
-   :url
-   "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-aarch64-1.22.0.tgz",
-   :bytes 6849865,
-   :sha256
-   "bb76395092d150b52c7092dc6b8f2fe4d80f0f3bf0416d2f269193e347e24702"},
+   :libs
+   [{:entry "runtimes/linux-arm64/native/libonnxruntime.so", :to "lib/libonnxruntime.so.1.22.0", :links ["lib/libonnxruntime.so.1" "lib/libonnxruntime.so"], :bytes 17643256, :sha256 "0afd69a0ae38c5099fd0e8604dda398ac43dee67cd9c6394b5142b19e82528de"}
+    {:entry "runtimes/linux-arm64/native/libonnxruntime_providers_shared.so", :to "lib/libonnxruntime_providers_shared.so", :bytes 198792, :sha256 "3b53a2c1f3ecb87dedaee20e2a6d4d9aaec133e3ec280e2b9cc34efbed7de423"}]},
   "x86_64-pc-windows-msvc"
-  {:file "onnxruntime-win-x64-1.22.0.zip",
+  {:source "nupkg",
+   :rid "win-x64",
    :directory "onnxruntime-win-x64-1.22.0",
-   :url
-   "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x64-1.22.0.zip",
-   :bytes 72368545,
-   :sha256
-   "174c616efc0271194488642a72f1a514e01487da4dfe84c49296d66e40ebe0da"}}}
+   :libs
+   [{:entry "runtimes/win-x64/native/onnxruntime.dll", :to "lib/onnxruntime.dll", :links [], :bytes 12418080, :sha256 "579b636403983254346a5c1d80bd28f1519cd1e284cd204f8d4ff41f8d711559"}
+    {:entry "runtimes/win-x64/native/onnxruntime.lib", :to "lib/onnxruntime.lib", :bytes 2124, :sha256 "ab00cba665b186c0d29df9c575d34fd2bcc8f9b9ecae997f81610d07b2fc8ebc"}
+    {:entry "runtimes/win-x64/native/onnxruntime_providers_shared.dll", :to "lib/onnxruntime_providers_shared.dll", :bytes 22064, :sha256 "ba00ea1ef846c9b909c7854bc56c51051a20f9773b3e1153dda118d4b85d0b93"}
+    {:entry "runtimes/win-x64/native/onnxruntime_providers_shared.lib", :to "lib/onnxruntime_providers_shared.lib", :bytes 2314, :sha256 "7ed5e62ac5f11af80fe6100a5fcdefe29817d9f70feb404bc69132f0a9a70193"}]}},
+ :mobile-platforms
+ {"aarch64-linux-android"
+  {:source "aar",
+   :directory "onnxruntime-android-arm64-v8a-1.22.0",
+   :abi "arm64-v8a",
+   :libs [{:entry "jni/arm64-v8a/libonnxruntime.so", :to "lib/libonnxruntime.so", :bytes 18214224, :sha256 "999ecfdb5b5a13e4097487773b6d71ce8a075408a237daab072e8f5e817bd78e"}]},
+  "armv7-linux-androideabi"
+  {:source "aar",
+   :directory "onnxruntime-android-armeabi-v7a-1.22.0",
+   :abi "armeabi-v7a",
+   :libs [{:entry "jni/armeabi-v7a/libonnxruntime.so", :to "lib/libonnxruntime.so", :bytes 13242336, :sha256 "2ca20b18eecc56d066018b4c741dbeaeb2627187e1277b63682377ade6608b39"}]},
+  "x86_64-linux-android"
+  {:source "aar",
+   :directory "onnxruntime-android-x86_64-1.22.0",
+   :abi "x86_64",
+   :libs [{:entry "jni/x86_64/libonnxruntime.so", :to "lib/libonnxruntime.so", :bytes 21880016, :sha256 "e3e67500ac56271802355bad3a46dcfcb90ce6392d9c4793b5a2c48da0d2a4e9"}]},
+  "aarch64-apple-ios"
+  {:source "pod",
+   :directory "onnxruntime-ios-device-1.22.0",
+   :slice "ios-arm64",
+   :libs [{:entry "onnxruntime.xcframework/ios-arm64/onnxruntime.framework/onnxruntime", :to "lib/libonnxruntime.a", :bytes 36907296, :sha256 "206ca385d5d94b6322ef5ae4deb1e1e696f90d172895227b13e867ec5ec91781"}]},
+  "aarch64-apple-ios-sim"
+  {:source "pod",
+   :directory "onnxruntime-ios-simulator-1.22.0",
+   :slice "ios-arm64_x86_64-simulator",
+   :libs [{:entry "onnxruntime.xcframework/ios-arm64_x86_64-simulator/onnxruntime.framework/onnxruntime", :to "lib/libonnxruntime.a", :bytes 79892504, :sha256 "966219015704994ec01caad9e67b2518a037f6e6b1635b46b6a6376dd108c1ec"}]}}}

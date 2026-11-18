@@ -254,6 +254,9 @@ jobs:
         run: bb native --triple ${{ matrix.triple }} --audit
       - name: The pinned pdfium for this platform
         run: bb pdfium-fetch --platform ${{ matrix.pdfium }}
+      # ORTPIN (D901): the PP adapter's ONNX Runtime for this triple, from Microsoft's own channel (Maven Central AAR or the onnxruntime-c pod archive), every file by SHA-256
+      - name: The pinned ONNX Runtime for this platform (PP adapter input)
+        run: bb mobile --triple ${{ matrix.triple }} --ort --fetch
       # libemon + pdfium + models, packed as emon-c-<version>-<triple>.tar.gz; then the library audit and the smoke program (iOS simulator: run in the simulator; Android: linked)
       - name: bb mobile --check (build, audit the library, smoke)
         run: bb mobile --triple ${{ matrix.triple }} --check

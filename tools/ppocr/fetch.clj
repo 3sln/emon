@@ -30,3 +30,6 @@
           (fs/move tmp dest {:replace-existing true})
           (println "fetched and verified" file)
           (finally (fs/delete-if-exists tmp)))))))
+;; ONNX Runtime 1.22.0: Microsoft's package, pinned in runtimes.edn (ORTPIN, D901), installed for this host by ort.clj
+(when (fs/regular-file? "tools/ppocr/runtimes.edn")
+  (shell {:shutdown nil} "bb" "tools/ppocr/ort.clj" "--fetch"))
