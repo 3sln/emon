@@ -176,8 +176,9 @@ page has to be drawn); Tesseract is `tesseract.js`. See [docs/hosts/js.md](docs/
 ### C
 
 The `emon-c-<version>-<triple>.tar.gz` archive of the [releases](https://github.com/3sln/emon/releases) holds
-`include/emon.h`, `lib/libemon.{so,dylib,a}`, and pdfium and the English and orientation models beside them (`lib/libpdfium.*`,
-`share/emon/tessdata/`), so a scan converts with the `EMON_NATIVE` flag. Link with `-lemon` ([docs/hosts/c.md](docs/hosts/c.md)).
+`include/emon.h`, `include/emon_adapter.h`, the core library `lib/libemon.{so,dylib,a}` (no OCR engine in it), and beside it pdfium
+(`lib/libpdfium.*`), the Tesseract adapter library (`lib/emon/adapters/`) and the English and orientation model packs
+(`share/emon/packs/`), so a scan converts with `emon_engines_defaults`. Link with `-lemon` ([docs/hosts/c.md](docs/hosts/c.md)).
 
 <!-- snippet: docs/snippets/c/quickstart.c -->
 ```c
@@ -227,7 +228,7 @@ engine*. The engine asks for them through two ports and links neither, so a host
 | Java | `emon.ffi.Pdfium.open`, loaded at run time (`--enable-native-access=ALL-UNNAMED`) | `emon.ffi.Tess.open` | the same |
 | C# | `emon.Ffi.Pdfium.Open`, loaded at run time | `emon.Ffi.Tess.Open` | the same |
 | JavaScript | `@3sln/emon/pdfium` over pdfium's WebAssembly build, `npm install @3sln/pdfium-wasm` | `@3sln/emon/tesseract` over [tesseract.js](https://github.com/naptha/tesseract.js) | `npm install @3sln/pdfium-wasm tesseract.js` |
-| C | bundled (`lib/libpdfium.*`, loaded at run time), with the `EMON_NATIVE` flag | bundled (linked statically; English and orientation models) | nothing to install |
+| C | bundled (`lib/libpdfium.*`, loaded at run time), with `emon_engines_defaults` | bundled (the adapter library `libemon_ocr_tesseract`; English and orientation model packs) | nothing to install |
 | pod | bundled (`lib/libpdfium.*`), with `:native true` | bundled (English and orientation models) | nothing to install |
 
 The pdfium that emon is tested with is `chromium/8076` of

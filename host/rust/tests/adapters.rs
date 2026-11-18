@@ -493,3 +493,124 @@ fn an_async_adapter_answers_later_and_a_one_shot_call_waits_for_it() {
     let cells = reading(5, 4, 4, 1);
     assert_eq!(unsafe { (h.complete.unwrap())(h.ctx, s.last_token.load(Ordering::SeqCst), ADAPTER_OK, cells.as_ptr(), cells.len(), std::ptr::null()) }, 1);
 }
+
+// ------------------------------------------------------------------------------------------------ fetch (feature `packs-fetch`)
+
+// a one-file HTTP server on 127.0.0.1: every GET answers `body` (or 404 when `body` is None)
+#[cfg(feature = "packs-fetch")]
+fn serve(body: Option<Vec<u8>>) -> (String, Arc<AtomicI32>) {
+    use std::io::{Read, Write};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", l.local_addr().unwrap());
+    let hits = Arc::new(AtomicI32::new(0));
+    let h2 = hits.clone();
+    std::thread::spawn(move || {
+        for c in l.incoming() {
+            let Ok(mut c) = c else { continue };
+            let mut buf = [0u8; 2048];
+            let _ = c.read(&mut buf);
+            h2.fetch_add(1, Ordering::SeqCst);
+            match &body {
+                Some(b) => {
+                    let _ = c.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len()).as_bytes());
+                    let _ = c.write_all(b);
+                }
+                None => {
+                    let _ = c.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                }
+            }
+        }
+    });
+    (url, hits)
+}
+
+#[cfg(feature = "packs-fetch")]
+#[test]
+fn a_fetched_pack_is_verified_before_it_is_kept_and_a_cancel_stops_it() {
+    let _g = serial();
+    let Some(good) = eng_traineddata() else {
+        eprintln!("SKIP: no eng.traineddata");
+        return;
+    };
+    let events: &'static Mutex<Vec<(i32, u64)>> = Box::leak(Box::new(Mutex::new(Vec::new())));
+    unsafe extern "C" fn ev(ctx: *mut c_void, e: *const emon::packs::PackEvent) -> c_int {
+        let m = &*(ctx as *const Mutex<Vec<(i32, u64)>>);
+        m.lock().unwrap().push(((*e).kind, (*e).done));
+        0
+    }
+    // the right bytes at the mirror: fetched, verified, installed; the adapter reads
+    let (url, hits) = serve(Some(good.clone()));
+    std::env::set_var("EMON_PACKS_URL", &url);
+    let dir = scratch("fetch");
+    let (e, s) = tess_engines(1);
+    e.packs().set_store(&dir).unwrap();
+    e.packs().set_mode(emon::emon::engines::pfetch_auto());
+    e.packs().set_events(Some(ev), events as *const _ as *mut c_void);
+    let (req, bm) = request(3, 1, false);
+    let a = e.router().unwrap().read_blocking(&req, &bm, false).unwrap();
+    assert_eq!((status(&a), s.reads.load(Ordering::SeqCst)), (0, 1), "auto, no hook: fetched, and read");
+    assert!(hits.load(Ordering::SeqCst) >= 1);
+    let kinds: Vec<i32> = events.lock().unwrap().iter().map(|k| k.0).collect();
+    assert_eq!((kinds.first(), kinds.last()), (Some(&emon::packs::PACK_EVENT_START), Some(&emon::packs::PACK_EVENT_DONE)), "{:?}", kinds);
+    assert!(kinds.contains(&emon::packs::PACK_EVENT_PROGRESS), "progress is reported");
+    // bytes that are not the catalogue's: discarded, never written
+    let mut bad = good.clone();
+    bad[777] ^= 1;
+    let (url2, _) = serve(Some(bad));
+    std::env::set_var("EMON_PACKS_URL", &url2);
+    let dir2 = scratch("fetch-bad");
+    let (e2, s2) = tess_engines(1);
+    e2.packs().set_store(&dir2).unwrap();
+    e2.packs().set_mode(emon::emon::engines::pfetch_auto());
+    let a = e2.router().unwrap().read_blocking(&req, &bm, false).unwrap();
+    assert_eq!((status(&a), s2.reads.load(Ordering::SeqCst)), (kp::ps_unsupported(), 0), "a tampered download is unread");
+    assert!(!dir2.join("tess-fast-eng/eng.traineddata").exists(), "and nothing is written");
+    assert!(e2.take_notes().join("\n").contains("pack-hash-mismatch:tess-fast-eng"));
+    // a server that has nothing, and then one that is asked to stop: the pack stays missing
+    let (url3, _) = serve(None);
+    std::env::set_var("EMON_PACKS_URL", &url3);
+    let (e3, _s3) = tess_engines(1);
+    e3.packs().set_store(&scratch("fetch-404")).unwrap();
+    e3.packs().set_mode(emon::emon::engines::pfetch_auto());
+    let a = e3.router().unwrap().read_blocking(&req, &bm, false).unwrap();
+    assert_eq!(status(&a), kp::ps_unsupported());
+    assert!(e3.take_notes().join("\n").contains("pack-fetch-failed:tess-fast-eng"));
+    let (url4, _) = serve(Some(good));
+    std::env::set_var("EMON_PACKS_URL", &url4);
+    unsafe extern "C" fn stop(_c: *mut c_void, e: *const emon::packs::PackEvent) -> c_int {
+        ((*e).kind == emon::packs::PACK_EVENT_PROGRESS) as c_int
+    }
+    let (e4, s4) = tess_engines(1);
+    e4.packs().set_store(&scratch("fetch-cancel")).unwrap();
+    e4.packs().set_mode(emon::emon::engines::pfetch_auto());
+    e4.packs().set_events(Some(stop), std::ptr::null_mut());
+    let a = e4.router().unwrap().read_blocking(&req, &bm, false).unwrap();
+    assert_eq!((status(&a), s4.reads.load(Ordering::SeqCst)), (kp::ps_unsupported(), 0), "a callback that answers non-zero to PROGRESS cancels the download");
+    assert!(e4.take_notes().join("\n").contains("pack-fetch-cancelled:tess-fast-eng"));
+    std::env::remove_var("EMON_PACKS_URL");
+}
+
+#[cfg(feature = "packs-fetch")]
+#[test]
+fn the_hook_fetches_and_packs_ensure_fetches_ahead_of_time() {
+    let _g = serial();
+    let Some(good) = eng_traineddata() else {
+        return;
+    };
+    let (url, _) = serve(Some(good));
+    std::env::set_var("EMON_PACKS_URL", &url);
+    let (e, s, h, dir) = hooked(emon::packs::PACK_FETCH, Vec::new());
+    e.packs().set_mode(emon::emon::engines::pfetch_auto());
+    let (req, bm) = request(3, 1, false);
+    let a = e.router().unwrap().read_blocking(&req, &bm, false).unwrap();
+    assert_eq!((status(&a), s.reads.load(Ordering::SeqCst), h.asked.load(Ordering::SeqCst)), (0, 1, 1), "the hook said fetch");
+    assert!(dir.join("tess-fast-eng/eng.traineddata").exists());
+    // ensure: only in auto
+    let (e2, _s2) = tess_engines(1);
+    e2.packs().set_store(&scratch("ensure")).unwrap();
+    assert!(e2.packs().ensure(&[1]).is_err(), "never: refused");
+    e2.packs().set_mode(emon::emon::engines::pfetch_auto());
+    assert!(e2.packs().ensure(&[1]).is_ok(), "auto: fetched ahead of time");
+    assert!(e2.packs().locate(1).is_some());
+    std::env::remove_var("EMON_PACKS_URL");
+}

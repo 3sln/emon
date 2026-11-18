@@ -130,7 +130,7 @@
 
 ;; The native OCR adapters and the engine registry (K2, D900): `host/rust/tests/adapters.rs` drives `adapter.rs` and `packs.rs` through stub adapters behind the C ABI.
 (let [r @(process {:dir ".cache/emon-rs" :out :string :err :string :extra-env {"RUSTFLAGS" "-A warnings"}}
-                  "cargo" "test" "--release" "--offline" "-q" "--features" "__test_hooks" "--test" "adapters" "--" "--test-threads=1")
+                  "cargo" "test" "--release" "--offline" "-q" "--features" "__test_hooks,packs-fetch" "--test" "adapters" "--" "--test-threads=1")
       n (some->> (re-find #"test result: ok\. (\d+) passed; 0 failed" (:out r)) second)]
   (if (and (zero? (:exit r)) n)
     (ok "the adapter registry's native tests: " n " passed (registration refusals; routing by engine id; unread, never blank; an answer held to what its adapter registered; the pack hook's decisions; every pack verified against the catalogue; prepare and engines; async answers and timeouts)")

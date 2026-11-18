@@ -944,10 +944,11 @@
 
 ;; ------------------------------------------------------------------------------------------------ C
 
-(defn- c-header-entries [root]
-  (let [raw (rd root "host/c/include/emon.h")
-        defines (for [[_ nm v] (re-seq #"(?m)^#define\s+(\w+)(?:[ \t]+(.*))?$" (str/replace raw #"/\*.*?\*/" ""))
-                      :when (not= nm "EMON_H")]
+(defn- c-header-file-entries
+  "The entries of one header: macros, structs (with their fields in layout order, function-pointer and array fields too), typedefs, functions."
+  [raw guard]
+  (let [defines (for [[_ nm v] (re-seq #"(?m)^#define\s+(\w+)(?:[ \t]+(.*))?$" (str/replace raw #"/\*.*?\*/" ""))
+                      :when (not= nm guard)]
                   (entry :c :public nm (str "#define " (norm-ws (first (str/split (or v "") #"/\*"))))))
         text (-> (clean raw :c) (str/replace #"(?m)^\s*#.*$" "") (str/replace #"extern\s+\"\"\s*\{" ""))
         stmts (loop [i 0 start 0 d 0 out []]
@@ -968,8 +969,12 @@
                          fields (->> (str/split body #";") (map norm-ws) (remove str/blank?))
                          ;; [name type] in declaration order: the order is the struct's layout, so it is part of the signature
                          flat (mapcat (fn [f]
-                                        (let [segs (str/split f #",")
-                                              [_ ty n1] (re-find #"^(.*?[\s*])(\w+)$" (norm-ws (first segs)))]
+                                        (let [segs (if (re-find #"\(\*" f) [f] (str/split f #","))
+                                              fp (re-find #"^(.*?)\(\*\s*(\w+)\s*\)(.*)$" (norm-ws (first segs)))
+                                              ar (re-find #"^(.*?[\s*])(\w+)((?:\[\d+\])+)$" (norm-ws (first segs)))
+                                              [_ ty n1] (cond fp [nil (norm-ws (first segs)) (nth fp 2)]
+                                                              ar [nil (str (norm-ws (nth ar 1)) (nth ar 3)) (nth ar 2)]
+                                                              :else (re-find #"^(.*?[\s*])(\w+)$" (norm-ws (first segs))))]
                                           (when n1
                                             (cons [n1 (norm-ws ty)]
                                                   (map (fn [x] [(norm-ws x) (norm-ws ty)]) (next segs))))))
@@ -989,14 +994,28 @@
                          params (norm-ws (subs s (inc pi) (str/last-index-of s ")")))]
                      [(entry :c :public nm (str ret " (" params ")"))])
                    :else []))
-               stmts)
+               stmts)]
+    ents))
+
+(defn- c-header-entries [root]
+  (let [raw (rd root "host/c/include/emon.h")
+        adapter-raw (rd root "host/c/include/emon_adapter.h")
+        defines (for [[_ nm v] (re-seq #"(?m)^#define\s+(\w+)(?:[ \t]+(.*))?$" (str/replace raw #"/\*.*?\*/" ""))
+                      :when (not= nm "EMON_H")]
+                  (entry :c :public nm (str "#define " (norm-ws (first (str/split (or v "") #"/\*"))))))
+        adapter-defs (for [[_ nm v] (re-seq #"(?m)^#define\s+(\w+)(?:[ \t]+(.*))?$" (str/replace adapter-raw #"/\*.*?\*/" ""))
+                           :when (not= nm "EMON_ADAPTER_H")]
+                       (entry :c :public nm (str "#define " (norm-ws (first (str/split (or v "") #"/\*"))))))
+        ents (c-header-file-entries raw "EMON_H")
+        adapter-ents (c-header-file-entries adapter-raw "EMON_ADAPTER_H")
         header-fns (set (keep #(when (and (= (:host %) :c) (str/includes? (:sig %) "(") (not (str/starts-with? (:sig %) "#")) (not (str/starts-with? (:sig %) "typedef")) (re-find #"^emon_[a-z]" (:id %)) (not (str/includes? (:id %) "."))) (:id %)) ents))
         capi (clean (rd root "host/c/src/capi.rs") :rust)
         symbols (set (map second (re-seq #"#\[no_mangle\]\s*pub\s+(?:unsafe\s+)?extern\s+\"\"\s+fn\s+(\w+)" capi)))
         extra (for [s (sort symbols) :when (not (contains? header-fns s))]
                 (entry :c :accidental (str "symbol " s) "exported by libemon, not declared in emon.h"))
         missing (for [f (sort header-fns) :when (not (contains? symbols f))] f)]
-    {:entries (concat defines ents extra) :missing missing}))
+    ;; emon_adapter.h is the ABI of the adapter LIBRARIES (emon_ocr_adapter_v1 is exported by them, not by libemon): its entries are frozen, and it is not held to capi.rs's exports
+    {:entries (concat defines ents adapter-defs adapter-ents extra) :missing missing}))
 
 ;; ------------------------------------------------------------------------------------------------ pod
 
