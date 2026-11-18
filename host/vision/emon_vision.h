@@ -1,4 +1,4 @@
-/* emon_vision.h -- the C face of the Apple Vision shim (K8, D900).  host/vision/emon_vision.m is the whole of the Objective-C: it hands Vision a bitmap and gives back plain
+/* emon_vision.h -- the C face of the Apple Vision shim (K8, D901).  host/vision/emon_vision.m is the whole of the Objective-C: it hands Vision a bitmap and gives back plain
  * C rows (lines, their words and boxes, their candidates).  Everything that is OIL (the answer record, the mapping, the capabilities) is Rust's, host/rust/src/vision.rs,
  * so the policy is written once and the shim stays a thin reader of one framework (macOS 10.15+ and iOS 13+, the same API on both).  No Swift, no new crate.
  *

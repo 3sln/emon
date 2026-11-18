@@ -1,4 +1,4 @@
-;; Laws for `emon.ocrloc` (K8, D900; D883 ruling 7): a request's languages as an engine's own locale tags. Apple Vision reads BCP-47 tags of its recognition languages, Windows.Media.Ocr
+;; Laws for `emon.ocrloc` (K8, D901; D883 ruling 7): a request's languages as an engine's own locale tags. Apple Vision reads BCP-47 tags of its recognition languages, Windows.Media.Ocr
 ;; the Windows language tags of the installed language packs; Tesseract's resolution is `emon.ocrtess`'s and has no row here. A language the engine has no tag for is none: an adapter
 ;; that is left with no language answers `lang-unavailable`, and the page is unread, never blank (D038).
 (ns emon.ocrloctest

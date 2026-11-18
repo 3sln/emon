@@ -1,4 +1,4 @@
-//! Windows.Media.Ocr as an `Ocr` port and the OIL answer it gives (K8, D900; D883 ruling 3; dart1 section 4.2). Windows 10 and later, through the `windows` crate: nothing but the
+//! Windows.Media.Ocr as an `Ocr` port and the OIL answer it gives (K8, D901; D883 ruling 3; dart1 section 4.2). Windows 10 and later, through the `windows` crate: nothing but the
 //! system's own WinRT API, no model, no pack, no network. Built under the `winocr` feature on Windows only.
 //!
 //! THE MAPPING DISCIPLINE is Apple Vision's (`vision.rs`), with what this engine has:

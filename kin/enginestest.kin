@@ -526,7 +526,7 @@
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n" (tb-engines))
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n" (tb-engines)))
 
-;; A committed transcript that Apple's Vision answered (K8, D900; tools/ocr/record-scan.clj --engine=apple-vision): it carries the engine table as the recorder wrote it from the engine's
+;; A committed transcript that Apple's Vision answered (K8, D901; tools/ocr/record-scan.clj --engine=apple-vision): it carries the engine table as the recorder wrote it from the engine's
 ;; own report, so a replay on any host, with no adapter, knows which engine read and with what it was allowed to say.
 (deftest test-a-committed-apple-vision-transcript-names-the-engine-that-read
   (let [^Blob b (test-file "ocr/vision/h-plain/transcript.edn")

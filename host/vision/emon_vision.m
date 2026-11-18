@@ -1,4 +1,4 @@
-// emon_vision.m -- Apple Vision's text recogniser behind plain C (K8, D900).  See emon_vision.h.  Built by tools/native/vision.clj (clang, -fobjc-arc) into a static library
+// emon_vision.m -- Apple Vision's text recogniser behind plain C (K8, D901).  See emon_vision.h.  Built by tools/native/vision.clj (clang, -fobjc-arc) into a static library
 // that the Rust adapter links with the Vision, Foundation, CoreGraphics and ImageIO frameworks.  It reads one bitmap and returns rows; it decides nothing.
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>

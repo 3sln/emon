@@ -456,7 +456,7 @@
 (defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
 (defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
 (defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D899), when the full pipeline built it
-(defonce native-vision-lib (atom nil)) ; the path of libemon_ocr_vision.dylib (K8, D900), built on a macOS host: tools/native/vision_adapter.clj builds and audits it
+(defonce native-vision-lib (atom nil)) ; the path of libemon_ocr_vision.dylib (K8, D901), built on a macOS host: tools/native/vision_adapter.clj builds and audits it
 
 ;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
 ;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
@@ -548,7 +548,7 @@
             (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40)))
             (when (and adapter (not (zero? (:exit adapter)))) (bad! "cargo build of the Tesseract adapter library failed\n" (tail (str (:out adapter) "\n" (:err adapter)) 40)))
             (reset! native-adapter-dir (when adapter (str adir "/target/release")))
-            ;; Apple Vision (K8, D900): the macOS archive's other adapter. Needs no native prefix and no pdfium; the shim, the Rust port and adapter are built over the same sources and audited
+            ;; Apple Vision (K8, D901): the macOS archive's other adapter. Needs no native prefix and no pdfium; the shim, the Rust port and adapter are built over the same sources and audited
             ;; as they are built (one arch, the deployment target, system libraries only, exactly one export). Never in a build that is not on macOS.
             (reset! native-vision-lib
                     (when (and mac? (zero? (:exit r)))

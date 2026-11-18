@@ -225,7 +225,7 @@
 
 ;; ----------------------------------------------------------------------------------------------- the page unit
 
-;; `ocr-engine=ppocr` (code 1) is the hybrid, which the page unit flags with bit 8 (`pu-px`); the platform engines (apple-vision 2, windows-media-ocr 3, K8, D900) read alone, the
+;; `ocr-engine=ppocr` (code 1) is the hybrid, which the page unit flags with bit 8 (`pu-px`); the platform engines (apple-vision 2, windows-media-ocr 3, K8, D901) read alone, the
 ;; engine's name being the request's own (`oe-tag`), and ask for no second reading.
 (defn ^I32 en-pp [^I32 e]
   (if (== e 1) (return 1))

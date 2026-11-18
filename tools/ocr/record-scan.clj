@@ -6,7 +6,7 @@
 ;;     bb tools/ocr/record-scan.clj [--engine=apple-vision] [--keep-bitmaps] [--px] [VARIANT/]ID...   each ID is test/corpus/synth/VARIANT/ID.pdf (VARIANT scan, scan-color or
 ;;                                                                       scan-ovl; scan when left out); the directory is ID for scan, VARIANT--ID else (D459)
 ;;
-;; --engine=apple-vision (K8, D900; macOS): the same with Apple's Vision (`emon-rs --ocr-engine=apple-vision`), into test/ocr/vision/ID. The transcript says whose engine answered, in its
+;; --engine=apple-vision (K8, D901; macOS): the same with Apple's Vision (`emon-rs --ocr-engine=apple-vision`), into test/ocr/vision/ID. The transcript says whose engine answered, in its
 ;; engine table and the observed identity (the OS build and the Vision revision); a replay needs `--ocr-engine=apple-vision` too, because a request names its engine.
 ;;
 ;; Each document goes through the Engine with the Tesseract `Ocr` port (`emon-rs --tesseract --record`), and the transcript the

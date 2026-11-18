@@ -1,5 +1,5 @@
 #!/bin/sh
-# The LIVE Apple Vision emon predictor for `bb accuracy` (K8, D900; the live-Tesseract one is predict-emon-live.sh): the Rust Engine with the Vision `Ocr` port (`ocr-engine=apple-vision`)
+# The LIVE Apple Vision emon predictor for `bb accuracy` (K8, D901; the live-Tesseract one is predict-emon-live.sh): the Rust Engine with the Vision `Ocr` port (`ocr-engine=apple-vision`)
 # and, when the pinned pdfium is fetched (`bb pdfium-fetch`), the pdfium `Renderer`. Protocol:
 #   predict-emon-live-vision.sh ID VARIANT INPUT GOLD   -> the Model's canonical JSON on stdout
 # macOS only, and NOT A GATE: a gate that ran an engine would depend on whose Vision (the OS build) is installed (D008, D095); the committed Vision transcripts are replayed instead

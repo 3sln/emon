@@ -374,7 +374,7 @@
                    (str " (" (str/replace l #"^ok +accuracy\[emon-replay-px\]: " "") ")"))))))))
 
 ;; ---------------------------------------------------------------------------------------------------------------------------
-;; 7. THE APPLE VISION SCANS (K8, D900). test/ocr/vision/ID/ holds the transcripts Apple's Vision answered (`bb tools/ocr/record-scan.clj --engine=apple-vision ID`, on a Mac: the
+;; 7. THE APPLE VISION SCANS (K8, D901). test/ocr/vision/ID/ holds the transcripts Apple's Vision answered (`bb tools/ocr/record-scan.clj --engine=apple-vision ID`, on a Mac: the
 ;; engine runs only there). The reading is OIL like every engine's, so a replay is the same on every host, which has no Vision: here every installed Engine replays it, naming
 ;; `ocr-engine=apple-vision` (a request names the engine it is for, D893), to the IDENTICAL bundle. What must hold:
 ;;   * the Rust, Go, Java and C# Engines and the C binding give the identical bundle, and the evidence says the engine was `apple-vision`, in the transcript's engine table too;

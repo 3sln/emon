@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; libemon_ocr_vision: the Apple Vision adapter library for an Apple triple.   bb tools/native/vision_adapter.clj --triple T [--out DIR]   (K8, D900)
+;; libemon_ocr_vision: the Apple Vision adapter library for an Apple triple.   bb tools/native/vision_adapter.clj --triple T [--out DIR]   (K8, D901)
 ;;
 ;; The adapter (host/rust/src/vision_adapter.rs, emon_adapter.h's one export `emon_ocr_adapter_v1`) over the Rust port (host/rust/src/vision.rs) and the Objective-C shim
 ;; (host/vision/emon_vision.m, tools/native/vision.clj). It needs no model, no pack and no third-party library: it links only the system's Vision, Foundation, CoreGraphics and ImageIO

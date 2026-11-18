@@ -14630,7 +14630,7 @@ P13.15, for the Dart/Flutter evaluation release (D895). The coordinator renumber
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — K8: Apple Vision and Windows.Media.Ocr adapters, Vision calibrated and measured, both explicit
+### D901 — K8: Apple Vision and Windows.Media.Ocr adapters, Vision calibrated and measured, both explicit
 
 P13.21, for the Dart/Flutter evaluation release (D895). The coordinator renumbers this entry. Two platform OCR engines join the adapter ABI of D899, each behind its own library and its own `ocr-engine` word, neither chosen for an app that chooses nothing. Apple Vision is built, calibrated (ruling 3), measured and **not accepted** under the criteria written down before it was measured; Windows.Media.Ocr is written and type-checked for Windows and has a CI job, and **has not run anywhere**.
 

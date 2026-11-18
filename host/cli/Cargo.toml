@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [features]
 tesseract = []
-# Apple Vision (host/rust/src/vision.rs, K8, D900), macOS only: the CLI links the shim of host/vision (tools/native/vision.clj) and registers the port beside Tesseract's
+# Apple Vision (host/rust/src/vision.rs, K8, D901), macOS only: the CLI links the shim of host/vision (tools/native/vision.clj) and registers the port beside Tesseract's
 vision = []
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8), Windows only: the CLI of a Windows machine registers the port beside Tesseract's
 winocr = ["dep:windows"]

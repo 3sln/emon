@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; libemon_ocr_winocr: the Windows.Media.Ocr adapter library.   bb winocr [--check | --cargo-check | --smoke] [--triple T] [--out DIR]   (K8, D900)
+;; libemon_ocr_winocr: the Windows.Media.Ocr adapter library.   bb winocr [--check | --cargo-check | --smoke] [--triple T] [--out DIR]   (K8, D901)
 ;;
 ;;   bb winocr --cargo-check   TYPE-CHECK the adapter for Windows from any host (`cargo check --target x86_64-pc-windows-msvc --features winocr-adapter`; the target's standard library is
 ;;                             `rustup target add x86_64-pc-windows-msvc`). Nothing links and nothing runs: this is what can be shown off Windows, and what the CI job's build repeats

@@ -170,7 +170,7 @@ impl OcrPolicy {
     }
 }
 
-/// Optional OCR port selection; Tesseract remains the default. `PpOcr` is the hybrid; Apple Vision and Windows.Media.Ocr read alone, when named (K8, D900): their requests say so,
+/// Optional OCR port selection; Tesseract remains the default. `PpOcr` is the hybrid; Apple Vision and Windows.Media.Ocr read alone, when named (K8, D901): their requests say so,
 /// and the registry sends them to the platform's adapter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcrEngine { Tesseract, PpOcr, AppleVision, WindowsMediaOcr }

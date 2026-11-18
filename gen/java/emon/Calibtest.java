@@ -33,7 +33,7 @@ public final class Calibtest {
     }
     public static void testTheTableIsSortedAndMonotoneInTheRawScore() {
         // Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
-        // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D900) are a group of their own.
+        // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.
         int n = 40;
         int i = 1;
         emon.Testport.assertThat(n > 0, "the table has a row (the identity table has one that no node matches)");
@@ -131,7 +131,7 @@ public final class Calibtest {
         emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 2, -1), -1, "absence survives engine lookup");
     }
     public static void testAppleVisionNodesHaveTheirOwnFittedRowsAndFallBackToThePooledMap() {
-        // K8, D900: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+        // K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
         emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 3, 231), 250, "a table's OCR map for engine 3");
         emon.Testport.assertThat(Calib.calLookupEngine(3, 1, 3, 947) != Calib.calLookupEngine(3, 1, 1, 947), "is not Tesseract's");
         emon.Testport.assertEq(Calib.calLookupEngine(3, 1, 1, 508), Calib.calLookup(3, 1, 508), "and Tesseract's is untouched");

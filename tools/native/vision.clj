@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The Apple Vision shim, compiled for an Apple triple.   bb tools/native/vision.clj --triple T   (K8, D900)
+;; The Apple Vision shim, compiled for an Apple triple.   bb tools/native/vision.clj --triple T   (K8, D901)
 ;;
 ;; host/vision/emon_vision.m is the whole of the Objective-C of `libemon_ocr_vision`: it hands Vision a bitmap and returns plain C rows (host/vision/emon_vision.h). This builds it for one of
 ;; the four Apple triples (aarch64-apple-darwin, x86_64-apple-darwin, aarch64-apple-ios, aarch64-apple-ios-sim) with the Xcode on this machine, the deployment targets of

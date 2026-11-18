@@ -42,7 +42,7 @@
 
 (deftest test-the-table-is-sorted-and-monotone-in-the-raw-score
   (comment "Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly")
-  (comment "and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D900) are a group of their own.")
+  (comment "and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.")
   (let [^I32 n (cd-count 0)
         ^:mut ^I32 i 1]
     (assert-that (> n 0) "the table has a row (the identity table has one that no node matches)")
@@ -128,7 +128,7 @@
   (assert-eq (cal-lookup-engine 3 1 2 -1) -1 "absence survives engine lookup"))
 
 (deftest test-apple-vision-nodes-have-their-own-fitted-rows-and-fall-back-to-the-pooled-map
-  (comment "K8, D900: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.")
+  (comment "K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.")
   (assert-eq (cal-lookup-engine 3 1 3 231) 250 "a table's OCR map for engine 3")
   (assert-that (!= (cal-lookup-engine 3 1 3 947) (cal-lookup-engine 3 1 1 947)) "is not Tesseract's")
   (assert-eq (cal-lookup-engine 3 1 1 508) (cal-lookup 3 1 508) "and Tesseract's is untouched")

@@ -38,7 +38,7 @@ fn test_a_kind_with_no_row_goes_through_as_it_is() {
 #[test]
 fn test_the_table_is_sorted_and_monotone_in_the_raw_score() {
     // Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
-    // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D900) are a group of their own.
+    // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.
     let n: i32 = 40;
     let mut i: i32 = 1;
     crate::testport::assert_that(n > 0, "the table has a row (the identity table has one that no node matches)");
@@ -141,7 +141,7 @@ fn test_node_map_is_engine_specific_with_pooled_fallback() {
 }
 #[test]
 fn test_apple_vision_nodes_have_their_own_fitted_rows_and_fall_back_to_the_pooled_map() {
-    // K8, D900: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+    // K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
     crate::testport::assert_eq(cal_lookup_engine(3, 1, 3, 231), 250, "a table's OCR map for engine 3");
     crate::testport::assert_that(cal_lookup_engine(3, 1, 3, 947) != cal_lookup_engine(3, 1, 1, 947), "is not Tesseract's");
     crate::testport::assert_eq(cal_lookup_engine(3, 1, 1, 508), cal_lookup(3, 1, 508), "and Tesseract's is untouched");

@@ -43,7 +43,7 @@ func TestAKindWithNoRowGoesThroughAsItIs(emonT *testing.T) {
 
 func TestTheTableIsSortedAndMonotoneInTheRawScore(emonT *testing.T) {
 	// Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
-	// and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D900) are a group of their own.
+	// and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.
 	var n int32 = 40
 	var i int32 = 1
 	port.AssertThat(emonT, n > 0, "the table has a row (the identity table has one that no node matches)")
@@ -146,7 +146,7 @@ func TestNodeMapIsEngineSpecificWithPooledFallback(emonT *testing.T) {
 }
 
 func TestAppleVisionNodesHaveTheirOwnFittedRowsAndFallBackToThePooledMap(emonT *testing.T) {
-	// K8, D900: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+	// K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
 	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 3, 231), 250, "a table's OCR map for engine 3")
 	port.AssertThat(emonT, calib.CalLookupEngine(3, 1, 3, 947) != calib.CalLookupEngine(3, 1, 1, 947), "is not Tesseract's")
 	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 1, 508), calib.CalLookup(3, 1, 508), "and Tesseract's is untouched")

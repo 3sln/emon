@@ -13,7 +13,7 @@
 #   macOS with Xcode), builds libemon over them (`bb mobile`), audits the library (`bb native --audit`: 16 KB ELF alignment, exports = emon.h, no stray dependency), runs the smoke
 #   program (iOS simulator: run; Android: linked, and run on an emulator when a runner has one) and uploads emon-c-mobile-<triple> (dist/c/emon-c-<version>-<triple>.tar.gz, named as
 #   the desktop C archives are). `mobile: false` leaves it out; verify.yml's call leaves it out until K5 adds the five archives to the release's asset list (tools/release/ops.clj).
-# K8 (P13.21, D900): the `platform` jobs below build the platform OCR adapter libraries and smoke-test them on the platform that has the engine: `vision` (Apple Vision; one macOS runner each for
+# K8 (P13.21, D901): the `platform` jobs below build the platform OCR adapter libraries and smoke-test them on the platform that has the engine: `vision` (Apple Vision; one macOS runner each for
 #   Apple silicon and Intel: `bb vision`, which builds libemon_ocr_vision.dylib and audits it, then a conversion of samples/scan-plain.pdf with `ocr-engine=apple-vision`) and `winocr`
 #   (Windows.Media.Ocr; `bb winocr --check`: type-check, build and audit emon_ocr_winocr.dll, then the same conversion with `ocr-engine=windows-media-ocr`). The iOS slices of the Vision adapter
 #   are built, audited and (in the simulator) smoke-tested by the `mobile` job. `platform: false` leaves them out; verify.yml's call leaves them out until K5 lists the adapters in the release.
@@ -278,7 +278,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # APPLE VISION (K8, P13.21, D900): libemon_ocr_vision.dylib for the two macOS architectures, each built on a runner of its own architecture. `bb vision` assembles the crate, compiles the
+  # APPLE VISION (K8, P13.21, D901): libemon_ocr_vision.dylib for the two macOS architectures, each built on a runner of its own architecture. `bb vision` assembles the crate, compiles the
   # Objective-C shim with the runner's Xcode, links Vision, Foundation, CoreGraphics and ImageIO, and AUDITS the library: one architecture, platform macOS, minos 12.0, system libraries only,
   # exactly one export (emon_ocr_adapter_v1). The smoke converts samples/scan-plain.pdf with `ocr-engine=apple-vision` through the reference driver. A hosted runner is a virtual machine and
   # Apple's text model may not run in it: if the conversion does not, the step says so and does not fail the job (the library was built and audited, which is what this job is for);
@@ -324,7 +324,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # WINDOWS.MEDIA.OCR (K8, P13.21, D900): emon_ocr_winocr.dll, Rust over the `windows` crate, built and smoke-tested on a Windows runner (it cannot run anywhere else; off Windows it is only
+  # WINDOWS.MEDIA.OCR (K8, P13.21, D901): emon_ocr_winocr.dll, Rust over the `windows` crate, built and smoke-tested on a Windows runner (it cannot run anywhere else; off Windows it is only
   # type-checked: `bb winocr --cargo-check`). `bb winocr --check` does four things: type-check the adapter, build the DLL with the C runtime linked statically (/MT), audit it (`dumpbin`:
   # exactly one export, no C or C++ runtime DLL among the imports) and convert samples/scan-plain.pdf with `ocr-engine=windows-media-ocr` through the reference driver
   # (`EMON_RS_WINOCR=1 kin/scripts/emon-rs-build`), requiring the heading in the HTML. Windows.Media.Ocr reads with an installed OCR language pack: the step before adds English's

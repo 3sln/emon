@@ -237,7 +237,7 @@ fn convert(args: Vec<String>) {
             eprintln!("emon: note: no pdfium ({}): pages that need rendering fail; pass --pdfium PATH or set EMON_PDFIUM_LIB", PDFIUM_LIB);
         }
     }
-    // The platform engines read alone and need no model (K8, D900), and are explicit: the platform's own recogniser is never chosen for the app
+    // The platform engines read alone and need no model (K8, D901), and are explicit: the platform's own recogniser is never chosen for the app
     let platform_engine = matches!(opts.ocr_engine, emon::OcrEngine::AppleVision | emon::OcrEngine::WindowsMediaOcr);
     if platform_engine && !never {
         if opts.ocr_engine == emon::OcrEngine::AppleVision {

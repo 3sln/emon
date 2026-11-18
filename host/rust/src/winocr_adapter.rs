@@ -1,4 +1,4 @@
-// libemon_ocr_winocr: Windows.Media.Ocr as a native OCR adapter LIBRARY (K8, D900; D899's ABI, host/c/include/emon_adapter.h). This crate file is the whole of its C side: the one
+// libemon_ocr_winocr: Windows.Media.Ocr as a native OCR adapter LIBRARY (K8, D901; D899's ABI, host/c/include/emon_adapter.h). This crate file is the whole of its C side: the one
 // export, `emon_ocr_adapter_v1`, over `winocr.rs`. Built by `bb package` and CI (`native.yml`, the `winocr` job) on Windows from the same sources as emon.dll, with the `winocr-adapter`
 // feature (the `windows` crate). It needs no pack, no model and no network, so `packs_dir` is ignored; `config` has no keys yet.
 use crate::adapter::{port_adapter, AdapterStatus, OcrAdapter};

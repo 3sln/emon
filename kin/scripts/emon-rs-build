@@ -44,7 +44,7 @@ if [ -n "$cli_mode" ]; then
   [ -n "$native_dir" ] || { echo "emon-rs-build: EMON_CLI=1 needs EMON_NATIVE=<prefix> (bb native builds it)" >&2; exit 1; }
   crate=.cache/emon-cli
 fi
-# APPLE VISION (K8, D900): EMON_RS_VISION=1 builds the same crate with the `vision` feature (host/rust/src/vision.rs) and the shim of host/vision linked from
+# APPLE VISION (K8, D901): EMON_RS_VISION=1 builds the same crate with the `vision` feature (host/rust/src/vision.rs) and the shim of host/vision linked from
 # tools/native/vision.clj (macOS only) into .cache/emon-rs-vision; LIVE only, never a gate's (a gate replays a transcript). It does not need Tesseract: the driver reads with
 # `ocr-engine=apple-vision`.
 vision_mode="${EMON_RS_VISION:-}"
@@ -53,7 +53,7 @@ if [ "$vision_mode" = 1 ]; then
   crate=.cache/emon-rs-vision
   live=1
 fi
-# WINDOWS.MEDIA.OCR (K8, D900): EMON_RS_WINOCR=1 builds the same crate with the `winocr` feature (host/rust/src/winocr.rs, the `windows` crate) into .cache/emon-rs-winocr; Windows only, LIVE only,
+# WINDOWS.MEDIA.OCR (K8, D901): EMON_RS_WINOCR=1 builds the same crate with the `winocr` feature (host/rust/src/winocr.rs, the `windows` crate) into .cache/emon-rs-winocr; Windows only, LIVE only,
 # never a gate's. The driver reads with `ocr-engine=windows-media-ocr`; no Tesseract is needed.
 winocr_mode="${EMON_RS_WINOCR:-}"
 if [ "$winocr_mode" = 1 ]; then
@@ -196,7 +196,7 @@ if [ "$ppocr_mode" = 1 ]; then
   flags="$flags --cfg ppocr -L native=$PWD/.cache/ppocr -L native=$PWD/.cache/ppocr/onnxruntime-osx-arm64-1.22.0/lib -C link-arg=-Wl,-rpath,$PWD/.cache/ppocr/onnxruntime-osx-arm64-1.22.0/lib"
 fi
 if [ -n "$cli_mode" ] && [ "$(uname -s)" = Darwin ]; then
-  # Apple Vision (K8, D900): the CLI of a Mac links the shim and registers the port beside Tesseract's (`--ocr-engine apple-vision`)
+  # Apple Vision (K8, D901): the CLI of a Mac links the shim and registers the port beside Tesseract's (`--ocr-engine apple-vision`)
   vision_triple=$(rustc -vV | sed -n 's/^host: //p')
   vision_dir=$(bb tools/native/vision.clj --triple "$vision_triple") || exit 1
   flags="$flags $(cat "$vision_dir/link.rustflags")"
@@ -207,7 +207,7 @@ if [ -n "$cli_mode" ]; then
   flags="$flags --cfg pdfium --cfg pdfium_dl"
   export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
   # Windows (D558): the C runtime is linked statically (/MT), as `bb native` builds the C and C++ libraries, so emon.exe needs no VC++ redistributable
-  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) flags="$flags -C target-feature=+crt-static"; cargo_features="$cargo_features,winocr" ;; esac # Windows.Media.Ocr (K8, D900)
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) flags="$flags -C target-feature=+crt-static"; cargo_features="$cargo_features,winocr" ;; esac # Windows.Media.Ocr (K8, D901)
 fi
 if [ -n "$pdfium_lib" ]; then
   flags="$flags --cfg pdfium -L native=$pdfium_lib -C link-arg=-Wl,-rpath,$pdfium_lib"

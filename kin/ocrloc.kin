@@ -1,6 +1,6 @@
 ;; Request languages as an engine's own locale tags (D883 ruling 7: `emon.ocrtess` resolves a request's languages for Tesseract only; every other engine has its table here).
 ;; A request names languages in emon's codes (ISO 639-3 packed in a cell, `eng`, and `chs` and `cht` for the two Chinese models) or a script (ISO 15924, `Latn`); an
-;; adapter asks `ol-locales` for the engine's tags, a comma-joined list, and reads with the ones its platform supports (K8, D900).
+;; adapter asks `ol-locales` for the engine's tags, a comma-joined list, and reads with the ones its platform supports (K8, D901).
 ;;   engine 3  Apple Vision: BCP-47 tags of `VNRecognizeTextRequest.supportedRecognitionLanguages` (macOS 12+, iOS 15+): en-US fr-FR it-IT de-DE es-ES pt-BR zh-Hans zh-Hant
 ;;             ja-JP ko-KR ru-RU uk-UA th-TH vi-VT (and a script's set: Latn reads the six Latin languages, Hani both Chinese scripts)
 ;;   engine 5  Windows.Media.Ocr: the Windows language tags (Windows.Globalization.Language), read from the installed language packs

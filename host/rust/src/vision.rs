@@ -1,4 +1,4 @@
-//! Apple Vision (`VNRecognizeTextRequest`) as an `Ocr` port and the OIL answer it gives (K8, D900; D883, D895; dart1 section 4.2). macOS and iOS: the same framework, the same API.
+//! Apple Vision (`VNRecognizeTextRequest`) as an `Ocr` port and the OIL answer it gives (K8, D901; D883, D895; dart1 section 4.2). macOS and iOS: the same framework, the same API.
 //!
 //! The Objective-C is `host/vision/emon_vision.m`, a thin shim that hands Vision a bitmap and returns plain C rows (a line's text, confidence, quad, its words with their boxes, its
 //! other candidates). Everything that is OIL is here: the mapping below, the capabilities, the observed identity. Nothing of it needs a pack, a model or the network.

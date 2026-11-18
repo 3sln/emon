@@ -84,7 +84,7 @@
 (def pdfium-file (when cfg (str pdfium-dir "/" (get-in pdfium-pin [:platforms (:pdfium cfg) :lib]))))
 (def lib-name (if android? "libemon.so" "libemon.dylib"))
 (def adapter-name (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
-(def vision-name "libemon_ocr_vision.dylib") ; Apple Vision (K8, D900): the iOS slices only; Android's platform OCR is ML Kit, a plugin of the Dart package (K7)
+(def vision-name "libemon_ocr_vision.dylib") ; Apple Vision (K8, D901): the iOS slices only; Android's platform OCR is ML Kit, a plugin of the Dart package (K7)
 (def pdfium-name (if android? "libpdfium.so" "libpdfium.dylib"))
 (def archive-name (str "emon-c-" version "-" triple))
 (def archive (str root "/dist/c/" archive-name ".tar.gz"))
@@ -232,7 +232,7 @@
   (say (format "  %-34s %10s" (str "dist/c/" archive-name ".tar.gz") (human (fs/size archive)))))
 
 (defn build-vision!
-  "libemon_ocr_vision.dylib for this iOS triple (K8, D900): `tools/native/vision_adapter.clj` (the shim, the Rust port and adapter over the same sources, audited as it is built)."
+  "libemon_ocr_vision.dylib for this iOS triple (K8, D901): `tools/native/vision_adapter.clj` (the shim, the Rust port and adapter over the same sources, audited as it is built)."
   []
   (let [r (sh {:env {"IPHONEOS_DEPLOYMENT_TARGET" (:ios-deployment cfg)}} "bb" "tools/native/vision_adapter.clj" "--triple" triple "--out" (str root "/.cache/mobile/stage/vision"))]
     (print (:err r)) (flush)
@@ -302,7 +302,7 @@
             (say "  ran      " (str/trim (:out r)))
             (when-not (str/includes? (slurp sout) scan-word) (die "the scan's HTML lacks " (pr-str scan-word) ": pdfium or Tesseract did not read it"))
             (say "  ok       samples/scan-plain.pdf read by pdfium and Tesseract inside the iOS simulator: the heading " (pr-str scan-word) " is there"))
-          ;; Apple Vision (K8, D900): the same scan, read by the Vision adapter library of lib/emon/adapters/ (`ocr-engine=apple-vision`). The simulator's Vision may not be able to
+          ;; Apple Vision (K8, D901): the same scan, read by the Vision adapter library of lib/emon/adapters/ (`ocr-engine=apple-vision`). The simulator's Vision may not be able to
           ;; run its text model (the neural engine is the device's); an answer that is not a reading is a NOTE with the reason, not a failure of the Tesseract smoke above
           (when (fs/exists? (str target-dir "/lib/emon/adapters/" vision-name))
             (let [vout (str smoke-dir "/scan.vision.html")

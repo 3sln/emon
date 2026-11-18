@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The NODE-level rows of a platform engine, for `bb calibration --fit --engine N --rows FILE` (K8, D900; D883 ruling 3).
+;; The NODE-level rows of a platform engine, for `bb calibration --fit --engine N --rows FILE` (K8, D901; D883 ruling 3).
 ;;
 ;;     bb tools/calibration/engine_nodes.clj --engine apple-vision [--jobs 3] [--out FILE]
 ;;

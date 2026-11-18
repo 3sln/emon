@@ -32,7 +32,7 @@
   (assert-eq (ocal-word 1 9 800) -1 "unknown Tesseract calibration class is unfitted")
   (assert-eq (ocal-word 2 9 800) -1 "unknown PP calibration class is unfitted"))
 
-;; Apple Vision's word map (K8, D900; D883 ruling 3): frozen from `test/calibration/engines/3/word-fit.edn`, fitted on 60 receipts and checked on 60 others. Vision gives one number for a
+;; Apple Vision's word map (K8, D901; D883 ruling 3): frozen from `test/calibration/engines/3/word-fit.edn`, fitted on 60 receipts and checked on 60 others. Vision gives one number for a
 ;; line, quantized (300, 500 or 1000 on the receipts), so the map has three steps: a line it was unsure of is right about 4 words in 10, a middling one 2 in 3, a sure one 4 in 5.
 (deftest test-apple-vision-word-calibration-is-monotone-at-every-permille
   (let [^:mut ^I32 i 0 ^:mut ^I32 previous 0]

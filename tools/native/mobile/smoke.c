@@ -3,7 +3,7 @@
  *   smoke IN.pdf OUT.html            one-shot conversion with `ocr=never` (born-digital: no engine needed)
  *   smoke IN.pdf OUT.html native [PDFIUM_PATH [ADAPTER_PATH [PACKS_DIR [OPTIONS]]]]
  *                                    the engines: the turnkey set next to the library (emon_engines_defaults: pdfium, lib/emon/adapters/, share/emon/packs/), or the paths named;
- *                                    OPTIONS is the conversion's option text: `ocr-engine=apple-vision` reads with the Vision adapter of lib/emon/adapters/ (K8, D900)
+ *                                    OPTIONS is the conversion's option text: `ocr-engine=apple-vision` reads with the Vision adapter of lib/emon/adapters/ (K8, D901)
  * Prints `emon VERSION caps=N` and exits 0 on success. Compiled with -std=c11 -Wall -Werror. */
 #include <stdio.h>
 #include <stdlib.h>

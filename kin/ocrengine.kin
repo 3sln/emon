@@ -16,7 +16,7 @@
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
-;; The requested configuration of the platform engines (K8, D900; D883 2.3): what makes two runs the same reading, as the transcript key holds it. Apple Vision: the
+;; The requested configuration of the platform engines (K8, D901; D883 2.3): what makes two runs the same reading, as the transcript key holds it. Apple Vision: the
 ;; text recogniser at the accurate level with language correction, whatever revision the OS has (the revision it ran is the observed identity), reading with the request's languages
 ;; or, when the request names none, the Latin-script ones (no language is assumed, D038, and an unaccented page reads as it does with English alone). Windows.Media.Ocr: the
 ;; engine of the installed language pack. Nothing the app can vary is left out, and nothing the OS decides is put in.

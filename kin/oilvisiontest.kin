@@ -1,4 +1,4 @@
-;; Laws for the platform engines' OIL answers (K8, D900; D883 rulings 3 and 4): what Apple Vision and Windows.Media.Ocr say, what they do not, and what kin does with an engine that
+;; Laws for the platform engines' OIL answers (K8, D901; D883 rulings 3 and 4): what Apple Vision and Windows.Media.Ocr say, what they do not, and what kin does with an engine that
 ;; has no confidence of its own. The adapters build these records with the same `emon.oil` builders (host/rust/src/vision.rs, winocr.rs), so the shapes below are theirs: a LINE
 ;; confidence that every word of the line inherits (Vision: `ck` 2, `lconf`, no `wconf`), word alternatives from the line's other candidates (`walts`), a quad and its angle,
 ;; and no confidence at all (Windows: `ck` 0, words carry -1, never a number nobody measured).

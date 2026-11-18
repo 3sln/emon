@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; Fit a platform engine's WORD calibration map on a held-out split (K8, D900; D883 ruling 3).   bb tools/calibration/engine_words.clj --engine apple-vision [--n 60] [--bin FILE]
+;; Fit a platform engine's WORD calibration map on a held-out split (K8, D901; D883 ruling 3).   bb tools/calibration/engine_words.clj --engine apple-vision [--n 60] [--bin FILE]
 ;;
 ;;   --collect   run the engine LIVE over the fit and held-out populations and keep the observations (raw word confidence and whether the word is in the gold) in
 ;;               $EMON_SCRATCH/calib-<engine>/obs.edn. Nothing of a document's text is kept: a word is a (confidence, right or wrong) pair

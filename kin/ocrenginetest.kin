@@ -189,7 +189,7 @@
   (assert-eq (of-rule 0 1 0 1 1 3 0 -1 0) 0 "votes cannot authorize uncalibrated insertion")
   (assert-eq (of-rule 1 0 0 1 1 3 1 -1 100) 0 "votes cannot authorize uncalibrated replacement"))
 
-;; ------------------------------------------------------------------ the platform engines (K8, D900)
+;; ------------------------------------------------------------------ the platform engines (K8, D901)
 
 (deftest test-platform-engines-have-their-own-requested-configuration
   (assert-eq (oe-config-len 3) 90 "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin")

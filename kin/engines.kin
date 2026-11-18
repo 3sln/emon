@@ -13,7 +13,7 @@
 ;;     impl        `eimpl`: built into the core library, a native adapter library, or a platform plugin (the embedder's: a Flutter plugin, the browser's own code)
 ;;     caps        the OIL capability bits (`emon.oil`'s `oc`) the engine CAN declare: the ceiling. What an adapter's `describe` reports at registration narrows it
 ;;     classes     the platform classes (`pcls`) the engine can run on, a bit set: bit (class - 1)
-;;     calibrated  1 when the engine has a frozen reliability map (D883 ruling 3). Apple Vision has one since K8 (D900); Windows.Media.Ocr, with no confidence at all, never can. A platform engine
+;;     calibrated  1 when the engine has a frozen reliability map (D883 ruling 3). Apple Vision has one since K8 (D901); Windows.Media.Ocr, with no confidence at all, never can. A platform engine
 ;;                 is not an incumbent or a default for that: the roles below stay reader or voter until the maintainer accepts one, a preview may select it only explicitly (D895), and Tesseract holds
 ;;                 seal and stamp pages (ruling 8). An UNCALIBRATED engine may vote, may not insert or replace and is never the incumbent
 ;;     needs       the kinds of pack (`pkind`, a bit set) the engine reads with. A language-specific kind (recognizer) is resolved per language; osd is needed only when
@@ -122,10 +122,10 @@
 ;;   tesseract 7339791 = blocks paras btype baseline wconf deskew wdir wlang lexicon style psize order (2225423, what `oil-tess-begin` always sets)
 ;;                       + symbols symconf alts (917504) + orient script (2560) + binary (4194304)
 ;;   ppocr     24928   = quad angle wconf wlang lexicon (what host/rust/src/ppocr.rs declares)
-;;   apple-vision 1056992 = quad angle lconf wlang walts (K8, D900: a confidence per LINE, quantized, so `lconf` and no `wconf`; the quad is the observation's, the angle
+;;   apple-vision 1056992 = quad angle lconf wlang walts (K8, D901: a confidence per LINE, quantized, so `lconf` and no `wconf`; the quad is the observation's, the angle
 ;;                           its top edge, the word language the request's, the word alternatives the line candidates that split into as many words; no OSD, no row metrics,
 ;;                           no blocks, dart1 4.2)
-;;   windows-media-ocr 9216 = deskew wlang (K8, D900: OcrResult.TextAngle for the page, the language of the engine; lines, words and their rectangles, and no confidence at all)
+;;   windows-media-ocr 9216 = deskew wlang (K8, D901: OcrResult.TextAngle for the page, the language of the engine; lines, words and their rectangles, and no confidence at all)
 ;;   mlkit-text 401825 = blocks quad lconf wconf wlang symbols symconf
 ;; classes: macos 1, ios 2, linux 4, windows 8, android 16, web 32. needs: recognizer 1, osd 2, detector 4, classifier 8.
 (defdata ^:pub en-table

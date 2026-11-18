@@ -18,7 +18,7 @@
 (def rows
   (mapv (fn [{:keys [lo n correct]}]
           [2 0 1 lo (if (pos? n) (quot (+ (* correct 1000) (quot n 2)) n) 0)]) blocks))
-;; The platform engines' rows (K8, D900, D883 ruling 3): each is the frozen fit record `bb tools/calibration/engine_words.clj --engine NAME --fit` wrote under
+;; The platform engines' rows (K8, D901, D883 ruling 3): each is the frozen fit record `bb tools/calibration/engine_words.clj --engine NAME --fit` wrote under
 ;; test/calibration/engines/<oen>/word-fit.edn (its :rows are [engine class kind raw-lo probability] already), fitted on its own disjoint population.
 (def engine-fits
   (vec (for [d (sort (map str (fs/list-dir "test/calibration/engines"))) :let [f (str d "/word-fit.edn")] :when (fs/exists? f)

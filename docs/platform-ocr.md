@@ -2,7 +2,7 @@
 
 An app can read scans with the recogniser the operating system already has, so there is no model to download and nothing to add to the
 app's size. Both are **explicit engines**: Tesseract stays the default everywhere, and `ocr-engine=` is how an app, or you on the command
-line, asks for the other (DEVLOG D895, D900).
+line, asks for the other (DEVLOG D895, D901).
 
 | `ocr-engine` | Runs on | What reads | Adapter library |
 |---|---|---|---|

@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The 54 CONTROLS under two OCR engines (K8, D900; D864's population): non-gate, live, macOS.
+;; The 54 CONTROLS under two OCR engines (K8, D901; D864's population): non-gate, live, macOS.
 ;;
 ;;     bb tools/controls/controls.clj [--jobs 3] [--limit N] [--list FILE] [--tesseract-bin FILE] [--vision-bin FILE] [--out FILE]
 ;;

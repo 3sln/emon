@@ -1,4 +1,4 @@
-//! What the platform OCR ports share (K8, D900): Apple Vision (`vision.rs`) and Windows.Media.Ocr (`winocr.rs`) are OS recognisers that take one bitmap and a language and answer lines of
+//! What the platform OCR ports share (K8, D901): Apple Vision (`vision.rs`) and Windows.Media.Ocr (`winocr.rs`) are OS recognisers that take one bitmap and a language and answer lines of
 //! words. Each does its own call and its own OIL mapping; the rest is here, once: the request as an adapter reads it (this engine and this configuration, the bitmap and the region,
 //! the languages as the engine's own locale tags from kin's `emon.ocrloc`), a small crop made big enough to read, and the answer that says "unread".
 use crate::plan::{Answer, Bitmaps, PlanError, Request};

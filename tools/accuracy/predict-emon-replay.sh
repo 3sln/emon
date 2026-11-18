@@ -9,7 +9,7 @@ set -e
 dir=scan
 engine=""
 if [ "$1" = "px" ]; then dir=scan-px; shift; fi
-# `vision` first (the predictor `emon-replay-vision`, K8, D900): the transcripts of test/ocr/vision/ID/, which Apple's Vision answered; a request names its engine, so the replay does too
+# `vision` first (the predictor `emon-replay-vision`, K8, D901): the transcripts of test/ocr/vision/ID/, which Apple's Vision answered; a request names its engine, so the replay does too
 if [ "$1" = "vision" ]; then dir=vision; engine="--ocr-engine=apple-vision"; shift; fi
 if ! command -v cargo > /dev/null; then
   echo "emon-replay: cargo is not on PATH, so the Rust Engine cannot be built (SKIP)" >&2
