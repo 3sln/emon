@@ -33,11 +33,12 @@
 ;; off D526 (2026-10-13).
 (def allowed-exact
   #{"MIT" "Apache-2.0" "BSD-2-Clause" "BSD-3-Clause" "ISC" "Zlib" "BSL-1.0" "MPL-2.0"
-    "FTL" "LicenseRef-AGG-2.3" "libtiff" "LicenseRef-Adobe-Core14-AFM"})
+    "FTL" "LicenseRef-AGG-2.3" "libtiff" "LicenseRef-Adobe-Core14-AFM"
+    "CDLA-Permissive-2.0"}) ; maintainer allowed it 2026-11-18 (D903); a permissive data licence, attribution only
 (def allowed-prefix ["libpng" "IJG" "Unicode-"])
 
 ;; Licences awaiting a maintainer's decision: passed with a NOTE until one is made. Empty since D526's sign-off.
-(def pending-decision #{"CDLA-Permissive-2.0"}) ; K2 (D899): webpki-roots, the Mozilla CA bundle behind the optional `packs-fetch` HTTPS client: a permissive data licence, attribution only; awaiting the maintainer
+(def pending-decision #{})
 
 (def deny-re #"(?i)jbig2dec(?!ode)|(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")
 (def gpl-re #"(?i)(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")
