@@ -7,13 +7,13 @@
 ;;   bb native --licenses [--check]                 write (or verify) the licence texts of tools/native/native.edn into release/licenses/, from the
 ;;                                                  source tarballs and the pinned pdfium-binaries archive (nothing else is downloaded)
 ;;   bb native --check                              native.edn is well formed, every triple is in native.yml and has a pdfium pin
-;;   bb native --audit [--triple T] [--lib-dir D]   (mobile triples, K6/D900: also the shipped library of `bb mobile`, .cache/mobile/<triple>/: Android .so 16 KB
+;;   bb native --audit [--triple T] [--lib-dir D]   (mobile triples, K6/D897: also the shipped library of `bb mobile`, .cache/mobile/<triple>/: Android .so 16 KB
 ;;                                                  aligned, soname, only libc/libm/libdl needed, exports = emon.h; iOS dylib: platform, minos, install name, deps)
 ;;   bb native --self-test                          plants each violation in a temporary prefix and requires the audit to name it
 ;;   bb native --fetch                              only download and verify the sources
 ;;
 ;; NOT a gate (it downloads and compiles for minutes); `bb release-audit` and `bb ci coverage` are the gates that hold its inputs.
-;; Native builds work on the HOST only; the other triples are built by .github/workflows/native.yml on their own runners. The MOBILE triples (K6, D900) are the
+;; Native builds work on the HOST only; the other triples are built by .github/workflows/native.yml on their own runners. The MOBILE triples (K6, D897) are the
 ;; exception: they are cross-compiled with the Android NDK (`ANDROID_NDK_HOME`, r28 or newer; from macOS or Linux) or Xcode's iPhoneOS and iPhoneSimulator SDKs (macOS),
 ;; so `bb native --triple aarch64-linux-android` runs on any machine that has the NDK. `bb mobile` (tools/native/mobile.clj) builds libemon over the prefix.
 ;;
@@ -49,7 +49,7 @@
 
 (def triple (or (opt "--triple") (host-triple)))
 (defn triple-cfg [t] (or (get-in pins [:triples t]) (die "no such triple " t " in " pins-file ": " (str/join ", " (sort (keys (:triples pins)))))))
-;; ------------------------------------------------------------------------------------------------ the mobile toolchains (K6, D900)
+;; ------------------------------------------------------------------------------------------------ the mobile toolchains (K6, D897)
 (defn mobile? [cfg] (contains? #{:android :ios} (:os cfg)))
 (defn host-os [] (let [os (System/getProperty "os.name")] (cond (str/includes? os "Mac") :mac (str/includes? os "Linux") :linux :else :windows)))
 
@@ -342,7 +342,7 @@
   (doseq [[k m] findings] (println (case k :ok "  ok  " :note "  note" :fail "  FAIL") m))
   (zero? (count (filter (comp #{:fail} first) findings))))
 
-;; ------------------------------------------------------------------------------------------------ the audit of a mobile LIBRARY (K6, D900)
+;; ------------------------------------------------------------------------------------------------ the audit of a mobile LIBRARY (K6, D897)
 ;; `bb mobile` ships ONE dynamic library per triple. What must hold of it, checked on the file (not on how it was made):
 ;;   Android .so   an ELF of the right machine; SONAME libemon.so; every LOAD segment aligned to 16 KB (Google Play requires it of 64-bit apps; the pinned pdfium
 ;;                 of 64-bit ABIs is held to it too) and GNU_RELRO ending on a 16 KB boundary or alone in its segment (developer.android.com/guide/practices/page-sizes);
@@ -512,7 +512,7 @@
     (let [stems (set (mapcat :libs (:sources pins))) os-stems (set (concat stems (mapcat #(mapcat val (:libs-os %)) (:sources pins))))]
       (doseq [l (:link-order pins)] (when-not (stems l) (f! "link-order names " l ", which no source installs")))
       (doseq [[os order] (:link-order-os pins) l order] (when-not (os-stems l) (f! "link-order-os " os " names " l ", which no source installs")))
-      ;; the mobile triples (K6, D900) are cross-compiled: every one names its toolchain and where its pdfium and Rust target come from
+      ;; the mobile triples (K6, D897) are cross-compiled: every one names its toolchain and where its pdfium and Rust target come from
       (doseq [[t c] (:triples pins) :when (#{:android :ios} (:os c))]
         (when-not (and (:rust c) (seq (:cross-from c))) (f! t ": a mobile triple needs :rust and :cross-from"))
         (when (and (= :android (:os c)) (not (and (:abi c) (:api c)))) (f! t ": an Android triple needs :abi and :api"))
@@ -581,7 +581,7 @@
           (fs/create-dirs (str p "/build/tesseract"))
           (spit (str p "/build/tesseract/link.txt") "c++ -o tesseract a.o /opt/homebrew/lib/libwebp.a\n")
           (expect "/opt/homebrew/lib/libwebp.a in a link.txt" p #"machine's libraries"))
-        ;; THE MOBILE LIBRARY AUDIT (K6, D900): small shared libraries built with the NDK or Xcode, one plant each (skipped where the toolchain is not)
+        ;; THE MOBILE LIBRARY AUDIT (K6, D897): small shared libraries built with the NDK or Xcode, one plant each (skipped where the toolchain is not)
         (let [expect-lib (fn [what findings pattern]
                            (if (some (fn [[k m]] (and (= k :fail) (re-find pattern m))) findings)
                              (println "  ok   planted:" what)

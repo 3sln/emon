@@ -1,4 +1,4 @@
-/* The mobile smoke program (K6, D900): a C program built for a mobile triple against the shipped libemon (`bb mobile --smoke`). It is the docs' quickstart over
+/* The mobile smoke program (K6, D897): a C program built for a mobile triple against the shipped libemon (`bb mobile --smoke`). It is the docs' quickstart over
  * arguments: it reads a PDF, converts it to HTML with the library and writes the bytes, so the caller can compare them with a golden.
  *   smoke IN.pdf OUT.html            one-shot conversion with `ocr=never` (born-digital: no engine needed)
  *   smoke IN.pdf OUT.html native [PDFIUM_PATH TESSDATA_DIR]

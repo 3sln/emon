@@ -158,23 +158,23 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
   Licence text: [27](#licence-text-27).
 
 - **LLVM libunwind (in the Android pdfium)** bundled in pdfium chromium/8076 (android archives) - Apache-2.0 WITH LLVM-exception - https://github.com/llvm/llvm-project/tree/main/libunwind
-  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (pdfium-android-{arm,arm64,x64}, K6 D900), listed in their licenses/ directory and in no other platform's.
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (pdfium-android-{arm,arm64,x64}, K6 D897), listed in their licenses/ directory and in no other platform's.
   Licence text: [49](#licence-text-49).
 
 - **cpu_features (in the Android pdfium)** bundled in pdfium chromium/8076 (android archives) - Apache-2.0 - https://github.com/google/cpu_features
-  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (K6 D900); listed in their licenses/ directory only.
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (K6 D897); listed in their licenses/ directory only.
   Licence text: [39](#licence-text-39).
 
 - **catapult (in the Android pdfium)** bundled in pdfium chromium/8076 (android archives) - BSD-3-Clause - https://chromium.googlesource.com/catapult
-  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (K6 D900); listed in their licenses/ directory only. The text is the archive's licenses/catapult.txt (Chromium Authors, BSD-3-Clause terms).
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). Bundled inside the pinned Android pdfium builds (K6 D897); listed in their licenses/ directory only. The text is the archive's licenses/catapult.txt (Chromium Authors, BSD-3-Clause terms).
   Licence text: [18](#licence-text-18).
 
 - **LLVM libc++, libc++abi and libunwind (the Android NDK's, linked statically into libemon.so)** NDK r28c (28.2.13676358) - Apache-2.0 WITH LLVM-exception - https://libcxx.llvm.org/
-  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). K6 D900: the Android libemon.so carries the C++ runtime of the NDK it is built with (nothing but libc, libm and libdl is loaded, so no libc++_shared.so is shipped). The text is the LLVM Project licence, the same one pdfium's llvm-libc entry quotes.
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). K6 D897: the Android libemon.so carries the C++ runtime of the NDK it is built with (nothing but libc, libm and libdl is loaded, so no libc++_shared.so is shipped). The text is the LLVM Project licence, the same one pdfium's llvm-libc entry quotes.
   Licence text: [51](#licence-text-51).
 
 - **Android NDK cpu-features (compiled into libwebp on Android)** NDK r28c (28.2.13676358) - Apache-2.0 - https://developer.android.com/ndk/guides/cpu-features
-  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). K6 D900: libwebp's CMake compiles sources/android/cpufeatures/cpu-features.c of the NDK (Copyright 2016 The Android Open Source Project, Apache-2.0) into libcpufeatures-webp.a on the Android triples (native.edn :libs-os).
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552). K6 D897: libwebp's CMake compiles sources/android/cpufeatures/cpu-features.c of the NDK (Copyright 2016 The Android Open Source Project, Apache-2.0) into libcpufeatures-webp.a on the Android triples (native.edn :libs-os).
   Licence text: [53](#licence-text-53).
 
 - **Tesseract** 5.5.3 - Apache-2.0 - https://github.com/tesseract-ocr/tesseract

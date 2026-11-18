@@ -33,7 +33,7 @@
                               ;; Tesseract 5.5.3's ccstruct/image.h uses uint32_t without <cstdint>, which MSVC 14.44's headers no longer bring in
                               :env {"CXXFLAGS" "/FIcstdint"}}
 
-  ;; THE MOBILE TRIPLES (K6, P13.19, D900). Cross-compiled; the :runner is the one `native.yml` builds them on, :cross-from the host OSes `bb native` may be run on.
+  ;; THE MOBILE TRIPLES (K6, P13.19, D897). Cross-compiled; the :runner is the one `native.yml` builds them on, :cross-from the host OSes `bb native` may be run on.
   ;; ANDROID: NDK r28c or newer (16 KB aligned by default; `bb native` refuses an older one), API 24 (Android 7.0): pdfium-binaries builds pdfium for API 23,
   ;; Leptonica's fmemopen/open_memstream and Tesseract's C++17 need 23 at least, and 24 is the floor of the NDK's own current default and of Flutter's
   ;; `minSdkVersion`. :abi is the Android ABI (the directory name in an APK's lib/), :rust the Rust target. The C++ runtime is linked STATICALLY into libemon.so
@@ -230,7 +230,7 @@
           {:out "native-pdfium-llvm-libc-chromium-8076.txt" :file "licenses/llvm-libc.txt"}
           {:out "native-pdfium-simdutf-chromium-8076.txt" :file "licenses/simdutf.txt"}
           {:out "native-pdfium-zlib-chromium-8076.txt" :file "licenses/zlib.txt"}
-          ;; only the Android archives of the mobile triples (K6, D900) list these three: pdfium's Android build bundles LLVM libunwind, Google's cpu_features and catapult
+          ;; only the Android archives of the mobile triples (K6, D897) list these three: pdfium's Android build bundles LLVM libunwind, Google's cpu_features and catapult
           {:out "native-pdfium-libunwind-chromium-8076.txt" :file "licenses/libunwind.txt" :platform "android-arm64"}
           {:out "native-pdfium-cpu_features-chromium-8076.txt" :file "licenses/cpu_features.txt" :platform "android-arm64"}
           {:out "native-pdfium-catapult-chromium-8076.txt" :file "licenses/catapult.txt" :platform "android-arm64"}]}}

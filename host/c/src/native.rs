@@ -4,7 +4,7 @@
 //   pdfium    an explicit path (`emon_set_native_paths`, the pod's `:pdfium`), then $EMON_PDFIUM_LIB, then NEXT TO THE LIBRARY (the directory libemon was
 //             loaded from; for a static link the executable's), then next to the executable: in each directory D, D/libpdfium.*, D/lib/libpdfium.* and
 //             D/../lib/libpdfium.* (the archive's layout is lib/libemon.* beside lib/libpdfium.*; the pod's is emon-pod, lib/libpdfium.*).
-//             MOBILE (K6, D900): inside an app the libraries are not files "next to" each other: an Android APK maps them (dladdr names `base.apk!/lib/...`) and an
+//             MOBILE (K6, D897): inside an app the libraries are not files "next to" each other: an Android APK maps them (dladdr names `base.apk!/lib/...`) and an
 //             iOS app carries them as frameworks. When nothing is found by file, the loader is asked for the library by name: `libpdfium.so` (Android: the app's
 //             own native-library directory is in the loader's search path) or `@rpath/libpdfium.dylib` and `@rpath/libpdfium.framework/libpdfium` (iOS).
 //   models    an explicit directory, then $EMON_TESSDATA, then `share/emon/tessdata` (D/share/emon/tessdata or D/../share/emon/tessdata, same D), then

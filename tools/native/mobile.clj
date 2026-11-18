@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; libemon for the mobile triples: Android (arm64-v8a, armeabi-v7a, x86_64) and iOS (device, simulator).   bb mobile   (DEVLOG P13.19, D900; D884, D885, D895)
+;; libemon for the mobile triples: Android (arm64-v8a, armeabi-v7a, x86_64) and iOS (device, simulator).   bb mobile   (DEVLOG P13.19, D897; D884, D885, D895)
 ;;
 ;;   bb mobile --triple T                build libemon over `bb native --triple T` and the pinned pdfium of that platform, assemble
 ;;                                       .cache/mobile/<T>/ and write dist/c/emon-c-<version>-<T>.tar.gz (the C archive of the release, D886)

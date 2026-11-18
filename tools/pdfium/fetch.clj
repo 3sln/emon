@@ -89,7 +89,7 @@
     (let [d (fetch! (:version pin) platform (:sha256 p))
           cur ".cache/pdfium/current"]
       (when (= platform "wasm") (wrap-wasm! d))
-      ;; The browser build (P11.4c) is not a library a host links: it must never become `current`; nor is a mobile one (K6, D900).
+      ;; The browser build (P11.4c) is not a library a host links: it must never become `current`; nor is a mobile one (K6, D897).
       (when-not (or (contains? args "--no-current") (= platform "wasm") (re-find #"^(android|ios)-" platform))
         (fs/delete-if-exists cur)
         (fs/create-sym-link cur (str/replace d ".cache/pdfium/" "")))

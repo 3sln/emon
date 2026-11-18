@@ -6,7 +6,7 @@ find_package(ZLIB REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
 
-# ANDROID (K6, D900): Tesseract 5.5.3's CMake build does `find_package(CpuFeaturesNdkCompat REQUIRED)` and links CpuFeatures::ndk_compat, a Google cpu_features
+# ANDROID (K6, D897): Tesseract 5.5.3's CMake build does `find_package(CpuFeaturesNdkCompat REQUIRED)` and links CpuFeatures::ndk_compat, a Google cpu_features
 # library it never uses here: the only code that includes <cpu-features.h> sits behind HAVE_ANDROID_GETCPUFAMILY, which the CMake build never defines (armv7 NEON is
 # detected with getauxval, HAVE_GETAUXVAL). No library is taken from anywhere: an EMPTY interface target of that name satisfies the call.
 if(ANDROID)

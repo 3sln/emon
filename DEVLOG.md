@@ -4123,7 +4123,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [ ] P13.16 — K3 host registries: Go (cgo adapters), Java, C#, Rust, JS, pod, CLI; delete the per-host Tesseract twins.
 - [ ] P13.17 — K4 packs infrastructure: append-only `packs` GitHub release + R2 mirror `emon-packs.3sln.com` (public read; CI-only scoped write token), `bb packs build|verify|bundle|list`, licence allowlist.
 - [ ] P13.18 — K5 packaging + release: `bb package` per piece, core/adapters/turnkey layering check, native bundle per triple, `release.yml` per-package jobs and `only` retry.
-- [x] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8). DONE for the C library and pdfium as they are today (D900); K2's adapter libraries become further entries in `tools/native/mobile.clj`.
+- [x] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8). DONE for the C library and pdfium as they are today (D897); K2's adapter libraries become further entries in `tools/native/mobile.clj`.
 - [ ] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing: GitHub OIDC from `pub.yml` on a deploy-key-pushed tag, D885).
 - [ ] P13.20b — `emon_flutter`, the Flutter turnkey: a federated plugin on top of `emon`. It adds `emon_ocr_mlkit` (an Android-only Flutter plugin: ML Kit through Play services, adapter contract) and the web implementation over the JS SDK. Build hooks cannot add Gradle dependencies or Android code, so Android platform OCR needs a plugin. Devices without Play services fall back to PP or Tesseract. The pure-Dart `emon` stays Flutter-free: Vision and Windows OCR come as hook-shipped adapter libraries.
 - [ ] P13.21 — K8 platform adapters Vision, Windows OCR, ML Kit (= P13.10, P13.11).
@@ -14530,7 +14530,7 @@ Every pack, including app-provided bytes, is verified against the catalogue's SH
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — Mobile native builds: one libemon per Android ABI and iOS slice, cross-compiled from the desktop pins
+### D897 — Mobile native builds: one libemon per Android ABI and iOS slice, cross-compiled from the desktop pins
 
 P13.19 (K6), for the Dart/Flutter evaluation release (D895). The C library of today (`libemon`, `emon.h`, Tesseract and Leptonica linked in, pdfium loaded at run time) now has five more triples. K2 (core plus adapter libraries) has not happened, so each triple ships what exists; `artifacts` in `tools/native/mobile.clj` is the one list of what a triple carries, and K2's adapter libraries become more entries in it.
 

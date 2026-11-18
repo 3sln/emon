@@ -9,7 +9,7 @@
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
 # P11.4b (D541): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
 #   verify.yml (D550) calls this file with `ref` set to the verified commit; release.yml attaches the collected archives to the GitHub release.
-# K6 (P13.19, D900): the `mobile` job below cross-compiles the same pins for Android (arm64-v8a, armeabi-v7a, x86_64; Ubuntu with the NDK) and iOS (device and simulator;
+# K6 (P13.19, D897): the `mobile` job below cross-compiles the same pins for Android (arm64-v8a, armeabi-v7a, x86_64; Ubuntu with the NDK) and iOS (device and simulator;
 #   macOS with Xcode), builds libemon over them (`bb mobile`), audits the library (`bb native --audit`: 16 KB ELF alignment, exports = emon.h, no stray dependency), runs the smoke
 #   program (iOS simulator: run; Android: linked, and run on an emulator when a runner has one) and uploads emon-c-mobile-<triple> (dist/c/emon-c-<version>-<triple>.tar.gz, named as
 #   the desktop C archives are). `mobile: false` leaves it out; verify.yml's call leaves it out until K5 adds the five archives to the release's asset list (tools/release/ops.clj).
@@ -195,7 +195,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # THE MOBILE TRIPLES (K6, P13.19, D900): cross-compiled from the same pins, one runner per triple. Android uses NDK r28c (16 KB pages by default; `bb native` refuses an older one),
+  # THE MOBILE TRIPLES (K6, P13.19, D897): cross-compiled from the same pins, one runner per triple. Android uses NDK r28c (16 KB pages by default; `bb native` refuses an older one),
   # API 24; iOS the Xcode of the runner (iPhoneOS and iPhoneSimulator SDKs), minimum iOS 13.0. The runner's own NDK is not relied on: r28c is installed by name.
   mobile:
     name: mobile (${{ matrix.triple }})
