@@ -4,6 +4,9 @@
 //   pdfium    an explicit path (`emon_set_native_paths`, the pod's `:pdfium`), then $EMON_PDFIUM_LIB, then NEXT TO THE LIBRARY (the directory libemon was
 //             loaded from; for a static link the executable's), then next to the executable: in each directory D, D/libpdfium.*, D/lib/libpdfium.* and
 //             D/../lib/libpdfium.* (the archive's layout is lib/libemon.* beside lib/libpdfium.*; the pod's is emon-pod, lib/libpdfium.*).
+//             MOBILE (K6, D900): inside an app the libraries are not files "next to" each other: an Android APK maps them (dladdr names `base.apk!/lib/...`) and an
+//             iOS app carries them as frameworks. When nothing is found by file, the loader is asked for the library by name: `libpdfium.so` (Android: the app's
+//             own native-library directory is in the loader's search path) or `@rpath/libpdfium.dylib` and `@rpath/libpdfium.framework/libpdfium` (iOS).
 //   models    an explicit directory, then $EMON_TESSDATA, then `share/emon/tessdata` (D/share/emon/tessdata or D/../share/emon/tessdata, same D), then
 //             $TESSDATA_PREFIX and the usual system places (the Rust host's `TessOcr::new(None)`).
 //
@@ -14,9 +17,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 const PDFIUM_LIB: &str = "libpdfium.dylib";
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
 const PDFIUM_LIB: &str = "libpdfium.so";
 #[cfg(windows)]
 const PDFIUM_LIB: &str = "pdfium.dll";
@@ -102,7 +105,36 @@ pub fn find_pdfium(explicit: Option<&str>) -> Result<Option<PathBuf>, String> {
             }
         }
     }
-    Ok(None)
+    Ok(loader_pdfium())
+}
+
+/// The names the platform's loader may know pdfium by, where the app bundle is not a directory of files (Android, iOS): the first the loader opens.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn loader_pdfium() -> Option<PathBuf> {
+    use std::ffi::{c_char, c_int, c_void, CString};
+    extern "C" {
+        fn dlopen(path: *const c_char, flags: c_int) -> *mut c_void;
+        fn dlclose(h: *mut c_void) -> c_int;
+    }
+    let names: &[&str] = if cfg!(target_os = "android") {
+        &["libpdfium.so"]
+    } else {
+        &["@rpath/libpdfium.dylib", "@rpath/libpdfium.framework/libpdfium"]
+    };
+    for n in names {
+        let c = CString::new(*n).ok()?;
+        // RTLD_LAZY (1): only asks whether the loader can open it; `pdfium::load` opens it again for real
+        let h = unsafe { dlopen(c.as_ptr(), 1) };
+        if !h.is_null() {
+            unsafe { dlclose(h) };
+            return Some(PathBuf::from(*n));
+        }
+    }
+    None
+}
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn loader_pdfium() -> Option<PathBuf> {
+    None
 }
 
 /// The models directory: Ok(Some) it, Ok(None) nowhere in the lookup order, Err a named place that is wrong.

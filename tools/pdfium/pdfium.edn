@@ -12,6 +12,13 @@
   "linux-x64"   {:sha256 "d9d67bc40af03aef4fe28a60b19b1086f28ace019c8c9caf19cb7fe3d14ceca3" :lib "lib/libpdfium.so"}
   "linux-arm64" {:sha256 "d7247b33ae5545615a5e877235dd97afc879e3a8805689684f528cae3339d352" :lib "lib/libpdfium.so"}
   "win-x64"     {:sha256 "808d36da9bc5a3104315fb307c80998121f565ee53953633bf33e80d7429e5ac" :lib "bin/pdfium.dll"}
+  ;; the mobile platforms (K6, D900): Android shared libraries (one per ABI) and iOS dylibs (device and simulator slices; pdfium-binaries builds them for iOS 17.0).
+  ;; Never `current`: `bb pdfium-fetch` installs them beside the host's (the Dart build hooks and `bb mobile` read .cache/pdfium/<version>/<platform>).
+  "android-arm64"       {:sha256 "b7a6919dc130dfdf7e409bd1762ed2a306408c4faee1173668837fc446217bf7" :lib "lib/libpdfium.so"}
+  "android-arm"         {:sha256 "4cabe64372ec9a8f9a7e023ae1c2802068abdb5ed79d4ef5cd42f2bbde80927a" :lib "lib/libpdfium.so"}
+  "android-x64"         {:sha256 "9d043689096c7cdd4ca98fff95599be115b2a38feba0c68d2a79ba5eedbda415" :lib "lib/libpdfium.so"}
+  "ios-device-arm64"    {:sha256 "c44140e03fc1e243bebb25fe964e78d2c1fcce32b1f03cfce1ef40617a882304" :lib "lib/libpdfium.dylib"}
+  "ios-simulator-arm64" {:sha256 "1bb98039d8148da5f908027eab5a11c85f0d3e31d4205f57168278c55f846b6e" :lib "lib/libpdfium.dylib"}
   "wasm"        {:sha256 "f0e18e471c0f40e769ff796a7a03955835f9782be4fd119c15349cc91b458f21" :lib "lib/pdfium.js"}}
  ;; A release a year before the pin (2025-09), mac-arm64 only: `bb render-record --compare-build` renders with both and
  ;; measures what two pdfium builds do to the same page (D127).

@@ -376,7 +376,8 @@
           (when-let [source (rd root "tools/ppocr/runtimes.edn")]
             (let [b (n-before)
                   pins (edn/read-string source)
-                  triples (set (keys (:triples (edn/read-string (rd root "tools/native/native.edn")))))]
+                  ;; the five desktop targets: the PP add-on is not built for the mobile triples (K6, D900; the PP adapter library of K2 will be)
+                  triples (set (for [[t c] (:triples (edn/read-string (rd root "tools/native/native.edn"))) :when (not (#{:android :ios} (:os c)))] t))]
               (when-not (= triples (set (keys (:platforms pins)))) (fail! "PP runtime pins must cover all five native targets"))
               (when-not (= "1.22.0" (:version pins)) (fail! "PP runtime version differs from qualified ORT"))
               (doseq [[triple pin] (:platforms pins)]

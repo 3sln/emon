@@ -9,6 +9,10 @@
 # `bb native --audit` runs on every run, cached or built: static libraries only, no jbig2dec, JBIG-KIT, OpenJPEG or GPL symbol, library or link line.
 # P11.4b (D541): after the libraries, each job builds the `emon` CLI over them (`bb cli --check`) and uploads emon-cli-<triple> (the archive and its .sha256).
 #   verify.yml (D550) calls this file with `ref` set to the verified commit; release.yml attaches the collected archives to the GitHub release.
+# K6 (P13.19, D900): the `mobile` job below cross-compiles the same pins for Android (arm64-v8a, armeabi-v7a, x86_64; Ubuntu with the NDK) and iOS (device and simulator;
+#   macOS with Xcode), builds libemon over them (`bb mobile`), audits the library (`bb native --audit`: 16 KB ELF alignment, exports = emon.h, no stray dependency), runs the smoke
+#   program (iOS simulator: run; Android: linked, and run on an emulator when a runner has one) and uploads emon-c-mobile-<triple> (dist/c/emon-c-<version>-<triple>.tar.gz, named as
+#   the desktop C archives are). `mobile: false` leaves it out; verify.yml's call leaves it out until K5 adds the five archives to the release's asset list (tools/release/ops.clj).
 # Not triggered by a push or a pull request. The table below is native.edn's :triples (`bb native --check` fails if they differ).
 name: native
 
@@ -23,6 +27,10 @@ on:
         description: also build, check and upload the emon CLI archive (bb cli)
         type: boolean
         default: true
+      mobile:
+        description: also build, audit, smoke-test and upload the Android and iOS libemon archives (bb mobile)
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       ref:
@@ -33,6 +41,10 @@ on:
         description: also build, check and upload the emon CLI archive (bb cli)
         type: boolean
         default: true
+      mobile:
+        description: also build the mobile (Android, iOS) libemon archives (bb mobile); off for callers until the release flow lists them (K5)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -180,5 +192,76 @@ jobs:
             emon/.cache/cli/emon-*.tar.gz
             emon/.cache/cli/emon-*.zip
             emon/.cache/cli/emon-*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  # THE MOBILE TRIPLES (K6, P13.19, D900): cross-compiled from the same pins, one runner per triple. Android uses NDK r28c (16 KB pages by default; `bb native` refuses an older one),
+  # API 24; iOS the Xcode of the runner (iPhoneOS and iPhoneSimulator SDKs), minimum iOS 13.0. The runner's own NDK is not relied on: r28c is installed by name.
+  mobile:
+    name: mobile (${{ matrix.triple }})
+    if: inputs.mobile != false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { triple: aarch64-linux-android,   runner: ubuntu-24.04, pdfium: android-arm64,        rust: aarch64-linux-android }
+          - { triple: armv7-linux-androideabi, runner: ubuntu-24.04, pdfium: android-arm,          rust: armv7-linux-androideabi }
+          - { triple: x86_64-linux-android,    runner: ubuntu-24.04, pdfium: android-x64,          rust: x86_64-linux-android }
+          - { triple: aarch64-apple-ios,       runner: macos-15,     pdfium: ios-device-arm64,     rust: aarch64-apple-ios }
+          - { triple: aarch64-apple-ios-sim,   runner: macos-15,     pdfium: ios-simulator-arm64,  rust: aarch64-apple-ios-sim }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref || 'main' }}
+          path: emon
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          bb: 1.3.190
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+          targets: ${{ matrix.rust }}
+      # libjpeg-turbo is built with REQUIRE_SIMD=ON: x86_64 Android needs the assembler (arm64 and armv7 use NEON; iOS arm64 NEON)
+      - name: NASM (x86_64 Android)
+        if: matrix.triple == 'x86_64-linux-android'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+      - name: Android NDK r28c
+        if: runner.os == 'Linux'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: The pins are well formed and name this matrix
+        run: bb native --check
+      - name: Cache key (the pins)
+        id: pins
+        run: echo "hash=$(bb native --pin-hash)" >> "$GITHUB_OUTPUT"
+      - name: Source tarballs (by pin hash)
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/dl
+          key: native-dl-${{ hashFiles('emon/tools/native/native.edn') }}
+      - name: Static Tesseract and Leptonica (by pin hash)
+        uses: actions/cache@v4
+        with:
+          path: emon/.cache/native/${{ matrix.triple }}
+          key: native-prefix-${{ matrix.triple }}-${{ matrix.runner }}-${{ steps.pins.outputs.hash }}
+      - name: bb native (cross-compiled; a cache hit is only audited)
+        run: bb native --triple ${{ matrix.triple }} --jobs 4
+      - name: bb native --audit
+        run: bb native --triple ${{ matrix.triple }} --audit
+      - name: The pinned pdfium for this platform
+        run: bb pdfium-fetch --platform ${{ matrix.pdfium }}
+      # libemon + pdfium + models, packed as emon-c-<version>-<triple>.tar.gz; then the library audit and the smoke program (iOS simulator: run in the simulator; Android: linked)
+      - name: bb mobile --check (build, audit the library, smoke)
+        run: bb mobile --triple ${{ matrix.triple }} --check
+      - name: Sizes
+        run: ls -l dist/c/emon-c-*.tar.gz && cat ".cache/mobile/${{ matrix.triple }}/manifest.edn"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emon-c-mobile-${{ matrix.triple }}
+          path: emon/dist/c/emon-c-*.tar.gz
           if-no-files-found: error
           retention-days: 7

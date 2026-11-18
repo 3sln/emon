@@ -7,11 +7,15 @@
 ;;   bb native --licenses [--check]                 write (or verify) the licence texts of tools/native/native.edn into release/licenses/, from the
 ;;                                                  source tarballs and the pinned pdfium-binaries archive (nothing else is downloaded)
 ;;   bb native --check                              native.edn is well formed, every triple is in native.yml and has a pdfium pin
+;;   bb native --audit [--triple T] [--lib-dir D]   (mobile triples, K6/D900: also the shipped library of `bb mobile`, .cache/mobile/<triple>/: Android .so 16 KB
+;;                                                  aligned, soname, only libc/libm/libdl needed, exports = emon.h; iOS dylib: platform, minos, install name, deps)
 ;;   bb native --self-test                          plants each violation in a temporary prefix and requires the audit to name it
 ;;   bb native --fetch                              only download and verify the sources
 ;;
 ;; NOT a gate (it downloads and compiles for minutes); `bb release-audit` and `bb ci coverage` are the gates that hold its inputs.
-;; Native builds work on the HOST only; the other triples are built by .github/workflows/native.yml on their own runners.
+;; Native builds work on the HOST only; the other triples are built by .github/workflows/native.yml on their own runners. The MOBILE triples (K6, D900) are the
+;; exception: they are cross-compiled with the Android NDK (`ANDROID_NDK_HOME`, r28 or newer; from macOS or Linux) or Xcode's iPhoneOS and iPhoneSimulator SDKs (macOS),
+;; so `bb native --triple aarch64-linux-android` runs on any machine that has the NDK. `bb mobile` (tools/native/mobile.clj) builds libemon over the prefix.
 ;;
 ;;   .cache/native/dl/              the verified tarballs            .cache/native/src/<name>-<ver>/   the extracted sources
 ;;   .cache/native/build/<triple>/  one CMake build tree and one log per component
@@ -45,6 +49,28 @@
 
 (def triple (or (opt "--triple") (host-triple)))
 (defn triple-cfg [t] (or (get-in pins [:triples t]) (die "no such triple " t " in " pins-file ": " (str/join ", " (sort (keys (:triples pins)))))))
+;; ------------------------------------------------------------------------------------------------ the mobile toolchains (K6, D900)
+(defn mobile? [cfg] (contains? #{:android :ios} (:os cfg)))
+(defn host-os [] (let [os (System/getProperty "os.name")] (cond (str/includes? os "Mac") :mac (str/includes? os "Linux") :linux :else :windows)))
+
+(defn ndk-dir
+  "The Android NDK: $ANDROID_NDK_HOME or $ANDROID_NDK_ROOT, else the newest under $ANDROID_HOME/ndk (or $ANDROID_SDK_ROOT/ndk)."
+  []
+  (or (some #(when (and % (fs/directory? %)) %) [(System/getenv "ANDROID_NDK_HOME") (System/getenv "ANDROID_NDK_ROOT")])
+      (when-let [sdk (some #(when (and % (fs/directory? (str % "/ndk"))) %) [(System/getenv "ANDROID_HOME") (System/getenv "ANDROID_SDK_ROOT")])]
+        (last (sort (map str (fs/list-dir (str sdk "/ndk"))))))
+      (die "no Android NDK: set ANDROID_NDK_HOME (r28 or newer)")))
+
+(defn ndk-revision [] (let [f (str (ndk-dir) "/source.properties")]
+                        (or (some->> (when (fs/exists? f) (slurp f)) (re-find #"(?m)^Pkg\.Revision\s*=\s*(\S+)") second) (die f " has no Pkg.Revision"))))
+(defn ndk-bin [] (let [tag (str (case (host-os) :mac "darwin" :linux "linux" (die "the Android NDK is used from macOS or Linux here")) "-x86_64")]
+                   (str (ndk-dir) "/toolchains/llvm/prebuilt/" tag "/bin")))
+(defn check-ndk! []
+  (let [rev (ndk-revision) major (Integer/parseInt (first (str/split rev #"\.")))]
+    (when (< major 28) (die "the Android NDK is " rev "; r28 or newer is required (16 KB page alignment by default, D884)"))
+    rev))
+(defn xcrun [& a] (str/trim (:out (apply p/shell {:out :string} "xcrun" a))))
+
 (defn abs [p] (str (fs/absolutize p)))
 (defn prefix-of [t] (abs (str cache "/" t)))
 (defn build-root [t] (abs (str cache "/build/" t)))
@@ -103,12 +129,26 @@
            (str "-DCMAKE_PREFIX_PATH=" prefix)]
           (when (seq (:ignore-prefix cfg)) [(str "-DCMAKE_IGNORE_PREFIX_PATH=" (str/join ";" (:ignore-prefix cfg)))])
           (when mac? [(str "-DCMAKE_OSX_DEPLOYMENT_TARGET=" (:osx-deployment cfg)) (str "-DCMAKE_OSX_ARCHITECTURES=" (:arch cfg))])
+          ;; ANDROID: the NDK's own toolchain file (sysroot, clang, -fPIC, the stripped-down find paths appended to ours); API level and ABI from native.edn
+          (when (= :android (:os cfg))
+            [(str "-DCMAKE_TOOLCHAIN_FILE=" (ndk-dir) "/build/cmake/android.toolchain.cmake")
+             (str "-DANDROID_ABI=" (:abi cfg)) (str "-DANDROID_PLATFORM=android-" (:api cfg)) "-DANDROID_STL=c++_static"
+             "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"])
+          ;; IOS: CMake's iOS system, the SDK by name (iphoneos / iphonesimulator), arm64, the deployment target of native.edn
+          (when (= :ios (:os cfg))
+            ["-DCMAKE_SYSTEM_NAME=iOS" "-DCMAKE_SYSTEM_PROCESSOR=aarch64" (str "-DCMAKE_OSX_SYSROOT=" (:sdk cfg)) (str "-DCMAKE_OSX_ARCHITECTURES=" (:arch cfg))
+             (str "-DCMAKE_OSX_DEPLOYMENT_TARGET=" (:ios-deployment cfg))])
           ;; the assembler is a program, found on the PATH before the prefix filters above
           (when (and (= "libjpeg-turbo" (:id s)) (fs/which "nasm")) [(str "-DCMAKE_ASM_NASM_COMPILER=" (fs/which "nasm"))])
           (when-let [pi (:project-include s)] [(str "-DCMAKE_PROJECT_INCLUDE=" (abs pi))])
           (map sub (:common-cmake pins))
           (map sub (:cmake cfg))
-          (map sub (:cmake s))))))
+          ;; EMON_NATIVE_NO_SIMD=1: a LOCAL verification aid for a machine without NASM building an x86 triple. libjpeg-turbo is then built without SIMD and the manifest says
+          ;; so (:no-simd true); a release build (CI installs NASM and never sets this) has REQUIRE_SIMD=ON.
+          (if (and (= "libjpeg-turbo" (:id s)) (= "1" (System/getenv "EMON_NATIVE_NO_SIMD")))
+            (concat (remove #{"-DREQUIRE_SIMD=ON"} (map sub (:cmake s))) ["-DWITH_SIMD=OFF"])
+            (map sub (:cmake s)))
+          (when (mobile? cfg) (map sub (:cross-cmake s)))))))
 
 (defn run-logged! [t what log env & cmd]
   (let [t0 (System/currentTimeMillis)
@@ -170,11 +210,11 @@
 ;; the name after `-l static=`: the linker adds `lib` and `.a` itself on Unix, and `.lib` only on MSVC (libwebp.lib stays `libwebp`)
 (defn link-name [file win?] (cond-> (str/replace file #"\.(a|lib)$" "") (not win?) (str/replace #"^lib(?=.)" "")))
 
-(defn write-manifest! [t prefix secs]
+(defn write-manifest! [t prefix secs ndk]
   (let [cfg (triple-cfg t)
         files (static-libs prefix)
         by-stem (into {} (map (juxt lib-stem identity)) files)
-        order (:link-order pins)
+        order (or (get-in pins [:link-order-os (:os cfg)]) (:link-order pins))
         missing (remove by-stem order)]
     (when (seq missing) (die "no static library for " (str/join ", " missing) " in " prefix "/lib"))
     (let [names (mapv #(link-name (by-stem %) (= :windows (:os cfg))) order)
@@ -188,15 +228,23 @@
             (with-out-str
               (clojure.pprint/pprint
                {:triple t :pin-hash (pin-hash) :build-seconds (Math/round (double secs))
+                :no-simd (= "1" (System/getenv "EMON_NATIVE_NO_SIMD"))
+                :toolchain (cond (= :android (:os cfg)) {:ndk ndk :abi (:abi cfg) :api (:api cfg)}
+                                 (= :ios (:os cfg)) {:sdk (:sdk cfg) :ios-deployment (:ios-deployment cfg) :xcode (xcrun "--sdk" (:sdk cfg) "--show-sdk-version")})
                 :versions (into {} (map (juxt :id :version)) (:sources pins))
                 :link-order names :cxx-runtime (:cxx-runtime cfg)
                 :libs (vec (for [f files] {:file f :bytes (fs/size (str prefix "/lib/" f)) :sha256 (sha256-file (str prefix "/lib/" f))}))
                 :tessdata (vec (for [d (:data pins)] {:file (:file d) :sha256 (:sha256 d)}))}))))))
 
 ;; ------------------------------------------------------------------------------------------------ the audit
-(defn- nm-tool []
-  (some (fn [c] (when (fs/which (first c)) c))
-        [["nm" "-A"] ["llvm-nm" "-A"] ["dumpbin" "/symbols" "/nologo"]]))
+(defn- nm-tool
+  ([] (nm-tool nil))
+  ([t]
+   ;; the NDK's llvm-nm reads ELF archives (Apple's nm does not)
+   (if (and t (= :android (:os (triple-cfg t))))
+     [(str (ndk-bin) "/llvm-nm") "-A"]
+     (some (fn [c] (when (fs/which (first c)) c))
+           [["nm" "-A"] ["llvm-nm" "-A"] ["dumpbin" "/symbols" "/nologo"]]))))
 
 (defn- tokens [line] (remove str/blank? (str/split line #"\s+")))
 (defn- lib-token? [tok] (or (re-find #"^-l." tok) (re-find #"\.(a|lib|so|dylib|dll)(\.[0-9]+)*$" tok)))
@@ -211,7 +259,9 @@
         deny-libs (re-pattern (get-in pins [:deny :libs]))
         deny-syms (re-pattern (get-in pins [:deny :symbols]))
         deny-paths (re-pattern (get-in pins [:deny :paths]))
-        allowed (set (concat (mapcat :libs (:sources pins))))]
+        os (:os (triple-cfg t))
+        allowed (set (concat (mapcat :libs (:sources pins)) (mapcat #(get-in % [:libs-os os]) (:sources pins))))
+        required (set (mapcat :libs (:sources pins)))]
     (if-not (fs/exists? (str prefix "/lib"))
       (fail! prefix "/lib does not exist: nothing is built for " t)
       (do
@@ -229,10 +279,10 @@
           (when (= b (nfail)) (ok! (str "lib/ holds only the listed static libraries (" (str/join " " (static-libs prefix)) ")"))))
         ;; 2. every listed component is there
         (let [b (nfail) have (set (map lib-stem (static-libs prefix)))]
-          (doseq [l allowed] (when-not (have l) (fail! "no static library for " l " in " prefix "/lib")))
-          (when (= b (nfail)) (ok! (str "all " (count allowed) " libraries of the pins are present"))))
+          (doseq [l required] (when-not (have l) (fail! "no static library for " l " in " prefix "/lib")))
+          (when (= b (nfail)) (ok! (str "all " (count required) " libraries of the pins are present"))))
         ;; 3. symbols
-        (let [b (nfail) tool (nm-tool)]
+        (let [b (nfail) tool (nm-tool t)]
           (if-not tool
             (fail! "no nm, llvm-nm or dumpbin on the PATH: the symbols cannot be inspected")
             (let [nsyms (atom 0)]
@@ -263,7 +313,7 @@
               (swap! n inc)
               ;; a tool (pkg-config, a compiler, ar) may live in Homebrew; a library, header or package directory may not
               (when (and (re-find deny-paths line)
-                         (not (re-find #"^[^:=]*(EXECUTABLE|PROGRAM|_COMPILER|_AR:|RANLIB|_NM:|_LINKER|_COMMAND|_TOOL|OBJDUMP|_STRIP)" line)))
+                         (not (re-find #"^[^:=]*(EXECUTABLE|PROGRAM|_COMPILER|_AR:|RANLIB|_NM:|_LINKER|_COMMAND|_TOOL|OBJDUMP|_STRIP|ADDR2LINE|DLLTOOL|OBJCOPY|READELF)" line)))
                 (fail! (fs/relativize bdir f) ": a path of the machine's own libraries: " (str/trim line)))
               (let [v (second (str/split line #"=" 2))]
                 (when (and v (re-find #"\.(a|lib|dylib|so|tbd)$" v) (allowed (lib-stem (fs/file-name v))) (not (str/starts-with? (str/lower-case (str/replace v "\\" "/")) (str/lower-case (str/replace (str prefix) "\\" "/")))))
@@ -292,6 +342,132 @@
   (doseq [[k m] findings] (println (case k :ok "  ok  " :note "  note" :fail "  FAIL") m))
   (zero? (count (filter (comp #{:fail} first) findings))))
 
+;; ------------------------------------------------------------------------------------------------ the audit of a mobile LIBRARY (K6, D900)
+;; `bb mobile` ships ONE dynamic library per triple. What must hold of it, checked on the file (not on how it was made):
+;;   Android .so   an ELF of the right machine; SONAME libemon.so; every LOAD segment aligned to 16 KB (Google Play requires it of 64-bit apps; the pinned pdfium
+;;                 of 64-bit ABIs is held to it too) and GNU_RELRO ending on a 16 KB boundary or alone in its segment (developer.android.com/guide/practices/page-sizes);
+;;                 no executable stack; NEEDED is libc.so, libm.so and libdl.so and nothing else (no libc++_shared.so: the C++ runtime is inside); no undefined libc++ or
+;;                 libstdc++ symbol; the exported (dynamic, defined) symbols are the functions of emon.h exactly; no excluded (jbig2dec, JBIG-KIT, OpenJPEG ...) symbol
+;;   iOS .dylib    one arm64 slice; platform IOS or IOSSIMULATOR as the triple says; minos at most the deployment target; install name @rpath/libemon.dylib; it loads
+;;                 only /usr/lib and /System/Library; exports = emon.h exactly; no excluded symbol
+(defn header-functions
+  "The function names emon.h declares (comments cut out): the C ABI's export list."
+  []
+  (let [h (str/replace (slurp "host/c/include/emon.h") #"(?s)/\*.*?\*/" " ")]
+    (into (sorted-set) (map second) (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" h))))
+
+(defn- llvm [tool] (str (ndk-bin) "/" tool))
+(defn- run-out [& cmd] (let [r (apply p/shell {:out :string :err :string :continue true} (map str cmd))] (str (:out r) (:err r))))
+(defn- hex [x] (Long/parseLong (str/replace (str x) #"^0x" "") 16))
+
+(defn- elf-segments
+  "[{:type :off :vaddr :filesz :memsz :flags :align}] of `llvm-readelf -lW`."
+  [file]
+  (for [line (str/split-lines (run-out (llvm "llvm-readelf") "-lW" file))
+        :let [t (tokens line)]
+        :when (and (seq t) (#{"LOAD" "GNU_RELRO" "GNU_STACK"} (first t)) (re-find #"^0x" (str (second t))))]
+    (let [[ty off va _ fsz msz & more] t
+          flags (apply str (take-while #(re-matches #"[RWE]" %) more))]
+      {:type ty :off (hex off) :vaddr (hex va) :filesz (hex fsz) :memsz (hex msz) :flags flags :align (hex (last t))})))
+
+(defn audit-android-lib
+  "Findings for an Android shared library. :page is the alignment it must have (0x4000 for the 64-bit ABIs and the library we build, 0x1000 allowed for the 32-bit pdfium
+  :needed-ok are the NEEDED names allowed; :exports the exact export list or nil (not checked: pdfium's)."
+  [file {:keys [machine page needed-ok exports soname]}]
+  (let [out (atom []) fail! #(swap! out conj [:fail (apply str %&)]) ok! #(swap! out conj [:ok (apply str %&)])
+        name (fs/file-name file) deny-syms (re-pattern (get-in pins [:deny :symbols]))
+        hdr (run-out (llvm "llvm-readelf") "-h" file)]
+    (if-not (re-find (re-pattern (str "Machine:\\s+" machine)) hdr)
+      (fail! name ": not an ELF of machine " machine ":\n" (str/trim hdr))
+      (let [segs (elf-segments file) loads (filter #(= "LOAD" (:type %)) segs)
+            dyn (run-out (llvm "llvm-readelf") "-d" file)
+            needed (set (map second (re-seq #"\(NEEDED\)\s+Shared library: \[([^\]]+)\]" dyn)))
+            sn (second (re-find #"\(SONAME\)\s+Library soname: \[([^\]]+)\]" dyn))
+            b (count (filter (comp #{:fail} first) @out))]
+        (when (empty? loads) (fail! name ": no LOAD segment"))
+        (doseq [l loads :when (< (:align l) page)]
+          (fail! name ": a LOAD segment is aligned to 0x" (Long/toHexString (:align l)) ", not 0x" (Long/toHexString page) " (16 KB pages)"))
+        (doseq [r (filter #(= "GNU_RELRO" (:type %)) segs)
+                :let [end (+ (:vaddr r) (:memsz r))
+                      enclosing (first (filter #(and (<= (:vaddr %) (:vaddr r)) (>= (+ (:vaddr %) (:memsz %)) end)) loads))]
+                :when (and (not= 0 (mod end 0x4000)) enclosing (not= end (+ (:vaddr enclosing) (:memsz enclosing))))]
+          (fail! name ": GNU_RELRO ends at 0x" (Long/toHexString end) ", not on a 16 KB boundary, and writable data follows it in its segment"))
+        (doseq [s segs :when (and (= "GNU_STACK" (:type s)) (str/includes? (:flags s) "E"))] (fail! name ": an executable stack"))
+        (when (= b (count (filter (comp #{:fail} first) @out)))
+          (ok! (str name ": " (count loads) " LOAD segments aligned to 0x" (Long/toHexString (apply min (map :align loads))) ", RELRO and stack fine")))
+        (when soname (if (= soname sn) (ok! (str name ": SONAME " sn)) (fail! name ": SONAME is " (pr-str sn) ", not " soname)))
+        (let [b (count (filter (comp #{:fail} first) @out))]
+          (doseq [n needed :when (not (needed-ok n))] (fail! name ": needs " n " (only " (str/join ", " (sort needed-ok)) " may be loaded)"))
+          (when (= b (count (filter (comp #{:fail} first) @out))) (ok! (str name ": loads only " (str/join ", " (sort needed)) ))))
+        (let [und (run-out (llvm "llvm-nm") "-D" "--undefined-only" file)
+              def (run-out (llvm "llvm-nm") "-D" "--defined-only" file)
+              syms (fn [txt] (into (sorted-set) (keep #(when-let [m (re-find #"^(?:[0-9a-f]+\s+)?[A-Za-z]\s+(\S+)" (str/trim %))] (second (re-find #"([^\s@]+)$" (str/trim %)))) (str/split-lines txt))))
+              u (syms und) d (syms def)
+              b (count (filter (comp #{:fail} first) @out))]
+          (doseq [x u :when (re-find #"^(_ZNSt|_ZSt|_ZNKSt|_ZTVN10__cxxabiv|_Znw|_Zna|_Zdl|_Zda|__gxx_personality)" x)]
+            (fail! name ": an undefined C++ runtime symbol (" x "): libc++ must be linked statically"))
+          (doseq [x (concat u d) :when (re-find deny-syms x)] (fail! name ": an excluded symbol (" x ")"))
+          (when (= b (count (filter (comp #{:fail} first) @out))) (ok! (str name ": no undefined C++ runtime symbol, no excluded symbol (" (count u) " undefined, " (count d) " defined)")))
+          (when exports
+            (let [missing (remove d exports) extra (remove exports d) b (count (filter (comp #{:fail} first) @out))]
+              (when (seq missing) (fail! name ": emon.h declares what the library does not export: " (str/join " " (take 8 missing))))
+              (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (take 8 extra)) (when (> (count extra) 8) (str " ... " (count extra) " in all"))))
+              (when (= b (count (filter (comp #{:fail} first) @out))) (ok! (str name ": exports exactly the " (count exports) " functions of emon.h")))))))
+      )
+    @out))
+
+(defn audit-ios-lib
+  "Findings for an iOS dylib. :platform IOS or IOSSIMULATOR, :minos-max a version string (\"13.0\"), :install-name, :exports or nil."
+  [file {:keys [platform minos-max install-name exports]}]
+  (let [out (atom []) fail! #(swap! out conj [:fail (apply str %&)]) ok! #(swap! out conj [:ok (apply str %&)])
+        name (fs/file-name file) deny-syms (re-pattern (get-in pins [:deny :symbols]))
+        nfail #(count (filter (comp #{:fail} first) @out))
+        archs (str/trim (run-out "lipo" "-archs" file))
+        vt (run-out "vtool" "-show-build" file)
+        plat (second (re-find #"platform (\S+)" vt)) minos (second (re-find #"minos (\S+)" vt))
+        ver (fn [v] (mapv #(Integer/parseInt %) (str/split (str v) #"\.")))
+        idname (str/trim (second (str/split-lines (run-out "otool" "-D" file))))
+        deps (rest (map #(first (tokens %)) (rest (str/split-lines (run-out "otool" "-L" file)))))
+        b (nfail)]
+    (when-not (= "arm64" archs) (fail! name ": architectures " (pr-str archs) ", not arm64 alone"))
+    (when-not (= platform plat) (fail! name ": platform " plat ", not " platform))
+    (when (and minos-max (pos? (compare (ver minos) (ver minos-max)))) (fail! name ": minos " minos " is above " minos-max))
+    (when (and install-name (not= install-name idname)) (fail! name ": install name " (pr-str idname) ", not " install-name))
+    (when (= b (nfail)) (ok! (str name ": arm64, platform " plat ", minos " minos ", install name " idname)))
+    (let [b (nfail)]
+      (doseq [d deps :when (not (re-find #"^(/usr/lib/|/System/Library/)" d))] (fail! name ": loads " d " (only /usr/lib and /System/Library may be loaded)"))
+      (when (= b (nfail)) (ok! (str name ": loads only system libraries (" (str/join ", " (map #(fs/file-name %) deps)) ")"))))
+    (let [b (nfail)
+          syms (fn [txt] (into (sorted-set) (keep #(second (re-find #"^_?(\S+)$" (str/trim %))) (str/split-lines txt))))
+          d (syms (run-out "nm" "-gUj" file)) u (syms (run-out "nm" "-gu" file))]
+      (doseq [x (concat u d) :when (re-find deny-syms x)] (fail! name ": an excluded symbol (" x ")"))
+      (when exports
+        (let [missing (remove d exports) extra (remove exports d)]
+          (when (seq missing) (fail! name ": emon.h declares what the library does not export: " (str/join " " (take 8 missing))))
+          (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (take 8 extra)) (when (> (count extra) 8) (str " ... " (count extra) " in all"))))))
+      (when (= b (nfail)) (ok! (str name ": " (if exports (str "exports exactly the " (count exports) " functions of emon.h") (str (count d) " exported symbols")) ", no excluded symbol"))))
+    @out))
+
+(defn audit-mobile-lib
+  "The shipped library of a mobile triple (`bb mobile`): [] when it has not been built (the caller notes that)."
+  [t dir]
+  (let [cfg (triple-cfg t) lib (str dir "/lib/" (if (= :android (:os cfg)) "libemon.so" "libemon.dylib"))
+        pd (str dir "/lib/" (if (= :android (:os cfg)) "libpdfium.so" "libpdfium.dylib"))
+        exports (header-functions)]
+    (cond
+      (not (fs/exists? lib)) nil
+      (= :android (:os cfg))
+      (let [machine ({"arm64" "AArch64" "arm" "ARM" "x86_64" "Advanced Micro Devices X86-64"} (:arch cfg))
+            sys #{"libc.so" "libm.so" "libdl.so"}
+            wide? (not= "arm" (:arch cfg))]
+        (concat (audit-android-lib lib {:machine machine :page 0x4000 :needed-ok sys :exports exports :soname "libemon.so"})
+                ;; pdfium: upstream's own build; 16 KB for the 64-bit ABIs Google Play requires it of, loads only the system's
+                (when (fs/exists? pd) (audit-android-lib pd {:machine machine :page (if wide? 0x4000 0x1000) :needed-ok sys :soname "libpdfium.so"}))))
+      :else
+      (concat (audit-ios-lib lib {:platform (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR") :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon.dylib" :exports exports})
+              ;; pdfium: upstream's own build (iOS 17.0), install name rewritten by `bb pdfium-fetch`
+              (when (fs/exists? pd) (audit-ios-lib pd {:platform (if (= "iphoneos" (:sdk cfg)) "IOS" "IOSSIMULATOR") :minos-max "17.0" :install-name "@rpath/libpdfium.dylib"}))))))
+
 ;; ------------------------------------------------------------------------------------------------ licence texts
 (defn licences! [check?]
   (let [bad (atom 0)
@@ -308,9 +484,12 @@
         (put! out (slurp (str dir "/" file)))))
     (let [{:keys [platform texts]} (:pdfium-licences pins)
           ver (:version (edn/read-string (slurp "tools/pdfium/pdfium.edn")))
-          d (str ".cache/pdfium/" (str/replace ver "/" "-") "/" platform)]
-      (when-not (fs/exists? (str d "/.verified")) (p/shell "bb" "tools/pdfium/fetch.clj" "--platform" platform))
-      (doseq [{:keys [out file]} texts] (put! out (slurp (str d "/" file)))))
+          dir-of (fn [plat] (str ".cache/pdfium/" (str/replace ver "/" "-") "/" plat))]
+      ;; a text may name the platform archive it is taken from (:platform); the others come from the pinned linux-x64 one
+      (doseq [{:keys [out file] :as t} texts
+              :let [plat (or (:platform t) platform) d (dir-of plat)]]
+        (when-not (fs/exists? (str d "/.verified")) (p/shell "bb" "tools/pdfium/fetch.clj" "--platform" plat "--no-current"))
+        (put! out (slurp (str d "/" file)))))
     (when (pos? @bad) (System/exit 1))))
 
 ;; ------------------------------------------------------------------------------------------------ --check
@@ -330,8 +509,14 @@
         (when-not (str/includes? wf t) (f! "native.yml does not name the triple " t))
         (when-not (str/includes? wf (:runner c)) (f! "native.yml does not name the runner " (:runner c) " (" t ")"))))
     (when-not (get-in pdf [:platforms "wasm" :sha256]) (f! "pdfium.edn has no wasm pin"))
-    (let [stems (set (mapcat :libs (:sources pins)))]
-      (doseq [l (:link-order pins)] (when-not (stems l) (f! "link-order names " l ", which no source installs"))))
+    (let [stems (set (mapcat :libs (:sources pins))) os-stems (set (concat stems (mapcat #(mapcat val (:libs-os %)) (:sources pins))))]
+      (doseq [l (:link-order pins)] (when-not (stems l) (f! "link-order names " l ", which no source installs")))
+      (doseq [[os order] (:link-order-os pins) l order] (when-not (os-stems l) (f! "link-order-os " os " names " l ", which no source installs")))
+      ;; the mobile triples (K6, D900) are cross-compiled: every one names its toolchain and where its pdfium and Rust target come from
+      (doseq [[t c] (:triples pins) :when (#{:android :ios} (:os c))]
+        (when-not (and (:rust c) (seq (:cross-from c))) (f! t ": a mobile triple needs :rust and :cross-from"))
+        (when (and (= :android (:os c)) (not (and (:abi c) (:api c)))) (f! t ": an Android triple needs :abi and :api"))
+        (when (and (= :ios (:os c)) (not (and (:sdk c) (:ios-deployment c)))) (f! t ": an iOS triple needs :sdk and :ios-deployment"))))
     (doseq [{:keys [out]} (:licence-texts pins)] (when-not (fs/exists? (str "release/licenses/" out)) (f! "release/licenses/" out " is not vendored (bb native --licenses)")))
     (doseq [{:keys [out]} (:texts (:pdfium-licences pins))] (when-not (fs/exists? (str "release/licenses/" out)) (f! "release/licenses/" out " is not vendored (bb native --licenses)")))
     (if (zero? @bad)
@@ -396,8 +581,46 @@
           (fs/create-dirs (str p "/build/tesseract"))
           (spit (str p "/build/tesseract/link.txt") "c++ -o tesseract a.o /opt/homebrew/lib/libwebp.a\n")
           (expect "/opt/homebrew/lib/libwebp.a in a link.txt" p #"machine's libraries"))
+        ;; THE MOBILE LIBRARY AUDIT (K6, D900): small shared libraries built with the NDK or Xcode, one plant each (skipped where the toolchain is not)
+        (let [expect-lib (fn [what findings pattern]
+                           (if (some (fn [[k m]] (and (= k :fail) (re-find pattern m))) findings)
+                             (println "  ok   planted:" what)
+                             (do (swap! fails inc) (println "  FAIL planted but not named:" what))))
+              sh! (fn [& c] (apply p/shell {:out :string :err :string} (map str c)))
+              src (fn [n body] (let [f (str tmp "/" n)] (spit f body) f))]
+          (if-let [ndk (try (ndk-bin) (catch Throwable _ nil))]
+            (when (fs/exists? (str ndk "/aarch64-linux-android24-clang"))
+              (let [cc (str ndk "/aarch64-linux-android24-clang") cxx (str ndk "/aarch64-linux-android24-clang++")
+                    c1 (src "lib1.c" "int f_ok(void) { return 1; }\n")
+                    mk (fn [out srcf & flags] (apply sh! (concat [cc "-shared" "-o" (str tmp "/" out) srcf] flags)) (str tmp "/" out))
+                    page16 ["-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384" "-Wl,-soname,libx.so"]
+                    opts {:machine "AArch64" :page 0x4000 :needed-ok #{"libc.so" "libm.so" "libdl.so"} :exports #{"f_ok"} :soname "libx.so"}
+                    good (apply mk "good.so" c1 page16)]
+                (if (every? (comp #{:ok} first) (audit-android-lib good opts))
+                  (println "  ok   a 16 KB aligned library that needs libc, exports what is declared and has the soname passes")
+                  (do (swap! fails inc) (println "  FAIL the clean Android library does not pass:") (report! (audit-android-lib good opts))))
+                (expect-lib "a 4 KB aligned library" (audit-android-lib (mk "page4.so" c1 "-Wl,-z,max-page-size=4096" "-Wl,-z,common-page-size=4096" "-Wl,-soname,libx.so") opts) #"aligned to 0x1000")
+                (expect-lib "a wrong soname" (audit-android-lib (mk "soname.so" c1 "-Wl,-z,max-page-size=16384" "-Wl,-soname,liboops.so") opts) #"SONAME")
+                (expect-lib "an extra export" (audit-android-lib (apply mk "extra.so" (src "lib2.c" "int f_ok(void){return 1;}\nint f_extra(void){return 2;}\n") page16) opts) #"exports what emon.h does not declare")
+                (expect-lib "a missing export" (audit-android-lib (apply mk "miss.so" (src "lib3.c" "int f_other(void){return 1;}\n") page16) (assoc opts :exports #{"f_ok" "f_other"})) #"does not export")
+                (expect-lib "a jbig2dec symbol" (audit-android-lib (apply mk "jbig.so" (src "lib4.c" "int f_ok(void){return 1;}\nint jbig2_ctx_new(void){return 2;}\n") page16) (assoc opts :exports nil)) #"excluded symbol")
+                (expect-lib "libc++_shared.so as a dependency" (audit-android-lib (let [f (src "lib5.cpp" "#include <string>\nstd::string f_ok(void) { return std::string(\"x\"); }\n")] (apply sh! cxx "-shared" "-o" (str tmp "/shared.so") f page16) (str tmp "/shared.so")) (assoc opts :exports nil)) #"needs libc\+\+_shared\.so|C\+\+ runtime symbol")))
+            (println "  SKIP --self-test: no Android NDK, the Android library audit was not exercised"))
+          (if (and (= :mac (host-os)) (fs/which "xcrun"))
+            (let [c1 (src "ios1.c" "int f_ok(void) { return 1; }\n")
+                  mk (fn [out & flags] (apply sh! (concat ["xcrun" "--sdk" "iphoneos" "clang" "-arch" "arm64" "-miphoneos-version-min=13.0" "-dynamiclib" "-o" (str tmp "/" out) c1] flags)) (str tmp "/" out))
+                  opts {:platform "IOS" :minos-max "13.0" :install-name "@rpath/libx.dylib" :exports #{"f_ok"}}
+                  good (mk "good.dylib" "-install_name" "@rpath/libx.dylib")]
+              (if (every? (comp #{:ok} first) (audit-ios-lib good opts))
+                (println "  ok   an arm64 iOS dylib with the right install name and exports passes")
+                (do (swap! fails inc) (println "  FAIL the clean iOS library does not pass:") (report! (audit-ios-lib good opts))))
+              (expect-lib "an absolute install name" (audit-ios-lib (mk "abs.dylib" "-install_name" "/Users/x/libx.dylib") opts) #"install name")
+              (expect-lib "the simulator platform where the device one is wanted" (audit-ios-lib (let [out (str tmp "/sim.dylib")] (sh! "xcrun" "--sdk" "iphonesimulator" "clang" "-arch" "arm64" "-mios-simulator-version-min=13.0" "-dynamiclib" "-install_name" "@rpath/libx.dylib" "-o" out c1) out) opts) #"platform")
+              (expect-lib "a deployment target above the declared one" (audit-ios-lib (let [out (str tmp "/new.dylib")] (sh! "xcrun" "--sdk" "iphoneos" "clang" "-arch" "arm64" "-miphoneos-version-min=16.0" "-dynamiclib" "-install_name" "@rpath/libx.dylib" "-o" out c1) out) opts) #"minos")
+              (expect-lib "an extra export" (audit-ios-lib (let [out (str tmp "/extra.dylib")] (sh! "xcrun" "--sdk" "iphoneos" "clang" "-arch" "arm64" "-miphoneos-version-min=13.0" "-dynamiclib" "-install_name" "@rpath/libx.dylib" "-o" out (src "ios2.c" "int f_ok(void){return 1;}\nint f_extra(void){return 2;}\n")) out) opts) #"exports what emon.h does not declare"))
+            (println "  SKIP --self-test: no Xcode, the iOS library audit was not exercised")))
         (fs/delete-tree tmp)
-        (if (zero? @fails) (println "  ok   --self-test: 16 planted violations, each named; the clean prefix passes") (System/exit 1))))))
+        (if (zero? @fails) (println "  ok   --self-test: 16 planted violations, each named; the clean prefix passes (and the mobile library audit's planted violations, above)") (System/exit 1))))))
 
 ;; ------------------------------------------------------------------------------------------------ --smoke
 (defn smoke! []
@@ -424,9 +647,11 @@
 ;; ------------------------------------------------------------------------------------------------ the build
 (defn build! []
   (let [t triple cfg (triple-cfg t)
-        _ (when-not (= t (host-triple))
-            (die t " cannot be built on this host (" (host-triple) "): native builds work on the host only; "
-                 ".github/workflows/native.yml builds it on " (:runner cfg)))
+        _ (when-not (or (= t (host-triple)) (contains? (:cross-from cfg) (host-os)))
+            (die t " cannot be built on this host (" (host-triple) "): native builds work on the host only (the mobile triples also cross-compile from " 
+                 (str/join "/" (map name (:cross-from cfg))) "); .github/workflows/native.yml builds it on " (:runner cfg)))
+        ndk (when (= :android (:os cfg)) (check-ndk!))
+        _ (when (= :ios (:os cfg)) (when-not (fs/which "xcrun") (die "iOS triples need Xcode (xcrun)")))
         prefix (prefix-of t)
         jobs (min 4 (Integer/parseInt (or (opt "--jobs") "4")))
         t0 (System/currentTimeMillis)]
@@ -437,12 +662,15 @@
         (println "native" t "-> " prefix " (" (count (:sources pins)) "sources, -j" jobs ")")
         (doseq [s (:sources pins)] (extract! s))
         (doseq [d (:data pins)] (datafile d))
-        (fs/delete-tree prefix)
-        (fs/create-dirs prefix)
-        (doseq [s (:sources pins)] (build-one! t s jobs))
+        ;; --from ID (a development aid, never CI): keep the prefix and rebuild from component ID on
+        (let [from (opt "--from") todo (if from (drop-while #(not= from (:id %)) (:sources pins)) (:sources pins))]
+          (when (and from (empty? todo)) (die "--from " from ": no such component"))
+          (when-not from (fs/delete-tree prefix))
+          (fs/create-dirs prefix)
+          (doseq [s todo] (build-one! t s jobs)))
         (let [secs (/ (- (System/currentTimeMillis) t0) 1000.0)]
           (when (= :windows (:os cfg)) (rename-windows-libs! prefix))
-          (write-manifest! t prefix secs)
+          (write-manifest! t prefix secs ndk)
           (println (format "built in %.0f s; auditing" secs))
           (when-not (report! (audit t prefix (build-root t)))
             (fs/delete (str prefix "/manifest.edn"))
@@ -458,5 +686,11 @@
   (flag? "--smoke") (smoke!)
   (flag? "--audit") (let [t triple]
                       (println "audit" t (prefix-of t))
-                      (when-not (report! (audit t (prefix-of t) (build-root t))) (System/exit 1)))
+                      (let [ok1 (report! (audit t (prefix-of t) (build-root t)))
+                            lib-dir (or (opt "--lib-dir") (abs (str ".cache/mobile/" t)))
+                            lib (when (mobile? (triple-cfg t)) (audit-mobile-lib t lib-dir))
+                            _ (when (mobile? (triple-cfg t))
+                                (if lib (println "audit the library of" t lib-dir) (println "  note" lib-dir "has no library (bb mobile --triple" t "): only the static dependencies were audited")))
+                            ok2 (if lib (report! lib) true)]
+                        (when-not (and ok1 ok2) (System/exit 1))))
   :else (build!))
