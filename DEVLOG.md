@@ -4123,7 +4123,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [ ] P13.16 — K3 host registries: Go (cgo adapters), Java, C#, Rust, JS, pod, CLI; delete the per-host Tesseract twins.
 - [ ] P13.17 — K4 packs infrastructure: append-only `packs` GitHub release + R2 mirror `emon-packs.3sln.com` (public read; CI-only scoped write token), `bb packs build|verify|bundle|list`, licence allowlist.
 - [ ] P13.18 — K5 packaging + release: `bb package` per piece, core/adapters/turnkey layering check, native bundle per triple, `release.yml` per-package jobs and `only` retry.
-- [ ] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8).
+- [x] P13.19 — K6 mobile triples (Android, iOS) for core + adapters + pdfium (supersedes P13.8). DONE for the C library and pdfium as they are today (D900); K2's adapter libraries become further entries in `tools/native/mobile.clj`.
 - [ ] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing: GitHub OIDC from `pub.yml` on a deploy-key-pushed tag, D885).
 - [ ] P13.20b — `emon_flutter`, the Flutter turnkey: a federated plugin on top of `emon`. It adds `emon_ocr_mlkit` (an Android-only Flutter plugin: ML Kit through Play services, adapter contract) and the web implementation over the JS SDK. Build hooks cannot add Gradle dependencies or Android code, so Android platform OCR needs a plugin. Devices without Play services fall back to PP or Tesseract. The pure-Dart `emon` stays Flutter-free: Vision and Windows OCR come as hook-shipped adapter libraries.
 - [ ] P13.21 — K8 platform adapters Vision, Windows OCR, ML Kit (= P13.10, P13.11).
@@ -14527,5 +14527,34 @@ Defaults:
 - `EMON_OFFLINE=1` or `packs: never` always wins over hooks.
 
 Every pack, including app-provided bytes, is verified against the catalogue's SHA-256 before use.
+
+- [ ] **Signed off** (maintainer)
+
+### D900 — Mobile native builds: one libemon per Android ABI and iOS slice, cross-compiled from the desktop pins
+
+P13.19 (K6), for the Dart/Flutter evaluation release (D895). The C library of today (`libemon`, `emon.h`, Tesseract and Leptonica linked in, pdfium loaded at run time) now has five more triples. K2 (core plus adapter libraries) has not happened, so each triple ships what exists; `artifacts` in `tools/native/mobile.clj` is the one list of what a triple carries, and K2's adapter libraries become more entries in it.
+
+**Triples and toolchains.**
+- **Android:** `aarch64-linux-android` (arm64-v8a), `armv7-linux-androideabi` (armeabi-v7a), `x86_64-linux-android`. NDK r28c (28.2.13676358; `bb native` refuses anything older), API 24, `ANDROID_STL=c++_static`, `-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`.
+- **iOS:** `aarch64-apple-ios` (device, iOS 13.0) and `aarch64-apple-ios-sim` (Apple-silicon simulator, 14.0), Xcode 16.2, iOS 18.2 SDKs. No Intel simulator (D885).
+- Rust 1.92.0 with the five targets. Cross-compiles run from macOS or Linux (Android) and macOS (iOS): `native.edn` `:cross-from`.
+- **Why API 24:** pdfium-binaries builds pdfium with `default_min_sdk_version = 23`; Leptonica's `fmemopen`/`open_memstream` need 23; 24 is Flutter's `minSdkVersion` floor and the NDK's current default. A Dart hook asked for `AndroidCodeConfig.targetNdkApi` below 24 should refuse.
+- **Why iOS 13.0 (simulator 14.0):** Flutter's floor; arm64 simulators exist from iOS 14, which is also Rust's minimum for `aarch64-apple-ios-sim`. The pinned pdfium dylib is built for iOS 17.0 upstream: on an older device libemon loads and has no pdfium (a clean absent port), born-digital conversion is unaffected.
+
+**Library form.**
+- ONE dynamic library per triple. Android `libemon.so` (soname `libemon.so`, 16 KB `LOAD` alignment from `-Wl,-z,max-page-size=16384`, C++ runtime linked statically so only libc, libm and libdl are needed, exports = the 44 functions of `emon.h`, `--exclude-libs ALL`). iOS `libemon.dylib` (install name `@rpath/libemon.dylib`, arm64 only, loads only `/usr/lib` and `/System/Library`).
+- **No `libemon.a` on mobile.** Dart build hooks bundle dynamic libraries only (`DynamicLoadingBundled`; dart.dev/tools/hooks, `code_assets`: `IOSCodeConfig.targetSdk` device or simulator, `deploymentVersion`, `AndroidCodeConfig.targetNdkApi`), and the static Tesseract slice is over a hundred megabytes. Flutter embeds and signs the iOS dylib as a framework; the archive's is unsigned.
+- Archive `emon-c-<version>-<triple>.tar.gz` in `dist/c/` with `include/emon.h`, `lib/libemon.*`, `lib/libpdfium.*`, `share/emon/tessdata/` (eng, osd), as the desktop archives.
+- **Finding pdfium in an app:** `PDFIUM_LIB` was `.so` on iOS (wrong; fixed) and files "beside the library" do not exist in an APK or an iOS app. After the file search, `host/c/src/native.rs` asks the loader by name (`libpdfium.so`; `@rpath/libpdfium.dylib`, `@rpath/libpdfium.framework/libpdfium`). The models still need a directory (`emon_set_native_paths`); the Dart package (K7) has to put them in the app's files.
+
+**pdfium.** The same pin `chromium/8076`, per platform by SHA-256 in `tools/pdfium/pdfium.edn`: `android-arm64`, `android-arm`, `android-x64`, `ios-device-arm64`, `ios-simulator-arm64`. They are never `.cache/pdfium/current`; the iOS dylibs get the `@rpath/libpdfium.dylib` install name like the macOS ones. The Android archives list three licences the desktop ones do not (LLVM libunwind, cpu_features, catapult): vendored under `release/licenses/` and in `release/third-party.edn`, with the NDK's libc++ and cpu-features that Android libemon and libwebp compile in. `release-audit`'s PP-runtime check now means the five desktop triples.
+
+**Pipeline.**
+- `tools/native/native.edn` + `native.clj`: the five triples, `:cross-cmake` (Tesseract's `LEPT_TIFF_RESULT=0`, since its configure runs a test program), `:libs-os`/`:link-order-os` (libwebp's `libcpufeatures-webp.a` on Android), an empty `CpuFeaturesNdkCompat` stub in `tesseract-prefind.cmake` (Tesseract's CMake demands a package it never uses), `--from ID` (development aid), `EMON_NATIVE_NO_SIMD=1` (a LOCAL aid for a machine without NASM building x86_64; CI installs NASM and the manifest records `:no-simd`).
+- `bb mobile --triple T [--smoke | --check]` (`tools/native/mobile.clj`): assembles the same crate as `bb package --host c` (a guard fails if its host-file list drifts from `tools/package.clj`), builds with `cargo rustc --target T --features tesseract -- FLAGS`, assembles `.cache/mobile/<T>/`, writes the archive, and the smoke program (`tools/native/mobile/smoke.c`). K5 should fold it into `bb package`.
+- `bb native --audit --triple T` now also audits the shipped library (`audit-android-lib`, `audit-ios-lib`, run by `--check` of `bb mobile`): ELF machine, soname, every `LOAD` aligned to 16 KB, `GNU_RELRO` per developer.android.com/guide/practices/page-sizes, no executable stack, NEEDED only libc/libm/libdl, no undefined C++ runtime symbol, exports equal to `emon.h` exactly; iOS: one arm64 slice, platform, minos, install name, system-only dependencies, exports equal to `emon.h`; no excluded symbol. The pinned pdfium of each platform is held to the loading rules (and 16 KB for 64-bit Android). `--self-test` plants eleven violations in small NDK/Xcode-built libraries. The first Android build failed this audit: rustc links with `-nodefaultlibs`, so `-static-libstdc++` did nothing and libc++ symbols were left undefined; the static runtime is now named explicitly.
+- CI: a `mobile` job in `native.yml` (five legs: Ubuntu with NDK r28c installed by name for Android, macOS 15 for iOS), `if: inputs.mobile != false`. It uploads `emon-c-mobile-<triple>` (the `emon-c-<version>-<triple>.tar.gz` archive). Off by default for `workflow_call`: the release asset list (`tools/release/ops.clj`, 23 assets) and verify.yml's collector are K5's, and adding five archives to them is a release-flow change.
+
+**Verification (this machine).** iOS simulator: ran in `xcrun simctl` (iOS 18.2): the born-digital sample byte for byte its golden, and the scan read by pdfium and Tesseract (the heading is there). Android arm64: ran on an arm64 emulator (API 35) with 4 KB pages and on a 16 KB-page emulator image: same two checks. armeabi-v7a, x86_64 and the iOS device library were linked and audited, not run (no 32-bit or x86_64 emulator on Apple silicon). The x86_64 prefix was built without SIMD (no NASM here); not the release configuration.
 
 - [ ] **Signed off** (maintainer)
