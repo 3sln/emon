@@ -28,7 +28,7 @@ tesseract = []
 # libemon_ocr_tesseract: that Tesseract as a native OCR adapter library (host/rust/src/tess_adapter.rs; emon_adapter.h). Built by `bb package`, not by a dependent crate.
 tesseract-adapter = ["tesseract"]
 # fetch the model packs adapters read with (host/rust/src/packs.rs): an HTTPS client. Off by default: a core crate never fetches (D885); every pack is verified against the catalogue's SHA-256.
-packs-fetch = []
+packs-fetch = ["dep:ureq"]
 
 [dependencies]
 # the ImageDecode port's codecs: PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned.
@@ -37,6 +37,8 @@ miniz_oxide = "=0.8.9"
 # the `decode-img` request's DCT decoder: the very library `image` already uses for JPEG, used directly for the Adobe CMYK and YCCK samples
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
+# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
+ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(ppocr)", "cfg(pdfium)", "cfg(codecs)", 'cfg(feature, values("__test_hooks"))'] }

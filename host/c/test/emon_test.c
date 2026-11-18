@@ -4,6 +4,8 @@
  * is the caller's to free and the free is safe; a panic does not cross; and a caller's small thread stack is nothing the answer depends on.
  * Prints `ok   WHAT` per check (`FAIL WHAT` otherwise) and exits 1 on any failure. `bb slice` and `bb c` run it. */
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE 1
+#define _DARWIN_C_SOURCE 1
 #include "emon.h"
 #include "emon_test_hooks.h"
 
@@ -11,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -117,6 +120,439 @@ static void *small_thread(void *p) {
     return NULL;
 }
 
+
+/* ------------------------------------------------------------------------------------------------ adapters (K2, D900): stubs in C behind emon_adapter.h */
+
+typedef struct {
+    int reads, starts, cancels;
+    int mode;            /* 0 a reading with no words, 1 unsupported, 2 failed */
+    uint64_t token;
+    const emon_adapter_host *host;
+    uint32_t engine, needs, flags;
+    int req_engine, req_nlangs, req_id_ok;
+    int32_t pending_id;
+    uint64_t tokens[256];
+    int32_t ids[256];
+    int npending;
+    char reason[96];
+} stub;
+
+static int stub_describe(void *ctx, emon_adapter_info *out, emon_adapter_status *st) {
+    stub *s = ctx;
+    (void)st;
+    memset(out, 0, sizeof *out);
+    out->engine = s->engine;
+    out->caps = 0;
+    out->needs = s->needs;
+    out->flags = s->flags;
+    out->config = "stub";
+    out->observed = "stub;v=1";
+    return EMON_ADAPTER_OK;
+}
+
+/* the smallest valid OIL answer: [len 3 id 0] and a 24-cell header with the engine and a segmentation, and no rows */
+static void stub_record(int32_t *rec, int32_t id, uint32_t engine) {
+    memset(rec, 0, 28 * sizeof *rec);
+    rec[0] = 28;
+    rec[1] = emon_const(2);
+    rec[2] = id;
+    rec[4] = 1;
+    rec[5] = (int32_t)engine;
+    rec[10] = 3;
+}
+
+static int stub_read(void *ctx, const int32_t *req, size_t n, const emon_adapter_image *img, int want_binary, emon_adapter_answer *out, emon_adapter_status *st) {
+    stub *s = ctx;
+    emon_ocr_request_info info;
+    emon_error e = {0};
+    (void)img;
+    (void)want_binary;
+    s->reads++;
+    if (emon_ocr_request(req, n, &info, &e) == 0) {
+        s->req_engine = info.engine;
+        s->req_nlangs = info.nlangs;
+        s->req_id_ok = info.id == req[2] && info.w <= 0;
+    }
+    emon_free_error(&e);
+    if (s->mode == 1) {
+        strcpy(st->reason, "lang-unavailable");
+        strcpy(st->message, "the stub reads nothing");
+        return EMON_ADAPTER_UNSUPPORTED;
+    }
+    if (s->mode == 2) {
+        strcpy(st->reason, "boom");
+        return EMON_ADAPTER_FAILED;
+    }
+    out->cells = malloc(28 * sizeof(int32_t));
+    out->ncells = 28;
+    stub_record(out->cells, req[2], s->engine);
+    return EMON_ADAPTER_OK;
+}
+
+static void stub_release(void *ctx, emon_adapter_answer *a) {
+    (void)ctx;
+    free(a->cells);
+    a->cells = NULL;
+}
+
+static int stub_start(void *ctx, const int32_t *req, size_t n, const emon_adapter_image *img, uint64_t token, emon_adapter_status *st) {
+    stub *s = ctx;
+    (void)n;
+    (void)img;
+    (void)st;
+    s->starts++;
+    s->token = token;
+    s->pending_id = req[2];
+    if (s->npending < 256) {
+        s->tokens[s->npending] = token;
+        s->ids[s->npending++] = req[2];
+    }
+    return EMON_ADAPTER_OK;
+}
+
+static void stub_cancel(void *ctx, uint64_t token) {
+    stub *s = ctx;
+    (void)token;
+    s->cancels++;
+}
+
+static void stub_bind(void *ctx, const emon_adapter_host *host) { ((stub *)ctx)->host = host; }
+static void stub_close(void *ctx) { (void)ctx; }
+
+static emon_ocr_adapter stub_adapter(stub *s, int async) {
+    emon_ocr_adapter a = {0};
+    a.abi = EMON_ADAPTER_ABI;
+    a.size = sizeof a;
+    a.name = "stub";
+    a.ctx = s;
+    a.describe = stub_describe;
+    a.read = async ? NULL : stub_read;
+    a.start = async ? stub_start : NULL;
+    a.cancel = stub_cancel;
+    a.release = stub_release;
+    a.bind = stub_bind;
+    a.close = stub_close;
+    return a;
+}
+
+static emon_engines *engines_with(stub *s, int async, emon_error *err) {
+    emon_engines *e = NULL;
+    emon_ocr_adapter a = stub_adapter(s, async);
+    if (emon_engines_new(&e, err) < 0) return NULL;
+    if (emon_engines_add_ocr(e, &a, err) < 0) {
+        emon_engines_free(e);
+        return NULL;
+    }
+    return e;
+}
+
+static int pack_asked = 0;
+static int pack_action = EMON_PACK_DECLINE;
+static const uint8_t *pack_bytes = NULL;
+static size_t pack_len = 0;
+static char pack_seen[64];
+static int on_pack(void *ctx, const emon_pack_request *req, emon_pack_decision *out) {
+    (void)ctx;
+    pack_asked++;
+    snprintf(pack_seen, sizeof pack_seen, "%s", req->pack);
+    out->action = pack_action;
+    out->data = pack_bytes;
+    out->len = pack_len;
+    out->engine = "ppocr";
+    return 0;
+}
+
+static int has(const emon_buf *b, const char *needle) { return b->data && strstr((const char *)b->data, needle) != NULL; }
+
+static void test_engines(const uint8_t *scan, size_t sn) {
+    emon_error err = {0};
+    emon_buf j0 = {0}, j1 = {0}, j2 = {0}, b = {0};
+    emon_input in = bytes_input(scan, sn);
+
+    /* registration: refused by name, at registration */
+    stub bad = {0};
+    emon_engines *e = NULL;
+    emon_engines_new(&e, &err);
+    emon_ocr_adapter a = stub_adapter(&bad, 0);
+    bad.engine = EMON_OEN_TESSERACT;
+    a.abi = EMON_ADAPTER_ABI + 1;
+    check(emon_engines_add_ocr(e, &a, &err) < 0 && err.name && strcmp(err.name, "adapter-abi-unsupported") == 0, "an adapter built for a newer ABI is refused: adapter-abi-unsupported");
+    emon_free_error(&err);
+    a = stub_adapter(&bad, 0);
+    bad.engine = 77;
+    check(emon_engines_add_ocr(e, &a, &err) < 0 && err.name && strcmp(err.name, "adapter-engine-unknown") == 0, "an engine kin's table does not have: adapter-engine-unknown");
+    emon_free_error(&err);
+    bad.engine = EMON_OEN_APPLE_VISION;
+    bad.needs = EMON_PACK_RECOGNIZER;
+    check(emon_engines_add_ocr(e, &a, &err) < 0 && err.name && strcmp(err.name, "adapter-needs-beyond-engine") == 0, "Vision needs no pack: adapter-needs-beyond-engine");
+    emon_free_error(&err);
+    bad.engine = EMON_OEN_TESSERACT;
+    bad.needs = 0;
+    bad.flags = EMON_ADAPTER_REMOTE;
+    check(emon_engines_add_ocr(e, &a, &err) < 0 && err.name && strcmp(err.name, "adapter-remote-refused") == 0, "pixels off the device need allow_remote: adapter-remote-refused");
+    emon_free_error(&err);
+    check(emon_engines_load(e, "/no/such/adapter.so", NULL, &err) < 0 && err.name && strcmp(err.name, "adapter-runtime-missing") == 0, "a library that is not there: adapter-runtime-missing");
+    emon_free_error(&err);
+    check(emon_engines_add_ocr(NULL, &a, &err) == -EMON_ERR_USAGE, "NULL engines are a usage error");
+    emon_free_error(&err);
+    emon_engines_free(e);
+
+    /* an adapter that cannot read is no adapter: the page is unread, never blank */
+    check(emon_convert_json(&in, "ocr=always\n", NULL, 0, &j0, &err) == 0, "a scan with no engines converts (unread)");
+    stub s1 = {0};
+    s1.engine = EMON_OEN_TESSERACT;
+    s1.mode = 1;
+    e = engines_with(&s1, 0, &err);
+    check(e != NULL && emon_convert_json(&in, "ocr=always\n", e, 0, &j1, &err) == 0, "a scan with an adapter that says unsupported converts");
+    printf("     (the adapter was asked %d times)\n", s1.reads);
+    check(s1.reads > 0 && s1.req_engine == EMON_OEN_TESSERACT && s1.req_id_ok, "the adapter is handed Tesseract's requests; emon_ocr_request reads their fields");
+    check(j0.len == j1.len && memcmp(j0.data, j1.data, j0.len) == 0, "unsupported by an adapter is unread, exactly as no adapter: never blank");
+    emon_buf notes = {0};
+    check(emon_engines_notes(e, &notes, &err) == 0 && has(&notes, "stub: unsupported lang-unavailable"), "the reason is in the notes");
+    emon_free_buf(&notes);
+    emon_free_buf(&j1);
+    s1.mode = 2;
+    check(emon_convert_json(&in, "ocr=always\n", e, 0, &j1, &err) == 0 && j1.len == j0.len, "an adapter that fails leaves the page unread and the conversion goes on");
+    emon_free_buf(&j1);
+    s1.mode = 0;
+    check(emon_convert_json(&in, "ocr=always\n", e, 0, &j1, &err) == 0 && !(j1.len == j0.len && memcmp(j1.data, j0.data, j0.len) == 0), "an adapter that reads is a reading, not the unread page");
+
+    /* the step API answers its adapter's requests itself and gives the one-shot's bytes */
+    int reads_before = s1.reads;
+    emon_session *sess = NULL;
+    check(emon_open(sn, 0, 0, e, NULL, 0, "ocr=always\n", &sess, &err) == 0, "emon_open with engines");
+    int needed_requests = 0, st;
+    emon_step_out o = {0};
+    while ((st = emon_step(sess, &o, &err)) > 0) {
+        if (st == EMON_NEED_BYTES)
+            for (size_t i = 0; i < o.nranges; i++) emon_provide(sess, o.ranges[i].offset, scan + o.ranges[i].offset, (size_t)o.ranges[i].length, &err);
+        if (st == EMON_NEED_REQUESTS) needed_requests++;
+        emon_free_step(&o);
+    }
+    emon_model *m = NULL;
+    check(st == 0 && emon_finish(sess, &m, &err) == 0, "the step loop finishes");
+    emon_close(sess);
+    check(needed_requests == 0 && s1.reads > reads_before, "emon_step answered the adapter's ocr requests itself: none came out");
+    check(m && emon_model_json(m, 0, &j2, &err) == 0 && j2.len == j1.len && memcmp(j1.data, j2.data, j1.len) == 0, "the session's Model is the one-shot's");
+    emon_free_model(m);
+    emon_free_buf(&j2);
+    emon_free_buf(&j0);
+    emon_engines_free(e);
+
+    /* routing by engine: an adapter for PP-OCR does not see Tesseract's requests; the hybrid sends it its own */
+    stub pp = {0}, tt = {0};
+    pp.engine = EMON_OEN_PPOCR;
+    tt.engine = EMON_OEN_TESSERACT;
+    e = engines_with(&pp, 0, &err);
+    emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+    check(pp.reads == 0, "PP-OCR's adapter is not asked for a Tesseract request");
+    emon_free_buf(&b);
+    emon_engines_free(e);
+    {
+        emon_ocr_adapter ta = stub_adapter(&tt, 0), pa = stub_adapter(&pp, 0);
+        emon_engines_new(&e, &err);
+        emon_engines_add_ocr(e, &ta, &err);
+        emon_engines_add_ocr(e, &pa, &err);
+    }
+    int ok = emon_convert_json(&in, "ocr=always\nocr-engine=ppocr\n", e, 0, &b, &err);
+    check(ok == 0 && pp.reads > 0 && pp.req_engine == EMON_OEN_PPOCR, "with ocr-engine=ppocr it is asked for PP-OCR's");
+    emon_free_buf(&b);
+    emon_engines_free(e);
+
+    /* async: start returns at once, the step says WAITING, emon_complete answers, and the Model is the sync reading's */
+    stub as = {0};
+    as.engine = EMON_OEN_TESSERACT;
+    as.flags = EMON_ADAPTER_ASYNC;
+    e = engines_with(&as, 1, &err);
+    emon_open(sn, 0, 0, e, NULL, 0, "ocr=always\n", &sess, &err);
+    int waited = 0, completed = 0;
+    while ((st = emon_step(sess, &o, &err)) > 0) {
+        if (st == EMON_NEED_BYTES)
+            for (size_t i = 0; i < o.nranges; i++) emon_provide(sess, o.ranges[i].offset, scan + o.ranges[i].offset, (size_t)o.ranges[i].length, &err);
+        if (st == EMON_WAITING) {
+            int32_t rec[28];
+            emon_error bogus = {0};
+            waited++;
+            check(emon_wait(sess, 0, &err) == 0, "emon_wait times out when nothing has arrived");
+            check(emon_complete(sess, as.token + 1000, NULL, 0, &bogus, &err) == -EMON_ERR_USAGE, "emon_complete for a token that is not this session's is a usage error");
+            emon_free_error(&err);
+            /* every request of the round was started: answer them all, as an engine of the program's own would */
+            for (int i = 0; i < as.npending; i++) {
+                stub_record(rec, as.ids[i], EMON_OEN_TESSERACT);
+                if (emon_complete(sess, as.tokens[i], rec, 28, NULL, &err) == 0) completed++;
+                else fprintf(stderr, "emon_complete: %s: %s\n", err.name, err.message);
+                emon_free_error(&err);
+            }
+            as.npending = 0;
+            check(emon_wait(sess, 1000, &err) == 1, "emon_wait returns once an answer has arrived");
+            if (waited > 20) break;
+        }
+        emon_free_step(&o);
+    }
+    check(st == 0 && waited >= 1 && completed >= 1 && as.starts >= 1, "emon_step says EMON_WAITING while only async work is outstanding, and takes the answer emon_complete gave");
+    m = NULL;
+    j2 = (emon_buf){0};
+    check(emon_finish(sess, &m, &err) == 0 && emon_model_json(m, 0, &j2, &err) == 0 && j2.len == j1.len && memcmp(j1.data, j2.data, j1.len) == 0, "the async reading gives the sync reading's Model");
+    emon_free_model(m);
+    emon_free_buf(&j2);
+    emon_free_buf(&j1);
+    emon_close(sess);
+    emon_engines_free(e);
+
+    /* closing a session with work outstanding cancels it */
+    stub as2 = {0};
+    as2.engine = EMON_OEN_TESSERACT;
+    as2.flags = EMON_ADAPTER_ASYNC;
+    e = engines_with(&as2, 1, &err);
+    emon_open(sn, 0, 0, e, NULL, 0, "ocr=always\n", &sess, &err);
+    while ((st = emon_step(sess, &o, &err)) == EMON_NEED_BYTES) {
+        for (size_t i = 0; i < o.nranges; i++) emon_provide(sess, o.ranges[i].offset, scan + o.ranges[i].offset, (size_t)o.ranges[i].length, &err);
+        emon_free_step(&o);
+    }
+    check(st == EMON_WAITING, "waiting on an adapter that never answers");
+    emon_close(sess);
+    check(as2.cancels >= 1, "closing the session cancels the work still outstanding");
+    emon_engines_free(e);
+}
+
+
+/* packs: the pack directory, prepare and engines as JSON, the hook's decisions, and every pack verified against the catalogue (the real English model: its hash is the catalogue's) */
+static void test_packs(const uint8_t *scan, size_t sn) {
+    emon_error err = {0};
+    emon_buf b = {0}, notes = {0};
+    emon_input in = bytes_input(scan, sn);
+    char dir[] = "/tmp/emon-c-packs-XXXXXX";
+    size_t tn = 0;
+    FILE *tf = fopen(".cache/native/dl/eng.traineddata", "rb");
+    uint8_t *good = NULL;
+    if (tf) {
+        fclose(tf);
+        good = slurp(".cache/native/dl/eng.traineddata", &tn);
+    }
+    if (!mkdtemp(dir)) {
+        check(0, "a temporary directory");
+        return;
+    }
+    stub s = {0};
+    s.engine = EMON_OEN_TESSERACT;
+    s.needs = EMON_PACK_RECOGNIZER;
+    emon_engines *e = NULL;
+    emon_ocr_adapter a = stub_adapter(&s, 0);
+    emon_engines_new(&e, &err);
+    check(emon_engines_packs(e, dir, EMON_PACKS_CACHE, &err) == 0, "emon_engines_packs names the pack directory and the mode");
+    check(emon_engines_packs(e, dir, 99, &err) == -EMON_ERR_USAGE, "a mode that is none of the three is a usage error");
+    emon_free_error(&err);
+    check(emon_engines_add_ocr(e, &a, &err) >= 0, "an adapter that needs a recognizer pack registers");
+    check(emon_engines_packs(e, dir, EMON_PACKS_CACHE, &err) == -EMON_ERR_USAGE && err.message && strstr(err.message, "before registering"), "the pack directory is named before the adapters are registered");
+    emon_free_error(&err);
+
+    check(emon_prepare(e, "ocr=auto\n", &b, &err) == 0 && has(&b, "\"verdict\":\"blocked\"") && has(&b, "\"id\":\"tess-fast-eng\",\"state\":\"missing\"") && has(&b, "\"id\":\"tess-osd\""), "emon_prepare: English and orientation are missing and the mode fetches nothing: blocked");
+    emon_free_buf(&b);
+    check(emon_prepare(e, "locale=de-DE\n", &b, &err) == 0 && has(&b, "tess-fast-deu") && has(&b, "\"languages\":[\"deu\"]"), "emon_prepare names the locale's language pack");
+    emon_free_buf(&b);
+    check(emon_prepare(e, "ocr=never\n", &b, &err) == 0 && has(&b, "\"verdict\":\"ready\"") && has(&b, "\"packs\":[]"), "ocr=never needs nothing: ready");
+    emon_free_buf(&b);
+    check(emon_prepare(e, "bogus=1\n", &b, &err) == -EMON_ERR_USAGE, "emon_prepare: an option text that does not parse is a usage error");
+    emon_free_error(&err);
+    check(emon_engines_describe(e, &b, &err) == 0 && has(&b, "\"name\":\"tesseract\"") && has(&b, "\"state\":\"unavailable\"") && has(&b, "\"mode\":\"cache\""), "emon_engines_describe: Tesseract is registered and its packs are missing, which this mode cannot fetch: unavailable");
+    emon_free_buf(&b);
+
+    /* the hook: decline */
+    emon_on_pack_needed(e, on_pack, NULL, &err);
+    pack_action = EMON_PACK_DECLINE;
+    check(emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err) == 0 && pack_asked > 0 && strcmp(pack_seen, "tess-fast-eng") == 0 && s.reads == 0, "decline: the hook is asked for English, the adapter is never called");
+    emon_free_buf(&b);
+    emon_engines_notes(e, &notes, &err);
+    check(has(&notes, "pack-missing:tess-fast-eng"), "the page is unread with pack-missing:<id>");
+    emon_free_buf(&notes);
+    /* substitute: another engine would answer under its own name: unread */
+    pack_action = EMON_PACK_SUBSTITUTE;
+    emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+    emon_free_buf(&b);
+    emon_engines_notes(e, &notes, &err);
+    check(has(&notes, "pack-substitute-differs:ppocr") && s.reads == 0, "substitute: another OIL engine leaves the request unread");
+    emon_free_buf(&notes);
+    /* fetch: the mode is cache, so a fetch answer is a refusal (never the network) */
+    pack_action = EMON_PACK_FETCH;
+    emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+    emon_free_buf(&b);
+    check(s.reads == 0, "fetch under `cache`: nothing is fetched");
+    /* never wins over the hook */
+    emon_engines_free(e);
+    emon_engines_new(&e, &err);
+    emon_engines_packs(e, dir, EMON_PACKS_NEVER, &err);
+    emon_engines_add_ocr(e, &a, &err);
+    emon_on_pack_needed(e, on_pack, NULL, &err);
+    pack_asked = 0;
+    pack_action = EMON_PACK_PROVIDE;
+    pack_bytes = good;
+    pack_len = tn;
+    emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+    emon_free_buf(&b);
+    check(pack_asked == 0 && s.reads == 0, "EMON_PACKS_NEVER wins over the hook: it is not asked");
+    check(emon_packs_ensure(e, "tess-fast-eng", &err) < 0, "emon_packs_ensure under `never` is refused");
+    emon_free_error(&err);
+    check(emon_packs_ensure(e, "no-such-pack", &err) < 0 && err.name && strcmp(err.name, "unknown-pack") == 0, "an unknown pack id is unknown-pack");
+    emon_free_error(&err);
+    emon_engines_free(e);
+
+    if (good) {
+        /* provide: the catalogue's own bytes are verified and kept, and the adapter reads */
+        emon_engines_new(&e, &err);
+        emon_engines_packs(e, dir, EMON_PACKS_CACHE, &err);
+        emon_engines_add_ocr(e, &a, &err);
+        emon_on_pack_needed(e, on_pack, NULL, &err);
+        pack_asked = 0;
+        s.reads = 0;
+        pack_action = EMON_PACK_PROVIDE;
+        pack_bytes = good;
+        pack_len = tn;
+        check(emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err) == 0 && s.reads > 0 && pack_asked == 1, "provide: bytes that are the catalogue's are used and the adapter reads");
+        emon_free_buf(&b);
+        char kept[256];
+        snprintf(kept, sizeof kept, "%s/tess-fast-eng/eng.traineddata", dir);
+        check(access(kept, R_OK) == 0, "and kept in the pack directory");
+        check(emon_prepare(e, "ocr=auto\n", &b, &err) == 0 && has(&b, "\"id\":\"tess-fast-eng\",\"state\":\"installed\""), "emon_prepare then says English is installed");
+        emon_free_buf(&b);
+        emon_engines_free(e);
+        /* tampered: one byte flipped. Never used, and nothing is kept */
+        unlink(kept);
+        good[1000] ^= 1;
+        emon_engines_new(&e, &err);
+        emon_engines_packs(e, dir, EMON_PACKS_CACHE, &err);
+        emon_engines_add_ocr(e, &a, &err);
+        emon_on_pack_needed(e, on_pack, NULL, &err);
+        s.reads = 0;
+        pack_bytes = good;
+        emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+        emon_free_buf(&b);
+        emon_engines_notes(e, &notes, &err);
+        check(s.reads == 0 && access(kept, R_OK) != 0 && has(&notes, "pack-hash-mismatch:tess-fast-eng"), "tampered bytes are never used: pack-hash-mismatch, unread, nothing kept");
+        emon_free_buf(&notes);
+        good[1000] ^= 1;
+        /* a tampered file already in the pack directory is deleted */
+        {
+            char pdir[256];
+            snprintf(pdir, sizeof pdir, "%s/tess-fast-eng", dir);
+            mkdir(pdir, 0700);
+            FILE *f = fopen(kept, "wb");
+            good[2000] ^= 1;
+            fwrite(good, 1, tn, f);
+            fclose(f);
+            good[2000] ^= 1;
+            pack_action = EMON_PACK_DECLINE;
+            emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
+            emon_free_buf(&b);
+            check(access(kept, R_OK) != 0, "a file in the pack directory that does not match is deleted");
+        }
+        emon_engines_free(e);
+        free(good);
+    } else {
+        printf("     SKIP the provide and tamper checks: .cache/native/dl/eng.traineddata is not here (bb native fetches it)\n");
+    }
+    (void)rmdir;
+}
+
 int main(void) {
     const char *DOC = "test/corpus/synth/pdf/h-plain.pdf";
     size_t n, gn, hn;
@@ -129,13 +565,7 @@ int main(void) {
 
     /* the library */
     check(emon_version() && strlen(emon_version()) > 0, "emon_version is a string");
-    check(emon_capabilities() <= 7, "emon_capabilities is a set of the three native ports");
-    /* a place you NAME that is wrong is a usage error that changes nothing; NULL and "" name nothing (D552) */
-    check(emon_set_native_paths("/no/such/pdfium", NULL, &err) == -EMON_ERR_USAGE && err_is(&err, EMON_ERR_USAGE, "usage") && strstr(err.message, "/no/such/pdfium"), "emon_set_native_paths: a pdfium that is not there is a usage error");
-    emon_free_error(&err);
-    check(emon_set_native_paths(NULL, "/no/such/models", &err) == -EMON_ERR_USAGE && strstr(err.message, "traineddata"), "emon_set_native_paths: a models directory without models is a usage error");
-    emon_free_error(&err);
-    check(emon_set_native_paths(NULL, "", &err) == 0 && emon_set_native_paths(NULL, NULL, &err) == 0 && emon_capabilities() <= 7, "emon_set_native_paths: NULL and \"\" name nothing");
+    check(emon_capabilities() <= 5 && (emon_capabilities() & 2) == 0, "emon_capabilities is a set of pdfium and the codecs: Tesseract is an adapter, not a bit");
     check(emon_const(0) != emon_const(2) &&emon_const(2) != emon_const(5) && emon_const(10) != emon_const(12) && emon_const(99) == -1, "emon_const: kin's numbers of the plan/fulfil protocol");
     check(strcmp(emon_error_category(EMON_ERR_LIMIT), "limit") == 0 && emon_error_category(-EMON_ERR_IO) != NULL && emon_error_category(99) == NULL, "emon_error_category names the categories");
 
@@ -391,6 +821,15 @@ int main(void) {
     check(emon_model_html(am, "assets=external,prefix=assets/", &b, &err) == 0 && strstr((char *)b.data, "assets/a0.jpg"), "external HTML names the asset's file");
     emon_free_buf(&b);
     emon_free_model(am);
+
+    /* adapters, engines and packs (K2, D900) */
+    {
+        size_t sn;
+        uint8_t *scan = slurp("samples/scan-plain.pdf", &sn);
+        test_engines(scan, sn);
+        test_packs(scan, sn);
+        free(scan);
+    }
 
     /* the engine's stack is its own */
     small t = {doc, n, {0}, 99};

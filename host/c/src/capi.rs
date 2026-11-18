@@ -1297,7 +1297,7 @@ pub unsafe extern "C" fn emon_packs_ensure(e: *mut emon_engines, ids: *const c_c
         for name in list.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
             codes.push(packs::pack_find(name).ok_or_else(|| RegFail::Named("unknown-pack".to_string(), format!("unknown pack: {:?}", name)))?);
         }
-        on_worker(|| e.packs().ensure(&codes)).map_err(|m| RegFail::Named(m.split(':').next().unwrap_or("pack-fetch-failed").to_string(), m))?;
+        on_worker(|| e.packs().ensure(&codes)).map_err(|m| if m.starts_with("pack-") { RegFail::Named(m.split(':').next().unwrap_or("pack-fetch-failed").to_string(), m) } else { RegFail::Usage(m) })?;
         Ok(0)
     })
 }

@@ -37,7 +37,7 @@
 (def allowed-prefix ["libpng" "IJG" "Unicode-"])
 
 ;; Licences awaiting a maintainer's decision: passed with a NOTE until one is made. Empty since D526's sign-off.
-(def pending-decision #{})
+(def pending-decision #{"CDLA-Permissive-2.0"}) ; K2 (D900): webpki-roots, the Mozilla CA bundle behind the optional `packs-fetch` HTTPS client: a permissive data licence, attribution only; awaiting the maintainer
 
 (def deny-re #"(?i)jbig2dec(?!ode)|(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")
 (def gpl-re #"(?i)(?<![a-z])[al]?gpl(?![a-z])|gnu (?:affero|general|lesser)")

@@ -97,7 +97,7 @@ path = "src/driver.rs"
 [features]
 tesseract = []
 # the pack fetch of the adapters (host/rust/src/packs.rs, K2): an HTTPS client, off unless asked
-packs-fetch = []
+packs-fetch = ["dep:ureq"]
 # libemon_ocr_tesseract: Tesseract as a native adapter library (host/rust/src/tess_adapter.rs), built by `bb package`
 tesseract-adapter = ["tesseract"]
 # the test hooks (P11.4, D542): `Options::no_retarget`. The driver needs it; a published crate (`bb package`) never has the feature.
@@ -112,6 +112,8 @@ miniz_oxide = "=0.8.9"
 # CMYK and YCCK samples `image` does not give; both are already in the lock file
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
+# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
+ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", "cfg(ppocr)"] }

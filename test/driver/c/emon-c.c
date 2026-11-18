@@ -341,15 +341,15 @@ int main(int argc, char **argv) {
     size_t pwlen = password ? strlen(password) : 0;
 
     if (native) {
-        emon_error nerr = {0};
-        CHECK(emon_engines_new(&g_engines, &nerr));
-        if (packs_dir) CHECK(emon_engines_packs(g_engines, packs_dir, EMON_PACKS_NEVER, &nerr));
+        emon_error err = {0};
+        CHECK(emon_engines_new(&g_engines, &err));
+        if (packs_dir) CHECK(emon_engines_packs(g_engines, packs_dir, EMON_PACKS_NEVER, &err));
         if (nadapters) {
-            for (int i = 0; i < nadapters; i++) CHECK(emon_engines_load(g_engines, adapters[i], NULL, &nerr));
+            for (int i = 0; i < nadapters; i++) CHECK(emon_engines_load(g_engines, adapters[i], NULL, &err));
             emon_error perr = {0};
             if (emon_engines_pdfium(g_engines, NULL, &perr) < 0) emon_free_error(&perr);
         } else {
-            CHECK(emon_engines_defaults(g_engines, &nerr));
+            CHECK(emon_engines_defaults(g_engines, &err));
         }
     }
     int use_step = async || record || replay || !strcmp(source, "step");

@@ -76,7 +76,7 @@ path = "src/pod.rs"
 [features]
 tesseract = []
 # the pack fetch of the adapters (host/rust/src/packs.rs, K2): an HTTPS client, off unless asked
-packs-fetch = []
+packs-fetch = ["dep:ureq"]
 # the test hooks (P11.4, D542): `Options::no_retarget` and the C symbol `emon_test_panic`. A published library (`bb package`) is built without it.
 __test_hooks = []
 
@@ -86,6 +86,8 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 miniz_oxide = "=0.8.9"
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
+# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
+ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", "cfg(ppocr)"] }
