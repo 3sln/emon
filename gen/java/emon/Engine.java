@@ -207,7 +207,7 @@ public final class Engine {
     }
     public static int enHybrid(emon.Enctx.Cfg c) {
         // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
-        // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901) ask for no second reading.
+        // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
         if (c.oengine == 1) {
             return 1;
         }
@@ -215,7 +215,7 @@ public final class Engine {
     }
     public static int enOeMode(emon.Enctx.Cfg c) {
         // How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's).
+        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
         if (c.oengine == 1) {
             return 2;
         }
@@ -227,6 +227,9 @@ public final class Engine {
         }
         if (c.oengine == 4) {
             return 6;
+        }
+        if (c.oengine == 5) {
+            return 8;
         }
         return 0;
     }

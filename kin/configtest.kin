@@ -215,7 +215,7 @@
   (t-key-name (test-t) 21 "ocr-engine"))
 
 (deftest test-the-words-have-their-names-and-codes-in-kin
-  (assert-eq (cv-row-count 0) 20 "twenty words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr: the engines of `ocr-engine`)")
+  (assert-eq (cv-row-count 0) 21 "twenty-one words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr; K7: mlkit-text: the engines of `ocr-engine`)")
   (t-word-name (test-t) 0 1 2 "always")
   (t-word-name (test-t) 1 1 1 "auto")
   (t-word-name (test-t) 2 1 0 "never")
@@ -235,7 +235,8 @@
   (t-word-name (test-t) 16 21 1 "ppocr")
   (t-word-name (test-t) 17 21 2 "ppocr-alone")
   (t-word-name (test-t) 18 21 3 "apple-vision")
-  (t-word-name (test-t) 19 21 4 "windows-media-ocr"))
+  (t-word-name (test-t) 19 21 4 "windows-media-ocr")
+  (t-word-name (test-t) 20 21 5 "mlkit-text"))
 
 (deftest test-a-key-is-found-by-its-whole-name-or-its-prefix
   (t-is-key (test-t) (text-blob "ocr") 1 "ocr")
@@ -463,4 +464,6 @@
     (assert-eq (fd c oengine) 3 "the platform engines read alone: their own codes, not PP's")
     (assert-eq (t-parse c (text-blob "ocr-engine=windows-media-ocr")) 0 "Windows.Media.Ocr parses")
     (assert-eq (fd c oengine) 4 "code 4")
-    (t-refused (test-t) (text-blob "ocr-engine=unknown") "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision or windows-media-ocr")))
+    (assert-eq (t-parse c (text-blob "ocr-engine=mlkit-text")) 0 "ML Kit parses (K7)")
+    (assert-eq (fd c oengine) 5 "code 5")
+    (t-refused (test-t) (text-blob "ocr-engine=unknown") "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text")))

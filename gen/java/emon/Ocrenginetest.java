@@ -265,7 +265,8 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrengine.oeConfigValue(5, 0), 119, "it begins with the engine's name");
         emon.Testport.assertEq(Ocrengine.oeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
         emon.Testport.assertEq(Ocrengine.oeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
-        emon.Testport.assertEq(Ocrengine.oeConfigLen(4), 0, "ML Kit has none here: it is the platform plugin's");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin");
+        emon.Testport.assertEq(Ocrengine.oeConfigValue(4, 0), 109, "it begins with the engine's name");
     }
     public static void testAppleVisionSelectionRetagsEveryRequestWithItsConfiguration() {
         emon.Port.Cells r = emon.Port.newCells();
@@ -298,6 +299,21 @@ public final class Ocrenginetest {
         Ocrengine.oeTag(r, scratch, 4);
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "a later selection replaces it, never stacks");
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "one trailer");
+    }
+    public static void testMlKitSelectionRetagsWithItsConfiguration() {
+        emon.Port.Cells r = emon.Port.newCells();
+        emon.Port.Cells scratch = emon.Port.newCells();
+        int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.rqOcrLang(r, 101, 110, 103, 0);
+        Plan.rqOcrEnd(r, at);
+        Ocrengine.oeTag(r, scratch, 8);
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 4, "ML Kit");
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(4), "its trailer");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 14), 71, "its configuration's length");
+        Ocrengine.oeTag(r, scratch, 8);
+        emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(4), "idempotent: one trailer");
+        Ocrengine.oeTag(r, scratch, 4);
+        emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "a later selection replaces it, never stacks");
     }
     public static void testAnEngineSelectionReachesEveryOcrRequestOfABatch() {
         emon.Port.Cells r = emon.Port.newCells();

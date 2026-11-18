@@ -1,0 +1,38 @@
+name: emon
+description: "PDF and image to semantic HTML and JSON, with OCR that just works: the emon core, the platform's OCR adapters, and model packs fetched on demand."
+version: 0.0.0-dev
+repository: https://github.com/3sln/emon
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  emon_core:
+    path: ../emon_core
+  emon_ocr_ppocr:
+    path: ../emon_ocr_ppocr
+  emon_ocr_tesseract:
+    path: ../emon_ocr_tesseract
+  emon_ocr_vision:
+    path: ../emon_ocr_vision
+  emon_ocr_winocr:
+    path: ../emon_ocr_winocr
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
+
+# Development in this repository: the archives `bb package --host c` and `bb mobile` write to dist/c (see emon_core's pubspec).
+hooks:
+  user_defines:
+    emon_core:
+      native_dir: ../../../dist/c
+    emon_ocr_tesseract:
+      native_dir: ../../../dist/c
+    emon_ocr_vision:
+      native_dir: ../../../dist/c
+    emon_ocr_winocr:
+      native_dir: ../../../dist/c
+    emon_ocr_ppocr:
+      native_dir: ../../../dist/c

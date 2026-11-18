@@ -1,0 +1,26 @@
+name: emon_ocr_winocr
+description: "Windows.Media.Ocr for emon on Windows: the adapter library (emon_ocr_winocr.dll) and nothing to download."
+version: 0.0.0-dev
+repository: https://github.com/3sln/emon
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  code_assets: ^2.2.0
+  emon_core:
+    path: ../emon_core
+  hooks: ^2.2.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
+
+# Development in this repository: the archives `bb package --host c` and `bb mobile` write to dist/c (see emon_core's pubspec).
+hooks:
+  user_defines:
+    emon_ocr_winocr:
+      native_dir: ../../../dist/c
+    emon_core:
+      native_dir: ../../../dist/c

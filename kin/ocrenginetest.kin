@@ -199,7 +199,8 @@
   (assert-eq (oe-config-value 5 0) 119 "it begins with the engine's name")
   (assert-eq (oe-config-len 2) 74 "PP-OCR's is its frozen policy hash")
   (assert-eq (oe-config-len 1) 0 "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change")
-  (assert-eq (oe-config-len 4) 0 "ML Kit has none here: it is the platform plugin's"))
+  (assert-eq (oe-config-len 4) 71 "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin")
+  (assert-eq (oe-config-value 4 0) 109 "it begins with the engine's name"))
 
 (deftest test-apple-vision-selection-retags-every-request-with-its-configuration
   (let [^Cells r (new-cells) ^Cells scratch (new-cells)
@@ -230,6 +231,20 @@
     (oe-tag r scratch 4)
     (assert-eq (op-request-engine r) 3 "a later selection replaces it, never stacks")
     (assert-eq (cells-len r) (+ 15 (oe-config-len 3)) "one trailer")))
+
+(deftest test-ml-kit-selection-retags-with-its-configuration
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)
+        ^I32 at (rq-ocr r 12 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (oe-tag r scratch 8)
+    (assert-eq (op-request-engine r) 4 "ML Kit")
+    (assert-eq (cells-len r) (+ 15 (oe-config-len 4)) "its trailer")
+    (assert-eq (cells-at r 14) 71 "its configuration's length")
+    (oe-tag r scratch 8)
+    (assert-eq (cells-len r) (+ 15 (oe-config-len 4)) "idempotent: one trailer")
+    (oe-tag r scratch 4)
+    (assert-eq (op-request-engine r) 3 "a later selection replaces it, never stacks")))
 
 (deftest test-an-engine-selection-reaches-every-ocr-request-of-a-batch
   (let [^Cells r (new-cells) ^Cells scratch (new-cells)

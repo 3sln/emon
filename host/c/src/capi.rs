@@ -276,18 +276,85 @@ impl<T> AssertSend<T> {
     }
 }
 
+// The thread that entered a call (the caller's) serves the callbacks the app registered while the worker runs the engine: a hook of the app's (the pack hook, the pack events)
+// is run on the caller's own thread, as if the engine had called it directly. A binding whose callbacks must run on the thread it called from (Dart's `NativeCallable.isolateLocal`
+// aborts the process on any other) needs it; a C caller sees only that its callback is not called from a thread it never made. A callback made from a thread that is not the worker
+// (the engine's own helper threads, `parallel=N`) is run where it is called.
+type CallerJob = Box<dyn FnOnce() + Send + 'static>;
+
+thread_local! {
+    static CALLER: std::cell::RefCell<Option<std::sync::mpsc::Sender<CallerJob>>> = const { std::cell::RefCell::new(None) };
+}
+
+// Run `f` on the thread that is waiting for the worker, and answer what it answers; directly when this is no worker.
+fn on_caller<R: Send>(f: impl FnOnce() -> R + Send) -> R {
+    let tx = CALLER.with(|c| c.borrow().clone());
+    let Some(tx) = tx else { return f() };
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<std::thread::Result<R>>();
+    let job: Box<dyn FnOnce() + Send + '_> = Box::new(move || {
+        let _ = done_tx.send(catch_unwind(AssertUnwindSafe(f)));
+    });
+    // SAFETY: this blocks until the job has run (or the caller's loop is gone, in which case it is dropped unrun), so nothing the job borrows is used after this returns.
+    let job: CallerJob = unsafe { std::mem::transmute::<Box<dyn FnOnce() + Send + '_>, CallerJob>(job) };
+    if tx.send(job).is_err() {
+        panic!("emon: the caller's thread is gone");
+    }
+    match done_rx.recv() {
+        Ok(Ok(r)) => r,
+        Ok(Err(p)) => std::panic::resume_unwind(p),
+        Err(_) => panic!("emon: the caller's thread did not run a callback"),
+    }
+}
+
 fn on_worker<T>(f: impl FnOnce() -> T) -> T {
     let f = AssertSend(f);
     std::thread::scope(|sc| {
+        let (tx, rx) = std::sync::mpsc::channel::<CallerJob>();
         let h = std::thread::Builder::new()
             .name("emon".to_string())
             .stack_size(WORKER_STACK)
-            .spawn_scoped(sc, move || AssertSend(f.into_inner()()))
+            .spawn_scoped(sc, move || {
+                CALLER.with(|c| *c.borrow_mut() = Some(tx));
+                let r = catch_unwind(AssertUnwindSafe(|| AssertSend(f.into_inner()())));
+                CALLER.with(|c| *c.borrow_mut() = None);
+                match r {
+                    Ok(v) => v,
+                    Err(p) => std::panic::resume_unwind(p),
+                }
+            })
             .unwrap_or_else(|e| panic!("emon could not start its worker thread: {}", e));
+        // serve the app's callbacks until the worker has finished (it drops its end of the channel)
+        for job in rx {
+            job();
+        }
         match h.join() {
             Ok(r) => r.into_inner(),
             Err(p) => std::panic::resume_unwind(p),
         }
+    })
+}
+
+// An app's pack hook or event callback, called on the caller's thread (see `on_caller`).
+struct HookBox<F> {
+    f: F,
+    ctx: *mut c_void,
+}
+
+unsafe extern "C" fn pack_needed_on_caller(ctx: *mut c_void, req: *const packs::PackRequest, out: *mut packs::PackDecision) -> c_int {
+    let h = &*(ctx as *const HookBox<packs::PackNeededFn>);
+    let (f, c, req, out) = (h.f, AssertSend(h.ctx), AssertSend(req), AssertSend(out));
+    on_caller(move || {
+        let (c, req, out) = (c, req, out);
+        f(c.0, req.0, out.0)
+    })
+}
+
+unsafe extern "C" fn pack_event_on_caller(ctx: *mut c_void, ev: *const packs::PackEvent) -> c_int {
+    let h = &*(ctx as *const HookBox<packs::PackEventFn>);
+    let (f, c, ev) = (h.f, AssertSend(h.ctx), AssertSend(ev));
+    on_caller(move || {
+        let (c, ev) = (c, ev);
+        f(c.0, ev.0)
     })
 }
 
@@ -1262,7 +1329,14 @@ pub unsafe extern "C" fn emon_prepare(e: *const emon_engines, options: *const c_
 #[no_mangle]
 pub unsafe extern "C" fn emon_on_pack_needed(e: *mut emon_engines, f: Option<packs::PackNeededFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
     guarded_n(err, || {
-        engines_arg(e)?.packs().set_hook(f, ctx);
+        // the hook is called on the caller's thread (`on_caller`): the box is the app's function and context, kept for as long as the process (a registry sets its hook once or twice)
+        match f {
+            Some(f) => {
+                let b: &'static HookBox<packs::PackNeededFn> = Box::leak(Box::new(HookBox { f, ctx }));
+                engines_arg(e)?.packs().set_hook(Some(pack_needed_on_caller), b as *const _ as *mut c_void);
+            }
+            None => engines_arg(e)?.packs().set_hook(None, std::ptr::null_mut()),
+        }
         Ok(0)
     })
 }
@@ -1272,7 +1346,13 @@ pub unsafe extern "C" fn emon_on_pack_needed(e: *mut emon_engines, f: Option<pac
 #[no_mangle]
 pub unsafe extern "C" fn emon_on_pack_event(e: *mut emon_engines, f: Option<packs::PackEventFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
     guarded_n(err, || {
-        engines_arg(e)?.packs().set_events(f, ctx);
+        match f {
+            Some(f) => {
+                let b: &'static HookBox<packs::PackEventFn> = Box::leak(Box::new(HookBox { f, ctx }));
+                engines_arg(e)?.packs().set_events(Some(pack_event_on_caller), b as *const _ as *mut c_void);
+            }
+            None => engines_arg(e)?.packs().set_events(None, std::ptr::null_mut()),
+        }
         Ok(0)
     })
 }

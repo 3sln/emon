@@ -1,0 +1,45 @@
+name: emon_flutter
+description: "emon for Flutter: PDF and image to semantic HTML and JSON with OCR that works out of the box (ML Kit on Android, Apple Vision or Tesseract elsewhere), model packs on demand, and a ChangeNotifier for downloads."
+version: 0.0.0-dev
+repository: https://github.com/3sln/emon
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  emon:
+    path: ../emon
+  emon_ocr_mlkit:
+    path: ../emon_ocr_mlkit
+  flutter:
+    sdk: flutter
+  path: ^1.9.0
+  path_provider: ^2.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      # ML Kit is the Android engine: the Android implementation of this plugin is emon_ocr_mlkit (a federated plugin: apps depend on emon_flutter alone)
+      android:
+        default_package: emon_ocr_mlkit
+
+# Development in this repository: the archives `bb package --host c` and `bb mobile` write to dist/c (see emon_core's pubspec). An app names its own.
+hooks:
+  user_defines:
+    emon_core:
+      native_dir: ../../../dist/c
+    emon_ocr_tesseract:
+      native_dir: ../../../dist/c
+    emon_ocr_vision:
+      native_dir: ../../../dist/c
+    emon_ocr_winocr:
+      native_dir: ../../../dist/c
+    emon_ocr_ppocr:
+      native_dir: ../../../dist/c

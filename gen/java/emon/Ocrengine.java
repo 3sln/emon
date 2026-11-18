@@ -6,11 +6,11 @@ package emon;
 
 public final class Ocrengine {
     public static final int[] OE_IDENTITY = {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 97, 55, 101, 55, 97, 99,
-        98, 51, 55, 99, 100, 56, 51, 49, 102, 55, 51, 57, 49, 100, 50, 102,
-        48, 50, 57, 57, 48, 50, 48, 51, 97, 49, 50, 49, 100, 49, 98, 49,
-        97, 51, 55, 50, 102, 55, 52, 97, 50, 97, 102, 48, 97, 101, 54, 49,
-        51, 50, 100, 55, 53, 50, 49, 56, 52, 56
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 50, 98, 100, 55, 99, 98,
+        99, 51, 53, 102, 57, 51, 57, 52, 99, 100, 57, 100, 54, 52, 99, 100,
+        48, 101, 51, 98, 54, 101, 48, 55, 98, 49, 54, 50, 49, 53, 98, 56,
+        57, 51, 56, 54, 55, 55, 52, 56, 102, 97, 48, 57, 54, 101, 102, 51,
+        55, 101, 102, 53, 49, 53, 97, 100, 97, 48
     };
     public static final int[] OE_VISION_CONFIG = {
         97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
@@ -26,12 +26,22 @@ public final class Ocrengine {
         79, 99, 114, 46, 79, 99, 114, 69, 110, 103, 105, 110, 101, 59, 108, 97,
         110, 103, 61, 105, 110, 115, 116, 97, 108, 108, 101, 100
     };
+    public static final int[] OE_MLKIT_CONFIG = {
+        109, 108, 107, 105, 116, 45, 116, 101, 120, 116, 59, 84, 101, 120, 116, 82,
+        101, 99, 111, 103, 110, 105, 116, 105, 111, 110, 59, 114, 101, 99, 111, 103,
+        110, 105, 122, 101, 114, 61, 98, 121, 45, 115, 99, 114, 105, 112, 116, 59,
+        108, 97, 110, 103, 61, 114, 101, 113, 117, 101, 115, 116, 45, 101, 108, 115,
+        101, 45, 108, 97, 116, 105, 110
+    };
     public static int oeCfgCount(int engine) {
         if (engine == 2) {
             return 74;
         }
         if (engine == 3) {
             return 90;
+        }
+        if (engine == 4) {
+            return 71;
         }
         if (engine == 5) {
             return 60;
@@ -44,6 +54,9 @@ public final class Ocrengine {
         }
         if (engine == 3) {
             return OE_VISION_CONFIG[i];
+        }
+        if (engine == 4) {
+            return OE_MLKIT_CONFIG[i];
         }
         return OE_WINOCR_CONFIG[i];
     }
@@ -168,6 +181,9 @@ public final class Ocrengine {
                 if (mode == 6) {
                     oeSelect(scratch, out, 5);
                 }
+                if (mode == 8) {
+                    oeSelect(scratch, out, 4);
+                }
             }
             at += n;
         }
@@ -198,7 +214,7 @@ public final class Ocrengine {
                 i += 1;
             }
         }
-        if ((engine == 3) || (engine == 5)) {
+        if ((engine == 3) || ((engine == 4) || (engine == 5))) {
             i = 0;
             while (i < oeCfgCount(engine)) {
                 emon.Port.cellsPush(out, oeCfgAt(engine, i));

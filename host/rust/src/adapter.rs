@@ -766,6 +766,7 @@ impl Engines {
         let mut engines = match p.options.ocr_engine {
             crate::engine::OcrEngine::AppleVision => vec![ke::eng_apple_vision()],
             crate::engine::OcrEngine::WindowsMediaOcr => vec![ke::eng_windows_media_ocr()],
+            crate::engine::OcrEngine::MlkitText => vec![ke::eng_mlkit_text()],
             _ => vec![ke::eng_tesseract()],
         };
         if p.options.ocr_engine.uses_pp() {
@@ -1038,10 +1039,12 @@ impl Router {
         }
         let mut engine_name = String::new();
         ke::eng_emit_name(&mut engine_name, eng);
+        let mut arrived = false;
         for r in rows.iter().filter(|r| r.state == ke::pstate_missing()) {
             let kind = ke::pk_pack_kind(r.pack);
             match packs.need(r.pack, "conversion", &engine_name) {
-                Need::Ready => {}
+                // a pack that came (fetched, or the app's) is not in the adapter's directory yet: that is rebuilt below, before it reads (K7)
+                Need::Ready => arrived = true,
                 // orientation detection degrades to kin's own policy without its model; it never leaves the page unread
                 Need::Unread(_) if kind == ke::pkind_osd() => {}
                 Need::Unread(why) => return Err(why),
@@ -1058,6 +1061,10 @@ impl Router {
                     };
                 }
             }
+        }
+        if arrived {
+            // the adapter lists its pack directory for each request, so what it is given must hold what arrived (it was built when the adapter was registered)
+            packs.view(&engine_name).map_err(|m| format!("pack-dir-missing: {}", m))?;
         }
         Ok(None)
     }

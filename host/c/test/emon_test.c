@@ -251,9 +251,13 @@ static int pack_action = EMON_PACK_DECLINE;
 static const uint8_t *pack_bytes = NULL;
 static size_t pack_len = 0;
 static char pack_seen[64];
+/* the hook is called on the thread that called emon_convert* (K7: a binding such as Dart's must be called on its own thread) */
+static pthread_t pack_caller;
+static int pack_on_caller = 1;
 static int on_pack(void *ctx, const emon_pack_request *req, emon_pack_decision *out) {
     (void)ctx;
     pack_asked++;
+    if (!pthread_equal(pthread_self(), pack_caller)) pack_on_caller = 0;
     snprintf(pack_seen, sizeof pack_seen, "%s", req->pack);
     out->action = pack_action;
     out->data = pack_bytes;
@@ -413,6 +417,40 @@ static void test_engines(const uint8_t *scan, size_t sn) {
     emon_close(sess);
     check(as2.cancels >= 1, "closing the session cancels the work still outstanding");
     emon_engines_free(e);
+
+    /* a session renders with the registry's pdfium (K7): the caller owes nothing, and the Model is the one-shot's. A page that has a text layer is read by OCR here (ocr=always),
+     * which asks pdfium for a render */
+    {
+        size_t pn = 0;
+        uint8_t *born = slurp("test/corpus/synth/pdf/h-plain.pdf", &pn);
+        stub rs = {0};
+        rs.engine = EMON_OEN_TESSERACT;
+        e = engines_with(&rs, 0, &err);
+        if (born && e && emon_engines_pdfium(e, NULL, &err) >= 0) {
+            emon_input bin = bytes_input(born, pn);
+            emon_buf a = {0}, c = {0};
+            check(emon_convert_json(&bin, "ocr=always\n", e, 0, &a, &err) == 0 && rs.reads > 0, "one-shot: pdfium renders and the adapter reads a born-digital page under ocr=always");
+            int reads1 = rs.reads, owed = 0;
+            emon_open(pn, 0, 0, e, NULL, 0, "ocr=always\n", &sess, &err);
+            emon_provide(sess, 0, born, pn, &err);
+            while ((st = emon_step(sess, &o, &err)) > 0) {
+                if (st == EMON_NEED_REQUESTS) owed++;
+                emon_free_step(&o);
+            }
+            m = NULL;
+            check(st == 0 && emon_finish(sess, &m, &err) == 0 && owed == 0 && rs.reads > reads1, "a session with pdfium renders for itself: nothing is owed to the caller");
+            check(m && emon_model_json(m, 0, &c, &err) == 0 && c.len == a.len && memcmp(c.data, a.data, a.len) == 0, "the session's Model with pdfium is the one-shot's");
+            emon_free_model(m);
+            emon_close(sess);
+            emon_free_buf(&a);
+            emon_free_buf(&c);
+        } else {
+            fprintf(stderr, "SKIP session with pdfium: no pdfium here\n");
+        }
+        emon_free_error(&err);
+        emon_engines_free(e);
+        free(born);
+    }
 }
 
 
@@ -460,7 +498,9 @@ static void test_packs(const uint8_t *scan, size_t sn) {
     /* the hook: decline */
     emon_on_pack_needed(e, on_pack, NULL, &err);
     pack_action = EMON_PACK_DECLINE;
+    pack_caller = pthread_self();
     check(emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err) == 0 && pack_asked > 0 && strcmp(pack_seen, "tess-fast-eng") == 0 && s.reads == 0, "decline: the hook is asked for English, the adapter is never called");
+    check(pack_on_caller == 1, "the hook is called on the thread that called emon_convert_json, not on the engine's worker thread");
     emon_free_buf(&b);
     emon_engines_notes(e, &notes, &err);
     check(has(&notes, "pack-missing:tess-fast-eng"), "the page is unread with pack-missing:<id>");
@@ -512,6 +552,9 @@ static void test_packs(const uint8_t *scan, size_t sn) {
         char kept[256];
         snprintf(kept, sizeof kept, "%s/tess-fast-eng/eng.traineddata", dir);
         check(access(kept, R_OK) == 0, "and kept in the pack directory");
+        char viewed[256];
+        snprintf(viewed, sizeof viewed, "%s/.views/tesseract/eng.traineddata", dir);
+        check(access(viewed, R_OK) == 0, "and in the directory the adapter reads, which was empty when it was registered (K7: the view is rebuilt when a pack arrives)");
         check(emon_prepare(e, "ocr=auto\n", &b, &err) == 0 && has(&b, "\"id\":\"tess-fast-eng\",\"state\":\"installed\""), "emon_prepare then says English is installed");
         emon_free_buf(&b);
         emon_engines_free(e);

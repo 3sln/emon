@@ -291,7 +291,8 @@ func TestPlatformEnginesHaveTheirOwnRequestedConfiguration(emonT *testing.T) {
 	port.AssertEq(emonT, ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name")
 	port.AssertEq(emonT, ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash")
 	port.AssertEq(emonT, ocrengine.OeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change")
-	port.AssertEq(emonT, ocrengine.OeConfigLen(4), 0, "ML Kit has none here: it is the platform plugin's")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin")
+	port.AssertEq(emonT, ocrengine.OeConfigValue(4, 0), 109, "it begins with the engine's name")
 }
 
 func TestAppleVisionSelectionRetagsEveryRequestWithItsConfiguration(emonT *testing.T) {
@@ -326,6 +327,22 @@ func TestWindowsSelectionRetagsWithTheWindowsConfiguration(emonT *testing.T) {
 	ocrengine.OeTag(r, scratch, 4)
 	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks")
 	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(3), "one trailer")
+}
+
+func TestMlKitSelectionRetagsWithItsConfiguration(emonT *testing.T) {
+	var r *port.Cells = port.NewCells()
+	var scratch *port.Cells = port.NewCells()
+	var at int32 = plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0)
+	plan.RqOcrLang(r, 101, 110, 103, 0)
+	plan.RqOcrEnd(r, at)
+	ocrengine.OeTag(r, scratch, 8)
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 4, "ML Kit")
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(4), "its trailer")
+	port.AssertEq(emonT, port.CellsAt(r, 14), 71, "its configuration's length")
+	ocrengine.OeTag(r, scratch, 8)
+	port.AssertEq(emonT, port.CellsLen(r), 15+ocrengine.OeConfigLen(4), "idempotent: one trailer")
+	ocrengine.OeTag(r, scratch, 4)
+	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks")
 }
 
 func TestAnEngineSelectionReachesEveryOcrRequestOfABatch(emonT *testing.T) {

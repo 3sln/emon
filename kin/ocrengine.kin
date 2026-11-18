@@ -12,7 +12,7 @@
 ;; policy and the frozen calibration. Update on any observable adapter change.
 (defdata ^:pub oe-identity
   :emitter kin.lang/flat-array
-  :data [112 112 111 99 114 53 45 101 110 45 97 55 101 55 97 99 98 51 55 99 100 56 51 49 102 55 51 57 49 100 50 102 48 50 57 57 48 50 48 51 97 49 50 49 100 49 98 49 97 51 55 50 102 55 52 97 50 97 102 48 97 101 54 49 51 50 100 55 53 50 49 56 52 56]
+  :data [112 112 111 99 114 53 45 101 110 45 50 98 100 55 99 98 99 51 53 102 57 51 57 52 99 100 57 100 54 52 99 100 48 101 51 98 54 101 48 55 98 49 54 50 49 53 98 56 57 51 56 54 55 55 52 56 102 97 48 57 54 101 102 51 55 101 102 53 49 53 97 100 97 48]
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
@@ -34,17 +34,29 @@
   :accessors {^I32 oe-winocr-count [^I32 ignored]
               ^I32 oe-winocr-at [^I32 ignored ^I32 i]})
 
+;; ML Kit text recognition (K7): the Android plugin's engine, answered by the caller (the Dart plugin). Its recogniser is one for each script (Latin, Chinese, Japanese, Korean,
+;; Devanagari: the ones the app included), chosen from the request's languages; a request that names none is read with the Latin one (no language is assumed, D038). Whether the model is
+;; bundled or comes with Play services is the observed identity, not the configuration: nothing the app decides at build time is put in.
+;;   mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin
+(defdata ^:pub oe-mlkit-config
+  :emitter kin.lang/flat-array
+  :data [109 108 107 105 116 45 116 101 120 116 59 84 101 120 116 82 101 99 111 103 110 105 116 105 111 110 59 114 101 99 111 103 110 105 122 101 114 61 98 121 45 115 99 114 105 112 116 59 108 97 110 103 61 114 101 113 117 101 115 116 45 101 108 115 101 45 108 97 116 105 110]
+  :accessors {^I32 oe-mlkit-count [^I32 ignored]
+              ^I32 oe-mlkit-at [^I32 ignored ^I32 i]})
+
 ;; The configuration text of an engine, as code points: PP's frozen policy hash, a platform engine's configuration. Tesseract's is `emon.ocridentity`'s (its policy hash
 ;; changes with the Tesseract inputs); 0 cells for an engine this does not configure.
 (defn ^I32 oe-cfg-count [^I32 engine]
   (if (== engine 2) (return (oe-id-count 0)))
   (if (== engine 3) (return (oe-vision-count 0)))
+  (if (== engine 4) (return (oe-mlkit-count 0)))
   (if (== engine 5) (return (oe-winocr-count 0)))
   (return 0))
 
 (defn ^I32 oe-cfg-at [^I32 engine ^I32 i]
   (if (== engine 2) (return (oe-id-at 0 i)))
   (if (== engine 3) (return (oe-vision-at 0 i)))
+  (if (== engine 4) (return (oe-mlkit-at 0 i)))
   (return (oe-winocr-at 0 i)))
 
 ;; For the adapters: what the request must say (flat-array accessors are not for hosts to call: kin may inline them).
@@ -137,7 +149,8 @@
           (do (if (== mode 1) (oe-select scratch out 2))
               (if (== mode 2) (oe-context scratch out))
               (if (== mode 4) (oe-select scratch out 3))
-              (if (== mode 6) (oe-select scratch out 5))))
+              (if (== mode 6) (oe-select scratch out 5))
+              (if (== mode 8) (oe-select scratch out 4))))
         (set at (+ at n))))
     (cells-drop requests 0) (set i 0)
     (while (< i (cells-len scratch))
@@ -156,7 +169,7 @@
       (do (set i 0)
           (while (< i (oe-id-count 0))
             (do (cells-push out (oe-id-at 0 i)) (set i (+ i 1))))))
-    (if (or (== engine 3) (== engine 5))
+    (if (or (== engine 3) (or (== engine 4) (== engine 5)))
       (do (set i 0)
           (while (< i (oe-cfg-count engine))
             (do (cells-push out (oe-cfg-at engine i)) (set i (+ i 1)))))))

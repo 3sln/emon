@@ -285,7 +285,8 @@ fn test_platform_engines_have_their_own_requested_configuration() {
     crate::testport::assert_eq(oe_config_value(5, 0), 119, "it begins with the engine's name");
     crate::testport::assert_eq(oe_config_len(2), 74, "PP-OCR's is its frozen policy hash");
     crate::testport::assert_eq(oe_config_len(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
-    crate::testport::assert_eq(oe_config_len(4), 0, "ML Kit has none here: it is the platform plugin's");
+    crate::testport::assert_eq(oe_config_len(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin");
+    crate::testport::assert_eq(oe_config_value(4, 0), 109, "it begins with the engine's name");
 }
 #[test]
 fn test_apple_vision_selection_retags_every_request_with_its_configuration() {
@@ -320,6 +321,22 @@ fn test_windows_selection_retags_with_the_windows_configuration() {
     oe_tag(r, scratch, 4);
     crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "one trailer");
+}
+#[test]
+fn test_ml_kit_selection_retags_with_its_configuration() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, at);
+    oe_tag(r, scratch, 8);
+    crate::testport::assert_eq(op_request_engine(r), 4, "ML Kit");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "its trailer");
+    crate::testport::assert_eq(crate::port::cells_at(r, 14), 71, "its configuration's length");
+    oe_tag(r, scratch, 8);
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "idempotent: one trailer");
+    oe_tag(r, scratch, 4);
+    crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
 }
 #[test]
 fn test_an_engine_selection_reaches_every_ocr_request_of_a_batch() {

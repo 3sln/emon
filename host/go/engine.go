@@ -243,7 +243,7 @@ func (f Furniture) mode() int32 { return int32(f) }
 type Options struct {
 	// PpOcr selects the experimental additive PP reading when true.
 	PpOcr bool
-	// OcrEngine is kin's code of the `ocr-engine` option (K8, D901): 0 tesseract, 1 ppocr, 2 ppocr-alone (PpOcr says either), 3 apple-vision, 4 windows-media-ocr. The platform engines read alone and
+	// OcrEngine is kin's code of the `ocr-engine` option (K8, D901): 0 tesseract, 1 ppocr, 2 ppocr-alone (PpOcr says either), 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text. The platform engines read alone and
 	// only run on their platform; a replay names the same engine, because a request says which engine it is for.
 	OcrEngine int32
 	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial

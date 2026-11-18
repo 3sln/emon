@@ -283,7 +283,8 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name");
         emon.Testport.AssertEq(Ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
         emon.Testport.AssertEq(Ocrengine.OeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
-        emon.Testport.AssertEq(Ocrengine.OeConfigLen(4), 0, "ML Kit has none here: it is the platform plugin's");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(4, 0), 109, "it begins with the engine's name");
     }
     [Xunit.Fact]
     public static void TestAppleVisionSelectionRetagsEveryRequestWithItsConfiguration() {
@@ -318,6 +319,22 @@ public static class Ocrenginetest {
         Ocrengine.OeTag(r, scratch, 4);
         emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks");
         emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(3), "one trailer");
+    }
+    [Xunit.Fact]
+    public static void TestMlKitSelectionRetagsWithItsConfiguration() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, at);
+        Ocrengine.OeTag(r, scratch, 8);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 4, "ML Kit");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(4), "its trailer");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 14), 71, "its configuration's length");
+        Ocrengine.OeTag(r, scratch, 8);
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(4), "idempotent: one trailer");
+        Ocrengine.OeTag(r, scratch, 4);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks");
     }
     [Xunit.Fact]
     public static void TestAnEngineSelectionReachesEveryOcrRequestOfABatch() {

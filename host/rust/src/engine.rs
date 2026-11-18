@@ -172,12 +172,12 @@ impl OcrPolicy {
 
 /// Optional OCR port selection; Tesseract remains the default. `PpOcr` adds a PP-OCR reading beside Tesseract's; `PpOcrAlone` (P13.4) has PP-OCR
 /// read every request, and kin joins its detector segments into rows. Apple Vision and Windows.Media.Ocr read alone, when named (K8, D901): their
-/// requests say so, and the registry sends them to the platform's adapter.
+/// requests say so, and the registry sends them to the platform's adapter. ML Kit (K7) is the Android plugin's: the caller answers its requests (`js-ocr=1`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OcrEngine { Tesseract, PpOcr, PpOcrAlone, AppleVision, WindowsMediaOcr }
+pub enum OcrEngine { Tesseract, PpOcr, PpOcrAlone, AppleVision, WindowsMediaOcr, MlkitText }
 impl OcrEngine {
-    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::PpOcrAlone => 2, Self::AppleVision => 3, Self::WindowsMediaOcr => 4 } }
-    fn from_code(code: i32) -> Self { match code { 1 => Self::PpOcr, 2 => Self::PpOcrAlone, 3 => Self::AppleVision, 4 => Self::WindowsMediaOcr, _ => Self::Tesseract } }
+    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::PpOcrAlone => 2, Self::AppleVision => 3, Self::WindowsMediaOcr => 4, Self::MlkitText => 5 } }
+    fn from_code(code: i32) -> Self { match code { 1 => Self::PpOcr, 2 => Self::PpOcrAlone, 3 => Self::AppleVision, 4 => Self::WindowsMediaOcr, 5 => Self::MlkitText, _ => Self::Tesseract } }
     /// True when the PP-OCR port has to be loaded (either way of selecting it).
     pub fn uses_pp(self) -> bool { matches!(self, Self::PpOcr | Self::PpOcrAlone) }
 }

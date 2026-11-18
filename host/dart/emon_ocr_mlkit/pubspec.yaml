@@ -1,0 +1,27 @@
+name: emon_ocr_mlkit
+description: "ML Kit text recognition for emon on Android: an OCR engine behind a Flutter plugin that answers emon's requests with honest capabilities and records its identity."
+version: 0.0.0-dev
+repository: https://github.com/3sln/emon
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  emon_core:
+    path: ../emon_core
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.threesln.emon_ocr_mlkit
+        pluginClass: EmonOcrMlkitPlugin

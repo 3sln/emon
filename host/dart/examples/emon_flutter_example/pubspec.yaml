@@ -1,0 +1,43 @@
+name: emon_flutter_example
+description: "Evaluate emon on a phone: convert a bundled PDF or a photo of a receipt, see the HTML, pick the OCR engine, watch the downloads."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  emon_flutter:
+    path: ../../emon_flutter
+  flutter:
+    sdk: flutter
+  material_ui: ^1.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+  image: ^4.5.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/scan-plain.pdf
+    - assets/born-digital.pdf
+    - assets/receipt.png
+
+# In this repository the native libraries come from the archives `bb package --host c` (desktop) and `bb mobile --triple T` (phones) write to dist/c. An app that uses a release names none of this:
+# the build hooks download and verify them.
+hooks:
+  user_defines:
+    emon_core:
+      native_dir: ../../../../dist/c
+    emon_ocr_tesseract:
+      native_dir: ../../../../dist/c
+    emon_ocr_vision:
+      native_dir: ../../../../dist/c
+    emon_ocr_winocr:
+      native_dir: ../../../../dist/c
+    emon_ocr_ppocr:
+      native_dir: ../../../../dist/c
