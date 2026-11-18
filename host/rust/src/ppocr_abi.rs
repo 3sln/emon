@@ -1,4 +1,4 @@
-//! PP-OCR as a native OCR adapter library (K2, D900): `emon_ocr_adapter_v1` (host/c/include/emon_adapter.h) around the unchanged qualified Rust port, and, until the host
+//! PP-OCR as a native OCR adapter library (K2, D899): `emon_ocr_adapter_v1` (host/c/include/emon_adapter.h) around the unchanged qualified Rust port, and, until the host
 //! registries move to the adapter ABI (K3), the four `emon_ppocr_*_v1` functions the Go, Java and C# wrappers and `tools/ppocr/hosts.*` call (host/native/include/emon_ppocr.h).
 //! Callers own input buffers for the call; returned cells belong to this library.
 use crate::adapter::{port_adapter, AdapterStatus, OcrAdapter, PortInfo};

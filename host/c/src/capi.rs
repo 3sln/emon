@@ -143,7 +143,7 @@ pub struct emon_model {
     _private: [u8; 0],
 }
 
-// The engines an embedder registered (K2, D900): OCR adapters, the renderer, the packs. Opaque to C: `adapter::Engines`.
+// The engines an embedder registered (K2, D899): OCR adapters, the renderer, the packs. Opaque to C: `adapter::Engines`.
 #[repr(C)]
 pub struct emon_engines {
     _private: [u8; 0],
@@ -379,7 +379,7 @@ pub extern "C" fn emon_version() -> *const c_char {
 }
 
 // What THIS LIBRARY has, as a bit set: 1 pdfium (render, crop: built in, and the library is found and loads), 4 OpenJPEG and jbig2dec (decode-img). Tesseract is not a bit: it is an
-// adapter library, and what adapters an embedder has is `emon_engines_describe`'s to say (K2, D900). See `native` below for where pdfium is looked for.
+// adapter library, and what adapters an embedder has is `emon_engines_describe`'s to say (K2, D899). See `native` below for where pdfium is looked for.
 #[no_mangle]
 pub extern "C" fn emon_capabilities() -> u32 {
     capabilities()
@@ -501,7 +501,7 @@ pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option
 
 // The pod's own ports (it links Tesseract statically, under the `tesseract` feature) and pdfium, for the ones this build has and finds (D127, D211, D336; `native` above). A
 // build without them, or a process that does not find them, has none, and a request for one is answered `unsupported` (D199). The C library does NOT call this: its ports are
-// the engines an embedder registers (`emon_engines_*`, K2, D900).
+// the engines an embedder registers (`emon_engines_*`, K2, D899).
 #[allow(unused_variables)]
 fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), Fail> {
     #[cfg(feature = "tesseract")]
@@ -777,7 +777,7 @@ unsafe fn completer<'a>(s: *mut emon_session) -> Result<&'a Completer, Fail> {
 }
 
 // Open a session over an input of `length` bytes read in chunks of `chunk` bytes (0: the options' `chunk`, 64 KiB). `flags`:
-// EMON_OPEN_INTAKE for stage 0 only (then `emon_finish_intake`). `engines`: the adapters the session answers its `ocr` requests with itself (NULL: none; K2, D900). The options
+// EMON_OPEN_INTAKE for stage 0 only (then `emon_finish_intake`). `engines`: the adapters the session answers its `ocr` requests with itself (NULL: none; K2, D899). The options
 // are kin's text; `record=1` keeps a transcript (`emon_transcript`), `js-ocr=1` makes the `ocr` requests nobody registered an adapter for the caller's.
 #[no_mangle]
 pub unsafe extern "C" fn emon_open(length: u64, chunk: u32, flags: u32, engines: *const emon_engines, password: *const u8, password_len: usize, options: *const c_char, out: *mut *mut emon_session, err: *mut emon_error) -> c_int {
@@ -1019,7 +1019,7 @@ pub unsafe extern "C" fn emon_finish_intake(s: *mut emon_session, out: *mut emon
     })
 }
 
-// ------------------------------------------------------------------------------------------------ the engines (K2, D900)
+// ------------------------------------------------------------------------------------------------ the engines (K2, D899)
 //
 // The OCR adapters an embedder has (`host/c/include/emon_adapter.h`), the renderer, and where the packs are: an `emon_engines` handle (`adapter::Engines`) that the one-shot calls
 // and `emon_open` take. A conversion given engines answers the requests they are registered for itself; one given NULL has none. Registration failures happen HERE, with a name to

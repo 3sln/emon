@@ -1,4 +1,4 @@
-;; THE ADAPTER POLICY (K2, D900; D883 section 2, D885, D896; pkg1 sections 1.2 to 1.7).
+;; THE ADAPTER POLICY (K2, D899; D883 section 2, D885, D896; pkg1 sections 1.2 to 1.7).
 ;;
 ;; A native OCR adapter (`host/c/include/emon_adapter.h`) is a library or a set of callbacks an embedder registers; the host loads it, calls it, fetches and verifies
 ;; the pack bytes it reads. WHAT IS DECIDED, and decided once for every host, is here, so no host keeps a rule of its own that could drift:

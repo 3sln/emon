@@ -1,4 +1,4 @@
-// The native OCR adapters and the engine registry (K2, D900): registration, routing by engine id, what an answer is held to, unread and never blank, the four decisions of a pack
+// The native OCR adapters and the engine registry (K2, D899): registration, routing by engine id, what an answer is held to, unread and never blank, the four decisions of a pack
 // hook, verification of every pack against the catalogue's SHA-256, prepare() and engines(), and async answers. The adapters here are stubs in Rust behind the C ABI
 // (`emon_adapter.h`'s struct), so what is exercised is the host side: `adapter.rs` and `packs.rs`. The kin laws (`kin/adapterstest.kin`) hold the rules themselves.
 use emon::adapter::*;

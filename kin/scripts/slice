@@ -128,7 +128,7 @@
     (ok "the Engine API's native tests: " n " passed (adapters identical; async 512 = memory over every PDF fixture; D040; limits; record/replay; the Model walks; no filesystem in the library)")
     (bad "the Engine API's native tests failed:\n" (str/join "\n" (take 40 (str/split-lines (str (:out r) (:err r))))))))
 
-;; The native OCR adapters and the engine registry (K2, D900): `host/rust/tests/adapters.rs` drives `adapter.rs` and `packs.rs` through stub adapters behind the C ABI.
+;; The native OCR adapters and the engine registry (K2, D899): `host/rust/tests/adapters.rs` drives `adapter.rs` and `packs.rs` through stub adapters behind the C ABI.
 (let [r @(process {:dir ".cache/emon-rs" :out :string :err :string :extra-env {"RUSTFLAGS" "-A warnings"}}
                   "cargo" "test" "--release" "--offline" "-q" "--features" "__test_hooks,packs-fetch" "--test" "adapters" "--" "--test-threads=1")
       n (some->> (re-find #"test result: ok\. (\d+) passed; 0 failed" (:out r)) second)]

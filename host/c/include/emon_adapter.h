@@ -1,4 +1,4 @@
-/* emon_adapter.h -- the native OCR adapter ABI, version 1 (DEVLOG D900, K2; D883, D885, D896; pkg1 section 1.2).
+/* emon_adapter.h -- the native OCR adapter ABI, version 1 (DEVLOG D899, K2; D883, D885, D896; pkg1 section 1.2).
  *
  * An ADAPTER is an OCR engine behind emon's port: it is handed an `ocr` request (kin's record, and the pixels it names) and answers with a reading in OIL, the engine-neutral
  * interchange (D883).  Tesseract is the adapter library `libemon_ocr_tesseract`; PP-OCR is `libemon_ocr_ppocr`; an embedder's own engine (a platform recognizer, a cloud service,

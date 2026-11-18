@@ -40,7 +40,7 @@ selects the add-on's pinned English lexicon for the adapter only; pass the CLI's
 
 The babashka pod uses the same environment variables and the `ocr-engine=ppocr`
 conversion option. The C library registers the PP adapter library like any
-adapter (K2, D900): `emon_engines_load(engines, path_to_libemon_ocr_ppocr, NULL, &err)`
+adapter (K2, D899): `emon_engines_load(engines, path_to_libemon_ocr_ppocr, NULL, &err)`
 beside the Tesseract adapter, with the PP-OCR packs (`pp5-det-mobile`,
 `pp5-cls-mobile`, `pp5-rec-en-mobile`) in the pack directory, and the option
 `ocr-engine=ppocr` then composes the two (docs/hosts/c.md). Rust embedders call

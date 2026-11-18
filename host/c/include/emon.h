@@ -1,4 +1,4 @@
-/* emon.h -- the C binding of emon (DEVLOG P9.4, D001, D471-D476, SPEC 13, 13.1; K2, D900).
+/* emon.h -- the C binding of emon (DEVLOG P9.4, D001, D471-D476, SPEC 13, 13.1; K2, D899).
  *
  * emon converts PDFs and images to a semantic Model (JSON, HTML). This is the Rust host behind a C ABI: libemon.{so,dylib,a}.  The core library has NO OCR engine in it:
  * OCR is an ADAPTER (emon_adapter.h), a library such as libemon_ocr_tesseract or a set of callbacks of yours, registered in an `emon_engines` (below).
@@ -281,7 +281,7 @@ void emon_free_files(emon_files *f);
 int emon_finish(emon_session *s, emon_model **out, emon_error *err);
 int emon_finish_intake(emon_session *s, emon_buf *out, emon_error *err);
 
-/* ----------------------------------------------------------------------------------------------- engines (K2, D900)
+/* ----------------------------------------------------------------------------------------------- engines (K2, D899)
  *
  * The OCR adapters you have, the renderer, and where the packs are: an `emon_engines`.  Give it to emon_convert* and emon_open.  Register in this order: the pack directory
  * (emon_engines_packs), then adapters (emon_engines_load: a library; emon_engines_add_ocr: callbacks), then pdfium.  emon_engines_defaults does the turnkey set for you:

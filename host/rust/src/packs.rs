@@ -1,4 +1,4 @@
-// THE PACKS (K2, D900; D885, D896; pkg1 section 3): the model files an adapter reads with, found, verified, fetched and handed over.
+// THE PACKS (K2, D899; D885, D896; pkg1 section 3): the model files an adapter reads with, found, verified, fetched and handed over.
 //
 // WHAT IS KIN'S. Which packs exist, what each is for, their SHA-256 and sizes (`emon.packdata`, generated from release/packs/packs.edn), which packs a conversion needs and which
 // are missing (`emon.engines`' `pk-resolve`), and what to do about one that is missing (`emon.adapters`' `ad-pack-action`: never and offline win over every hook; a turnkey with no

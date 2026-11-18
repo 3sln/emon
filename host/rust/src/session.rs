@@ -40,7 +40,7 @@ pub enum Step {
     Bytes(Vec<(u64, u64)>),
     // requests the caller owes (`ocr`, with `js-ocr=1`; `render` and `crop`, with `js-render=1`): each a record `[len kind id arg...]`
     Requests(Vec<Vec<i32>>),
-    // only async adapters' work is outstanding (K2, D900): wait for a completion (`Completer::wait`) and step again
+    // only async adapters' work is outstanding (K2, D899): wait for a completion (`Completer::wait`) and step again
     Waiting,
 }
 
@@ -75,7 +75,7 @@ pub struct Session {
     in_round: bool,
     external: BTreeSet<i32>,
     done: bool,
-    // the registry's OCR adapters (K2, D900): the session answers the requests they are registered for itself; what they answer later arrives in the mailbox
+    // the registry's OCR adapters (K2, D899): the session answers the requests they are registered for itself; what they answer later arrives in the mailbox
     router: Option<Router>,
     mailbox: Arc<Mailbox>,
     // token of an async adapter's work -> the request it is for
@@ -116,7 +116,7 @@ impl Session {
         Session::open_with(length, chunk, intake_only, password, options, None)
     }
 
-    // `open`, with the engines an embedder registered (K2, D900): when they have OCR adapters the session answers the `ocr` requests those are registered for itself, and only
+    // `open`, with the engines an embedder registered (K2, D899): when they have OCR adapters the session answers the `ocr` requests those are registered for itself, and only
     // the bytes, the requests nobody registered for (with `js-ocr=1`) and WAITING come out of `step`.
     pub fn open_with(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str, engines: Option<&Engines>) -> Result<Session, Fault> {
         let router = engines.and_then(|e| e.router());

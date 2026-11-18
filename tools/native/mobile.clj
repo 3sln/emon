@@ -8,7 +8,7 @@
 ;;   bb mobile --triple T --check        build, `bb native --audit`, smoke: what the CI jobs run
 ;;   bb mobile --list                    the mobile triples
 ;;
-;; WHAT IT IS. The C library of docs/hosts/c.md (host/c, emon.h) for a phone (K2, D900): TWO dynamic libraries per triple, `libemon.so` / `libemon.dylib`, the CORE library (no OCR engine:
+;; WHAT IT IS. The C library of docs/hosts/c.md (host/c, emon.h) for a phone (K2, D899): TWO dynamic libraries per triple, `libemon.so` / `libemon.dylib`, the CORE library (no OCR engine:
 ;; pdfium loaded at run time, the pack fetch), and `lib/emon/adapters/libemon_ocr_tesseract.*`, the Tesseract ADAPTER library with Tesseract and Leptonica (and their codecs) linked statically from
 ;; `bb native` and the C++ runtime statically too (Android: nothing is loaded but libc, libm and libdl, in either). An app that reads scans another way ships the core alone. pdfium is the pinned
 ;; pdfium-binaries library of the platform, shipped beside them and loaded at run time (host/c/src/native.rs: by file, then by name). The English and orientation models are PACKS in
@@ -105,7 +105,7 @@
   (when-not (and (fs/exists? dst) (= (fs/size src) (fs/size dst)) (= (sha256 src) (sha256 dst))) (fs/copy src dst {:replace-existing true})))
 (defn stamp [s] (str/replace s "0.0.0-dev" version))
 
-;; K2 (D900): TWO crates per triple, from the same sources. The CORE library (libemon: emon.h, pdfium at run time, the pack fetch, no Tesseract) and the Tesseract ADAPTER library
+;; K2 (D899): TWO crates per triple, from the same sources. The CORE library (libemon: emon.h, pdfium at run time, the pack fetch, no Tesseract) and the Tesseract ADAPTER library
 ;; (libemon_ocr_tesseract: Tesseract and Leptonica statically, exporting only `emon_ocr_adapter_v1`).
 (defn stage-crate! [kind]
   (when-not (= (package-host-files) rust-host-files) (die "tools/package.clj's rust-host-files differ from tools/native/mobile.clj's: keep them equal"))
@@ -192,7 +192,7 @@
           "LICENSE" (str root "/LICENSE")
           "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
           "README.md" (str root "/release/pkg/README.md")}
-         ;; the models are PACKS (D885, D900): share/emon/packs/<id>/<file>, where emon_engines_defaults looks
+         ;; the models are PACKS (D885, D899): share/emon/packs/<id>/<file>, where emon_engines_defaults looks
          (into {} (for [d (:data pins)] [(str "share/emon/packs/" (pack-dir-of (:file d)) "/" (:file d)) (str native-prefix "/share/tessdata/" (:file d))]))))
 
 (defn assemble! [libs]

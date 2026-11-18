@@ -1,4 +1,4 @@
-// THE NATIVE OCR ADAPTERS AND THE ENGINE REGISTRY (K2, D900; D883, D885, D896; pkg1 sections 1.2 to 1.7). `host/c/include/emon_adapter.h` is the ABI and its documentation; this
+// THE NATIVE OCR ADAPTERS AND THE ENGINE REGISTRY (K2, D899; D883, D885, D896; pkg1 sections 1.2 to 1.7). `host/c/include/emon_adapter.h` is the ABI and its documentation; this
 // file is the host side of it: loading an adapter library (or taking a struct of callbacks), checking what it says it is, routing an `ocr` request to the adapter of its engine,
 // holding what comes back to what the adapter registered, and answering later when an adapter does.
 //

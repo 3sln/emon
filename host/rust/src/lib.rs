@@ -25,7 +25,7 @@ pub mod pdfium;
 // parallel execution (P10.2, D505): a pool of threads that fulfils a round's requests at once and the pages ahead of the loop's; the browser has none
 #[cfg(not(target_arch = "wasm32"))]
 pub mod par;
-// the native OCR adapters (host/c/include/emon_adapter.h) and the engine registry (K2, D900): loading, routing, answering later; and the model packs they read
+// the native OCR adapters (host/c/include/emon_adapter.h) and the engine registry (K2, D899): loading, routing, answering later; and the model packs they read
 // with: found, verified against the catalogue's SHA-256, fetched (feature `packs-fetch`). Kin decides (`emon.adapters`); these are the mechanics. A build for the
 // browser carries them and can load nothing.
 pub mod adapter;
@@ -43,7 +43,7 @@ pub mod wasm;
 // the Tesseract adapter of the `Ocr` port (D211): live only, built under the `tesseract` feature (it links libtesseract)
 #[cfg(feature = "tesseract")]
 pub mod tess;
-// the same Tesseract as a native adapter LIBRARY (K2, D900): `libemon_ocr_tesseract` exports `emon_ocr_adapter_v1` (emon_adapter.h). Assembled in only by the adapter's build.
+// the same Tesseract as a native adapter LIBRARY (K2, D899): `libemon_ocr_tesseract` exports `emon_ocr_adapter_v1` (emon_adapter.h). Assembled in only by the adapter's build.
 #[cfg(feature = "tesseract-adapter")]
 pub mod tess_adapter;
 

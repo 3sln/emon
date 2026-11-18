@@ -455,9 +455,9 @@
 (defonce native-built (atom nil))
 (defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
 (defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
-(defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D900), when the full pipeline built it
+(defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D899), when the full pipeline built it
 
-;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D900). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
+;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
 ;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
 ;; built from the same sources with the static Tesseract and Leptonica of `bb native` (EMON_NATIVE, .cache/native/<triple>/link.rustflags) and exporting only `emon_ocr_adapter_v1`
 ;; (emon_adapter.h). The pod, a binary, still links Tesseract itself (the `tesseract` feature). The archives carry the pinned pdfium (lib/), the adapter (lib/emon/adapters/) and the
@@ -582,7 +582,7 @@
       (bad! "the pack catalogue has no Tesseract pack with the file " file)))
 
 (defn- native-extras-c
-  "The entries of the C archive the full pipeline adds (K2, D900): pdfium in lib/, the Tesseract adapter library in lib/emon/adapters/, the models as packs in
+  "The entries of the C archive the full pipeline adds (K2, D899): pdfium in lib/, the Tesseract adapter library in lib/emon/adapters/, the models as packs in
   share/emon/packs/<id>/<file> (where `emon_engines_defaults` looks)."
   []
   (when-let [{:keys [pdfium data]} @native-full]
@@ -621,7 +621,7 @@
       (when (and (zero? (:exit r)) (not (str/includes? (:out r) (if mac? "@rpath/libemon.dylib" "libemon.so"))))
         (bad! dyn " is named by an absolute path, not @rpath/ or its soname:\n" (:out r)))
       (when (and (zero? (:exit r)) (re-find #"/deps/" (:out r))) (bad! dyn " carries its build path in its name")))
-    ;; K2 (D900): THE CORE LIBRARY HAS NO TESSERACT, no Leptonica and no codec of theirs (the adapter library has all of them), and the adapter exports one function
+    ;; K2 (D899): THE CORE LIBRARY HAS NO TESSERACT, no Leptonica and no codec of theirs (the adapter library has all of them), and the adapter exports one function
     (doseq [f [dyn static]]
       (let [nm (run {:ok? false} "nm" (str rel "/" f))]
         (when (re-find #"(?m)\b_?(TessBaseAPI[A-Za-z0-9_]*|pixRead[A-Za-z0-9_]*|pixCreate[A-Za-z0-9_]*)\b" (:out nm)) (bad! f " carries Tesseract or Leptonica: the core library has none (K2)"))))

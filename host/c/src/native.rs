@@ -9,7 +9,7 @@
 //             own native-library directory is in the loader's search path) or `@rpath/libpdfium.dylib` and `@rpath/libpdfium.framework/libpdfium` (iOS).
 //   models    (the pod, which links Tesseract: the `tesseract` feature) an explicit directory, then $EMON_TESSDATA, then `share/emon/tessdata` (D/share/emon/tessdata or
 //             D/../share/emon/tessdata, same D), then $TESSDATA_PREFIX and the usual system places (the Rust host's `TessOcr::new(None)`).
-//   packs     (the C library, K2, D900) `share/emon/packs` one directory above `lib/` (the archive's), or beside the executable; $EMON_MODELS is searched by `packs.rs`.
+//   packs     (the C library, K2, D899) `share/emon/packs` one directory above `lib/` (the archive's), or beside the executable; $EMON_MODELS is searched by `packs.rs`.
 //   adapters  (the C library) `$EMON_ADAPTER_DIR`, then `lib/emon/adapters/` beside or above the library: every `libemon_ocr_*` (`emon_ocr_*.dll`) in it; in an app, by name from the
 //             loader (`libemon_ocr_tesseract.so`, `@rpath/libemon_ocr_tesseract.dylib`).
 //

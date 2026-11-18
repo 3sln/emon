@@ -1,4 +1,4 @@
-// libemon_ocr_tesseract: Tesseract as a native OCR adapter LIBRARY (K2, D900; D883, D885; pkg1 section 1.2). This crate file is the whole of its C side: `emon_ocr_adapter_v1`
+// libemon_ocr_tesseract: Tesseract as a native OCR adapter LIBRARY (K2, D899; D883, D885; pkg1 section 1.2). This crate file is the whole of its C side: `emon_ocr_adapter_v1`
 // (host/c/include/emon_adapter.h), over `tess.rs` unchanged, so the answers are the bytes every transcript in the repository was recorded with.
 //
 // The library is built by `bb package` and `bb mobile` from the same sources as libemon, with the `tesseract-adapter` feature and the static Tesseract and Leptonica of `bb native`;

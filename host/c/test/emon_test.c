@@ -121,7 +121,7 @@ static void *small_thread(void *p) {
 }
 
 
-/* ------------------------------------------------------------------------------------------------ adapters (K2, D900): stubs in C behind emon_adapter.h */
+/* ------------------------------------------------------------------------------------------------ adapters (K2, D899): stubs in C behind emon_adapter.h */
 
 typedef struct {
     int reads, starts, cancels;
@@ -822,7 +822,7 @@ int main(void) {
     emon_free_buf(&b);
     emon_free_model(am);
 
-    /* adapters, engines and packs (K2, D900) */
+    /* adapters, engines and packs (K2, D899) */
     {
         size_t sn;
         uint8_t *scan = slurp("samples/scan-plain.pdf", &sn);

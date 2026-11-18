@@ -343,7 +343,7 @@
   (zero? (count (filter (comp #{:fail} first) findings))))
 
 ;; ------------------------------------------------------------------------------------------------ the audit of a mobile LIBRARY (K6, D897)
-;; `bb mobile` ships, per triple, the core dynamic library and (K2, D900) the Tesseract adapter library. What must hold of it, checked on the file (not on how it was made):
+;; `bb mobile` ships, per triple, the core dynamic library and (K2, D899) the Tesseract adapter library. What must hold of it, checked on the file (not on how it was made):
 ;;   Android .so   an ELF of the right machine; SONAME libemon.so; every LOAD segment aligned to 16 KB (Google Play requires it of 64-bit apps; the pinned pdfium
 ;;                 of 64-bit ABIs is held to it too) and GNU_RELRO ending on a 16 KB boundary or alone in its segment (developer.android.com/guide/practices/page-sizes);
 ;;                 no executable stack; NEEDED is libc.so, libm.so and libdl.so and nothing else (no libc++_shared.so: the C++ runtime is inside); no undefined libc++ or
@@ -449,7 +449,7 @@
     @out))
 
 (defn audit-mobile-lib
-  "The shipped libraries of a mobile triple (`bb mobile`): the core library (exports = emon.h), pdfium, and (K2, D900) the Tesseract adapter library (exports = emon_ocr_adapter_v1
+  "The shipped libraries of a mobile triple (`bb mobile`): the core library (exports = emon.h), pdfium, and (K2, D899) the Tesseract adapter library (exports = emon_ocr_adapter_v1
   and nothing else; the C++ runtime inside, as Tesseract needs it). [] when it has not been built (the caller notes that)."
   [t dir]
   (let [cfg (triple-cfg t) android? (= :android (:os cfg))

@@ -269,7 +269,7 @@ fn convert(args: Vec<String>) {
     }
 
     if opts.ocr_engine == emon::OcrEngine::PpOcr && !never {
-        // the hybrid: Tesseract (linked here) registered as an adapter beside the PP adapter library, a router over the two (K2, D900)
+        // the hybrid: Tesseract (linked here) registered as an adapter beside the PP adapter library, a router over the two (K2, D899)
         cfg.ocr = Some(emon::adapter::ppocr_hybrid(cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
     }
 

@@ -457,7 +457,7 @@
       wasm-exports (set (map second (re-seq #"(?s)#\[no_mangle\]\s*pub (?:unsafe )?extern \"C\" fn (emon_[a-z0-9_]+)" (slurp "host/wasm/src/wasm.rs"))))
       ;; `emon_clock` is the browser's clock for `stage-ms` (D501): a native host (the C binding) has its own monotonic clock in the Machine
       plumbing #{"emon_alloc" "emon_free" "emon_out_ptr" "emon_out_len" "emon_out_free" "emon_clock"}
-      ;; K2 (D900): the Tesseract-shaped policy exports are gone from the C binding (an adapter receives its request and a registry routes it; `emon_ocr_request` reads a request's fields).
+      ;; K2 (D899): the Tesseract-shaped policy exports are gone from the C binding (an adapter receives its request and a registry routes it; `emon_ocr_request` reads a request's fields).
       ;; The browser still exports them: tesseract.js and the PP-OCR web adapter are driven from JS, which has no registry.
       browser-only #{"emon_ocr_block_type" "emon_ocr_identity_at" "emon_ocr_lang_first" "emon_ocr_models" "emon_ocr_observed" "emon_ocr_word_lang"}
       alias {"emon_model_free" "emon_free_model" "emon_stats" "emon_model_stats" "emon_finish_intake" "emon_finish_intake"}

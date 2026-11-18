@@ -1,4 +1,4 @@
-;; Laws for `emon.adapters` (K2, D900; D883, D885, D896; pkg1 sections 1.2 to 1.7): registration, routing by engine id, the refusal of an unregistered engine, what an answer is held to,
+;; Laws for `emon.adapters` (K2, D899; D883, D885, D896; pkg1 sections 1.2 to 1.7): registration, routing by engine id, the refusal of an unregistered engine, what an answer is held to,
 ;; unread and never blank, the four decisions of a pack hook under each mode, `prepare()` and `engines()`.
 (ns emon.adapterstest
   (:require [emon.lang :refer [I32 Cells Text]]

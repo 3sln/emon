@@ -256,7 +256,7 @@ pub extern "C" fn emon_step(h: i32) -> i32 {
             put_ranges(&r);
             1
         }
-        // the browser has no native adapters, which are what a session waits for (K2, D900)
+        // the browser has no native adapters, which are what a session waits for (K2, D899)
         Some(Ok(Step::Waiting)) => {
             put(Vec::new());
             3

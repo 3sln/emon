@@ -14602,7 +14602,7 @@ Foundation for the Dart/Flutter evaluation release (D895) and `prepare()` (D896)
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — K2: the native adapter ABI, a Tesseract-free core libemon, the Tesseract adapter library and the engine registry in the C ABI
+### D899 — K2: the native adapter ABI, a Tesseract-free core libemon, the Tesseract adapter library and the engine registry in the C ABI
 
 P13.15, for the Dart/Flutter evaluation release (D895). The coordinator renumbers this entry. Kin owns the rules (`kin/adapters.kin`, module `emon.adapters`, 29 laws in `kin/adapterstest.kin` on all four arms); the Rust host loads, calls, locks, waits and spells JSON (`host/rust/src/adapter.rs`, `packs.rs`, `tess_adapter.rs`); `host/c/include/emon_adapter.h` is the ABI.
 
