@@ -595,3 +595,13 @@ fn test_a_transcript_with_an_unknown_engine_or_a_bad_row_is_refused() {
     en_refused(0, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", tb_engines());
     en_refused(0, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", tb_engines());
 }
+#[test]
+fn test_a_committed_apple_vision_transcript_names_the_engine_that_read() {
+    let b: &[u8] = &crate::testport::test_file("ocr/vision/h-plain/transcript.edn")[..];
+    let t: &mut crate::emon::transcriptctx::Tr = &mut crate::emon::transcriptctx::Tr::new();
+    crate::testport::assert_eq(tr_read(t, b), 0, "it reads");
+    crate::testport::assert_eq(tr_n_engines(t), 1, "one engine read");
+    crate::testport::assert_eq(tr_eng_engine(t, 0), eng_apple_vision(), "Apple Vision");
+    crate::testport::assert_eq(tr_eng_caps(t, 0), pk_engine_caps(eng_apple_vision()), "with the capabilities of its table's ceiling");
+    crate::testport::assert_eq(tr_eng_role(t, 0), erole_reader(), "it read alone: a reader, never an incumbent");
+}

@@ -215,7 +215,7 @@ public final class Configtest {
         tKeyName(0, 21, "ocr-engine");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(19, 17, "seventeen words");
+        emon.Testport.assertEq(19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -233,6 +233,8 @@ public final class Configtest {
         tWordName(0, 14, 20, 1, "scored");
         tWordName(0, 15, 21, 0, "tesseract");
         tWordName(0, 16, 21, 1, "ppocr");
+        tWordName(0, 17, 21, 2, "apple-vision");
+        tWordName(0, 18, 21, 3, "windows-media-ocr");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");

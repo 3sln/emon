@@ -40,7 +40,8 @@ func TestAnAppleVisionAnswerIsValidAndItsWordsCarryTheirLinesConfidence(emonT *t
 	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhLg()), 2, "an OS recognizer line")
 	port.AssertEq(emonT, oil.OilNlines(c, at), 2, "two lines")
 	port.AssertEq(emonT, oil.OilNwords(c, at), 3, "three words")
-	port.AssertEq(emonT, port.CellsAt(c, oil.OilFirstWord(c, at)+5), 1000, "a word has its line's confidence")
+	var first int32 = oil.OilFirstWord(c, at)
+	port.AssertEq(emonT, port.CellsAt(c, first+5), 1000, "a word has its line's confidence")
 	port.AssertEq(emonT, oil.OilNativeCheck(caps, oil.OcQuad()+oil.OcLconf()), 1, "what it measures is what it declares")
 	port.AssertEq(emonT, oil.OilNativeCheck(caps, oil.OcWconf()), 0, "it measures no word confidence, and cannot claim one")
 }
@@ -79,7 +80,8 @@ func TestAWindowsAnswerCarriesNoConfidenceAndNoNumberIsInvented(emonT *testing.T
 	oil.OilEnd(c, at)
 	port.AssertEq(emonT, oil.OilRecordCheckBitmap(c, at, 100, 100, scratch), 0, "a valid record")
 	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhCk()), 0, "confidence kind none")
-	port.AssertEq(emonT, port.CellsAt(c, oil.OilFirstWord(c, at)+5), -1, "the word's confidence is absent, whatever the caller passed")
+	var first int32 = oil.OilFirstWord(c, at)
+	port.AssertEq(emonT, port.CellsAt(c, first+5), -1, "the word's confidence is absent, whatever the caller passed")
 	port.AssertEq(emonT, oil.OilGet(c, at, oil.OhNative()), 0, "it measures nothing it can put a number on")
 }
 

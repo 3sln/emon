@@ -618,3 +618,13 @@ func TestATranscriptWithAnUnknownEngineOrABadRowIsRefused(emonT *testing.T) {
 	enRefused(emonT, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", transcript.TbEngines())
 	enRefused(emonT, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", transcript.TbEngines())
 }
+
+func TestACommittedAppleVisionTranscriptNamesTheEngineThatRead(emonT *testing.T) {
+	var b []byte = port.TestFile("ocr/vision/h-plain/transcript.edn")
+	var t *transcriptctx.Tr = transcriptctx.NewTr()
+	port.AssertEq(emonT, transcript.TrRead(t, b), 0, "it reads")
+	port.AssertEq(emonT, transcript.TrNEngines(t), 1, "one engine read")
+	port.AssertEq(emonT, transcript.TrEngEngine(t, 0), engines.EngAppleVision(), "Apple Vision")
+	port.AssertEq(emonT, transcript.TrEngCaps(t, 0), engines.PkEngineCaps(engines.EngAppleVision()), "with the capabilities of its table's ceiling")
+	port.AssertEq(emonT, transcript.TrEngRole(t, 0), engines.EroleReader(), "it read alone: a reader, never an incumbent")
+}

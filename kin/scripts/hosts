@@ -54,6 +54,11 @@
          [:port    "host/java/emon/ffi/PpOcr.java" "ocrengine ocrport plan"]
          [:port    "host/csharp/Emon/Ffi/PpOcr.cs" "ocrengine ocrport plan"]
          [:port "host/rust/src/ppocr.rs" "evidence ocr ocrengine ocrport oil plan"]
+         ;; K8 (D900): the platform OCR ports are ports like tess.rs and ppocr.rs. They build OIL answers with the same builders, read a request's languages through kin's `emon.ocrloc` (the
+         ;; locale tables of ruling 7) and its engine configuration (`emon.ocrengine`), and hold no policy: what an engine may declare, which locale a language is and what a request must say are kin's.
+         [:port "host/rust/src/platform.rs" "ocrengine ocrloc ocrport plan"]
+         [:port "host/rust/src/vision.rs" "evidence ocr oil"]
+         [:port "host/rust/src/winocr.rs" "oil"]
          [:port    "host/wasm/src/ppocr.rs"             "ocr ocrengine ocrport oil plan"]
          [:test "host/rust/tests/engine.rs" "ocrengine ocrport oil plan"]
          [:test "test/driver/rust/main.rs" "oil"]      ; `--fake-ports` (P10.2): the answers of a stand-in Ocr, built with the forms a real engine's adapter uses

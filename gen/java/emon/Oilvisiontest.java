@@ -33,7 +33,8 @@ public final class Oilvisiontest {
         emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohLg()), 2, "an OS recognizer line");
         emon.Testport.assertEq(Oil.oilNlines(c, at), 2, "two lines");
         emon.Testport.assertEq(Oil.oilNwords(c, at), 3, "three words");
-        emon.Testport.assertEq(emon.Port.cellsAt(c, Oil.oilFirstWord(c, at) + 5), 1000, "a word has its line's confidence");
+        int first = Oil.oilFirstWord(c, at);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, first + 5), 1000, "a word has its line's confidence");
         emon.Testport.assertEq(Oil.oilNativeCheck(caps, Oil.ocQuad() + Oil.ocLconf()), 1, "what it measures is what it declares");
         emon.Testport.assertEq(Oil.oilNativeCheck(caps, Oil.ocWconf()), 0, "it measures no word confidence, and cannot claim one");
     }
@@ -69,7 +70,8 @@ public final class Oilvisiontest {
         Oil.oilEnd(c, at);
         emon.Testport.assertEq(Oil.oilRecordCheckBitmap(c, at, 100, 100, scratch), 0, "a valid record");
         emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohCk()), 0, "confidence kind none");
-        emon.Testport.assertEq(emon.Port.cellsAt(c, Oil.oilFirstWord(c, at) + 5), -1, "the word's confidence is absent, whatever the caller passed");
+        int first = Oil.oilFirstWord(c, at);
+        emon.Testport.assertEq(emon.Port.cellsAt(c, first + 5), -1, "the word's confidence is absent, whatever the caller passed");
         emon.Testport.assertEq(Oil.oilGet(c, at, Oil.ohNative()), 0, "it measures nothing it can put a number on");
     }
     public static void testWhatEachPlatformEngineCannotSayIsNotInItsCeiling() {

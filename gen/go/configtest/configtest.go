@@ -238,7 +238,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 19, 17, "seventeen words")
+	port.AssertEq(emonT, 19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -256,6 +256,8 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 14, 20, 1, "scored")
 	tWordName(emonT, 15, 21, 0, "tesseract")
 	tWordName(emonT, 16, 21, 1, "ppocr")
+	tWordName(emonT, 17, 21, 2, "apple-vision")
+	tWordName(emonT, 18, 21, 3, "windows-media-ocr")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {

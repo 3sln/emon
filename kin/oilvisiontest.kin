@@ -36,7 +36,8 @@
     (assert-eq (oil-get c at (oh-lg)) 2 "an OS recognizer line")
     (assert-eq (oil-nlines c at) 2 "two lines")
     (assert-eq (oil-nwords c at) 3 "three words")
-    (assert-eq (cells-at c (+ (oil-first-word c at) 5)) 1000 "a word has its line's confidence")
+    (let [^I32 first (oil-first-word c at)]
+      (assert-eq (cells-at c (+ first 5)) 1000 "a word has its line's confidence"))
     (assert-eq (oil-native-check caps (+ (oc-quad) (oc-lconf))) 1 "what it measures is what it declares")
     (assert-eq (oil-native-check caps (oc-wconf)) 0 "it measures no word confidence, and cannot claim one")))
 
@@ -68,7 +69,8 @@
     (oil-end c at)
     (assert-eq (oil-record-check-bitmap c at 100 100 scratch) 0 "a valid record")
     (assert-eq (oil-get c at (oh-ck)) 0 "confidence kind none")
-    (assert-eq (cells-at c (+ (oil-first-word c at) 5)) -1 "the word's confidence is absent, whatever the caller passed")
+    (let [^I32 first (oil-first-word c at)]
+      (assert-eq (cells-at c (+ first 5)) -1 "the word's confidence is absent, whatever the caller passed"))
     (assert-eq (oil-get c at (oh-native)) 0 "it measures nothing it can put a number on")))
 
 (deftest test-what-each-platform-engine-cannot-say-is-not-in-its-ceiling

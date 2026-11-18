@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 ;; The 54 CONTROLS under two OCR engines (K8, D900; D864's population): non-gate, live, macOS.
 ;;
-;;     bb tools/controls/controls.clj [--jobs 3] [--limit N] [--out FILE]
+;;     bb tools/controls/controls.clj [--jobs 3] [--limit N] [--list FILE] [--tesseract-bin FILE] [--vision-bin FILE] [--out FILE]
 ;;
 ;; Every document of test/controls/sweep3.txt (the corpus paths are listed there so the corpus shard keeps them) is converted twice with D864's command (`--pdfium --ocr=auto --assets=figures
 ;; --out=bundle`): once with live Tesseract (`.cache/emon-rs-fusion`, built by `EMON_RS_PDFIUM=<libdir> kin/scripts/emon-rs-build`) and once with Apple Vision (`.cache/emon-rs-vision`,
@@ -17,9 +17,9 @@
 (defn opt [f d] (or (second (drop-while #(not= f %) args)) d))
 (def jobs (parse-long (opt "--jobs" "3")))
 (def out (opt "--out" (str (or (System/getenv "EMON_SCRATCH") (str root "/.cache/scratch")) "/controls.edn")))
-(def engines {:tesseract {:bin (str root "/.cache/emon-rs-fusion/target/release/emon-rs") :flags ["--pdfium" "--tesseract"]}
-              :vision {:bin (str root "/.cache/emon-rs-vision/target/release/emon-rs") :flags ["--pdfium" "--ocr-engine=apple-vision"]}})
-(def sources (->> (str/split-lines (slurp (str root "/test/controls/sweep3.txt"))) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (take (parse-long (opt "--limit" "1000"))) vec))
+(def engines {:tesseract {:bin (opt "--tesseract-bin" (str root "/.cache/emon-rs-fusion/target/release/emon-rs")) :flags ["--pdfium" "--tesseract"]}
+              :vision {:bin (opt "--vision-bin" (str root "/.cache/emon-rs-vision/target/release/emon-rs")) :flags ["--pdfium" "--ocr-engine=apple-vision"]}})
+(def sources (->> (str/split-lines (slurp (opt "--list" (str root "/test/controls/sweep3.txt")))) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (take (parse-long (opt "--limit" "1000"))) vec))
 
 (defn sha256 [^bytes b] (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest (MessageDigest/getInstance "SHA-256") b))))
 (defn words [s] (remove str/blank? (str/split (str/lower-case (str s)) #"\s+")))

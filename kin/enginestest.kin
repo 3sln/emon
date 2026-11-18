@@ -3,7 +3,7 @@
 (ns emon.enginestest
   (:require [emon.lang :refer [I32 Cells Text Blob fd]]
             [emon.transcriptctx :refer [Tr]]
-            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob test-file]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop blob-len]]
             [emon.oil :refer [oil-tess-begin oil-get oh-caps oen-emit-name]]
             [emon.ocrengine :refer [oe-role]]
@@ -525,3 +525,14 @@
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n" (tb-engines))
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n" (tb-engines))
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n" (tb-engines)))
+
+;; A committed transcript that Apple's Vision answered (K8, D900; tools/ocr/record-scan.clj --engine=apple-vision): it carries the engine table as the recorder wrote it from the engine's
+;; own report, so a replay on any host, with no adapter, knows which engine read and with what it was allowed to say.
+(deftest test-a-committed-apple-vision-transcript-names-the-engine-that-read
+  (let [^Blob b (test-file "ocr/vision/h-plain/transcript.edn")
+        ^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t b) 0 "it reads")
+    (assert-eq (tr-n-engines t) 1 "one engine read")
+    (assert-eq (tr-eng-engine t 0) (eng-apple-vision) "Apple Vision")
+    (assert-eq (tr-eng-caps t 0) (pk-engine-caps (eng-apple-vision)) "with the capabilities of its table's ceiling")
+    (assert-eq (tr-eng-role t 0) (erole-reader) "it read alone: a reader, never an incumbent")))

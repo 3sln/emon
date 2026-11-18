@@ -34,7 +34,8 @@ fn test_an_apple_vision_answer_is_valid_and_its_words_carry_their_lines_confiden
     crate::testport::assert_eq(oil_get(c, at, oh_lg()), 2, "an OS recognizer line");
     crate::testport::assert_eq(oil_nlines(c, at), 2, "two lines");
     crate::testport::assert_eq(oil_nwords(c, at), 3, "three words");
-    crate::testport::assert_eq(crate::port::cells_at(c, oil_first_word(c, at) + 5), 1000, "a word has its line's confidence");
+    let first: i32 = oil_first_word(c, at);
+    crate::testport::assert_eq(crate::port::cells_at(c, first + 5), 1000, "a word has its line's confidence");
     crate::testport::assert_eq(oil_native_check(caps, oc_quad() + oc_lconf()), 1, "what it measures is what it declares");
     crate::testport::assert_eq(oil_native_check(caps, oc_wconf()), 0, "it measures no word confidence, and cannot claim one");
 }
@@ -73,7 +74,8 @@ fn test_a_windows_answer_carries_no_confidence_and_no_number_is_invented() {
     oil_end(c, at);
     crate::testport::assert_eq(oil_record_check_bitmap(c, at, 100, 100, scratch), 0, "a valid record");
     crate::testport::assert_eq(oil_get(c, at, oh_ck()), 0, "confidence kind none");
-    crate::testport::assert_eq(crate::port::cells_at(c, oil_first_word(c, at) + 5), -1, "the word's confidence is absent, whatever the caller passed");
+    let first: i32 = oil_first_word(c, at);
+    crate::testport::assert_eq(crate::port::cells_at(c, first + 5), -1, "the word's confidence is absent, whatever the caller passed");
     crate::testport::assert_eq(oil_get(c, at, oh_native()), 0, "it measures nothing it can put a number on");
 }
 #[test]

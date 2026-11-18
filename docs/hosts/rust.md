@@ -132,7 +132,7 @@ implement `Renderer` (`render(source, password, &RenderRequest) -> Result<Bitmap
 - The `no_retarget` test setting of `Options` is not in the published crate (`bb package --check` proves it).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the rust host: 328 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the rust host: 330 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -316,8 +316,10 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::Ocr::fulfil` | `fn required (&self, &plan::Request, &plan::Bitmaps, bool) -> Result<plan::Answer, PlanError>` |
 | `emon::Ocr::producer` | `fn provided (&self) -> Vec<(String, String)>` |
 | `emon::OcrEngine` | `enum derive(Clone,Copy,Debug,Eq,PartialEq)` |
+| `emon::OcrEngine::AppleVision` | `variant` |
 | `emon::OcrEngine::PpOcr` | `variant` |
 | `emon::OcrEngine::Tesseract` | `variant` |
+| `emon::OcrEngine::WindowsMediaOcr` | `variant` |
 | `emon::OcrPolicy` | `enum derive(Clone,Copy,Debug,Eq,PartialEq)` |
 | `emon::OcrPolicy::Always` | `variant` |
 | `emon::OcrPolicy::Auto` | `variant` |

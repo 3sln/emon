@@ -223,7 +223,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.AssertEq(19, 17, "seventeen words");
+        emon.Testport.AssertEq(19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)");
         TWordName(0, 0, 1, 2, "always");
         TWordName(0, 1, 1, 1, "auto");
         TWordName(0, 2, 1, 0, "never");
@@ -241,6 +241,8 @@ public static class Configtest {
         TWordName(0, 14, 20, 1, "scored");
         TWordName(0, 15, 21, 0, "tesseract");
         TWordName(0, 16, 21, 1, "ppocr");
+        TWordName(0, 17, 21, 2, "apple-vision");
+        TWordName(0, 18, 21, 3, "windows-media-ocr");
     }
     [Xunit.Fact]
     public static void TestAKeyIsFoundByItsWholeNameOrItsPrefix() {

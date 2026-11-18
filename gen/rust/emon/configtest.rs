@@ -222,7 +222,7 @@ fn test_the_keys_have_their_names_in_kin() {
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
-    crate::testport::assert_eq(19, 17, "seventeen words");
+    crate::testport::assert_eq(19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)");
     t_word_name(0, 0, 1, 2, "always");
     t_word_name(0, 1, 1, 1, "auto");
     t_word_name(0, 2, 1, 0, "never");
@@ -240,6 +240,8 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 14, 20, 1, "scored");
     t_word_name(0, 15, 21, 0, "tesseract");
     t_word_name(0, 16, 21, 1, "ppocr");
+    t_word_name(0, 17, 21, 2, "apple-vision");
+    t_word_name(0, 18, 21, 3, "windows-media-ocr");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {

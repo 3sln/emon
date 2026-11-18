@@ -572,4 +572,13 @@ public final class Enginestest {
         enRefused(0, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", Transcript.tbEngines());
         enRefused(0, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", Transcript.tbEngines());
     }
+    public static void testACommittedAppleVisionTranscriptNamesTheEngineThatRead() {
+        byte[] b = emon.Testport.testFile("ocr/vision/h-plain/transcript.edn");
+        emon.Transcriptctx.Tr t = new emon.Transcriptctx.Tr();
+        emon.Testport.assertEq(Transcript.trRead(t, b), 0, "it reads");
+        emon.Testport.assertEq(Transcript.trNEngines(t), 1, "one engine read");
+        emon.Testport.assertEq(Transcript.trEngEngine(t, 0), Engines.engAppleVision(), "Apple Vision");
+        emon.Testport.assertEq(Transcript.trEngCaps(t, 0), Engines.pkEngineCaps(Engines.engAppleVision()), "with the capabilities of its table's ceiling");
+        emon.Testport.assertEq(Transcript.trEngRole(t, 0), Engines.eroleReader(), "it read alone: a reader, never an incumbent");
+    }
 }

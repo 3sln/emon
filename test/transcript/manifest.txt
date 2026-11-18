@@ -93,6 +93,9 @@ ocr/scan-px/table-simple-ruled/transcript.edn
 ocr/scan/columns-two/transcript.edn
 ocr/scan/furn-title-pagenum/transcript.edn
 ocr/scan/h-plain/transcript.edn
+ocr/vision/columns-two/transcript.edn
+ocr/vision/furn-title-pagenum/transcript.edn
+ocr/vision/h-plain/transcript.edn
 pdfium-wasm/replay/columns-span-figure/transcript.edn
 pdfium-wasm/replay/fig-logo-pages/transcript.edn
 pdfium-wasm/replay/fig-over-image/transcript.edn

@@ -34,7 +34,8 @@ public static class Oilvisiontest {
         emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhLg()), 2, "an OS recognizer line");
         emon.Testport.AssertEq(Oil.OilNlines(c, at), 2, "two lines");
         emon.Testport.AssertEq(Oil.OilNwords(c, at), 3, "three words");
-        emon.Testport.AssertEq(emon.Port.CellsAt(c, Oil.OilFirstWord(c, at) + 5), 1000, "a word has its line's confidence");
+        int first = Oil.OilFirstWord(c, at);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, first + 5), 1000, "a word has its line's confidence");
         emon.Testport.AssertEq(Oil.OilNativeCheck(caps, Oil.OcQuad() + Oil.OcLconf()), 1, "what it measures is what it declares");
         emon.Testport.AssertEq(Oil.OilNativeCheck(caps, Oil.OcWconf()), 0, "it measures no word confidence, and cannot claim one");
     }
@@ -73,7 +74,8 @@ public static class Oilvisiontest {
         Oil.OilEnd(c, at);
         emon.Testport.AssertEq(Oil.OilRecordCheckBitmap(c, at, 100, 100, scratch), 0, "a valid record");
         emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhCk()), 0, "confidence kind none");
-        emon.Testport.AssertEq(emon.Port.CellsAt(c, Oil.OilFirstWord(c, at) + 5), -1, "the word's confidence is absent, whatever the caller passed");
+        int first = Oil.OilFirstWord(c, at);
+        emon.Testport.AssertEq(emon.Port.CellsAt(c, first + 5), -1, "the word's confidence is absent, whatever the caller passed");
         emon.Testport.AssertEq(Oil.OilGet(c, at, Oil.OhNative()), 0, "it measures nothing it can put a number on");
     }
     [Xunit.Fact]

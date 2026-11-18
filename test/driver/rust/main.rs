@@ -351,8 +351,8 @@ fn main() {
             {
                 let incumbent = emon::tess::TessOcr::new(None).unwrap_or_else(|e| usage(&e));
                 let incumbent = emon::OcrPort(std::sync::Arc::new(incumbent));
-                let port = emon::ppocr_native::PpOcr::open(None, Some(incumbent)).unwrap_or_else(|e| usage(&e));
-                cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(port)));
+                // K2 (D899) deleted `ppocr_native`; the hybrid is the registry's: Tesseract registered as an adapter beside the PP adapter library (K8 repaired this live build, which no gate runs)
+                cfg.ocr = Some(emon::adapter::ppocr_hybrid(Some(incumbent)).unwrap_or_else(|e| usage(&e)));
             }
             #[cfg(all(not(ppocr), not(feature = "tesseract")))]
             usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_LIVE=1)");
