@@ -52,6 +52,7 @@ it is for; asking for another is `transcript-miss`, never a guess.
 ## Language
 
 An engine reads the languages of its platform. emon's codes (`eng`, `deu`, `chs`, ...) and scripts (`Latn`, `Hani`, ...) are turned into
-Vision's locale tags or Windows' language tags by one table in kin (`emon.ocrloc`). Vision reads English, French, Italian, German,
+Vision's locale tags or Windows' language tags by one table in kin (`emon.ocrloc`); a request that names no language is read in Vision's
+Latin-script languages (no language is assumed), or in the user's profile languages on Windows. Vision reads English, French, Italian, German,
 Spanish, Portuguese, Chinese (simplified and traditional), Japanese, Korean, Russian, Ukrainian, Thai and Vietnamese; Windows reads the
 languages whose OCR pack is installed (`Add-WindowsCapability -Online -Name Language.OCR~~~en-US~0.0.1.0`).
