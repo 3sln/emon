@@ -1171,7 +1171,7 @@ pub unsafe extern "C" fn emon_engines_packs(e: *mut emon_engines, dir: *const c_
         }
         let d = if dir.is_null() { String::new() } else { text(dir)? };
         if !d.is_empty() {
-            e.set_packs_dir(std::path::Path::new(&d))?;
+            e.set_packs_dir_text(&d)?;
         }
         e.packs().set_mode(mode);
         Ok(0)
@@ -1189,16 +1189,7 @@ pub unsafe extern "C" fn emon_engines_defaults(e: *mut emon_engines, err: *mut e
         if let Some(d) = native::find_packs_dir() {
             e.packs().add_dir(&d);
         }
-        let mode = match std::env::var("EMON_PACKS_FETCH").ok().as_deref() {
-            Some("never") => EMON_PACKS_NEVER,
-            Some("cache") => EMON_PACKS_CACHE,
-            Some("auto") => EMON_PACKS_AUTO,
-            Some(other) if !other.is_empty() => return Err(RegFail::Usage(format!("EMON_PACKS_FETCH is never, cache or auto, not {:?}", other))),
-            _ => {
-                // the turnkey default of the platform class (kin's `pk-default-fetch`), when this build has a way to fetch
-                if cfg!(feature = "packs-fetch") { crate::emon::engines::pk_default_fetch(e.packs().class()) } else { EMON_PACKS_CACHE }
-            }
-        };
+        let mode = e.turnkey_mode().map_err(RegFail::Usage)?;
         e.packs().set_mode(mode);
         let libs = native::find_adapter_libs().map_err(RegFail::Usage)?;
         for l in libs {

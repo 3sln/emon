@@ -165,7 +165,7 @@ in.data = pdf;
 in.len = len;
 emon_buf html = {0};
 emon_error err = {0};
-if (emon_convert_html(&in, NULL, 0, NULL, &html, &err) < 0) {
+if (emon_convert_html(&in, NULL, NULL, NULL, &html, &err) < 0) {
     fprintf(stderr, "%s: %s\n", err.name, err.message);
     emon_free_error(&err);
     return 1;
@@ -217,13 +217,13 @@ in.len = len;
 
 /* Stage 0 alone is cheap: "pdf 1.4 pages=3 encrypted=false bytes=1234". */
 emon_buf line = {0};
-if (emon_intake(&in, options, 0, &line, &err) == 0) {
+if (emon_intake(&in, options, &line, &err) == 0) {
     printf("%s\n", (const char *)line.data);
     emon_free_buf(&line);
 }
 
 emon_model *model = NULL;
-if (emon_convert(&in, options, 0, &model, &err) < 0) {
+if (emon_convert(&in, options, NULL, &model, &err) < 0) {
     /* err.name is the stable name to route on, err.code its category */
     fprintf(stderr, "%s (%s): %s\n", err.name, emon_error_category(err.code), err.message);
     emon_free_error(&err);
@@ -241,7 +241,35 @@ emon_free_model(model);
 
 <!-- snippet: docs/snippets/c/native.c -->
 ```c
-(placeholder: `bb docs` writes the snippet)
+/* pdf, len: a scanned document's bytes */
+emon_error err = {0};
+/* The turnkey engines: what is next to the library. pdfium (lib/libpdfium.*), the adapter libraries (lib/emon/adapters/: Tesseract) and the
+   packs (share/emon/packs/: English and orientation), found as the archive lays them out; $EMON_PDFIUM_LIB, $EMON_ADAPTER_DIR and $EMON_MODELS name others. */
+emon_engines *engines = NULL;
+if (emon_engines_new(&engines, &err) < 0 || emon_engines_defaults(engines, &err) < 0) {
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    emon_free_error(&err);
+    return 1;
+}
+if (!(emon_capabilities() & EMON_CAP_PDFIUM)) {
+    fprintf(stderr, "pdfium was not found next to the library\n");
+    return 1;
+}
+
+emon_input in = {0};
+in.data = pdf;
+in.len = len;
+emon_buf html = {0};
+if (emon_convert_html(&in, NULL, engines, NULL, &html, &err) < 0) { /* the engines: pdfium draws, the Tesseract adapter reads */
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    emon_free_error(&err);
+    return 1;
+}
+FILE *out = fopen("scan.html", "wb");
+fwrite(html.data, 1, html.len, out);
+fclose(out);
+emon_free_buf(&html);
+emon_engines_free(engines);
 ```
 
 `bb package --check` compiles this against the built archive and runs it on `samples/scan-plain.pdf`, linked both ways, with no
@@ -258,7 +286,43 @@ are registered for itself**, so a caller needs no loop of its own for OCR; the p
 
 <!-- snippet: docs/snippets/c/session.c -->
 ```c
-(placeholder: `bb docs` writes the snippet)
+/* pdf, len: the document, which only you can read. The engine never calls out: it says what it needs, you do it. */
+emon_session *s = NULL;
+emon_error err = {0};
+if (emon_open(len, 0, 0, NULL, NULL, 0, "ocr=never", &s, &err) < 0) {
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    return 1;
+}
+emon_step_out out = {0};
+int status;
+while ((status = emon_step(s, &out, &err)) > 0) {
+    if (status == EMON_NEED_BYTES) {
+        /* read each span of the source and hand it in; the engine reads only what it touches */
+        for (size_t i = 0; i < out.nranges; i++) {
+            uint64_t off = out.ranges[i].offset, want = out.ranges[i].length;
+            if (off + want > len) want = len - off;
+            emon_provide(s, off, pdf + off, (size_t)want, &err);
+        }
+    } else {
+        /* EMON_NEED_REQUESTS: out.requests, each to fulfil with emon_answer_ocr, emon_answer_render or emon_answer
+           (only with the options js-ocr=1 and js-render=1; without them the session answers `unsupported` itself) */
+    }
+    emon_free_step(&out);
+}
+if (status < 0) {
+    fprintf(stderr, "%s: %s\n", err.name, err.message);
+    emon_free_error(&err);
+    emon_close(s);
+    return 1;
+}
+emon_model *model = NULL;
+emon_finish(s, &model, &err); /* EMON_DONE: the Model, as for emon_convert */
+emon_close(s);
+emon_buf html = {0};
+emon_model_html(model, NULL, &html, &err);
+fwrite(html.data, 1, html.len, stdout);
+emon_free_buf(&html);
+emon_free_model(model);
 ```
 
 `EMON_NEED_BYTES` lists the ranges of the source the engine missed: read them and `emon_provide` them; the unit that missed
@@ -298,15 +362,21 @@ header and have no example here.
   the step API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the c host: 124 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the c host: 254 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
 | Name | Signature |
 |---|---|
+| `EMON_ADAPTER_ABI` | `#define 1` |
+| `EMON_ADAPTER_ASYNC` | `#define 1` |
+| `EMON_ADAPTER_FAILED` | `#define 2` |
+| `EMON_ADAPTER_OK` | `#define 0` |
+| `EMON_ADAPTER_REMOTE` | `#define 2` |
+| `EMON_ADAPTER_THREADSAFE` | `#define 4` |
+| `EMON_ADAPTER_UNSUPPORTED` | `#define 1` |
 | `EMON_CAP_CODECS` | `#define 4` |
 | `EMON_CAP_PDFIUM` | `#define 1` |
-| `EMON_CAP_TESSERACT` | `#define 2` |
 | `EMON_DONE` | `#define 0` |
 | `EMON_ERR_DAMAGED` | `#define 8` |
 | `EMON_ERR_ENCRYPTION_UNSUPPORTED` | `#define 6` |
@@ -321,10 +391,66 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `EMON_ERR_UNSUPPORTED` | `#define 11` |
 | `EMON_ERR_UNSUPPORTED_FORMAT` | `#define 7` |
 | `EMON_ERR_USAGE` | `#define 1` |
-| `EMON_NATIVE` | `#define 1` |
 | `EMON_NEED_BYTES` | `#define 1` |
 | `EMON_NEED_REQUESTS` | `#define 2` |
+| `EMON_OEN_APPLE_VISION` | `#define 3` |
+| `EMON_OEN_MLKIT_TEXT` | `#define 4` |
+| `EMON_OEN_PPOCR` | `#define 2` |
+| `EMON_OEN_TESSERACT` | `#define 1` |
+| `EMON_OEN_WINDOWS_MEDIA_OCR` | `#define 5` |
 | `EMON_OPEN_INTAKE` | `#define 1` |
+| `EMON_PACKS_AUTO` | `#define 3` |
+| `EMON_PACKS_CACHE` | `#define 2` |
+| `EMON_PACKS_NEVER` | `#define 1` |
+| `EMON_PACK_BY_APP` | `#define 2` |
+| `EMON_PACK_BY_LIBRARY` | `#define 1` |
+| `EMON_PACK_CLASSIFIER` | `#define 8` |
+| `EMON_PACK_DECLINE` | `#define 3` |
+| `EMON_PACK_DETECTOR` | `#define 4` |
+| `EMON_PACK_EVENT_CANCELLED` | `#define 5` |
+| `EMON_PACK_EVENT_DONE` | `#define 3` |
+| `EMON_PACK_EVENT_FAILED` | `#define 4` |
+| `EMON_PACK_EVENT_PROGRESS` | `#define 2` |
+| `EMON_PACK_EVENT_START` | `#define 1` |
+| `EMON_PACK_FETCH` | `#define 1` |
+| `EMON_PACK_OSD` | `#define 2` |
+| `EMON_PACK_PROVIDE` | `#define 2` |
+| `EMON_PACK_RECOGNIZER` | `#define 1` |
+| `EMON_PACK_SUBSTITUTE` | `#define 4` |
+| `EMON_WAITING` | `#define 3` |
+| `emon_adapter_answer` | `struct` |
+| `emon_adapter_answer.binary` | `@2 const uint8_t *` |
+| `emon_adapter_answer.binary_height` | `@4 int32_t` |
+| `emon_adapter_answer.binary_width` | `@3 int32_t` |
+| `emon_adapter_answer.cells` | `@0 int32_t *` |
+| `emon_adapter_answer.ncells` | `@1 size_t` |
+| `emon_adapter_answer.owner` | `@5 void *` |
+| `emon_adapter_host` | `struct` |
+| `emon_adapter_host.abi` | `@0 uint32_t` |
+| `emon_adapter_host.complete` | `@3 int (*complete)(void *ctx, uint64_t token, int status, const int32_t *cells, size_t ncells, const emon_adapter_status *why)` |
+| `emon_adapter_host.ctx` | `@2 void *` |
+| `emon_adapter_host.size` | `@1 uint32_t` |
+| `emon_adapter_image` | `struct` |
+| `emon_adapter_image.channels` | `@2 int32_t` |
+| `emon_adapter_image.dpi` | `@5 int32_t` |
+| `emon_adapter_image.height` | `@1 int32_t` |
+| `emon_adapter_image.pixels` | `@4 const uint8_t *` |
+| `emon_adapter_image.stride` | `@3 int32_t` |
+| `emon_adapter_image.width` | `@0 int32_t` |
+| `emon_adapter_info` | `struct` |
+| `emon_adapter_info.caps` | `@1 uint32_t` |
+| `emon_adapter_info.config` | `@5 const char *` |
+| `emon_adapter_info.engine` | `@0 uint32_t` |
+| `emon_adapter_info.flags` | `@4 uint32_t` |
+| `emon_adapter_info.langs` | `@8 const char *const *` |
+| `emon_adapter_info.native` | `@2 uint32_t` |
+| `emon_adapter_info.needs` | `@3 uint32_t` |
+| `emon_adapter_info.nlangs` | `@9 size_t` |
+| `emon_adapter_info.observed` | `@6 const char *` |
+| `emon_adapter_info.producer` | `@7 const char *` |
+| `emon_adapter_status` | `struct` |
+| `emon_adapter_status.message` | `@1 char[224]` |
+| `emon_adapter_status.reason` | `@0 char[96]` |
 | `emon_answer` | `int (emon_session *s, const int32_t *cells, size_t ncells, emon_error *err)` |
 | `emon_answer_ocr` | `int (emon_session *s, int32_t id, const int32_t *cells, size_t ncells, emon_error *err)` |
 | `emon_answer_render` | `int (emon_session *s, int32_t id, int32_t width, int32_t height, const uint8_t *rgb, size_t len, emon_error *err)` |
@@ -344,10 +470,23 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_capabilities` | `unsigned (void)` |
 | `emon_check_options` | `int (const char *options, emon_error *err)` |
 | `emon_close` | `void (emon_session *s)` |
+| `emon_complete` | `int (emon_session *s, uint64_t token, const int32_t *cells, size_t ncells, const emon_error *failure, emon_error *err)` |
 | `emon_const` | `int (unsigned i)` |
-| `emon_convert` | `int (const emon_input *input, const char *options, unsigned flags, emon_model **out, emon_error *err)` |
-| `emon_convert_html` | `int (const emon_input *input, const char *options, unsigned flags, const char *html_options, emon_buf *out, emon_error *err)` |
-| `emon_convert_json` | `int (const emon_input *input, const char *options, unsigned flags, int pretty, emon_buf *out, emon_error *err)` |
+| `emon_convert` | `int (const emon_input *input, const char *options, const emon_engines *engines, emon_model **out, emon_error *err)` |
+| `emon_convert_html` | `int (const emon_input *input, const char *options, const emon_engines *engines, const char *html_options, emon_buf *out, emon_error *err)` |
+| `emon_convert_json` | `int (const emon_input *input, const char *options, const emon_engines *engines, int pretty, emon_buf *out, emon_error *err)` |
+| `emon_engines` | `opaque struct` |
+| `emon_engines_add_ocr` | `int (emon_engines *e, const emon_ocr_adapter *a, emon_error *err)` |
+| `emon_engines_allow_remote` | `int (emon_engines *e, int allow, emon_error *err)` |
+| `emon_engines_defaults` | `int (emon_engines *e, emon_error *err)` |
+| `emon_engines_describe` | `int (const emon_engines *e, emon_buf *out, emon_error *err)` |
+| `emon_engines_free` | `void (emon_engines *e)` |
+| `emon_engines_load` | `int (emon_engines *e, const char *path, const char *config, emon_error *err)` |
+| `emon_engines_new` | `int (emon_engines **out, emon_error *err)` |
+| `emon_engines_notes` | `int (emon_engines *e, emon_buf *out, emon_error *err)` |
+| `emon_engines_packs` | `int (emon_engines *e, const char *dir, int mode, emon_error *err)` |
+| `emon_engines_pdfium` | `int (emon_engines *e, const char *lib_or_dir, emon_error *err)` |
+| `emon_engines_set_timeout` | `int (emon_engines *e, int32_t ms, emon_error *err)` |
 | `emon_error` | `struct` |
 | `emon_error.code` | `@0 int` |
 | `emon_error.message` | `@2 char *` |
@@ -375,7 +514,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_input.password` | `@3 const uint8_t *` |
 | `emon_input.password_len` | `@4 size_t` |
 | `emon_input.source` | `@2 const emon_source *` |
-| `emon_intake` | `int (const emon_input *input, const char *options, unsigned flags, emon_buf *out, emon_error *err)` |
+| `emon_intake` | `int (const emon_input *input, const char *options, emon_buf *out, emon_error *err)` |
 | `emon_is_option_key` | `int (const char *name)` |
 | `emon_limit` | `int (emon_session *s, int32_t kind, int64_t *out, emon_error *err)` |
 | `emon_model` | `opaque struct` |
@@ -386,12 +525,67 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_model_html` | `int (const emon_model *m, const char *html_options, emon_buf *out, emon_error *err)` |
 | `emon_model_json` | `int (const emon_model *m, int pretty, emon_buf *out, emon_error *err)` |
 | `emon_model_stats` | `int (const emon_model *m, emon_stats *out)` |
-| `emon_ocr_block_type` | `int (int32_t poly)` |
-| `emon_ocr_lang_first` | `int (const int32_t *request, size_t nrequest)` |
-| `emon_ocr_models` | `int (const int32_t *request, size_t nrequest, const int32_t *installed, size_t ninstalled, emon_buf *out, emon_error *err)` |
-| `emon_ocr_word_lang` | `int (const int32_t *request, size_t nrequest)` |
-| `emon_open` | `int (uint64_t length, uint32_t chunk, unsigned flags, const uint8_t *password, size_t password_len, const char *options, emon_session **out, emon_error *err)` |
+| `emon_ocr_adapter` | `struct` |
+| `emon_ocr_adapter.abi` | `@0 uint32_t` |
+| `emon_ocr_adapter.bind` | `@10 void (*bind)(void *ctx, const emon_adapter_host *host)` |
+| `emon_ocr_adapter.cancel` | `@8 void (*cancel)(void *ctx, uint64_t token)` |
+| `emon_ocr_adapter.close` | `@11 void (*close)(void *ctx)` |
+| `emon_ocr_adapter.ctx` | `@3 void *` |
+| `emon_ocr_adapter.describe` | `@4 int (*describe)(void *ctx, emon_adapter_info *out, emon_adapter_status *st)` |
+| `emon_ocr_adapter.name` | `@2 const char *` |
+| `emon_ocr_adapter.read` | `@6 int (*read)(void *ctx, const int32_t *request, size_t n, const emon_adapter_image *image, int want_binary, emon_adapter_answer *out, emon_adapter_status *st)` |
+| `emon_ocr_adapter.release` | `@9 void (*release)(void *ctx, emon_adapter_answer *a)` |
+| `emon_ocr_adapter.size` | `@1 uint32_t` |
+| `emon_ocr_adapter.start` | `@7 int (*start)(void *ctx, const int32_t *request, size_t n, const emon_adapter_image *image, uint64_t token, emon_adapter_status *st)` |
+| `emon_ocr_adapter.supports` | `@5 int (*supports)(void *ctx, const int32_t *request, size_t n, emon_adapter_status *st)` |
+| `emon_ocr_adapter_v1` | `const emon_ocr_adapter * (const char *config, const char *packs_dir, emon_adapter_status *st)` |
+| `emon_ocr_adapter_v1_fn` | `typedef const emon_ocr_adapter *(*emon_ocr_adapter_v1_fn)(const char *config, const char *packs_dir, emon_adapter_status *st)` |
+| `emon_ocr_request` | `int (const int32_t *request, size_t nrequest, emon_ocr_request_info *out, emon_error *err)` |
+| `emon_ocr_request_info` | `struct` |
+| `emon_ocr_request_info.bitmap` | `@1 int32_t` |
+| `emon_ocr_request_info.dpi` | `@5 int32_t` |
+| `emon_ocr_request_info.engine` | `@2 int32_t` |
+| `emon_ocr_request_info.flags` | `@4 int32_t` |
+| `emon_ocr_request_info.h` | `@9 int32_t` |
+| `emon_ocr_request_info.id` | `@0 int32_t` |
+| `emon_ocr_request_info.langs` | `@11 char[8][8]` |
+| `emon_ocr_request_info.nlangs` | `@10 int32_t` |
+| `emon_ocr_request_info.psm` | `@3 int32_t` |
+| `emon_ocr_request_info.w` | `@8 int32_t` |
+| `emon_ocr_request_info.x` | `@6 int32_t` |
+| `emon_ocr_request_info.y` | `@7 int32_t` |
+| `emon_on_pack_event` | `int (emon_engines *e, emon_pack_event_fn fn, void *ctx, emon_error *err)` |
+| `emon_on_pack_needed` | `int (emon_engines *e, emon_pack_needed_fn fn, void *ctx, emon_error *err)` |
+| `emon_open` | `int (uint64_t length, uint32_t chunk, unsigned flags, const emon_engines *engines, const uint8_t *password, size_t password_len, const char *options, emon_session **out, emon_error *err)` |
+| `emon_pack_decision` | `struct` |
+| `emon_pack_decision.action` | `@0 int32_t` |
+| `emon_pack_decision.data` | `@1 const uint8_t *` |
+| `emon_pack_decision.engine` | `@4 const char *` |
+| `emon_pack_decision.len` | `@2 size_t` |
+| `emon_pack_decision.path` | `@3 const char *` |
+| `emon_pack_event` | `struct` |
+| `emon_pack_event.done` | `@3 uint64_t` |
+| `emon_pack_event.engine` | `@2 const char *` |
+| `emon_pack_event.initiator` | `@5 int32_t` |
+| `emon_pack_event.kind` | `@0 int32_t` |
+| `emon_pack_event.message` | `@6 const char *` |
+| `emon_pack_event.pack` | `@1 const char *` |
+| `emon_pack_event.total` | `@4 uint64_t` |
+| `emon_pack_event_fn` | `typedef int (*emon_pack_event_fn)(void *ctx, const emon_pack_event *ev)` |
+| `emon_pack_needed_fn` | `typedef int (*emon_pack_needed_fn)(void *ctx, const emon_pack_request *req, emon_pack_decision *out)` |
+| `emon_pack_request` | `struct` |
+| `emon_pack_request.bytes` | `@5 uint64_t` |
+| `emon_pack_request.engine` | `@2 const char *` |
+| `emon_pack_request.kind` | `@3 const char *` |
+| `emon_pack_request.licence` | `@4 const char *` |
+| `emon_pack_request.pack` | `@0 const char *` |
+| `emon_pack_request.reason` | `@6 const char *` |
+| `emon_pack_request.request_engine` | `@7 const char *` |
+| `emon_pack_request.rev` | `@1 int32_t` |
+| `emon_packs_cancel` | `void (emon_engines *e)` |
+| `emon_packs_ensure` | `int (emon_engines *e, const char *ids, emon_error *err)` |
 | `emon_prefetch` | `int (emon_session *s, emon_step_out *out, emon_error *err)` |
+| `emon_prepare` | `int (const emon_engines *e, const char *options, emon_buf *out, emon_error *err)` |
 | `emon_provide` | `int (emon_session *s, uint64_t offset, const uint8_t *data, size_t len, emon_error *err)` |
 | `emon_range` | `struct` |
 | `emon_range.length` | `@1 uint64_t` |
@@ -405,7 +599,6 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_request.kind` | `@0 int32_t` |
 | `emon_request.ncells` | `@3 size_t` |
 | `emon_session` | `opaque struct` |
-| `emon_set_native_paths` | `int (const char *pdfium, const char *tessdata, emon_error *err)` |
 | `emon_source` | `struct` |
 | `emon_source.ctx` | `@2 void *` |
 | `emon_source.length` | `@0 uint64_t` |
@@ -428,6 +621,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_step_out.requests` | `@2 emon_request *` |
 | `emon_transcript` | `int (emon_session *s, emon_files *out, emon_error *err)` |
 | `emon_version` | `const char * (void)` |
+| `emon_wait` | `int (emon_session *s, int32_t timeout_ms, emon_error *err)` |
 
 </details>
 <!-- bb docs:end api-index -->

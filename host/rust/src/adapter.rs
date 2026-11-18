@@ -54,11 +54,11 @@ impl AdapterStatus {
         put(&mut self.message, message);
     }
 
-    pub fn reason(&self) -> String {
+    pub fn reason_text(&self) -> String {
         unsafe { CStr::from_ptr(self.reason.as_ptr()) }.to_string_lossy().to_string()
     }
 
-    pub fn message(&self) -> String {
+    pub fn message_text(&self) -> String {
         unsafe { CStr::from_ptr(self.message.as_ptr()) }.to_string_lossy().to_string()
     }
 }
@@ -250,7 +250,7 @@ impl RegError {
     }
 }
 
-pub struct Entry {
+pub struct Adapter {
     pub name: String,
     pub info: Info,
     vt: OcrAdapter,
@@ -261,11 +261,11 @@ pub struct Entry {
     _lib: Option<Lib>,
 }
 
-unsafe impl Send for Entry {}
-unsafe impl Sync for Entry {}
+unsafe impl Send for Adapter {}
+unsafe impl Sync for Adapter {}
 
 fn status_text(st: &AdapterStatus, fallback: &str) -> (String, String) {
-    let (r, m) = (st.reason(), st.message());
+    let (r, m) = (st.reason_text(), st.message_text());
     (if r.is_empty() { fallback.to_string() } else { r }, if m.is_empty() { fallback.to_string() } else { m })
 }
 
@@ -277,9 +277,9 @@ unsafe fn text_of(p: *const c_char) -> String {
     }
 }
 
-impl Entry {
+impl Adapter {
     // Take an adapter: describe it, hold what it says to kin's table (`ad-register-check`), bind it. The adapter is closed if it is refused.
-    fn open(vt: OcrAdapter, lib: Option<Lib>, inner: *const Inner, name_hint: Option<&str>) -> Result<Entry, RegError> {
+    fn open(vt: OcrAdapter, lib: Option<Lib>, inner: *const Inner, name_hint: Option<&str>) -> Result<Adapter, RegError> {
         let close = |vt: &OcrAdapter| {
             if let Some(c) = vt.close {
                 unsafe { c(vt.ctx) }
@@ -339,7 +339,7 @@ impl Entry {
         if let Some(bind) = vt.bind {
             unsafe { bind(vt.ctx, &*host) };
         }
-        Ok(Entry { name, info, vt, host, serial: Mutex::new(()), _lib: lib })
+        Ok(Adapter { name, info, vt, host, serial: Mutex::new(()), _lib: lib })
     }
 
     fn threadsafe(&self) -> bool {
@@ -413,7 +413,7 @@ impl Entry {
     }
 }
 
-impl Drop for Entry {
+impl Drop for Adapter {
     fn drop(&mut self) {
         if let Some(c) = self.vt.close {
             unsafe { c(self.vt.ctx) }
@@ -432,7 +432,7 @@ pub enum Completion {
 
 // What an async completion needs to be settled: the adapter that was asked, the request, the bitmap's size.
 pub struct Meta {
-    pub entry: Arc<Entry>,
+    pub entry: Arc<Adapter>,
     pub id: i32,
     pub oen: i32,
     pub width: i32,
@@ -480,7 +480,7 @@ unsafe extern "C" fn host_complete(ctx: *mut c_void, token: u64, status: c_int, 
     let c = if status == ADAPTER_OK {
         Completion::Answer(if cells.is_null() { Vec::new() } else { std::slice::from_raw_parts(cells, ncells).to_vec() })
     } else {
-        let reason = if why.is_null() { String::new() } else { (*why).reason() };
+        let reason = if why.is_null() { String::new() } else { (*why).reason_text() };
         Completion::Refused { status, reason: if reason.is_empty() { if status == ADAPTER_UNSUPPORTED { "unsupported".to_string() } else { "failed".to_string() } } else { reason } }
     };
     if inner.complete(token, c) {
@@ -493,7 +493,7 @@ unsafe extern "C" fn host_complete(ctx: *mut c_void, token: u64, status: c_int, 
 // ------------------------------------------------------------------------------------------------ the registry
 
 struct Inner {
-    entries: RwLock<Vec<Arc<Entry>>>,
+    entries: RwLock<Vec<Arc<Adapter>>>,
     renderer: Mutex<Option<Arc<dyn Renderer>>>,
     packs: Packs,
     timeout_ms: AtomicI64,
@@ -591,6 +591,23 @@ impl Engines {
         self.inner.packs.set_store(dir).map_err(|e| RegError::new("pack-dir-missing", e))
     }
 
+    // `set_packs_dir` for a caller that holds the path as text (the C binding names no path type).
+    pub fn set_packs_dir_text(&self, dir: &str) -> Result<(), RegError> {
+        self.set_packs_dir(std::path::Path::new(dir))
+    }
+
+    // The pack mode a TURNKEY registry starts in: `$EMON_PACKS_FETCH` (never, cache, auto), else the platform class's default (kin's `pk-default-fetch`) when this build can fetch, else
+    // `cache`. Err names a value that is none of the three.
+    pub fn turnkey_mode(&self) -> Result<i32, String> {
+        match std::env::var("EMON_PACKS_FETCH").ok().as_deref() {
+            Some("never") => Ok(ke::pfetch_never()),
+            Some("cache") => Ok(ke::pfetch_cache()),
+            Some("auto") => Ok(ke::pfetch_auto()),
+            Some(other) if !other.is_empty() => Err(format!("EMON_PACKS_FETCH is never, cache or auto, not {:?}", other)),
+            _ => Ok(if cfg!(feature = "packs-fetch") { ke::pk_default_fetch(self.inner.packs.class()) } else { ke::pfetch_cache() }),
+        }
+    }
+
     pub fn set_renderer(&self, r: Arc<dyn Renderer>) {
         *self.inner.renderer.lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
     }
@@ -603,11 +620,11 @@ impl Engines {
         !self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).is_empty()
     }
 
-    pub fn adapters(&self) -> Vec<Arc<Entry>> {
+    pub fn adapters(&self) -> Vec<Arc<Adapter>> {
         self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
-    fn admit(&self, e: Entry) -> Result<usize, RegError> {
+    fn admit(&self, e: Adapter) -> Result<usize, RegError> {
         if e.info.flags & ADAPTER_REMOTE != 0 && !self.inner.allow_remote.load(Ordering::SeqCst) {
             return Err(RegError::new("adapter-remote-refused", format!("{} sends the pixels off the device; allow it with emon_engines_allow_remote (documents may hold personal data)", e.name)));
         }
@@ -619,7 +636,7 @@ impl Engines {
     // An adapter given as callbacks: the struct is copied, `ctx` stays the caller's, `close` is called when the registry goes.
     pub fn add_adapter(&self, vt: OcrAdapter) -> Result<usize, RegError> {
         self.inner.sealed.store(true, Ordering::SeqCst);
-        let e = Entry::open(vt, None, Arc::as_ptr(&self.inner), None)?;
+        let e = Adapter::open(vt, None, Arc::as_ptr(&self.inner), None)?;
         self.admit(e)
     }
 
@@ -649,7 +666,7 @@ impl Engines {
             return Err(RegError::new("adapter-open-failed", format!("{}: {}: {}", path, r, m)));
         }
         let vt = unsafe { *p };
-        let e = Entry::open(vt, Some(lib), Arc::as_ptr(&self.inner), Some(&engine))?;
+        let e = Adapter::open(vt, Some(lib), Arc::as_ptr(&self.inner), Some(&engine))?;
         self.admit(e)
     }
 
@@ -932,7 +949,7 @@ impl Router {
         Duration::from_millis(self.inner.timeout_ms.load(Ordering::SeqCst).max(1) as u64)
     }
 
-    fn registered_oens(&self) -> (Vec<Arc<Entry>>, Cells) {
+    fn registered_oens(&self) -> (Vec<Arc<Adapter>>, Cells) {
         let v = self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).clone();
         let mut c = Cells::new();
         for e in &v {
@@ -942,7 +959,7 @@ impl Router {
     }
 
     // Which adapter, if any, is the request's (kin's `ad-route`): the first registered for the engine it addresses.
-    fn route(&self, req: &Request) -> Option<Arc<Entry>> {
+    fn route(&self, req: &Request) -> Option<Arc<Adapter>> {
         let (v, mut oens) = self.registered_oens();
         let mut c = cells_of(&req.rec);
         let at = ka::ad_route(kop::op_request_engine(&mut c), &mut oens, 0);
@@ -976,7 +993,7 @@ impl Router {
         out
     }
 
-    fn languages_of(&self, entry: &Entry, req: &Request) -> Vec<i32> {
+    fn languages_of(&self, entry: &Adapter, req: &Request) -> Vec<i32> {
         // Tesseract's requests name languages; PP-OCR has one recognizer (English) and its requests' layout differs (a view's hash precedes the languages)
         if entry.oen() != 1 {
             return Vec::new();
@@ -996,7 +1013,7 @@ impl Router {
 
     // The packs a request needs, made present or refused (D896). `Ok(None)`: go on with this adapter. `Ok(Some(e))`: the app named another adapter of the same engine. `Err`: the
     // page is unread, with the reason.
-    fn ensure_packs(&self, entry: &Arc<Entry>, req: &Request) -> Result<Option<Arc<Entry>>, String> {
+    fn ensure_packs(&self, entry: &Arc<Adapter>, req: &Request) -> Result<Option<Arc<Adapter>>, String> {
         if entry.info.needs == 0 {
             return Ok(None);
         }
@@ -1040,7 +1057,7 @@ impl Router {
         Ok(None)
     }
 
-    fn refused(&self, entry: &Entry, id: i32, status: c_int, reason: &str) -> Answer {
+    fn refused(&self, entry: &Adapter, id: i32, status: c_int, reason: &str) -> Answer {
         self.inner.note(format!("{}: {} {}", entry.name, if status == ADAPTER_UNSUPPORTED { "unsupported" } else { "failed" }, reason));
         refusal(id, status)
     }
