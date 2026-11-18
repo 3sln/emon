@@ -14672,5 +14672,16 @@ P13.21, for the Dart/Flutter evaluation release (D895). Two platform OCR engines
 
 **Merge with D900 (P13.4).** Both added values to `ocr-engine`; the enum is now tesseract 0, ppocr 1, ppocr-alone 2 (D900), apple-vision 3, windows-media-ocr 4. `en-oe-mode` (kin) maps them to `oe-tag` modes 0, 2, 1, 4, 6; only `ppocr` asks for the hybrid's second reading (`en-hybrid`). The PP policy identity (`oe-id`) re-key made on this branch is kept: it is required, because `tools/ppocr/identity.clj` hashes `kin/ocrengine.kin` and `kin/ocalibdata.kin`, and this branch changed both (the platform engines' requested configurations; Vision's word calibration, engine 3), so `identity.clj` fails without it; PP-OCR's behaviour is unchanged. The merged value is the one `identity.clj --write` gives on the merge; `ortpin` re-pins ONNX Runtime and reconciles identity when it merges.
 
+- [ ] **Signed off** (maintainer)
+
+### D902 — The full gate matrix runs only for a release; pull requests and pushes are targeted
+
+Maintainer, 2026-11-18: "We can do the full matrix on release only. For PRs, we should be targeted, only running tests likely affected by the diff."
+
+- **Release:** `release-run.yml` calls `verify.yml` with `mode: full` for the release commit (D886). That is the only full run.
+- **Pull requests:** `pr.yml` runs `bb ci core` plus the gates `bb ci plan --base origin/<base>` maps from the diff through `ci/gate-map.edn` (fast variants where they exist). Unchanged.
+- **Push to main:** a scoped `verify.yml` run (the plan since the newest verified ancestor), only when the `EMON_VERIFY_ON_PUSH` variable is true. Currently off.
+- **Weekly run:** the weekly full run (Monday cron) is removed.
+- **Local agent and coordinator runs** follow the same rule: `bb check`, `bb ci core`, and the `bb ci plan` selection. The full four-host `bb unit` runs only when the plan selects it.
 
 - [ ] **Signed off** (maintainer)

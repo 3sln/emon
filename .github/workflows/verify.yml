@@ -11,7 +11,7 @@
 #                 they are affected (a path they are built from changed, no valid archives came with the base, or the VERSION changed: the archives carry it). Otherwise the base's
 #                 stay valid. Either way `emon/archives` is posted on the commit, naming the run whose artifact `release-archives` (retention 90 days) holds them.
 #   5. VERDICT    `emon/verified` success only when the plan, the core and every job ran green; description `verified: N gates since <sha>`.
-# Also: weekly (Monday, all gates, archives rebuilt, status posted), `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
+# Also (no weekly run: the full matrix runs only for a release, D902): `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
 # (release.yml calls it in full for the release commit). A commit that is not on main is refused.
 # Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka. Never run (D524: no Actions credits yet).
 name: verify
@@ -20,8 +20,6 @@ on:
   push:
     branches: [main]
     paths-ignore: [version.edn] # release.yml verifies a version-only push in full
-  schedule:
-    - cron: "17 4 * * 1"
   workflow_dispatch:
     inputs:
       mode:
@@ -60,13 +58,13 @@ defaults:
 env:
   CI: "true"
   SHA: ${{ inputs.sha || github.sha }}
-  MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'full') || 'scoped' }}
+  MODE: ${{ inputs.mode || 'scoped' }}
 
 jobs:
   # ---- what this commit calls for: the base, the plan, and whether the archives are rebuilt ---------------------------------------------------------
   # A push runs only when the repository variable EMON_VERIFY_ON_PUSH is 'true' (the repository is private and billed; the maintainer sets it when there are credits or the
   # repository is public). Skipped, every dependent is skipped with it (`needs: plan` / `plan.result == 'success'`) and `verdict` (on_main empty) posts no status at all.
-  # The schedule, workflow_dispatch and workflow_call are not affected.
+  # workflow_dispatch and workflow_call are not affected.
   plan:
     if: inputs.sha != '' || github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
     runs-on: ubuntu-latest
