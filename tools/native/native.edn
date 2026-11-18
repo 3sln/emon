@@ -31,7 +31,31 @@
                               ;; CMAKE_MSVC_RUNTIME_LIBRARY count in every project, whatever cmake_minimum_required it states (giflib's and zlib's are old)
                               :cmake ["-DCMAKE_POLICY_DEFAULT_CMP0091=NEW" "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"]
                               ;; Tesseract 5.5.3's ccstruct/image.h uses uint32_t without <cstdint>, which MSVC 14.44's headers no longer bring in
-                              :env {"CXXFLAGS" "/FIcstdint"}}}
+                              :env {"CXXFLAGS" "/FIcstdint"}}
+
+  ;; THE MOBILE TRIPLES (K6, P13.19, D897). Cross-compiled; the :runner is the one `native.yml` builds them on, :cross-from the host OSes `bb native` may be run on.
+  ;; ANDROID: NDK r28c or newer (16 KB aligned by default; `bb native` refuses an older one), API 24 (Android 7.0): pdfium-binaries builds pdfium for API 23,
+  ;; Leptonica's fmemopen/open_memstream and Tesseract's C++17 need 23 at least, and 24 is the floor of the NDK's own current default and of Flutter's
+  ;; `minSdkVersion`. :abi is the Android ABI (the directory name in an APK's lib/), :rust the Rust target. The C++ runtime is linked STATICALLY into libemon.so
+  ;; (nothing but the system's libc, libm and libdl is loaded: no libc++_shared.so for the app to package), so :cxx-runtime is empty here.
+  ;; IOS: the iPhoneOS and iPhoneSimulator SDKs of the Xcode on the runner; :ios-deployment is the minimum iOS of emon's own code (13.0: Flutter's floor; the arm64 SIMULATOR is 14.0, the first iOS that has one),
+  ;; the pinned pdfium dylib is built for iOS 17.0 by its upstream (a device older than that loads libemon and finds no pdfium, a clean `no render port`).
+  ;; The CMake generator is `Unix Makefiles` everywhere: nothing here needs Ninja.
+  "aarch64-linux-android"     {:runner "ubuntu-24.04"   :os :android :arch "arm64" :abi "arm64-v8a" :api 24 :rust "aarch64-linux-android" :generator "Unix Makefiles"
+                               :cross-from #{:mac :linux} :pdfium "android-arm64"
+                               :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime [] :cmake ["-DCMath_LIBRARY:STRING=m" "-DCMath_HAVE_LIBM_POW=1"]}
+  "armv7-linux-androideabi"   {:runner "ubuntu-24.04"   :os :android :arch "arm" :abi "armeabi-v7a" :api 24 :rust "armv7-linux-androideabi" :generator "Unix Makefiles"
+                               :cross-from #{:mac :linux} :pdfium "android-arm"
+                               :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime [] :cmake ["-DCMath_LIBRARY:STRING=m" "-DCMath_HAVE_LIBM_POW=1"]}
+  "x86_64-linux-android"      {:runner "ubuntu-24.04"   :os :android :arch "x86_64" :abi "x86_64" :api 24 :rust "x86_64-linux-android" :generator "Unix Makefiles"
+                               :cross-from #{:mac :linux} :pdfium "android-x64"
+                               :ignore-prefix ["/usr/local" "/opt/homebrew"] :cxx-runtime [] :cmake ["-DCMath_LIBRARY:STRING=m" "-DCMath_HAVE_LIBM_POW=1"]}
+  "aarch64-apple-ios"         {:runner "macos-15"       :os :ios :arch "arm64" :sdk "iphoneos" :ios-deployment "13.0" :rust "aarch64-apple-ios" :generator "Unix Makefiles"
+                               :cross-from #{:mac} :pdfium "ios-device-arm64"
+                               :ignore-prefix ["/opt/homebrew" "/usr/local"] :cxx-runtime ["c++"]}
+  "aarch64-apple-ios-sim"     {:runner "macos-15"       :os :ios :arch "arm64" :sdk "iphonesimulator" :ios-deployment "14.0" :rust "aarch64-apple-ios-sim" :generator "Unix Makefiles"
+                               :cross-from #{:mac} :pdfium "ios-simulator-arm64"
+                               :ignore-prefix ["/opt/homebrew" "/usr/local"] :cxx-runtime ["c++"]}}
 
  :common-cmake
  ["-DCMAKE_BUILD_TYPE=Release"
@@ -111,6 +135,8 @@
    :url "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz"
    :sha256 "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
    :inventory "native/leptonica-libwebp" :libs ["webp" "webpmux" "webpdecoder" "webpdemux" "sharpyuv"]
+   ;; on Android libwebp's CMake also compiles the NDK's own cpu-features.c (Apache-2.0) into libcpufeatures-webp.a, which libwebp's CPU detection calls
+   :libs-os {:android ["cpufeatures-webp"]}
    ;; Leptonica wants libwebp and libwebpmux (animation); no tool is built, so no GIF, PNG, JPEG or TIFF is looked for by gif2webp or cwebp
    :cmake ["-DWEBP_LINK_STATIC=ON" "-DWEBP_BUILD_ANIM_UTILS=OFF" "-DWEBP_BUILD_CWEBP=OFF" "-DWEBP_BUILD_DWEBP=OFF" "-DWEBP_BUILD_GIF2WEBP=OFF"
            "-DWEBP_BUILD_IMG2WEBP=OFF" "-DWEBP_BUILD_VWEBP=OFF" "-DWEBP_BUILD_WEBPINFO=OFF" "-DWEBP_BUILD_WEBPMUX=OFF" "-DWEBP_BUILD_EXTRAS=OFF"
@@ -144,10 +170,15 @@
    :cmake ["-DSW_BUILD=OFF" "-DBUILD_TRAINING_TOOLS=OFF" "-DBUILD_TESTS=OFF" "-DGRAPHICS_DISABLED=ON" "-DOPENMP_BUILD=OFF"
            "-DDISABLE_TIFF=ON" "-DDISABLE_ARCHIVE=ON" "-DDISABLE_CURL=ON" "-DUSE_SYSTEM_ICU=OFF" "-DENABLE_NATIVE=OFF" "-DENABLE_LTO=OFF"
            "-DENABLE_CCACHE=OFF" "-DENABLE_PRECOMPILED_HEADERS=OFF" "-DENABLE_NINJA_POOL=OFF" "-DINSTALL_CONFIGS=OFF"
-           "-DLeptonica_DIR=@PREFIX@/lib/cmake/leptonica"]}]
+           "-DLeptonica_DIR=@PREFIX@/lib/cmake/leptonica"]
+   ;; :cross-cmake: added for the cross-compiled (mobile) triples only. Tesseract's configure RUNS a program to ask whether Leptonica has TIFF
+   ;; (check_leptonica_tiff_support); a program for another CPU cannot run here, so the answer is given (0 = yes, and this Leptonica has it: libtiff above)
+   :cross-cmake ["-DLEPT_TIFF_RESULT=0"]}]
 
  ;; the link order of a consumer (static archives, dependents first); `bb native` writes it to <prefix>/link.rustflags and manifest.edn
  :link-order ["tesseract" "leptonica" "tiff" "webpmux" "webp" "sharpyuv" "jpeg" "png" "gif" "z"]
+ ;; Android: libwebp's CPU-detection helper (:libs-os above) comes right after the libraries that call it
+ :link-order-os {:android ["tesseract" "leptonica" "tiff" "webpmux" "webp" "sharpyuv" "cpufeatures-webp" "jpeg" "png" "gif" "z"]}
 
  ;; data the CLI bundles (P11.4b), fetched and sha256-checked into .cache/native/dl/ and copied to <prefix>/share/tessdata/
  :data
@@ -198,4 +229,8 @@
           {:out "native-pdfium-libpng-chromium-8076.txt" :file "licenses/libpng.txt"}
           {:out "native-pdfium-llvm-libc-chromium-8076.txt" :file "licenses/llvm-libc.txt"}
           {:out "native-pdfium-simdutf-chromium-8076.txt" :file "licenses/simdutf.txt"}
-          {:out "native-pdfium-zlib-chromium-8076.txt" :file "licenses/zlib.txt"}]}}
+          {:out "native-pdfium-zlib-chromium-8076.txt" :file "licenses/zlib.txt"}
+          ;; only the Android archives of the mobile triples (K6, D897) list these three: pdfium's Android build bundles LLVM libunwind, Google's cpu_features and catapult
+          {:out "native-pdfium-libunwind-chromium-8076.txt" :file "licenses/libunwind.txt" :platform "android-arm64"}
+          {:out "native-pdfium-cpu_features-chromium-8076.txt" :file "licenses/cpu_features.txt" :platform "android-arm64"}
+          {:out "native-pdfium-catapult-chromium-8076.txt" :file "licenses/catapult.txt" :platform "android-arm64"}]}}

@@ -49,7 +49,7 @@
       (fs/delete-tree dir)
       (fs/create-dirs dir)
       (shell "tar" "-xzf" tgz "-C" dir)
-      (when (str/starts-with? plat "mac-")
+      (when (or (str/starts-with? plat "mac-") (str/starts-with? plat "ios-"))
         (let [lib (str dir "/lib/libpdfium.dylib")]
           (shell "install_name_tool" "-id" "@rpath/libpdfium.dylib" lib)
           (shell "codesign" "-f" "-s" "-" lib)))
@@ -89,8 +89,8 @@
     (let [d (fetch! (:version pin) platform (:sha256 p))
           cur ".cache/pdfium/current"]
       (when (= platform "wasm") (wrap-wasm! d))
-      ;; The browser build (P11.4c) is not a library a host links: it must never become `current`.
-      (when-not (or (contains? args "--no-current") (= platform "wasm"))
+      ;; The browser build (P11.4c) is not a library a host links: it must never become `current`; nor is a mobile one (K6, D897).
+      (when-not (or (contains? args "--no-current") (= platform "wasm") (re-find #"^(android|ios)-" platform))
         (fs/delete-if-exists cur)
         (fs/create-sym-link cur (str/replace d ".cache/pdfium/" "")))
       (println "pdfium" (:version pin) platform "at" d))))

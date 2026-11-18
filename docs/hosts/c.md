@@ -37,6 +37,47 @@ The same layout is the CLI's ([docs/cli.md](../cli.md)) and the pod's ([docs/hos
 directories anywhere together and they work. On macOS a downloaded library is quarantined until you run
 `xattr -dr com.apple.quarantine <dir>` (the files are not signed).
 
+## Android and iOS
+
+The release also carries the library for phones, one archive per triple, `emon-c-<version>-<triple>.tar.gz`, built by `bb mobile` (`tools/native/mobile.clj`) from the same
+sources and the same pinned Tesseract, Leptonica, codecs and pdfium as the desktop archives (`tools/native/native.edn`, `tools/pdfium/pdfium.edn`):
+
+| Triple | Library | Platform | pdfium (pinned, `chromium/8076`) |
+|---|---|---|---|
+| `aarch64-linux-android` | `lib/libemon.so` | Android arm64-v8a, API 24+ | `android-arm64` |
+| `armv7-linux-androideabi` | `lib/libemon.so` | Android armeabi-v7a, API 24+ | `android-arm` |
+| `x86_64-linux-android` | `lib/libemon.so` | Android x86_64 (emulators, Chromebooks), API 24+ | `android-x64` |
+| `aarch64-apple-ios` | `lib/libemon.dylib` | iOS device, arm64, iOS 13.0+ | `ios-device-arm64` |
+| `aarch64-apple-ios-sim` | `lib/libemon.dylib` | iOS simulator on Apple silicon, arm64 | `ios-simulator-arm64` |
+
+Each archive has `include/emon.h`, the library, pdfium (`lib/libpdfium.so` or `.dylib`, loaded at run time) and `share/emon/tessdata/` (`eng`, `osd`), the desktop
+layout. There is **no `libemon.a`**: Dart build hooks bundle dynamic libraries only (`DynamicLoadingBundled` code assets,
+[dart.dev/tools/hooks](https://dart.dev/tools/hooks), [`DynamicLoadingBundled`](https://pub.dev/documentation/code_assets/latest/code_assets/DynamicLoadingBundled-class.html)),
+and a static slice with Tesseract in it would be over a hundred megabytes. The Intel iOS simulator is not built (D885).
+
+What each library is, and what `bb native --audit --triple T` holds it to:
+
+- **Android.** NDK r28c (a build with an older NDK is refused), API level 24 (Android 7.0). 24 is where the pieces agree: pdfium-binaries builds pdfium for API 23, Leptonica's
+  `fmemopen` and `open_memstream` need 23, and 24 is the floor of the NDK's current defaults and of Flutter's `minSdkVersion`; a Dart hook asked for a lower
+  `AndroidCodeConfig.targetNdkApi` should refuse the build (the library does not load below 24). The shared library has **16 KB page alignment**
+  (`-Wl,-z,max-page-size=16384`; Google Play requires it of 64-bit apps targeting Android 15, [developer.android.com/guide/practices/page-sizes](https://developer.android.com/guide/practices/page-sizes)):
+  every `LOAD` segment aligned to 0x4000 and `GNU_RELRO` ending on a 16 KB boundary (the audit checks the file, and the pinned 64-bit pdfium too; the 32-bit pdfium of armeabi-v7a is
+  4 KB aligned upstream, which Play does not require of 32-bit code). The C++ runtime is linked statically, so the library needs only `libc.so`, `libm.so` and `libdl.so`:
+  no `libc++_shared.so` goes into the app. Its exports are exactly the functions of `emon.h`.
+- **iOS.** One arm64 slice, platform `IOS` (device) or `IOSSIMULATOR`, minimum iOS 13.0, install name `@rpath/libemon.dylib`, loading only `/usr/lib` and `/System/Library`
+  (libSystem and libc++). The pinned pdfium is upstream's own build for iOS 17.0 (`libpdfium.dylib`, install name rewritten to `@rpath/libpdfium.dylib` by `bb pdfium-fetch`): on an older device
+  libemon loads and finds no pdfium (`emon_capabilities()` has no `EMON_CAP_PDFIUM`; born-digital conversion is unaffected). Flutter embeds a code asset on iOS as a framework and signs it;
+  the library is unsigned in the archive. The hook gives a device build the `aarch64-apple-ios` archive and a simulator build the `aarch64-apple-ios-sim` one (`IOSCodeConfig.targetSdk`).
+
+**Finding pdfium and the models inside an app.** An APK maps its libraries and an iOS app carries them as frameworks, so "beside the library" is not always a directory. After
+the places listed above, the library asks the loader for pdfium by name: `libpdfium.so` (Android) or `@rpath/libpdfium.dylib`, `@rpath/libpdfium.framework/libpdfium` (iOS).
+The models are files: copy `share/emon/tessdata` into the app's data directory and name it with `emon_set_native_paths(NULL, dir, &err)`.
+
+Cross-compiling needs the Android NDK (`ANDROID_NDK_HOME`, from macOS or Linux) or Xcode (macOS), `rustup target add <triple>`, then
+`bb native --triple T`, `bb pdfium-fetch --platform <pdfium>`, `bb mobile --triple T --check` (build, audit, smoke). The smoke program (`tools/native/mobile/smoke.c`) is linked against every library;
+it is *run* in the iOS simulator (`xcrun simctl`: a born-digital sample compared with its golden, a scan read by pdfium and Tesseract), and on an Android device or emulator of the same ABI when
+`adb` finds one.
+
 ## First conversion
 
 <!-- snippet: docs/snippets/c/quickstart.c -->
