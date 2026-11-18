@@ -51,7 +51,7 @@ nor ORT. Missing assets report `ppocr-models-missing`; missing native
 libraries report `ppocr-runtime-missing`.
 
 `bb ppocr-hosts` is a non-gate requiring the models and an OIL qualification
-artifact (by default `$EMON_SCRATCH/ppocr-qual`). It compares all complete integer answers on exactly 225 bitmaps
+artifact (by default `corpus/_qual/ppocr-qual`). It compares all complete integer answers on exactly 225 bitmaps
 through Rust, Go, Java, C# and both C/native transports; missing inputs fail
 explicitly. `--qualification DIR` selects the artifact,
 `--out DIR` the scratch output. `--limit N` is only a development smoke test
@@ -63,7 +63,7 @@ To re-qualify after an answer-format change, use the restored OP1c selections:
 
 ```sh
 bb ppocr-hosts --qualification "$EMON_SCRATCH/op1c" \
-  --record-qualification "$EMON_SCRATCH/ppocr-qual"
+  --record-qualification "corpus/_qual/ppocr-qual"
 ```
 
 This records a new Rust reference, requires exact transport and replay bytes,
@@ -186,7 +186,7 @@ The optional [browser and Node adapter](../../docs/ppocr-web.md) uses ORT Web
 It requires caller-supplied pinned assets and remains experimental; its live
 answer qualification is separate from the native hosts. `web_qualify.clj`
 reads the new OIL `reference.answers` from `--qualification DIR` (default
-`$EMON_SCRATCH/ppocr-qual`), checks its provenance checksum and completed native
+`corpus/_qual/ppocr-qual`), checks its provenance checksum and completed native
 transport comparison. D891 compares ORT Web with native ORT using a scoped
 rule: text, geometry, indices, capabilities, headers and sidecars are identical,
 except the checked web observed-identity hash and raw word-confidence and
@@ -206,7 +206,7 @@ installing the locked JS dependencies and restoring the pinned model/runtime
 assets. The frozen wasm input is retained with the qualification artifact:
 
 ```sh
-EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="$EMON_SCRATCH/ppocr-qual/web/emon.wasm" bb -cp tools tools/ppocr/web_qualify.clj --candidate browser --out "$EMON_SCRATCH/oil-chrome" --qualification "$EMON_SCRATCH/ppocr-qual"
+EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="corpus/_qual/ppocr-qual/web/emon.wasm" bb -cp tools tools/ppocr/web_qualify.clj --candidate browser --out "$EMON_SCRATCH/oil-chrome" --qualification "corpus/_qual/ppocr-qual"
 ```
 
 Expected output includes `"answers":225`, `"accepted":225`,

@@ -76,7 +76,7 @@
                    (apply shell "kin/scripts/png-check" *command-line-args*))}
   ppocr-addon {:doc "Build the separate experimental native PP archive; --fetch permits pinned downloads; --check tests an unpacked archive with the CLI"
                :task (apply shell "bb" "tools/ppocr/addon.clj" *command-line-args*)}
-  ppocr-hosts {:doc "Non-gate live PP-OCR qualification; needs pinned models and $EMON_SCRATCH/ppocr-qual. Re-record: --qualification DIR --record-qualification DIR"
+  ppocr-hosts {:doc "Non-gate live PP-OCR qualification; needs pinned models and corpus/_qual/ppocr-qual (a corpus shard). Re-record: --qualification DIR --record-qualification DIR"
                :task (apply shell "bb" "tools/ppocr/hosts.clj" *command-line-args*)}
   ppocr-check {:doc "Offline optional PP-OCR native prototype checks (not an acceptance gate)"
                :task (shell "bb" "tools/ppocr/check.clj")}

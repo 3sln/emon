@@ -6,7 +6,7 @@
          '[ppocr.qualification :as q])
 (def args (apply hash-map *command-line-args*))
 (def scratch (or (System/getenv "EMON_SCRATCH") ".cache/scratch"))
-(def qual (get args "--qualification" (str scratch "/ppocr-qual")))
+(def qual (get args "--qualification" "corpus/_qual/ppocr-qual"))
 (def captures (get args "--captures" (str scratch "/op2b/qualification")))
 (def candidate (get args "--candidate" "web"))
 (def out (str captures "/" candidate "-receipts"))

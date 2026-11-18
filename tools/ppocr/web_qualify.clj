@@ -9,7 +9,7 @@
 (assert (every? #{"--out" "--limit" "--compare-only" "--candidate" "--qualification"} (keys args)) "unknown option")
 (def scratch (or (System/getenv "EMON_SCRATCH") ".cache/scratch"))
 (def out (get args "--out" (str scratch "/op2b/qualification")))
-(def qual (get args "--qualification" (str scratch "/ppocr-qual")))
+(def qual (get args "--qualification" "corpus/_qual/ppocr-qual"))
 (def candidate (get args "--candidate" "web"))
 (assert (#{"web" "browser"} candidate) "candidate must be web or browser")
 (defn space! []

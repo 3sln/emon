@@ -6,7 +6,7 @@
          '[clojure.edn :as edn] '[ppocr.qualification :as qualification])
 (import '[java.util.zip GZIPInputStream] '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
-(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
+(def qual (get args "--qualification" "corpus/_qual/ppocr-qual"))
 (def record-reference (get args "--record-reference"))
 (def out (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/qualification-replays")))
 (fs/create-dirs out)

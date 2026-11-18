@@ -6,7 +6,7 @@
 (import '[java.security MessageDigest])
 (def args (apply hash-map *command-line-args*))
 (assert (every? #{"--qualification" "--out" "--limit" "--skip-build" "--record-qualification"} (keys args)) "unknown ppocr-hosts option")
-(def qual (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
+(def qual (get args "--qualification" "corpus/_qual/ppocr-qual"))
 (def out (str (fs/absolutize (get args "--out" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/op2a/hosts")))))
 (def env {"EMON_CS_SHARED_COMPILATION" "false" "NuGetAudit" "false"})
 (def artifact (get args "--record-qualification"))
