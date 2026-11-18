@@ -146,7 +146,7 @@
     ;; Windows (D558): the C runtime is linked STATICALLY (/MT, +crt-static), the UCRT with it, so no msvcp140, vcruntime140, vcruntime140_1, ucrtbase or
     ;; api-ms-win-crt-* may appear: a dependency on any of them means a /MD object got in, and the exe would need the VC++ redistributable (or, for the UCRT, a
     ;; Windows older than 10). What remains are Windows' own DLLs, and the api-ms-win-core-* etc. API sets rustc's std imports (they ship with Windows 10+).
-    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|bcryptprimitives|userenv|ole32|shell32|gdi32|oleaut32|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-(?!crt-).*)\.dll$"))
+    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|bcryptprimitives|userenv|ole32|shell32|gdi32|oleaut32|combase|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-(?!crt-).*)\.dll$"))
 
 (defn dependencies [exe]
   (case (:os tcfg)
