@@ -14646,3 +14646,15 @@ P13.15, for the Dart/Flutter evaluation release (D895). The coordinator renumber
 **Merge with K1/K2 (D898, D899).** `ppocr-alone` rides K2's registry: the CLI (`adapter::ppocr_hybrid`) and the pod/C path register Tesseract and the PP adapter library, and kin's `en-oe-mode` tags every request with PP-OCR's engine so the router sends all of them to the PP adapter (the old `ppocr_native` wrapper and `EMON_NATIVE` are not used here). `prepare` resolves PP-OCR's packs for both options (`OcrEngine::uses_pp`). Follow-up: `ppocr-alone` is not yet a row of K1's engine table, so no `pk-pp-engine`-style role or `emon_engines_*` hook names it; and the PP live path stays unverified here (ORT pin 404).
 
 - [ ] **Signed off** (maintainer)
+
+### D902 — The full gate matrix runs only for a release; pull requests and pushes are targeted
+
+Maintainer, 2026-11-18: "We can do the full matrix on release only. For PRs, we should be targeted, only running tests likely affected by the diff."
+
+- **Release:** `release-run.yml` calls `verify.yml` with `mode: full` for the release commit (D886). That is the only full run.
+- **Pull requests:** `pr.yml` runs `bb ci core` plus the gates `bb ci plan --base origin/<base>` maps from the diff through `ci/gate-map.edn` (fast variants where they exist). Unchanged.
+- **Push to main:** a scoped `verify.yml` run (the plan since the newest verified ancestor), only when the `EMON_VERIFY_ON_PUSH` variable is true. Currently off.
+- **Weekly run:** the weekly full run (Monday cron) is removed.
+- **Local agent and coordinator runs** follow the same rule: `bb check`, `bb ci core`, and the `bb ci plan` selection. The full four-host `bb unit` runs only when the plan selects it.
+
+- [ ] **Signed off** (maintainer)
