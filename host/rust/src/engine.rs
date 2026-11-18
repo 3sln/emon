@@ -170,12 +170,15 @@ impl OcrPolicy {
     }
 }
 
-/// Optional OCR port selection; Tesseract remains the default.
+/// Optional OCR port selection; Tesseract remains the default. `PpOcr` adds a PP-OCR reading beside Tesseract's; `PpOcrAlone` (P13.4) has PP-OCR
+/// read every request, and kin joins its detector segments into rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OcrEngine { Tesseract, PpOcr }
+pub enum OcrEngine { Tesseract, PpOcr, PpOcrAlone }
 impl OcrEngine {
-    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1 } }
-    fn from_code(code: i32) -> Self { if code == 1 { Self::PpOcr } else { Self::Tesseract } }
+    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::PpOcrAlone => 2 } }
+    fn from_code(code: i32) -> Self { match code { 1 => Self::PpOcr, 2 => Self::PpOcrAlone, _ => Self::Tesseract } }
+    /// True when the PP-OCR port has to be loaded (either way of selecting it).
+    pub fn uses_pp(self) -> bool { self != Self::Tesseract }
 }
 
 // THE `Ocr` PORT (SPEC 7.2; D008, D095, D211): fulfils one `ocr` request. A host brings its engine (Tesseract through

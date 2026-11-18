@@ -573,10 +573,10 @@ fn one_shot_setup(p: &Parsed, flags: u32) -> Result<(Engine, Options), Fail> {
         return Err(Fail::Usage("record=1, js-ocr=1 and js-render=1 are options of a session (emon_open): a one-shot conversion has no caller to fulfil or keep a transcript".to_string()));
     }
     let mut cfg = p.config.clone();
-    if flags & EMON_NATIVE != 0 || p.options.ocr_engine == crate::OcrEngine::PpOcr {
+    if flags & EMON_NATIVE != 0 || p.options.ocr_engine.uses_pp() {
         native_ports(&mut cfg, None, None)?;
     }
-    if p.options.ocr_engine == crate::OcrEngine::PpOcr {
+    if p.options.ocr_engine.uses_pp() {
         ppocr_config(&mut cfg).map_err(Fail::Usage)?;
     }
     Ok((Engine::new(cfg), p.options.clone()))

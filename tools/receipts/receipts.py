@@ -199,7 +199,7 @@ def baseline_comparison(dataset, rows, totals, baseline):
 def main():
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--n',type=int,default=60)
-    p.add_argument('--ocr-engine',choices=('tesseract','ppocr'),default='tesseract')
+    p.add_argument('--ocr-engine',choices=('tesseract','ppocr','ppocr-alone'),default='tesseract')
     p.add_argument('--set',default='sroie,cord')
     p.add_argument('--report',action='store_true')
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
@@ -213,7 +213,7 @@ def main():
     p.add_argument('--transcript-dir',help='separate external transcript directory; defaults to the output directory')
     p.add_argument('--save',default=str(SCRATCH/'baseline.json'))
     a=p.parse_args()
-    if a.ocr_engine=='ppocr' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
+    if a.ocr_engine!='tesseract' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
         a.bin=str(ROOT/'.cache/emon-rs-live-ppocr/target/release/emon-rs')
     if a.n<1: p.error('--n must be positive')
     if a.rescore and (a.record_transcripts or a.replay_transcripts):
@@ -239,9 +239,9 @@ def main():
             if a.replay_transcripts and not (transcript/'transcript.edn').is_file():
                 raise RuntimeError('missing receipt replay: '+str(transcript))
             cpu_before=resource.getrusage(resource.RUSAGE_CHILDREN)
-            command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine=ppocr'),'--out=bundle',*extra,str(image)]
+            command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine='+a.ocr_engine),'--out=bundle',*extra,str(image)]
             if a.measure_cost: command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),*command]
-            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=180))
+            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=int(os.environ.get('EMON_RECEIPTS_TIMEOUT','180'))))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)
             if r.returncode: raise RuntimeError(g['id']+': '+r.stderr[-1000:])
             sections=dict(re.findall(r'== ([^\n]+)\n(.*?)(?=\n== |\Z)',r.stdout,re.S))

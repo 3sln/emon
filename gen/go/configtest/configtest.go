@@ -238,7 +238,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 17, 17, "seventeen words")
+	port.AssertEq(emonT, 18, 18, "eighteen words")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -256,6 +256,7 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 14, 20, 1, "scored")
 	tWordName(emonT, 15, 21, 0, "tesseract")
 	tWordName(emonT, 16, 21, 1, "ppocr")
+	tWordName(emonT, 17, 21, 2, "ppocr-alone")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
@@ -488,5 +489,7 @@ func TestOptionalOcrEngineIsExplicitAndDefaultsToTesseract(emonT *testing.T) {
 	port.AssertEq(emonT, c.Oengine, 1, "explicit optional engine")
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins")
 	port.AssertEq(emonT, c.Oengine, 0, "explicit Tesseract")
-	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)")
+	port.AssertEq(emonT, c.Oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's")
+	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr or ppocr-alone")
 }

@@ -1,0 +1,326 @@
+;; ROW ASSEMBLY FOR SEGMENT ENGINES (P13.4, D883 ruling 2, oil1 report 2.9).
+;;
+;; A detector engine (PP-OCR) answers SEGMENTS: one box, a few words, no layout. A receipt row "ITEM  2  20.000" arrives as three of them, a name, a
+;; quantity and a price, each emitted as its own OCR line, block and paragraph. Tesseract's layout analysis never needed a stage that joins them,
+;; because it already answers the row as one textline, and every stage after the OCR (paragraphs, tables, columns) reads an OCR page as it reads a
+;; text layer's lines: a row split in three was three lines to all of them, and no table row held an item (D849: CORD line items 22/151 -> 0).
+;;
+;; WHAT THIS DOES. `or-assemble` runs once a page unit is done, over the pipeline lines (`lines`, `words`) that unit added (the range from `l0`, `w0`),
+;; and only when every OCR run the unit made reports segment granularity (OIL `lg-segment`: an engine declares it in its answer's header; no engine
+;; is named here). It joins segments that lie on one row into one pipeline line, which keeps its words in reading order, and leaves the rest.
+;; A page that any layout engine also read (the hybrid: Tesseract is incumbent, PP-OCR a challenger) is left alone, because the lines selected
+;; there may be the layout engine's own; N-engine composition (P13.9) will attach segments per line instead.
+;;
+;; WHAT JOINS. Two lines are of one row when:
+;;   * their heights are within 1.5 of each other (a segment's box includes the detector's margin, which varies with its glyphs);
+;;   * their centre lines are within a third of the lesser height;
+;;   * they do not overlap along the line by more than a quarter of that height, and the gap between them is at most `or-row-gap` (8) times it;
+;;   * no vertical rule of the tracer lies in the gap (a ruled table's cells stay cells for the table stage).
+;; Rows are the transitive closure (union-find); a row's words are in left-to-right order whatever order the detector listed its segments in; rows
+;; come out in the order of their first segment, which is the detector's own top-to-bottom order. THE GAP IS A CONSTANT OF THE POLICY AND IS NOT FITTED
+;; ON THE RECEIPT BASELINE: 8 heights is above the 90th percentile of the same-row gaps of the CORD test annotations outside the fixed 60 documents
+;; (8.9 of a gold word height, a detector box is about 1.2 times it) and below a column gutter's usual width on a page of text; a gutter narrower than that
+;; is joined (the layout engine stays the default for such pages). It is a candidate for the P13.5 refit.
+;;
+;; WHAT STAYS. The segment boundaries are provenance: the last word of every segment but a row's last is a `gap` word break (a table stage's cell
+;; cut), the row's last is the usual `line-end`; the evidence's OCR lines (`olines`) are the engine's own segments and are not touched, so what the
+;; engine said and where it said it stay on record.
+(ns emon.oilrows
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.port :refer [cells-at cells-set cells-drop cells-grow]]
+            [emon.oil :refer [lg-segment]]
+            [emon.model :refer [sr-ocr]]
+            [emon.evidence :refer [or-count or-granularity
+                                   ln-count ln-get ln-set ln-new wd-count wd-get wd-set wd-new
+                                   lh-first lh-count lh-x0 lh-y0 lh-x1 lh-y1 lh-bx0 lh-by0 lh-bx1 lh-by1 lh-rot lh-dir
+                                   hd-x0 hd-x1 hd-rot hd-line wf-size wf-gap wf-wbreak lf-src lf-order wb-gap wb-line-end ev-baseline-at
+                                   rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick]]
+            [kin.lang :refer [defn return let set while if do comment + - * quot < > <= >= == != and or bit-and]]))
+
+(defn ^:pub ^I32 or-row-gap [] (comment "The widest gap, in heights of the lesser segment, across which two segments of a row are joined.") (return 8))
+(defn ^I32 or-max [] (comment "The most lines of a page unit that are assembled (the selection's cap, `sc-sel-max`); a page of more is left as it is.") (return 1500))
+(defn ^I32 or-rule-slack [] (comment "As `sc-rule-slack`: centipoints around a rule's centre line within which a point is on it.") (return 150))
+
+(defn ^I32 or-mn [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 or-mx [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^I32 or-on-vrule [^Cells rules ^I32 page ^I32 cx ^I32 cy]
+  (comment "1 when the point lies on one of the tracer's vertical rules: at least eight times as long as wide, covering `cy`, with its centre line within the slack and")
+  (comment "half its thickness of `cx` (the test of `sc-on-vrule`, which this module cannot call: `emon.scan` reads the pipeline's lines through here).")
+  (let [^I32 n (rl-count rules)
+        ^:mut ^I32 r 0
+        ^:mut ^I32 xa 0
+        ^:mut ^I32 xb 0
+        ^:mut ^I32 ya 0
+        ^:mut ^I32 yb 0
+        ^:mut ^I32 dx 0
+        ^:mut ^I32 dy 0
+        ^:mut ^I32 d 0
+        ^:mut ^I32 t 0]
+    (while (< r n)
+      (do (if (== (rl-get rules r (rlf-page)) page)
+            (do (set xa (rl-get rules r (rlf-lx0)))
+                (set xb (rl-get rules r (rlf-lx1)))
+                (set ya (rl-get rules r (rlf-ly0)))
+                (set yb (rl-get rules r (rlf-ly1)))
+                (if (< yb ya) (do (set t ya) (set ya yb) (set yb t)))
+                (set dx (- xb xa))
+                (if (< dx 0) (set dx (- 0 dx)))
+                (set dy (- yb ya))
+                (if (and (> dy 0) (<= (* dx 8) dy))
+                  (if (and (>= cy ya) (<= cy yb))
+                    (do (set d (- cx (quot (+ xa xb) 2)))
+                        (if (< d 0) (set d (- 0 d)))
+                        (if (<= d (+ (or-rule-slack) (quot (rl-get rules r (rlf-thick)) 2))) (return 1)))))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 or-same-row [^Cells lines ^Cells rules ^I32 page ^I32 a ^I32 b]
+  (comment "1 when pipeline lines `a` and `b` are segments of one row: heights within 1.5, centres within a third of the lesser height, no more than a quarter of it")
+  (comment "of overlap and at most `or-row-gap` of it apart along the line, and no vertical rule between them.")
+  (let [^I32 ax0 (ln-get lines a (lh-x0))
+        ^I32 ay0 (ln-get lines a (lh-y0))
+        ^I32 ax1 (ln-get lines a (lh-x1))
+        ^I32 ay1 (ln-get lines a (lh-y1))
+        ^I32 bx0 (ln-get lines b (lh-x0))
+        ^I32 by0 (ln-get lines b (lh-y0))
+        ^I32 bx1 (ln-get lines b (lh-x1))
+        ^I32 by1 (ln-get lines b (lh-y1))
+        ^I32 ha (- ay1 ay0)
+        ^I32 hb (- by1 by0)
+        ^I32 hmin (or-mn ha hb)
+        ^I32 hmax (or-mx ha hb)
+        ^I32 left (or-mx ax0 bx0)
+        ^I32 right (or-mn ax1 bx1)
+        ^I32 gap (- left right)
+        ^:mut ^I32 dy (- (+ ay0 ay1) (+ by0 by1))]
+    (if (< hmin 1) (return 0))
+    (if (> (* hmax 2) (* hmin 3)) (return 0))
+    (if (< dy 0) (set dy (- 0 dy)))
+    (if (> (* dy 3) (* hmin 2)) (return 0))
+    (if (< (* gap 4) (- 0 hmin)) (return 0))
+    (if (> gap (* (or-row-gap) hmin)) (return 0))
+    (if (> gap 0)
+      (if (== (or-on-vrule rules page (quot (+ left right) 2) (quot (+ (+ ay0 ay1) (+ by0 by1)) 4)) 1) (return 0)))
+    (return 1)))
+
+(defn ^I32 or-find [^:mut ^Cells scr ^I32 base ^I32 e]
+  (comment "The root of the set of line `e` in the union-find parents at `base`, with path halving.")
+  (let [^:mut ^I32 x e]
+    (while (!= (cells-at scr (+ base x)) x)
+      (do (cells-set scr (+ base x) (cells-at scr (+ base (cells-at scr (+ base x)))))
+          (set x (cells-at scr (+ base x)))))
+    (return x)))
+
+(defn ^I32 or-segments-only [^Cells oruns ^I32 r0]
+  (comment "1 when the page unit made OCR runs (from run `r0`) and every one of them is the answer of a segment engine.")
+  (let [^I32 n (or-count oruns)
+        ^:mut ^I32 r r0]
+    (if (>= r0 n) (return 0))
+    (while (< r n)
+      (do (if (!= (or-granularity oruns r) (lg-segment)) (return 0))
+          (set r (+ r 1))))
+    (return 1)))
+
+(defn ^I32 or-before [^Cells lines ^I32 l0 ^Cells scr ^I32 n ^I32 a ^I32 b]
+  (comment "1 when line `a` sorts before line `b` (both relative to `l0`): by row, then left to right. The row of line e is cell 2n + e of the scratch.")
+  (let [^I32 ra (cells-at scr (+ (* 2 n) a))
+        ^I32 rb (cells-at scr (+ (* 2 n) b))]
+    (if (< ra rb) (return 1))
+    (if (> ra rb) (return 0))
+    (if (< (ln-get lines (+ l0 a) (lh-x0)) (ln-get lines (+ l0 b) (lh-x0))) (return 1))
+    (return 0)))
+
+(defn ^I32 or-emit-row [^:mut ^Cells lines ^I32 l0 ^:mut ^Cells words ^I32 w0 ^I32 wbase ^I32 page ^Cells scr ^I32 n ^I32 k ^I32 k2 ^I32 row]
+  (comment "Append (at the arenas' tails) the pipeline line of the lines `ORD[k..k2)` of one row, and their words in that order, as the line `l0 + row` and the words")
+  (comment "from `w0 + (what the tail held when the rebuild began, `wbase`)`: a row of one line is copied as it is, a row of several is one line (box the union, baseline")
+  (comment "the widest segment's carried to the row's ends, its rotation and size, every word's `line` and `rot` and `size` the row's) whose words keep the boundary of each")
+  (comment "segment as a `gap` word break and have their `gap` recomputed along the row.")
+  (let [^I32 ord (* 3 n)
+        ^I32 lf (+ l0 (cells-at scr (+ ord k)))
+        ^I32 ll (+ l0 (cells-at scr (+ ord (- k2 1))))
+        ^I32 first (+ w0 (- (wd-count words) wbase))
+        ^I32 tail (wd-count words)
+        ^:mut ^I32 widest lf
+        ^:mut ^I32 m k
+        ^:mut ^I32 lm 0
+        ^:mut ^I32 j 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 r 0
+        ^:mut ^I32 src 0
+        ^:mut ^I32 total 0
+        ^:mut ^I32 x0 (ln-get lines lf (lh-x0))
+        ^:mut ^I32 y0 (ln-get lines lf (lh-y0))
+        ^:mut ^I32 x1 (ln-get lines lf (lh-x1))
+        ^:mut ^I32 y1 (ln-get lines lf (lh-y1))
+        ^:mut ^I32 cnt 0]
+    (comment "the widest segment, the row's box and the words in all")
+    (while (< m k2)
+      (do (set lm (+ l0 (cells-at scr (+ ord m))))
+          (if (> (- (ln-get lines lm (lh-x1)) (ln-get lines lm (lh-x0))) (- (ln-get lines widest (lh-x1)) (ln-get lines widest (lh-x0))))
+            (set widest lm))
+          (set x0 (or-mn x0 (ln-get lines lm (lh-x0))))
+          (set y0 (or-mn y0 (ln-get lines lm (lh-y0))))
+          (set x1 (or-mx x1 (ln-get lines lm (lh-x1))))
+          (set y1 (or-mx y1 (ln-get lines lm (lh-y1))))
+          (set total (+ total (ln-get lines lm (lh-count))))
+          (set m (+ m 1))))
+    (let [^I32 rot (ln-get lines widest (lh-rot))
+          ^I32 size (wd-get words (ln-get lines widest (lh-first)) (wf-size))
+          ^I32 bx0 (ln-get lines lf (lh-bx0))
+          ^I32 bx1 (ln-get lines ll (lh-bx1))
+          ^I32 wbx0 (ln-get lines widest (lh-bx0))
+          ^I32 wby0 (ln-get lines widest (lh-by0))
+          ^I32 wbx1 (ln-get lines widest (lh-bx1))
+          ^I32 wby1 (ln-get lines widest (lh-by1))]
+      (set m k)
+      (while (< m k2)
+        (do (set lm (+ l0 (cells-at scr (+ ord m))))
+            (set cnt (ln-get lines lm (lh-count)))
+            (set j 0)
+            (while (< j cnt)
+              (do (set src (+ (ln-get lines lm (lh-first)) j))
+                  (set r (wd-new words page 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1))
+                  (set f 0)
+                  (while (< f 24)
+                    (let [^I32 v (wd-get words src f)]
+                      (wd-set words r f v)
+                      (set f (+ f 1))))
+                  (wd-set words r (hd-line) (+ l0 row))
+                  (if (> (- k2 k) 1)
+                    (do (wd-set words r (hd-rot) rot)
+                        (wd-set words r (wf-size) size)
+                        (if (== (+ j 1) cnt)
+                          (if (< (+ m 1) k2)
+                            (wd-set words r (wf-wbreak) (wb-gap))
+                            (wd-set words r (wf-wbreak) (wb-line-end))))))
+                  (set j (+ j 1))))
+            (set m (+ m 1))))
+      (comment "the gap after each word of a joined row is the distance to the next one's box")
+      (if (> (- k2 k) 1)
+        (do (set j 0)
+            (while (< j total)
+              (do (if (< (+ j 1) total)
+                    (let [^I32 nx0 (wd-get words (+ (+ tail j) 1) (hd-x0))
+                          ^I32 ox1 (wd-get words (+ tail j) (hd-x1))]
+                      (wd-set words (+ tail j) (wf-gap) (- nx0 ox1)))
+                    (wd-set words (+ tail j) (wf-gap) -1))
+                  (set j (+ j 1))))))
+      (if (> (- k2 k) 1)
+        (do (set r (ln-new lines page x0 y0 x1 y1 bx0 (ev-baseline-at wbx0 wby0 wbx1 wby1 bx0) bx1 (ev-baseline-at wbx0 wby0 wbx1 wby1 bx1) rot 0 first total))
+            (let [^I32 src0 (ln-get lines lf (lf-src))]
+              (ln-set lines r (lf-src) src0)))
+        (do (set r (ln-new lines page 0 0 0 0 0 0 0 0 0 0 0 0))
+            (set f 0)
+            (while (< f 16)
+              (let [^I32 v (ln-get lines lf f)]
+                (ln-set lines r f v)
+                (set f (+ f 1))))
+            (ln-set lines r (lh-first) first)))
+      (ln-set lines r (lf-order) (+ l0 row))
+      (return 0))))
+
+(defn ^I32 or-rebuild [^:mut ^Cells lines ^I32 l0 ^:mut ^Cells words ^I32 w0 ^I32 page ^Cells scr ^I32 n ^I32 rows]
+  (comment "The page unit's lines rebuilt as `rows` rows: each emitted at the tails, then all moved down over the lines they replace and the arenas cut. Answers `rows`.")
+  (let [^I32 lbase (ln-count lines)
+        ^I32 wbase (wd-count words)
+        ^I32 nw (- wbase w0)
+        ^I32 ord (* 3 n)
+        ^:mut ^I32 k 0
+        ^:mut ^I32 k2 0
+        ^:mut ^I32 row 0
+        ^:mut ^I32 f 0
+        ^:mut ^I32 i 0]
+    (while (< k n)
+      (do (set row (cells-at scr (+ (* 2 n) (cells-at scr (+ ord k)))))
+          (set k2 (+ k 1))
+          (while (and (< k2 n) (== (cells-at scr (+ (* 2 n) (cells-at scr (+ ord k2)))) row))
+            (set k2 (+ k2 1)))
+          (or-emit-row lines l0 words w0 wbase page scr n k k2 row)
+          (set k k2)))
+    (set i 0)
+    (while (< i rows)
+      (do (set f 0)
+          (while (< f 16)
+            (let [^I32 v (ln-get lines (+ lbase i) f)]
+              (ln-set lines (+ l0 i) f v)
+              (set f (+ f 1))))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i nw)
+      (do (set f 0)
+          (while (< f 24)
+            (let [^I32 v (wd-get words (+ wbase i) f)]
+              (wd-set words (+ w0 i) f v)
+              (set f (+ f 1))))
+          (set i (+ i 1))))
+    (cells-drop lines (* 16 (+ l0 rows)))
+    (cells-drop words (* 24 (+ w0 nw)))
+    (return rows)))
+
+(defn ^:pub ^I32 or-assemble [^Cells oruns ^I32 r0 ^Cells rules ^I32 page
+                              ^:mut ^Cells lines ^I32 l0 ^:mut ^Cells words ^I32 w0 ^:mut ^Cells scr]
+  (comment "Join the segments of one row into one pipeline line, over the lines `l0` and up and the words `w0` and up that a page unit has just added (runs from `r0`")
+  (comment "are its own). Answers the number of lines in the range afterwards. Scratch layout: four arrays of one cell a line, the union-find parents (-1 for a line that is no")
+  (comment "OCR line or no left-to-right one), the row of each root, the row of each line, and the lines in output order.")
+  (let [^I32 n (- (ln-count lines) l0)]
+    (if (< n 2) (return n))
+    (if (> n (or-max)) (return n))
+    (if (== (or-segments-only oruns r0) 0) (return n))
+    (cells-drop scr 0)
+    (cells-grow scr (* 4 n) -1)
+    (let [^:mut ^I32 e 0
+          ^:mut ^I32 f 0
+          ^:mut ^I32 ra 0
+          ^:mut ^I32 rb 0
+          ^:mut ^I32 rows 0
+          ^:mut ^I32 root 0]
+      (comment "the candidates: an OCR line that reads left to right is its own set")
+      (while (< e n)
+        (do (if (and (== (bit-and (ln-get lines (+ l0 e) (lf-src)) 255) (sr-ocr)) (== (ln-get lines (+ l0 e) (lh-dir)) 0))
+              (cells-set scr e e))
+            (set e (+ e 1))))
+      (set e 0)
+      (while (< e n)
+        (do (if (>= (cells-at scr e) 0)
+              (do (set f (+ e 1))
+                  (while (< f n)
+                    (do (if (>= (cells-at scr f) 0)
+                          (do (set ra (or-find scr 0 e))
+                              (set rb (or-find scr 0 f))
+                              (if (!= ra rb)
+                                (if (== (or-same-row lines rules page (+ l0 e) (+ l0 f)) 1)
+                                  (if (< ra rb) (cells-set scr rb ra) (cells-set scr ra rb))))))
+                        (set f (+ f 1))))))
+            (set e (+ e 1))))
+      (comment "rows are numbered by their lowest line, which is the first the detector listed")
+      (set e 0)
+      (while (< e n)
+        (do (set root e)
+            (if (>= (cells-at scr e) 0) (set root (or-find scr 0 e)))
+            (if (< (cells-at scr (+ n root)) 0)
+              (do (cells-set scr (+ n root) rows)
+                  (set rows (+ rows 1))))
+            (cells-set scr (+ (* 2 n) e) (cells-at scr (+ n root)))
+            (set e (+ e 1))))
+      (if (== rows n) (return n))
+      (comment "output order: insertion sort of the lines by row, then by their left edge (stable)")
+      (set e 0)
+      (while (< e n)
+        (do (cells-set scr (+ (* 3 n) e) e)
+            (set e (+ e 1))))
+      (set e 1)
+      (while (< e n)
+        (let [^I32 v (cells-at scr (+ (* 3 n) e))
+              ^:mut ^I32 j (- e 1)]
+          (while (and (>= j 0) (== (or-before lines l0 scr n v (cells-at scr (+ (* 3 n) j))) 1))
+            (do (cells-set scr (+ (* 3 n) (+ j 1)) (cells-at scr (+ (* 3 n) j)))
+                (set j (- j 1))))
+          (cells-set scr (+ (* 3 n) (+ j 1)) v)
+          (set e (+ e 1))))
+      (return (or-rebuild lines l0 words w0 page scr n rows)))))

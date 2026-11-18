@@ -205,6 +205,24 @@ public static class Engine {
         }
         return EnAttemptPdf(view, pw, c, d, ev, p, idx, intakeOnly);
     }
+    internal static int EnHybrid(emon.Enctx.Cfg c) {
+        // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, D850): the page unit then asks for it in its own slot.
+        if (c.Oengine == 1) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int EnOeMode(emon.Enctx.Cfg c) {
+        // How the OCR requests are tagged and the engines registered: 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
+        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger.
+        if (c.Oengine == 1) {
+            return 2;
+        }
+        if (c.Oengine == 2) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int EnPageInner(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         // One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
         // left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
@@ -212,9 +230,9 @@ public static class Engine {
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
         emon.Port.CellsDrop(d.Pscr, 0);
         if (d.Kind == EnKindPdf()) {
-            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2 * c.Nort) + (4 * c.Dry)) + (8 * c.Oengine), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
         }
-        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2 * c.Nort) + (4 * c.Dry)) + (8 * c.Oengine), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
     }
     internal static int EnOcrPlanned(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         if (c.Ocr == 0) {
@@ -233,9 +251,14 @@ public static class Engine {
         return 0;
     }
     public static int EnPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+        int l0 = Evidence.LnCount(d.Ln);
+        int w0 = Evidence.WdCount(d.Wd);
+        int r0 = Evidence.OrCount(ev.Oruns);
         int status = EnPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
-        Ocrengine.OeTag(rq, d.Pscr, 2 * c.Oengine);
+        Ocrengine.OeTag(rq, d.Pscr, EnOeMode(c));
         if (status == 0) {
+            // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
+            Oilrows.OrAssemble(ev.Oruns, r0, ev.Rules, i + 1, d.Ln, l0, d.Wd, w0, d.Pscr);
             if (Oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0) {
                 return 2;
             }
@@ -547,7 +570,7 @@ public static class Engine {
         if (kind == 0) {
             Inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw);
         }
-        if (Ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2 * c.Oengine, s.S0) < 0) {
+        if (Ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, EnOeMode(c), s.S0) < 0) {
             return 2;
         }
         Para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix);

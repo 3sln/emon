@@ -18,6 +18,7 @@ use crate::emon::model::*;
 use crate::emon::notes::*;
 use crate::emon::ocrengine::*;
 use crate::emon::ocrledger::*;
+use crate::emon::oilrows::*;
 use crate::emon::oilsrc::*;
 use crate::emon::pageunit::*;
 use crate::emon::para::*;
@@ -241,6 +242,24 @@ pub fn en_attempt(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate:
     }
     return en_attempt_pdf(view, pw, c, d, ev, p, idx, intake_only);
 }
+pub(crate) fn en_hybrid(c: &mut crate::emon::enctx::Cfg) -> i32 {
+    // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, D850): the page unit then asks for it in its own slot.
+    if c.oengine == 1 {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn en_oe_mode(c: &mut crate::emon::enctx::Cfg) -> i32 {
+    // How the OCR requests are tagged and the engines registered: 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
+    // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger.
+    if c.oengine == 1 {
+        return 2;
+    }
+    if c.oengine == 2 {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn en_page_inner(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, i: i32, idx: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
     // One page's unit (P7.U, D195; a frame's, for a raster input): its own requests and answers and its `BitmapSet`; a scanned page is read, any other is
     // left as the text layer made it. It writes nothing until its answers are in, and never reads the input. Answers `us-done`, `us-requests`, or a status.
@@ -248,9 +267,9 @@ pub(crate) fn en_page_inner(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon
     // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
     crate::port::cells_drop(&mut d.pscr, 0);
     if d.kind == en_kind_pdf() {
-        return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, ((2 * c.nort) + (4 * c.dry)) + (8 * c.oengine), &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
+        return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, ((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c)), &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
     }
-    return rs_page(i, idx, nbytes, c.ocr, ((2 * c.nort) + (4 * c.dry)) + (8 * c.oengine), ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
+    return rs_page(i, idx, nbytes, c.ocr, ((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c)), ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
 }
 pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc) -> i32 {
     if c.ocr == 0 {
@@ -269,9 +288,14 @@ pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emo
     return 0;
 }
 pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc, ev: &mut crate::emon::enctx::EvArenas, i: i32, idx: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
+    let l0: i32 = ln_count(&mut d.ln);
+    let w0: i32 = wd_count(&mut d.wd);
+    let r0: i32 = or_count(&mut ev.oruns);
     let status: i32 = en_page_inner(c, d, ev, i, idx, nbytes, ans, rq, bms);
-    oe_tag(rq, &mut d.pscr, 2 * c.oengine);
+    oe_tag(rq, &mut d.pscr, en_oe_mode(c));
     if status == 0 {
+        // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
+        or_assemble(&mut ev.oruns, r0, &mut ev.rules, i + 1, &mut d.ln, l0, &mut d.wd, w0, &mut d.pscr);
         if oxs_collect(ans, &mut ev.views, &mut ev.oruns, &mut ev.olines, &mut ev.oxs) < 0 {
             return 2;
         }
@@ -583,7 +607,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     if kind == 0 {
         il_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut d.ift, &mut s.sf, &mut d.an, &mut d.txt, &mut d.pg, &mut m.pages, np, &mut m.text, &mut s.hc, &mut s.isw);
     }
-    if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, 2 * c.oengine, &mut s.s0) < 0 {
+    if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, en_oe_mode(c), &mut s.s0) < 0 {
         return 2;
     }
     pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);

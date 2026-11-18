@@ -268,7 +268,7 @@ fn convert(args: Vec<String>) {
         eprintln!("emon: note: --lang does nothing with ocr=never");
     }
 
-    if opts.ocr_engine == emon::OcrEngine::PpOcr && !never {
+    if opts.ocr_engine.uses_pp() && !never {
         let port = emon::ppocr_native::PpOcr::open(None, cfg.ocr.take())
             .unwrap_or_else(|e| die(3, &e));
         cfg.ocr = Some(emon::OcrPort(Arc::new(port)));

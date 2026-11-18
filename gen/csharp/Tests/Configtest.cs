@@ -223,7 +223,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.AssertEq(17, 17, "seventeen words");
+        emon.Testport.AssertEq(18, 18, "eighteen words");
         TWordName(0, 0, 1, 2, "always");
         TWordName(0, 1, 1, 1, "auto");
         TWordName(0, 2, 1, 0, "never");
@@ -241,6 +241,7 @@ public static class Configtest {
         TWordName(0, 14, 20, 1, "scored");
         TWordName(0, 15, 21, 0, "tesseract");
         TWordName(0, 16, 21, 1, "ppocr");
+        TWordName(0, 17, 21, 2, "ppocr-alone");
     }
     [Xunit.Fact]
     public static void TestAKeyIsFoundByItsWholeNameOrItsPrefix() {
@@ -473,6 +474,8 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Oengine, 1, "explicit optional engine");
         emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins");
         emon.Testport.AssertEq(c.Oengine, 0, "explicit Tesseract");
-        TRefused(0, emon.Testport.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract or ppocr");
+        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)");
+        emon.Testport.AssertEq(c.Oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
+        TRefused(0, emon.Testport.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr or ppocr-alone");
     }
 }

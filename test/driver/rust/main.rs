@@ -339,7 +339,7 @@ fn main() {
         input = input.with_password(p.into_bytes());
     }
 
-    if opts.ocr_engine == emon::OcrEngine::PpOcr {
+    if opts.ocr_engine.uses_pp() {
         if tess.is_some() { usage("ocr-engine=ppocr cannot use --tesseract or --tessdata"); }
         if replay.is_none() {
             #[cfg(ppocr)]
@@ -416,14 +416,14 @@ fn main() {
                 }
             }
             Err(e) => {
-                if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
+                if opts.ocr_engine.uses_pp() { drop(engine); }
                 fail(e)
             },
         }
         return;
     }
     if !matches!(out.as_str(), "json" | "html" | "evidence" | "bundle" | "pixels") {
-        if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
+        if opts.ocr_engine.uses_pp() { drop(engine); }
         usage("--out is json, html, evidence, bundle, pixels or intake");
     }
     let transcript = replay.as_ref().map(|dir| {
@@ -495,7 +495,7 @@ fn main() {
         Ok(x) => x,
         Err(e) => {
             // ORT sessions must close before process::exit skips Rust destructors.
-            if opts.ocr_engine == emon::OcrEngine::PpOcr { drop(engine); }
+            if opts.ocr_engine.uses_pp() { drop(engine); }
             fail(e)
         },
     };
