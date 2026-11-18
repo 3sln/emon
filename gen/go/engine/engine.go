@@ -22,6 +22,7 @@ import (
 	"emon/notes"
 	"emon/ocrengine"
 	"emon/ocrledger"
+	"emon/oilrows"
 	"emon/oilsrc"
 	"emon/pageunit"
 	"emon/para"
@@ -265,9 +266,29 @@ func EnAttempt(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, ev *enc
 	return enAttemptPdf(view, pw, c, d, ev, p, idx, intakeOnly)
 }
 
-func enPp(e int32) int32 {
-	if e == 1 {
+func enHybrid(c *enctx.Cfg) int32 {
+	// 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
+	// The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901) ask for no second reading.
+	if c.Oengine == 1 {
 		return 1
+	}
+	return 0
+}
+
+func enOeMode(c *enctx.Cfg) int32 {
+	// How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
+	// 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's).
+	if c.Oengine == 1 {
+		return 2
+	}
+	if c.Oengine == 2 {
+		return 1
+	}
+	if c.Oengine == 3 {
+		return 4
+	}
+	if c.Oengine == 4 {
+		return 6
 	}
 	return 0
 }
@@ -279,9 +300,9 @@ func enPageInner(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx in
 	// on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
 	port.CellsDrop(d.Pscr, 0)
 	if d.Kind == EnKindPdf() {
-		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2*c.Nort)+(4*c.Dry))+(8*enPp(c.Oengine)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 	}
-	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2*c.Nort)+(4*c.Dry))+(8*enPp(c.Oengine)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 }
 
 func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
@@ -302,9 +323,14 @@ func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
 }
 
 func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
+	var l0 int32 = evidence.LnCount(d.Ln)
+	var w0 int32 = evidence.WdCount(d.Wd)
+	var r0 int32 = evidence.OrCount(ev.Oruns)
 	var status int32 = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms)
-	ocrengine.OeTag(rq, d.Pscr, 2*c.Oengine)
+	ocrengine.OeTag(rq, d.Pscr, enOeMode(c))
 	if status == 0 {
+		// Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
+		oilrows.OrAssemble(ev.Oruns, r0, ev.Rules, i+1, d.Ln, l0, d.Wd, w0, d.Pscr)
 		if oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0 {
 			return 2
 		}
@@ -624,7 +650,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	if kind == 0 {
 		inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw)
 	}
-	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2*c.Oengine, s.S0) < 0 {
+	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, enOeMode(c), s.S0) < 0 {
 		return 2
 	}
 	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)

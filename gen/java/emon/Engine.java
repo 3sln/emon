@@ -205,9 +205,28 @@ public final class Engine {
         }
         return enAttemptPdf(view, pw, c, d, ev, p, idx, intakeOnly);
     }
-    public static int enPp(int e) {
-        if (e == 1) {
+    public static int enHybrid(emon.Enctx.Cfg c) {
+        // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
+        // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901) ask for no second reading.
+        if (c.oengine == 1) {
             return 1;
+        }
+        return 0;
+    }
+    public static int enOeMode(emon.Enctx.Cfg c) {
+        // How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
+        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's).
+        if (c.oengine == 1) {
+            return 2;
+        }
+        if (c.oengine == 2) {
+            return 1;
+        }
+        if (c.oengine == 3) {
+            return 4;
+        }
+        if (c.oengine == 4) {
+            return 6;
         }
         return 0;
     }
@@ -218,9 +237,9 @@ public final class Engine {
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
         emon.Port.cellsDrop(d.pscr, 0);
         if (d.kind == enKindPdf()) {
-            return Pageunit.puRunPdf(i, idx, c.ocr, d.plan, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ((2 * c.nort) + (4 * c.dry)) + (8 * enPp(c.oengine)), d.fw, d.fl, d.hl, ev.refs, d.cg, ev.tlines, d.xs0, d.xs1, d.xs2, d.xs3, d.xs4, d.xs5, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys1, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
+            return Pageunit.puRunPdf(i, idx, c.ocr, d.plan, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ((2 * c.nort) + (4 * c.dry)) + (8 * enHybrid(c)), d.fw, d.fl, d.hl, ev.refs, d.cg, ev.tlines, d.xs0, d.xs1, d.xs2, d.xs3, d.xs4, d.xs5, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys1, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
         }
-        return Rasterin.rsPage(i, idx, nbytes, c.ocr, ((2 * c.nort) + (4 * c.dry)) + (8 * enPp(c.oengine)), ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
+        return Rasterin.rsPage(i, idx, nbytes, c.ocr, ((2 * c.nort) + (4 * c.dry)) + (8 * enHybrid(c)), ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
     }
     public static int enOcrPlanned(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         if (c.ocr == 0) {
@@ -239,9 +258,14 @@ public final class Engine {
         return 0;
     }
     public static int enPage(emon.Enctx.Cfg c, emon.Enctx.Doc d, emon.Enctx.EvArenas ev, int i, int idx, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+        int l0 = Evidence.lnCount(d.ln);
+        int w0 = Evidence.wdCount(d.wd);
+        int r0 = Evidence.orCount(ev.oruns);
         int status = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms);
-        Ocrengine.oeTag(rq, d.pscr, 2 * c.oengine);
+        Ocrengine.oeTag(rq, d.pscr, enOeMode(c));
         if (status == 0) {
+            // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
+            Oilrows.orAssemble(ev.oruns, r0, ev.rules, i + 1, d.ln, l0, d.wd, w0, d.pscr);
             if (Oilsrc.oxsCollect(ans, ev.views, ev.oruns, ev.olines, ev.oxs) < 0) {
                 return 2;
             }
@@ -553,7 +577,7 @@ public final class Engine {
         if (kind == 0) {
             Inline.ilAnalyze(d.fw, s.lt, d.et, d.gl, d.ift, s.sf, d.an, d.txt, d.pg, m.pages, np, m.text, s.hc, s.isw);
         }
-        if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, 2 * c.oengine, s.s0) < 0) {
+        if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, enOeMode(c), s.s0) < 0) {
             return 2;
         }
         Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);

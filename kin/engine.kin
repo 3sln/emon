@@ -28,6 +28,7 @@
             [emon.pdfcontent :refer [pc-document]]
             [emon.pageunit :refer [pu-plan pu-run-pdf pu-kind pk-born pk-scan]]
             [emon.ocrengine :refer [oe-register oe-tag oe-evidence]]
+            [emon.oilrows :refer [or-assemble]]
             [emon.oilsrc :refer [oxs-collect oxs-check oxs-emit]]
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfmeta :refer [pm-run]]
@@ -41,7 +42,7 @@
             [emon.sigmark :refer [sg-has-digital]]
             [emon.arbiter :refer [ar-doc ar-write ar-tag]]
             [emon.player :refer [pl-check pl-emit-open pl-emit-gfx-open]]
-            [emon.evidence :refer [ev-emit-open ev-emit-ofuse ev-emit-oarb ev-page-row ep-get epf-width epf-height]]
+            [emon.evidence :refer [ev-emit-open ev-emit-ofuse ev-emit-oarb ev-page-row ep-get epf-width epf-height ln-count wd-count or-count]]
             [emon.tagtable :refer [tt-emit]]
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
@@ -225,10 +226,19 @@
 
 ;; ----------------------------------------------------------------------------------------------- the page unit
 
-;; `ocr-engine=ppocr` (code 1) is the hybrid, which the page unit flags with bit 8 (`pu-px`); the platform engines (apple-vision 2, windows-media-ocr 3, K8, D901) read alone, the
-;; engine's name being the request's own (`oe-tag`), and ask for no second reading.
-(defn ^I32 en-pp [^I32 e]
-  (if (== e 1) (return 1))
+(defn ^I32 en-hybrid [^Cfg c]
+  (comment "1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).")
+  (comment "The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901) ask for no second reading.")
+  (if (== (fd c oengine) 1) (return 1))
+  (return 0))
+
+(defn ^I32 en-oe-mode [^Cfg c]
+  (comment "How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),")
+  (comment "2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's).")
+  (if (== (fd c oengine) 1) (return 2))
+  (if (== (fd c oengine) 2) (return 1))
+  (if (== (fd c oengine) 3) (return 4))
+  (if (== (fd c oengine) 4) (return 6))
   (return 0))
 
 (defn ^I32 en-page-inner [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
@@ -241,12 +251,12 @@
     (return (pu-run-pdf i idx (fd c ocr) (fd d plan) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
                         (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
                         (fd ev oalts) (fd d wd) (fd d ln)
-                        (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-pp (fd c oengine)))) (fd d fw) (fd d fl) (fd d hl) (fd ev refs) (fd d cg) (fd ev tlines)
+                        (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-hybrid c))) (fd d fw) (fd d fl) (fd d hl) (fd ev refs) (fd d cg) (fd ev tlines)
                         (fd d xs0) (fd d xs1) (fd d xs2) (fd d xs3) (fd d xs4) (fd d xs5)
                         (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
                         (fd d ys0) (fd d ys1) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
                         (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18) (fd ev ofuse) (fd ev oarb))))
-  (return (rs-page i idx nbytes (fd c ocr) (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-pp (fd c oengine)))) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
+  (return (rs-page i idx nbytes (fd c ocr) (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-hybrid c))) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
                    (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
                    (fd ev oalts) (fd d wd) (fd d ln) (fd ev refs) (fd ev tlines) (fd d cg)
                    (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
@@ -263,10 +273,15 @@
   (return 0))
 
 (defn ^:pub ^I32 en-page [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
-  (let [^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
-    (oe-tag rq (fd d pscr) (* 2 (fd c oengine)))
+  (let [^I32 l0 (ln-count (fd d ln))
+        ^I32 w0 (wd-count (fd d wd))
+        ^I32 r0 (or-count (fd ev oruns))
+        ^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
+    (oe-tag rq (fd d pscr) (en-oe-mode c))
     (if (== status 0)
-      (do (if (< (oxs-collect ans (fd ev views) (fd ev oruns) (fd ev olines) (fd ev oxs)) 0) (return 2))
+      (do (comment "Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.")
+          (or-assemble (fd ev oruns) r0 (fd ev rules) (+ i 1) (fd d ln) l0 (fd d wd) w0 (fd d pscr))
+          (if (< (oxs-collect ans (fd ev views) (fd ev oruns) (fd ev olines) (fd ev oxs)) 0) (return 2))
           (if (< (oxs-check (fd ev oxs) (fd ev oruns)) 0) (return 2))))
     (return status)))
 
@@ -496,7 +511,7 @@
       (do
         (il-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd d ift) (fd s sf) (fd d an) (fd d txt) (fd d pg) (fd m pages) np (fd m text) (fd s hc)
  (fd s isw))))
-    (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (* 2 (fd c oengine)) (fd s s0)) 0) (return 2))
+    (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (en-oe-mode c) (fd s s0)) 0) (return 2))
     (pa-build (fd d fw) (fd d et) np (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
          (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
          (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al) (fd s pix))

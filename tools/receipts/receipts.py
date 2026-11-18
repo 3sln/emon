@@ -199,7 +199,7 @@ def baseline_comparison(dataset, rows, totals, baseline):
 def main():
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--n',type=int,default=60)
-    p.add_argument('--ocr-engine',choices=('tesseract','ppocr','apple-vision'),default='tesseract')
+    p.add_argument('--ocr-engine',choices=('tesseract','ppocr','ppocr-alone','apple-vision'),default='tesseract')
     p.add_argument('--set',default='sroie,cord')
     p.add_argument('--report',action='store_true')
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
@@ -213,7 +213,7 @@ def main():
     p.add_argument('--transcript-dir',help='separate external transcript directory; defaults to the output directory')
     p.add_argument('--save',default=str(SCRATCH/'baseline.json'))
     a=p.parse_args()
-    if a.ocr_engine=='ppocr' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
+    if a.ocr_engine!='tesseract' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
         a.bin=str(ROOT/'.cache/emon-rs-live-ppocr/target/release/emon-rs')
     if a.ocr_engine=='apple-vision' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
         a.bin=str(ROOT/'.cache/emon-rs-vision/target/release/emon-rs')
@@ -243,7 +243,7 @@ def main():
             cpu_before=resource.getrusage(resource.RUSAGE_CHILDREN)
             command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine='+a.ocr_engine),'--out=bundle',*extra,str(image)]
             if a.measure_cost: command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),*command]
-            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=180))
+            r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=int(os.environ.get('EMON_RECEIPTS_TIMEOUT','180'))))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)
             if r.returncode: raise RuntimeError(g['id']+': '+r.stderr[-1000:])
             sections=dict(re.findall(r'== ([^\n]+)\n(.*?)(?=\n== |\Z)',r.stdout,re.S))

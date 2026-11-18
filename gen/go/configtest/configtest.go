@@ -238,7 +238,7 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)")
+	port.AssertEq(emonT, 20, 20, "twenty words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr: the engines of `ocr-engine`)")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -256,8 +256,9 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 14, 20, 1, "scored")
 	tWordName(emonT, 15, 21, 0, "tesseract")
 	tWordName(emonT, 16, 21, 1, "ppocr")
-	tWordName(emonT, 17, 21, 2, "apple-vision")
-	tWordName(emonT, 18, 21, 3, "windows-media-ocr")
+	tWordName(emonT, 17, 21, 2, "ppocr-alone")
+	tWordName(emonT, 18, 21, 3, "apple-vision")
+	tWordName(emonT, 19, 21, 4, "windows-media-ocr")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
@@ -490,9 +491,11 @@ func TestOptionalOcrEngineIsExplicitAndDefaultsToTesseract(emonT *testing.T) {
 	port.AssertEq(emonT, c.Oengine, 1, "explicit optional engine")
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins")
 	port.AssertEq(emonT, c.Oengine, 0, "explicit Tesseract")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)")
+	port.AssertEq(emonT, c.Oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's")
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses")
-	port.AssertEq(emonT, c.Oengine, 2, "the platform engines read alone: their own codes, not PP's")
+	port.AssertEq(emonT, c.Oengine, 3, "the platform engines read alone: their own codes, not PP's")
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses")
-	port.AssertEq(emonT, c.Oengine, 3, "code 3")
-	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr")
+	port.AssertEq(emonT, c.Oengine, 4, "code 4")
+	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision or windows-media-ocr")
 }

@@ -223,7 +223,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.AssertEq(19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)");
+        emon.Testport.AssertEq(20, 20, "twenty words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr: the engines of `ocr-engine`)");
         TWordName(0, 0, 1, 2, "always");
         TWordName(0, 1, 1, 1, "auto");
         TWordName(0, 2, 1, 0, "never");
@@ -241,8 +241,9 @@ public static class Configtest {
         TWordName(0, 14, 20, 1, "scored");
         TWordName(0, 15, 21, 0, "tesseract");
         TWordName(0, 16, 21, 1, "ppocr");
-        TWordName(0, 17, 21, 2, "apple-vision");
-        TWordName(0, 18, 21, 3, "windows-media-ocr");
+        TWordName(0, 17, 21, 2, "ppocr-alone");
+        TWordName(0, 18, 21, 3, "apple-vision");
+        TWordName(0, 19, 21, 4, "windows-media-ocr");
     }
     [Xunit.Fact]
     public static void TestAKeyIsFoundByItsWholeNameOrItsPrefix() {
@@ -475,10 +476,12 @@ public static class Configtest {
         emon.Testport.AssertEq(c.Oengine, 1, "explicit optional engine");
         emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins");
         emon.Testport.AssertEq(c.Oengine, 0, "explicit Tesseract");
+        emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)");
+        emon.Testport.AssertEq(c.Oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
         emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses");
-        emon.Testport.AssertEq(c.Oengine, 2, "the platform engines read alone: their own codes, not PP's");
+        emon.Testport.AssertEq(c.Oengine, 3, "the platform engines read alone: their own codes, not PP's");
         emon.Testport.AssertEq(TParse(c, emon.Testport.TextBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses");
-        emon.Testport.AssertEq(c.Oengine, 3, "code 3");
-        TRefused(0, emon.Testport.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr");
+        emon.Testport.AssertEq(c.Oengine, 4, "code 4");
+        TRefused(0, emon.Testport.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision or windows-media-ocr");
     }
 }

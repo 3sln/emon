@@ -762,13 +762,13 @@ impl Engines {
         let packs = &self.inner.packs;
         let (mode, off) = (packs.mode(), packs::offline());
         let never = p.options.ocr == OcrPolicy::Never;
-        // the platform engines read alone and need no pack (K8, D901); PP-OCR is the hybrid, so Tesseract's pack too
+        // the platform engines read alone and need no pack (K8, D901); PP-OCR, alone or not (D900), is loaded beside Tesseract's pack
         let mut engines = match p.options.ocr_engine {
             crate::engine::OcrEngine::AppleVision => vec![ke::eng_apple_vision()],
             crate::engine::OcrEngine::WindowsMediaOcr => vec![ke::eng_windows_media_ocr()],
             _ => vec![ke::eng_tesseract()],
         };
-        if p.options.ocr_engine == crate::engine::OcrEngine::PpOcr {
+        if p.options.ocr_engine.uses_pp() {
             engines.push(ke::eng_ppocr());
         }
         let mut langs: Vec<i32> = Vec::new();

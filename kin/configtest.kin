@@ -215,7 +215,7 @@
   (t-key-name (test-t) 21 "ocr-engine"))
 
 (deftest test-the-words-have-their-names-and-codes-in-kin
-  (assert-eq (cv-row-count 0) 19 "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)")
+  (assert-eq (cv-row-count 0) 20 "twenty words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr: the engines of `ocr-engine`)")
   (t-word-name (test-t) 0 1 2 "always")
   (t-word-name (test-t) 1 1 1 "auto")
   (t-word-name (test-t) 2 1 0 "never")
@@ -233,8 +233,9 @@
   (t-word-name (test-t) 14 20 1 "scored")
   (t-word-name (test-t) 15 21 0 "tesseract")
   (t-word-name (test-t) 16 21 1 "ppocr")
-  (t-word-name (test-t) 17 21 2 "apple-vision")
-  (t-word-name (test-t) 18 21 3 "windows-media-ocr"))
+  (t-word-name (test-t) 17 21 2 "ppocr-alone")
+  (t-word-name (test-t) 18 21 3 "apple-vision")
+  (t-word-name (test-t) 19 21 4 "windows-media-ocr"))
 
 (deftest test-a-key-is-found-by-its-whole-name-or-its-prefix
   (t-is-key (test-t) (text-blob "ocr") 1 "ocr")
@@ -456,8 +457,10 @@
     (assert-eq (fd c oengine) 1 "explicit optional engine")
     (assert-eq (t-parse c (text-blob "ocr-engine=ppocr\nocr-engine=tesseract")) 0 "last engine wins")
     (assert-eq (fd c oengine) 0 "explicit Tesseract")
+    (assert-eq (t-parse c (text-blob "ocr-engine=ppocr-alone")) 0 "PP-OCR alone parses (P13.4)")
+    (assert-eq (fd c oengine) 2 "PP-OCR alone is its own code: every request names it, none is Tesseract's")
     (assert-eq (t-parse c (text-blob "ocr-engine=apple-vision")) 0 "Apple Vision parses")
-    (assert-eq (fd c oengine) 2 "the platform engines read alone: their own codes, not PP's")
+    (assert-eq (fd c oengine) 3 "the platform engines read alone: their own codes, not PP's")
     (assert-eq (t-parse c (text-blob "ocr-engine=windows-media-ocr")) 0 "Windows.Media.Ocr parses")
-    (assert-eq (fd c oengine) 3 "code 3")
-    (t-refused (test-t) (text-blob "ocr-engine=unknown") "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr")))
+    (assert-eq (fd c oengine) 4 "code 4")
+    (t-refused (test-t) (text-blob "ocr-engine=unknown") "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision or windows-media-ocr")))

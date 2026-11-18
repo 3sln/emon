@@ -222,7 +222,7 @@ fn test_the_keys_have_their_names_in_kin() {
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
-    crate::testport::assert_eq(19, 19, "nineteen words (K8: apple-vision and windows-media-ocr join the two engines of `ocr-engine`)");
+    crate::testport::assert_eq(20, 20, "twenty words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr: the engines of `ocr-engine`)");
     t_word_name(0, 0, 1, 2, "always");
     t_word_name(0, 1, 1, 1, "auto");
     t_word_name(0, 2, 1, 0, "never");
@@ -240,8 +240,9 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 14, 20, 1, "scored");
     t_word_name(0, 15, 21, 0, "tesseract");
     t_word_name(0, 16, 21, 1, "ppocr");
-    t_word_name(0, 17, 21, 2, "apple-vision");
-    t_word_name(0, 18, 21, 3, "windows-media-ocr");
+    t_word_name(0, 17, 21, 2, "ppocr-alone");
+    t_word_name(0, 18, 21, 3, "apple-vision");
+    t_word_name(0, 19, 21, 4, "windows-media-ocr");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
@@ -474,9 +475,11 @@ fn test_optional_ocr_engine_is_explicit_and_defaults_to_tesseract() {
     crate::testport::assert_eq(c.oengine, 1, "explicit optional engine");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr\nocr-engine=tesseract")[..]), 0, "last engine wins");
     crate::testport::assert_eq(c.oengine, 0, "explicit Tesseract");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr-alone")[..]), 0, "PP-OCR alone parses (P13.4)");
+    crate::testport::assert_eq(c.oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=apple-vision")[..]), 0, "Apple Vision parses");
-    crate::testport::assert_eq(c.oengine, 2, "the platform engines read alone: their own codes, not PP's");
+    crate::testport::assert_eq(c.oengine, 3, "the platform engines read alone: their own codes, not PP's");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=windows-media-ocr")[..]), 0, "Windows.Media.Ocr parses");
-    crate::testport::assert_eq(c.oengine, 3, "code 3");
-    t_refused(0, &crate::testport::text_blob("ocr-engine=unknown")[..], "ocr-engine is tesseract, ppocr, apple-vision or windows-media-ocr");
+    crate::testport::assert_eq(c.oengine, 4, "code 4");
+    t_refused(0, &crate::testport::text_blob("ocr-engine=unknown")[..], "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision or windows-media-ocr");
 }
