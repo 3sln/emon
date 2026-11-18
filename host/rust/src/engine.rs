@@ -190,10 +190,22 @@ pub trait Ocr: Send + Sync {
     fn producer(&self) -> Vec<(String, String)> {
         Vec::new()
     }
-    // The engines of kin's table (`emon.engines`' `eng`) this port can answer as, for the transcript's `:pk-engines` (D900). Empty for a port that is none of
-    // the table's (a test double, a host's own): the transcript then carries no engine table, as it never did.
+    // The engines of kin's table (`emon.engines`' `eng`) this port answers as, for the transcript's `:pk-engines` (D900): the ones its `producer` names, under `engine` or
+    // `ocr-engine` (`tesseract+ppocr` names two). Empty for a port that is none of the table's (a test double, a host's own): the transcript then carries no engine table,
+    // as it never did. Read from the producer so that the engines' own files, which are inputs of their requested identities, stay as they are.
     fn engines(&self) -> Vec<i32> {
-        Vec::new()
+        let mut found = Vec::new();
+        for (k, v) in self.producer() {
+            if k == "engine" || k == "ocr-engine" {
+                for name in v.split('+') {
+                    let e = crate::emon::engines::eng_find(name.as_bytes(), 0, name.len() as i32);
+                    if e >= 0 && !found.contains(&e) {
+                        found.push(e);
+                    }
+                }
+            }
+        }
+        found
     }
 }
 

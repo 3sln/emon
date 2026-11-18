@@ -192,7 +192,7 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 359 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 360 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -463,6 +463,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `planrun.File.Name` | `field string` |
 | `planrun.Transcript` | `struct` |
 | `planrun.Transcript.CheckInputs` | `ptr (inputs [][2]int32) error` |
+| `planrun.Transcript.Engines` | `field [][3]int32` |
 | `planrun.Transcript.Entries` | `field []port.PlanEntry` |
 | `planrun.Transcript.Inputs` | `field [][2]int32` |
 | `planrun.Transcript.Producer` | `field [][2]string` |

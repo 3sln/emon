@@ -132,7 +132,7 @@ implement `Renderer` (`render(source, password, &RenderRequest) -> Result<Bitmap
 - The `no_retarget` test setting of `Options` is not in the published crate (`bb package --check` proves it).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the rust host: 327 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the rust host: 329 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -313,6 +313,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::Node::sources` | `fn (&self) -> Vec<String>` |
 | `emon::Node::text` | `fn (&self) -> String` |
 | `emon::Ocr` | `trait: Send + Sync` |
+| `emon::Ocr::engines` | `fn provided (&self) -> Vec<i32>` |
 | `emon::Ocr::fulfil` | `fn required (&self, &plan::Request, &plan::Bitmaps, bool) -> Result<plan::Answer, PlanError>` |
 | `emon::Ocr::producer` | `fn provided (&self) -> Vec<(String, String)>` |
 | `emon::OcrEngine` | `enum derive(Clone,Copy,Debug,Eq,PartialEq)` |
@@ -417,6 +418,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::SpoolSource::spool` | `fn <R: Read>(R, u64) -> io::Result<SpoolSource>` |
 | `emon::Transcript` | `struct derive(Clone,Debug,Default)` |
 | `emon::Transcript::check_inputs` | `fn (&self, &[(i32, i32)]) -> Result<(), PlanError>` |
+| `emon::Transcript::engines` | `field Vec<(i32,i32,i32)>` |
 | `emon::Transcript::entries` | `field Vec<Entry>` |
 | `emon::Transcript::from_files` | `fn (&BTreeMap<String, Vec<u8>>) -> Result<Transcript, PlanError>` |
 | `emon::Transcript::inputs` | `field Vec<(i32,i32)>` |

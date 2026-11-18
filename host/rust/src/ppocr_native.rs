@@ -145,11 +145,6 @@ impl Drop for State {
     }
 }
 impl Ocr for PpOcr {
-    fn engines(&self) -> Vec<i32> {
-        let mut e = self.incumbent.as_ref().map(|p| p.0.engines()).unwrap_or_default();
-        e.push(crate::emon::engines::eng_ppocr());
-        e
-    }
     fn producer(&self) -> Vec<(String, String)> {
         let mut out = self
             .incumbent
