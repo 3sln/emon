@@ -28,8 +28,8 @@
   {:id "lang-test"     :cmd ["bb" "lang-test"]                    :gate "lang-test"     :secs 1   :why "the generator's own refusals (emit-ascii, defenum, defctx, fd): under a second"}
   {:id "api-diff"      :cmd ["bb" "api-diff"]                     :gate "api-diff"      :secs 2   :why "the public API is the frozen one (D527)"}
   {:id "release-audit" :cmd ["bb" "release-audit"]                :gate "release-audit" :secs 1   :why "licences, inventory and notices (D526)"}
-  {:id "packs"         :cmd ["bb" "packs" "--emit" "--check"]                           :secs 1   :why "the pack catalogue (release/packs/packs.edn) is sound, agrees with the pin files it absorbed, and kin/packdata.kin and packs.json are what it generates (D900)"}
-  {:id "packs-selftest" :cmd ["bb" "packs" "--self-test"]                               :secs 1   :why "each refusal of the catalogue checks fires on a planted failure (D900)"}
+  {:id "packs"         :cmd ["bb" "packs" "--emit" "--check"]                           :secs 1   :why "the pack catalogue (release/packs/packs.edn) is sound, agrees with the pin files it absorbed, and kin/packdata.kin and packs.json are what it generates (D898)"}
+  {:id "packs-selftest" :cmd ["bb" "packs" "--self-test"]                               :secs 1   :why "each refusal of the catalogue checks fires on a planted failure (D898)"}
   {:id "version"       :cmd ["bb" "version" "--check" "@version" "--source-only"]                       :secs 1   :why "central version and placeholder inventory agree; staged artifacts are stamped (D886)"}
   {:id "version-selftest" :cmd ["bb" "version" "--self-test"] :secs 1 :why "one-file bump and staged version stamping (D886)"}
   {:id "release-notes-selftest"  :cmd ["bb" "release-notes" "--self-test"]                    :secs 1   :why "the release notes tool's parsing and rendering (D547)"}

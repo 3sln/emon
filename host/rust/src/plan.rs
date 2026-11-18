@@ -715,14 +715,14 @@ pub struct Transcript {
     // replay depends on the answers, not on whose engine gave them. Empty for a run with no live port that
     // identifies itself, which leaves the file as it always was.
     pub producer: Vec<(String, String)>,
-    // THE ENGINE TABLE (D900): the engines this run had, `(engine, caps, role)` in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+    // THE ENGINE TABLE (D898): the engines this run had, `(engine, caps, role)` in kin's `emon.engines` terms, written first in the file as `:pk-engines`
     // when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
     pub engines: Vec<(i32, i32, i32)>,
 }
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
 
-// THE ENGINE TABLE OF A RECORDING (D900): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
+// THE ENGINE TABLE OF A RECORDING (D898): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
 // producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
 // identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
 pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {

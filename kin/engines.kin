@@ -1,4 +1,4 @@
-;; THE ENGINE TABLE, THE PACK RESOLVER AND THE TURNKEY DEFAULTS (K1, D900; D883 rulings 3, 7 and 8, D885, D893, D895, D896; pkg1 sections 1.1 and 3).
+;; THE ENGINE TABLE, THE PACK RESOLVER AND THE TURNKEY DEFAULTS (K1, D898; D883 rulings 3, 7 and 8, D885, D893, D895, D896; pkg1 sections 1.1 and 3).
 ;;
 ;; Kin owns which engines exist, what each may declare and do, which packs each needs, and what a platform's turnkey package chooses for an app that chooses
 ;; nothing. A host only LOADS adapters, FETCHES and VERIFIES bytes; it never decides which engine reads or which pack a conversion needs. Everything here is a pure

@@ -598,7 +598,7 @@ public static class Planrun {
         /// </summary>
         public List<string[]> Producer = new List<string[]>();
         /// <summary>
-        /// The ENGINE TABLE (D900): the engines the run had, {engine, caps, role} in kin's `emon.engines` terms, written first in the file as `:pk-engines`
+        /// The ENGINE TABLE (D898): the engines the run had, {engine, caps, role} in kin's `emon.engines` terms, written first in the file as `:pk-engines`
         /// when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
         /// </summary>
         public List<int[]> Engines = new List<int[]>();

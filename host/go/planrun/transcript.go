@@ -29,7 +29,7 @@ type Transcript struct {
 	// written as `:producer {...}` when there are any and never read back for a replay: a replay depends on the answers, not on whose engine gave
 	// them. Empty leaves the file as it always was.
 	Producer [][2]string
-	// Engines is the ENGINE TABLE (D900): the engines the run had, [engine, caps, role] in kin's `emon.engines` terms, written first in the file as
+	// Engines is the ENGINE TABLE (D898): the engines the run had, [engine, caps, role] in kin's `emon.engines` terms, written first in the file as
 	// `:pk-engines` when there are any. A replay reads it back and needs no adapter to know which engines were available. Empty leaves the file as it always was.
 	Engines [][3]int32
 }

@@ -1,4 +1,4 @@
-;; Laws for `emon.engines` and `emon.packdata` (K1, D900; D883 rulings 3 and 8, D885, D893, D895, D896): the engine table, its roles, the turnkey defaults, the pack catalogue as kin
+;; Laws for `emon.engines` and `emon.packdata` (K1, D898; D883 rulings 3 and 8, D885, D893, D895, D896): the engine table, its roles, the turnkey defaults, the pack catalogue as kin
 ;; holds it and its agreement with the table, pack resolution for each engine and option combination, the refusals by name, and the engine table in a transcript.
 (ns emon.enginestest
   (:require [emon.lang :refer [I32 Cells Text Blob fd]]

@@ -1289,7 +1289,7 @@ pub fn tr_add_producer(t: &mut crate::emon::transcriptctx::Tr, key: &mut crate::
     return 0;
 }
 pub fn tr_add_engine(t: &mut crate::emon::transcriptctx::Tr, eng: i32, caps: i32, role: i32) -> i32 {
-    // One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
+    // One engine of the run's engine table (D898): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
     crate::port::cells_push(&mut t.etab, eng);
     crate::port::cells_push(&mut t.etab, caps);
     crate::port::cells_push(&mut t.etab, role);

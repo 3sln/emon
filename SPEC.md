@@ -869,7 +869,7 @@ name their input by index. A transcript is a directory: `transcript.edn`
 plus one lossless PNG per bitmap. Replay looks a request up by its whole record
 and answers `transcript-miss` rather than guess. `max-rounds` and `fetch-rounds`
 are named limits of the host loop. A recording that had OCR engines writes them
-first in the file as `:pk-engines` (D900): one map per engine of kin's engine table
+first in the file as `:pk-engines` (D898): one map per engine of kin's engine table
 (`kin/engines.kin`), its `:engine` name, the OIL `:caps` it declared and the `:role`
 it took, so a replay knows which engines were available and needs no adapter to
 know it. A transcript with none writes none, and an engine the table does not

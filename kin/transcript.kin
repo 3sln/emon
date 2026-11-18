@@ -12,7 +12,7 @@
 ;;         {:round 0 :kind :render :req [7 1 1 0 0 150 0] :ans [8 1 1 0 1275 1650 1 150] :bitmap "bitmap-0000.png"}
 ;;         ...]}
 ;;
-;;   THE ENGINE TABLE (D900) is `:pk-engines`, written FIRST, before the producer, when the run had one: one map per engine the host registered, `:engine` (the name `emon.engines`
+;;   THE ENGINE TABLE (D898) is `:pk-engines`, written FIRST, before the producer, when the run had one: one map per engine the host registered, `:engine` (the name `emon.engines`
 ;;   spells), `:caps` (the OIL capability bits it declared) and `:role` (the role it took), so a replay knows which engines were available and needs no adapter to know it.
 ;;   A transcript with none writes none; an engine the table does not know is refused by name (`tb-engine-unknown`).
 ;;
@@ -533,7 +533,7 @@
     (return 0)))
 
 (defn ^:pub ^I32 tr-add-engine [^Tr t ^I32 eng ^I32 caps ^I32 role]
-  (comment "One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.")
+  (comment "One engine of the run's engine table (D898): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.")
   (cells-push (fd t etab) eng)
   (cells-push (fd t etab) caps)
   (cells-push (fd t etab) role)

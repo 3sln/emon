@@ -14530,7 +14530,7 @@ Every pack, including app-provided bytes, is verified against the catalogue's SH
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — K1: the engine table, roles, turnkey defaults and pack catalogue are kin; the transcript records its engine table first
+### D898 — K1: the engine table, roles, turnkey defaults and pack catalogue are kin; the transcript records its engine table first
 
 Foundation for the Dart/Flutter evaluation release (D895) and `prepare()` (D896). Kin owns which engines exist, what each may declare and do, which packs each needs and what a turnkey package chooses; a host loads adapters and fetches and verifies bytes, and decides none of it. The coordinator renumbers this entry.
 

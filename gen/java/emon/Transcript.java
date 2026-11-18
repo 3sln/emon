@@ -1290,7 +1290,7 @@ public final class Transcript {
         return 0;
     }
     public static int trAddEngine(emon.Transcriptctx.Tr t, int eng, int caps, int role) {
-        // One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
+        // One engine of the run's engine table (D898): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
         emon.Port.cellsPush(t.etab, eng);
         emon.Port.cellsPush(t.etab, caps);
         emon.Port.cellsPush(t.etab, role);

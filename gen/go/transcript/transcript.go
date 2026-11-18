@@ -1324,7 +1324,7 @@ func TrAddProducer(t *transcriptctx.Tr, key *port.Cells, val *port.Cells) int32 
 }
 
 func TrAddEngine(t *transcriptctx.Tr, eng int32, caps int32, role int32) int32 {
-	// One engine of the run's engine table (D900): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
+	// One engine of the run's engine table (D898): its id (`emon.engines`' `eng`), the capability bits it declared and the role it took. Written first in the file, in the order added.
 	port.CellsPush(t.Etab, eng)
 	port.CellsPush(t.Etab, caps)
 	port.CellsPush(t.Etab, role)

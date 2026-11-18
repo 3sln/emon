@@ -1,4 +1,4 @@
-;; THE AUTHORED PACK CATALOGUE (K1, D900; pkg1 section 3, D885, D896). The one source of every model pack emon knows: id, revision, engine, kind, languages and
+;; THE AUTHORED PACK CATALOGUE (K1, D898; pkg1 section 3, D885, D896). The one source of every model pack emon knows: id, revision, engine, kind, languages and
 ;; scripts, files with SHA-256 and byte count, licence and upstream. `bb packs --emit` generates kin/packdata.kin (what kin resolves and every host verifies
 ;; against) and release/packs/packs.json (for hooks and tools); `bb packs --emit --check` is the drift gate, run by `bb ci core`.
 ;;

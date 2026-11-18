@@ -7,7 +7,7 @@
 ;;   ents     the entries, back to back: `[length round bm used n request-length request... answer...]`. `bm` is 0 for an entry with no bitmap, else
 ;;            1 + where its file name is in `names` (a file read) or 1 (an entry the host added: the name is made from `n`); `used` is 1 once a
 ;;            replay has been answered from it; `n` is the entry's place in the file
-;;   etab     the engine table the run had (`:pk-engines`, D900), rows of `[eng caps role]` in the order the file has them; empty for a transcript with none
+;;   etab     the engine table the run had (`:pk-engines`, D898), rows of `[eng caps role]` in the order the file has them; empty for a transcript with none
 ;;   names    the bitmap file names a file read gave: `[length code-point...]`
 ;;   idx      the replay map: an open-addressing table, 0 for a free slot and else 1 + the entry's place in `ents`, keyed by the WHOLE request record
 ;;   tmp      scratch: the integers of a request and an answer being read
