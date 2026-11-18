@@ -722,6 +722,42 @@ pub struct Transcript {
 
 pub const TRANSCRIPT_FILE: &str = "transcript.edn";
 
+// THE ENGINE TABLE OF A RECORDING (D900): the rows `(engine, caps, role)` kin records (`pk_record_engines`) for the engines a live port's `producer` names, on this platform class. The
+// producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
+// identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
+pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
+    use crate::emon::engines as ke;
+    let class = if cfg!(target_arch = "wasm32") {
+        ke::pcls_web()
+    } else if cfg!(target_os = "macos") {
+        ke::pcls_macos()
+    } else if cfg!(target_os = "ios") {
+        ke::pcls_ios()
+    } else if cfg!(target_os = "windows") {
+        ke::pcls_windows()
+    } else if cfg!(target_os = "android") {
+        ke::pcls_android()
+    } else {
+        ke::pcls_linux()
+    };
+    let mut avail = Cells::new();
+    for (k, v) in producer {
+        if k == "engine" || k == "ocr-engine" {
+            for name in v.split('+') {
+                let e = ke::eng_find(name.as_bytes(), 0, name.len() as i32);
+                if e >= 0 {
+                    cells_push(&mut avail, e);
+                }
+            }
+        }
+    }
+    let mut rows = Cells::new();
+    if ke::pk_record_engines(&mut rows, class, &mut avail) != 0 {
+        return Vec::new();
+    }
+    (0..cells_len(&rows) / 3).map(|i| (cells_at(&rows, 3 * i), cells_at(&rows, 3 * i + 1), cells_at(&rows, 3 * i + 2))).collect()
+}
+
 // THE FILE IS KIN'S (P10.9, `kin/transcript.kin`, D438): the format (version 1, byte for byte), the kind names, the escaping of the producer, the reader
 // and its refusals, the map a replay is answered from and the count of entries it never asked for. This file keeps what is not observable: the
 // bitmaps (a PNG for each, kin's `emon.pngread`), the in-memory `Transcript` the embedder holds, and the

@@ -264,7 +264,7 @@ fn main() {
     let lens: Vec<u64> = pdfs.iter().map(|p| std::fs::metadata(p).unwrap().len()).collect();
     let inputs: Vec<(i32, i32)> = lens.iter().enumerate().map(|(i, l)| (i as i32, *l as i32)).collect();
     let cfg = Config::default();
-    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new() };
+    let mut transcript = Transcript { inputs: inputs.clone(), entries: Vec::new(), producer: Vec::new(), engines: Vec::new() };
     let mut replayer: Option<Replayer> = None;
     if mode == "replay" {
         let t = match Transcript::from_files(&read_dir(&dir)).and_then(|t| t.check_inputs(&inputs).map(|_| t)) {

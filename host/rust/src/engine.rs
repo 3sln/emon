@@ -190,51 +190,6 @@ pub trait Ocr: Send + Sync {
     fn producer(&self) -> Vec<(String, String)> {
         Vec::new()
     }
-    // The engines of kin's table (`emon.engines`' `eng`) this port answers as, for the transcript's `:pk-engines` (D900): the ones its `producer` names, under `engine` or
-    // `ocr-engine` (`tesseract+ppocr` names two). Empty for a port that is none of the table's (a test double, a host's own): the transcript then carries no engine table,
-    // as it never did. Read from the producer so that the engines' own files, which are inputs of their requested identities, stay as they are.
-    fn engines(&self) -> Vec<i32> {
-        let mut found = Vec::new();
-        for (k, v) in self.producer() {
-            if k == "engine" || k == "ocr-engine" {
-                for name in v.split('+') {
-                    let e = crate::emon::engines::eng_find(name.as_bytes(), 0, name.len() as i32);
-                    if e >= 0 && !found.contains(&e) {
-                        found.push(e);
-                    }
-                }
-            }
-        }
-        found
-    }
-}
-
-// The engine table of a recording (D900): the engines the live port has, as kin's table records them on this platform class (`pk_record_engines`): rows of
-// (engine, caps, role). Empty when the port names none or kin refuses one (an engine that cannot run on this class has no row).
-fn record_engines(ocr: &OcrPort) -> Vec<(i32, i32, i32)> {
-    use crate::emon::engines as ke;
-    let class = if cfg!(target_arch = "wasm32") {
-        ke::pcls_web()
-    } else if cfg!(target_os = "macos") {
-        ke::pcls_macos()
-    } else if cfg!(target_os = "ios") {
-        ke::pcls_ios()
-    } else if cfg!(target_os = "windows") {
-        ke::pcls_windows()
-    } else if cfg!(target_os = "android") {
-        ke::pcls_android()
-    } else {
-        ke::pcls_linux()
-    };
-    let mut avail = Cells::new();
-    for e in ocr.0.engines() {
-        cells_push(&mut avail, e);
-    }
-    let mut rows = Cells::new();
-    if ke::pk_record_engines(&mut rows, class, &mut avail) != 0 {
-        return Vec::new();
-    }
-    (0..cells_len(&rows) / 3).map(|i| (cells_at(&rows, 3 * i), cells_at(&rows, 3 * i + 1), cells_at(&rows, 3 * i + 2))).collect()
 }
 
 // An `Ocr` port as a `Config` holds it.
@@ -1535,7 +1490,7 @@ impl Engine {
                 t.inputs = this_input.clone();
                 if let Some(p) = &self.cfg.ocr {
                     t.producer = p.0.producer();
-                    t.engines = record_engines(p);
+                    t.engines = plan::engine_rows(&t.producer);
                 }
                 recording = Some(t);
             }
