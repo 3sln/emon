@@ -46,6 +46,7 @@ String? libraryPathOf(int address) {
         calloc.free(buf);
       }
     }
+    // (on Android a library may be loaded straight from the APK: `base.apk!/lib/arm64-v8a/libx.so` is a path the loader reads and a file check does not; see [loaderName])
     final dladdr = DynamicLibrary.process().lookupFunction<_DladdrC, _DladdrD>('dladdr');
     final info = calloc<_DlInfo>();
     try {
@@ -110,3 +111,10 @@ Uint8List takeBuf(Pointer<c.emon_buf> buf) {
 
 /// An `emon_buf` as text (UTF-8), freeing the buffer.
 String takeBufText(Pointer<c.emon_buf> buf) => utf8.decode(takeBuf(buf), allowMalformed: true);
+
+/// For a path that points inside an APK (`.../base.apk!/lib/arm64-v8a/libpdfium.so`, a library Android loads without unpacking), the name the loader knows it by (`libpdfium.so`): the
+/// library is already loaded under it, so `dlopen` by name finds it, and a file check of the path does not. Any other path is returned as it is.
+String loaderName(String path) {
+  final i = path.indexOf('!/');
+  return i < 0 ? path : path.substring(path.lastIndexOf('/') + 1);
+}

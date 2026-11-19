@@ -10,7 +10,7 @@
 ;;   bb dart --bindings [--check]     regenerate lib/src/bindings.g.dart from host/c/include/{emon,emon_adapter}.h with ffigen (--check: fail when it differs)
 ;;   bb dart --packs [--check]        regenerate lib/src/packs.g.dart from release/packs/packs.json (--check: fail when it differs)
 ;;   bb dart --sha-table FILE         write lib/src/native_assets.g.dart from the SHA256SUMS of a release (the archives `emon-c-<version>-<triple>.tar.gz`), at release time (D886)
-;;   bb dart --stamp DIR              copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (the published packages are the stamped copy)
+;;   bb dart --stamp DIR [--publishable]  copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (--publishable: hosted dependencies, no publish_to: none: what pub.dev gets)
 ;;   bb dart --analyze                `dart analyze` for every package
 ;;   bb dart --test                   `dart test` for every pure-Dart package (needs `EMON_NATIVE_DIR`: a directory with the C archive(s) of `bb package --host c`)
 ;;   bb dart --check                  the drift checks and --analyze
@@ -135,14 +135,31 @@
                        (concat (pub-tool p) ["test"]))]
           (if (zero? (:exit r)) (say "ok   dart test " (:dir p)) (die "dart test " (:dir p) "\n" (:out r) (:err r))))))))
 
-(defn stamp! [dir]
+(defn stamp! [dir publishable?]
   (fs/delete-tree dir)
-  (fs/copy-tree dart-root dir)
+  (let [skip? (fn [f] (some #{".dart_tool" "build" "Pods" ".gradle" ".idea"} (map str (fs/components (fs/relativize dart-root f)))))]
+    (doseq [f (file-seq (java.io.File. dart-root))
+            :when (and (.isFile f) (not (skip? (.toPath f))) (not (#{"pubspec.lock" "local.properties"} (.getName f))))]
+      (let [dst (fs/path dir (fs/relativize dart-root (.toPath f)))]
+        (fs/create-dirs (fs/parent dst))
+        (fs/copy f dst {:copy-attributes true}))))
   (doseq [f (file-seq (java.io.File. dir))
-          :when (and (.isFile f) (re-find #"\.(yaml|dart|kt|gradle|md|podspec|swift)$" (.getName f)) (not (str/includes? (str f) "/.dart_tool/")) (not (str/includes? (str f) "/build/")))]
-    (let [s (slurp f)]
-      (when (str/includes? s "0.0.0-dev") (spit f (str/replace s "0.0.0-dev" version)))))
-  (say "stamped " version " into " dir))
+          :when (and (.isFile f) (re-find #"\.(yaml|dart|kt|gradle|md|podspec|swift)$" (.getName f)))]
+    (let [s (slurp f)
+          pubspec? (and (= "pubspec.yaml" (.getName f)) (not (str/includes? (str f) "/examples/")))
+          s (str/replace s "0.0.0-dev" version)
+          ;; the development `hooks: user_defines` of a package's own pubspec (a path into this checkout's dist/c) is not part of what is published
+          s (if pubspec?
+              (let [i (str/index-of s "# Development in this repository")] (if i (str (str/trimr (subs s 0 i)) "\n") s))
+              s)
+          ;; PUBLISHABLE: a hosted dependency instead of a path, and no `publish_to: none`
+          s (if (and publishable? pubspec?)
+              (-> s
+                  (str/replace #"\n  (emon\w*):\n    path: [^\n]+" (str "\n  $1: ^" version))
+                  (str/replace #"publish_to: none\n" ""))
+              s)]
+      (spit f s)))
+  (say "stamped " version " into " dir (when publishable? " (publishable)")))
 
 ;; ------------------------------------------------------------------------------------------------ main
 
@@ -152,7 +169,7 @@
   (flag? "--sha-table") (let [f (opt "--sha-table")]
                           (spit (str dart-root "/emon_core/lib/src/native_assets.g.dart") (native-table-dart f))
                           (say "wrote host/dart/emon_core/lib/src/native_assets.g.dart"))
-  (flag? "--stamp") (stamp! (or (opt "--stamp") (die "usage: bb dart --stamp DIR")))
+  (flag? "--stamp") (stamp! (or (opt "--stamp") (die "usage: bb dart --stamp DIR [--publishable]")) (flag? "--publishable"))
   (flag? "--analyze") (analyze!)
   (flag? "--test") (test!)
   (flag? "--check") (do (bindings! true)

@@ -4,7 +4,6 @@ import 'package:emon/emon.dart';
 import 'package:emon_ocr_mlkit/emon_ocr_mlkit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import 'downloads.dart';
 
@@ -37,7 +36,7 @@ class EmonFlutter extends ChangeNotifier {
 
   /// Open emon for this app.
   ///
-  /// [engine] overrides the platform's default. [packs] is how packs are fetched (default: on demand). [packDirectory] defaults to `<application support>/emon/packs`.
+  /// [engine] overrides the platform's default. [packs] is how packs are fetched (default: on demand). [packDirectory] defaults to [appPackDirectory].
   static Future<EmonFlutter> open({
     OcrEngine? engine,
     PackMode packs = PackMode.auto,
@@ -45,7 +44,7 @@ class EmonFlutter extends ChangeNotifier {
     PackNeededHook? onPackNeeded,
     List<String>? packSources,
   }) async {
-    final dir = packDirectory ?? p.join((await getApplicationSupportDirectory()).path, 'emon', 'packs');
+    final dir = packDirectory ?? appPackDirectory();
     MlKitAdapter? mlkit;
     if (Platform.isAndroid) {
       final candidate = MlKitAdapter();
@@ -78,4 +77,17 @@ class EmonFlutter extends ChangeNotifier {
     super.dispose();
     emon.close();
   }
+}
+
+/// Where an app keeps packs when it does not say: the app's own files, never shared. Android: `<app data>/files/emon/packs` (the parent of the cache directory the temporary directory is);
+/// iOS and macOS: `Library/Application Support/emon/packs` of the app's container; elsewhere the user's cache (the library's default).
+String appPackDirectory() {
+  if (Platform.isAndroid) {
+    return p.join(Directory.systemTemp.parent.path, 'files', 'emon', 'packs');
+  }
+  if (Platform.isIOS || Platform.isMacOS) {
+    final home = Platform.environment['HOME'];
+    if (home != null && home.isNotEmpty) return p.join(home, 'Library', 'Application Support', 'emon', 'packs');
+  }
+  return defaultPackDirectory();
 }

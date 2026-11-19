@@ -145,3 +145,23 @@ Local contracts: `bb version --self-test`, `bb release-ops --self-test`,
 upload. Never invoke a real `bb publish` locally. `bb release-notes` derives notes
 from DEVLOG and commits since the previous tag; `bb release-verify` checks the
 central version, templates, tag, release target and verified commit status.
+
+## Dart: the first publish (K7, D885, D895)
+
+pub.dev enables automated publishing only on a package that exists, so the maintainer publishes each package once by hand, then enables automation. Needs a verified publisher
+(`3sln.com`, by DNS through Google Search Console), a Dart 3.10+ SDK and the release of that version already on GitHub (the hooks download the C archives from it).
+
+```sh
+# emon-docs: unverified — operator commands, require the maintainer's pub.dev account
+git checkout vX.Y.Z
+bb dart --sha-table <(gh release download vX.Y.Z --pattern SHA256SUMS --output -)    # the SHA-256 table of the release's C archives, into emon_core
+bb dart --stamp /tmp/emon-dart --publishable                                          # versions stamped, hosted dependencies, no publish_to: none
+cd /tmp/emon-dart
+for pkg in emon_core emon_ocr_tesseract emon_ocr_ppocr emon_ocr_vision emon_ocr_winocr emon_ocr_mlkit emon emon_flutter; do
+  (cd $pkg && dart pub publish --dry-run && flutter pub publish)    # one at a time, in this order: each depends on the one before (`flutter pub publish` for the plugins)
+done
+```
+
+Then for every package, on pub.dev (Admin > Automated publishing): repository `3sln/emon`, tag pattern `emon-dart-v{{version}}`, and move it to the verified publisher `3sln.com`.
+`release.yml` pushes `emon-dart-v<version>` with the repository deploy key after the release has its archives; `.github/workflows/pub.yml` (disabled until the repository variable
+`PUB_PUBLISH_ENABLED` is `true`) publishes from that tag. The repository must be public for the hooks to download release assets.

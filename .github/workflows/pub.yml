@@ -1,0 +1,45 @@
+# Publishes the Dart packages to pub.dev (K7, P13.20; DEVLOG D885, D886). PREPARED BUT DISABLED.
+#
+# pub.dev accepts automated publishing only from a workflow run triggered by a tag push, authenticated by GitHub's OIDC token, and only for a package that already exists: the first
+# publish of each package is manual (docs/releasing.md, "Dart: the first publish"). `release.yml` pushes the tag `emon-dart-v<version>` with a repository deploy key (a push made with
+# GITHUB_TOKEN triggers no workflow) once the GitHub release has its archives; this workflow then stamps the packages (`bb dart --stamp`), writes the SHA-256 table of the release's C archives
+# (`bb dart --sha-table`) and publishes in dependency order. Every pub.dev package is configured with the tag pattern `emon-dart-v{{version}}` and this repository.
+#
+# DISABLED: nothing runs until the repository variable PUB_PUBLISH_ENABLED is `true`, which is set after the maintainer has made the first publish and enabled automated publishing on pub.dev.
+name: pub
+
+on:
+  push:
+    tags:
+      - 'emon-dart-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: ${{ vars.PUB_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Fetch the release's SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#emon-dart-v}"
+          gh release download "v${version}" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+      - name: Stamp the packages and write the SHA-256 table of the release's archives
+        run: |
+          bb dart --sha-table "$RUNNER_TEMP/SHA256SUMS"
+          bb dart --stamp "$RUNNER_TEMP/dart" --publishable
+      - name: Publish, in dependency order (the first publish of a package is manual)
+        working-directory: ${{ runner.temp }}/dart
+        run: |
+          for pkg in emon_core emon_ocr_tesseract emon_ocr_ppocr emon_ocr_vision emon_ocr_winocr emon_ocr_mlkit emon emon_flutter; do
+            (cd "$pkg" && dart pub publish --force)
+          done

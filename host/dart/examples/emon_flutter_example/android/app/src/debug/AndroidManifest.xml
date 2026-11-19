@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- a pack mirror on the development machine (EMON_PACKS_URL set with dart-define, for example http://10.0.2.2:8765) is plain HTTP -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

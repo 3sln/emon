@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 const autorun = String.fromEnvironment('EMON_AUTORUN');
+// A pack mirror of your own (a base URL; the files are `<base>/sha256/<hex>`): for a device that cannot reach the default one.
+const packsUrl = String.fromEnvironment('EMON_PACKS_URL');
 
 void main() {
   runApp(const ExampleApp());
@@ -72,6 +74,7 @@ class _HomeState extends State<Home> {
   Future<void> _open() async {
     try {
       final e = await EmonFlutter.open(
+        packSources: packsUrl.isEmpty ? null : [packsUrl],
         // the app decides about downloads: this one asks nothing and says so in the log; a real app could show a dialog here (the hook may be async)
         onPackNeeded: (r) {
           debugPrint('emon: fetching ${r.pack.id} (${r.pack.bytes} bytes, ${r.pack.licence}) for ${r.requestEngine}');

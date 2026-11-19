@@ -1062,11 +1062,26 @@ impl Router {
                 }
             }
         }
-        if arrived {
+        if arrived || rows.iter().any(|r| r.state == ke::pstate_installed()) {
             // the adapter lists its pack directory for each request, so what it is given must hold what arrived (it was built when the adapter was registered)
             packs.view(&engine_name).map_err(|m| format!("pack-dir-missing: {}", m))?;
         }
         Ok(None)
+    }
+
+    // Does the request want orientation detection that the engine's model for it cannot give (the pack is missing and was declined, or could not be fetched)?
+    fn osd_missing(&self, entry: &Arc<Adapter>, req: &Request) -> bool {
+        if entry.info.needs & 2 == 0 || req.field(crate::emon::plan::oc_flags()) & kr::ocf_osd() == 0 {
+            return false;
+        }
+        let eng = ka::ad_oen_eng(entry.oen());
+        if eng < 0 {
+            return false;
+        }
+        match self.inner.packs.resolve(&[eng], &[], true) {
+            Ok(rows) => rows.iter().any(|r| r.state == ke::pstate_missing() && ke::pk_pack_kind(r.pack) == ke::pkind_osd()),
+            Err(_) => false,
+        }
     }
 
     fn refused(&self, entry: &Adapter, id: i32, status: c_int, reason: &str) -> Answer {
@@ -1128,7 +1143,13 @@ impl Router {
                 Err(why) => return Ok(Begun::Done(self.refused(&entry, id, ADAPTER_UNSUPPORTED, &why))),
             }
         }
-        if let Err((reason, _)) = unsafe { entry.supports(&req.rec) } {
+        // orientation detection without its model degrades to kin's own policy: the engine is not asked for it (a Tesseract asked to load a model that is not there gives up)
+        let mut rec = req.rec.clone();
+        if self.osd_missing(&entry, req) {
+            let at = 3 + crate::emon::plan::oc_flags() as usize;
+            rec[at] &= !kr::ocf_osd();
+        }
+        if let Err((reason, _)) = unsafe { entry.supports(&rec) } {
             return Ok(Begun::Done(self.refused(&entry, id, ADAPTER_UNSUPPORTED, &reason)));
         }
         let mut c = cells_of(&req.rec);
@@ -1140,7 +1161,7 @@ impl Router {
         if entry.is_async() {
             let token = self.inner.next_token.fetch_add(1, Ordering::SeqCst);
             self.inner.pending.lock().unwrap_or_else(|e| e.into_inner()).insert(token, Pending { mailbox: mailbox.clone(), meta });
-            return match unsafe { entry.start(&req.rec, &image, token) } {
+            return match unsafe { entry.start(&rec, &image, token) } {
                 Ok(()) => Ok(Begun::Pending(token)),
                 Err((status, reason)) => {
                     self.inner.pending.lock().unwrap_or_else(|e| e.into_inner()).remove(&token);
@@ -1149,7 +1170,7 @@ impl Router {
             };
         }
         // an adapter that panics is a failed read, not a crashed process
-        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe { entry.read(&req.rec, &image, keep_binary) }));
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe { entry.read(&rec, &image, keep_binary) }));
         let r = r.unwrap_or_else(|_| Err((ADAPTER_FAILED, "panic".to_string())));
         Ok(Begun::Done(self.settle(&meta, r)?))
     }

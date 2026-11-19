@@ -25,7 +25,7 @@
 
 (def root (str (fs/absolutize ".")))
 (def version (:version (edn/read-string (slurp (str root "/version.edn")))))
-(def all-hosts [:rust :go :java :csharp :js :c :pod :ppocr :js-ppocr])
+(def all-hosts [:rust :go :java :csharp :js :c :pod :ppocr :js-ppocr :dart])
 (def sample "align-justify")
 
 (def ^:dynamic *out* nil)
@@ -682,7 +682,35 @@
       (run {:dir dir} "npm" "pack" "--ignore-scripts" "--pack-destination" out)
       [(str out "/3sln-emon-ppocr-" version ".tgz")])))
 
-(def builders {:ppocr build-ppocr! :js-ppocr build-js-ppocr! :rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})
+
+;; THE DART PACKAGES (K7, P13.20; D884, D885, D886). The packages of host/dart, stamped with version.edn, one source archive each (`emon_core-<v>.tar.gz`, ...): what a
+;; consumer unpacks side by side. The libraries are NOT in them: a published package's build hook downloads them from the release (and checks their SHA-256 against a
+;; table generated at release time); here the consumer points the hooks at the C archive `bb package --host c` made (`native_dir`). Needs a Dart 3.10+ SDK and dist/c.
+(def dart-packages ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon" "emon_ocr_mlkit" "emon_flutter"])
+
+(defn- dart-version []
+  (let [r (run {:ok? false} "dart" "--version")]
+    (when-let [[_ a b] (re-find #"(\d+)\.(\d+)\.\d+" (str (:out r) (:err r)))]
+      [(parse-long a) (parse-long b)])))
+
+(defn build-dart! []
+  (when-not (have? "dart") (skip! "no dart on PATH"))
+  (let [[a b] (dart-version)]
+    (when-not (and a (or (> a 3) (>= b 10))) (skip! "the Dart packages need Dart 3.10 or newer (build hooks)")))
+  (let [c-dir (out-dir :c)]
+    (when-not (and (fs/directory? c-dir) (seq (filter #(re-find #"emon-c-.*\.tar\.gz$" (str %)) (fs/list-dir c-dir))))
+      (skip! "no C archive in dist/c: run `bb package --host c` first (the Dart packages' hooks read it)")))
+  (let [stage (str (stage-dir :dart) "/packages") out (out-dir :dart)]
+    (fs/delete-tree (stage-dir :dart))
+    (fs/create-dirs out)
+    (run {} "bb" "tools/dart.clj" "--stamp" stage)
+    (vec (for [pkg dart-packages
+               :let [src (str stage "/" pkg) f (str out "/" pkg "-" version ".tar.gz")]
+               :when (fs/directory? src)]
+           (do (run {} "tar" "--exclude=.dart_tool" "--exclude=build" "--exclude=pubspec.lock" "--exclude=.gradle" "--exclude=Pods" "--exclude=local.properties" "-czf" f "-C" stage pkg)
+               f)))))
+
+(def builders {:dart build-dart! :ppocr build-ppocr! :js-ppocr build-js-ppocr! :rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})
 
 (defn- artifact-line [f] (format "%-62s %10s  sha256 %s" (str (fs/relativize root f)) (human (fs/size f)) (subs (sha256 f) 0 16)))
 
@@ -1036,6 +1064,35 @@
           (say "  NOTE c: the archive was built without pdfium and Tesseract, so the native snippet was not run"))
         a))))
 
+
+(defn- consume-dart [{:keys [files]} tmp]
+  (let [pk (str tmp "/packages") app (str tmp "/app")
+        c-dir (out-dir :c)
+        archive (or (first (filter #(re-find #"emon-c-.*-(aarch64|x86_64)-(apple-darwin|unknown-linux-gnu)\.tar\.gz$" (str %)) (fs/list-dir c-dir))) (skip! "no desktop C archive in dist/c"))
+        unpacked (unpack (str archive) (tmp-dir "dart-c"))
+        pure ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon"]]
+    (fs/create-dirs pk)
+    (doseq [f files :let [n (str/replace (str (fs/file-name f)) (str "-" version ".tar.gz") "")] :when (some #{n} pure)]
+      (run {} "tar" "-xzf" f "-C" pk))
+    (put-sample! app)
+    (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
+    (fs/create-dirs (str app "/bin"))
+    (spit (str app "/pubspec.yaml")
+          (str "name: consumer\nenvironment:\n  sdk: ^3.10.0\ndependencies:\n"
+               "  emon_core:\n    path: " pk "/emon_core\n  emon:\n    path: " pk "/emon\n"
+               (str/join "" (for [n (rest pure) :when (not= n "emon")] (str "  " n ":\n    path: " pk "/" n "\n")))
+               "hooks:\n  user_defines:\n"
+               (str/join "" (for [n (remove #{"emon"} pure)] (str "    " n ":\n      native_dir: " (str c-dir) "\n")))))
+    (spit (str app "/bin/quickstart.dart") (slurp (snippet-file "dart/quickstart.dart")))
+    (spit (str app "/bin/native.dart") (slurp (snippet-file "dart/native.dart")))
+    (run {:dir app} "dart" "pub" "get")
+    (run {:dir app} "dart" "run" "bin/quickstart.dart")
+    (let [html (report-html app)]
+      ;; the turnkey: a scan read by Tesseract through the adapter library, packs from the archive (EMON_MODELS), nothing fetched
+      (run {:dir app :env {"EMON_MODELS" (str unpacked "/share/emon/packs") "EMON_OFFLINE" "1"}} "dart" "run" "bin/native.dart")
+      (scan-html-ok! "dart (emon)" app)
+      html)))
+
 (defn- consume-pod [{:keys [files]} tmp]
   (let [dir (unpack (first files) tmp)
         app (str tmp "/app")
@@ -1082,7 +1139,7 @@
   (run {:dir tmp} "node" "--input-type=module" "-e" "import {ppocrPort, ppocrAdapter, ppocrLexicon, ppocrAssets} from '@3sln/emon-ppocr'; if (![ppocrPort,ppocrAdapter,ppocrLexicon,ppocrAssets].every(x=>typeof x === 'function')) process.exit(1)")
   :checked)
 
-(def consumers {:ppocr consume-ppocr :js-ppocr consume-js-ppocr :rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})
+(def consumers {:dart consume-dart :ppocr consume-ppocr :js-ppocr consume-js-ppocr :rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})
 
 (defn check-hosts!
   "Install each built artifact into a clean consumer and convert the sample. Returns {host html-or-nil}."
@@ -1139,7 +1196,7 @@
                    "--list" (recur (next as) (assoc o :list true))
                    (die 2 "usage: bb package [--host H] [--out DIR] | --check [--host H] [--out DIR] [--no-build] [--keep] | --list"))
                  o))
-        hosts (or (:hosts opts) (remove #{:ppocr :js-ppocr} all-hosts))
+        hosts (or (:hosts opts) (remove #{:ppocr :js-ppocr :dart} all-hosts))
         out (str (fs/absolutize (or (:out opts) "dist")))]
     (when (:list opts)
       (doseq [h all-hosts] (println (name h)))

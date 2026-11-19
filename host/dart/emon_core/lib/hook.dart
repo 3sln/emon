@@ -136,6 +136,7 @@ Future<String> resolveNativeSource(BuildInput input, BuildOutputBuilder output, 
       output.dependencies.add(Directory(source.path).uri);
       return source.path;
     }
+    output.dependencies.add(File(source.path).uri); // a rebuilt archive runs the hook again
     return _unpack(File(source.path), shared, 'local-$triple');
   }
   final entry = kNativeAssets.archives[triple];

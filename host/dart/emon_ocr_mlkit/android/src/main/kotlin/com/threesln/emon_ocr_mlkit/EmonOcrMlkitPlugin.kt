@@ -23,7 +23,7 @@ class EmonOcrMlkitPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Event
     private val worker = Executors.newSingleThreadExecutor()
     private var sink: EventChannel.EventSink? = null
     private val recognizers = Recognizers()
-    private lateinit var installer: ModelInstaller
+    private lateinit var installer: ModelInstallerApi
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext

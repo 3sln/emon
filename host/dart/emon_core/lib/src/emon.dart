@@ -228,12 +228,16 @@ class Emon {
         early.add('${n.name}: adapter-runtime-missing: the library was not found');
         continue;
       }
-      native.add((n.name, path, n.config));
+      native.add((n.name, loaderName(path), n.config));
     }
     String? pdfiumLib = pdfiumPath;
     if (pdfium && pdfiumLib == null) {
       final addr = pdfiumSymbolAddress();
-      if (addr != 0) pdfiumLib = libraryPathOf(addr);
+      if (addr != 0) {
+        final path = libraryPathOf(addr);
+        // inside an APK: no file to name, the library is found by name (where emon looks for it last)
+        pdfiumLib = path == null || path.contains('!/') ? null : path;
+      }
     }
     final init = WorkerInit(
       native: native,
