@@ -14687,7 +14687,7 @@ Maintainer, 2026-11-18: "We can do the full matrix on release only. For PRs, we 
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — K7: the Dart packages (`emon_core`, adapters, `emon`, `emon_flutter`, ML Kit) and the C ABI changes they needed (P13.20, P13.20b)
+### D904 — K7: the Dart packages (`emon_core`, adapters, `emon`, `emon_flutter`, ML Kit) and the C ABI changes they needed (P13.20, P13.20b)
 
 The coordinator renumbers this entry. The Dart/Flutter evaluation release (D895): packages in `host/dart/`, each analysed clean, tested on macOS and run on the iOS simulator and an arm64 Android emulator.
 
