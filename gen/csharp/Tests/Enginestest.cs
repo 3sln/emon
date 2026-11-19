@@ -165,17 +165,26 @@ public static class Enginestest {
         emon.Testport.AssertEq(Engines.PkRoleMask(Engines.EngAppleVision(), Engines.PclsIos()) & Engines.EroleIncumbent(), 0, "never the incumbent");
         emon.Testport.AssertEq(Engines.PkRoleDefault(Engines.EngAppleVision(), Engines.PclsWindows()), 0, "no role on the wrong class");
     }
-    internal static int EnTurnkeyClass(int emonT, int pclass, int platform, int platformCalibrated, int pp) {
+    internal static int EnTurnkeyClass(int emonT, int pclass, int dflt, int platform, int platformCalibrated, int pp) {
         int eng = Engines.PkDefaultEngine(pclass);
-        emon.Testport.AssertEq(eng, Engines.EngTesseract(), "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)");
+        emon.Testport.AssertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)");
         emon.Testport.AssertEq(Engines.PkEngineOn(eng, pclass), 1, "the default runs on the class");
-        emon.Testport.AssertEq(Engines.PkEngineCalibrated(eng), 1, "the default is calibrated");
-        emon.Testport.AssertEq(Engines.PkRoleDefault(eng, pclass), Engines.EroleIncumbent(), "and the incumbent");
+        if (eng == Engines.EngTesseract()) {
+            emon.Testport.AssertEq(Engines.PkEngineCalibrated(eng), 1, "Tesseract is calibrated");
+            emon.Testport.AssertEq(Engines.PkRoleDefault(eng, pclass), Engines.EroleIncumbent(), "and the incumbent");
+        } else {
+            emon.Testport.AssertEq(Engines.PkEngineCalibrated(eng), 0, "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)");
+            emon.Testport.AssertEq(Engines.PkRoleDefault(eng, pclass), Engines.EroleReader(), "and reads alone: a reader, never an incumbent or a challenger");
+        }
         emon.Testport.AssertEq(Engines.PkPlatformEngine(pclass), platform, "the class's own engine");
         if (platform != 0) {
             emon.Testport.AssertEq(Engines.PkEngineOn(platform, pclass), 1, "the platform engine runs on the class");
             emon.Testport.AssertEq(Engines.PkEngineCalibrated(platform), platformCalibrated, "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map");
-            emon.Testport.AssertThat(platform != eng, "and never the automatic choice");
+            if (eng != Engines.EngTesseract()) {
+                emon.Testport.AssertEq(platform, eng, "where the default is not Tesseract it is the class's own engine");
+            } else {
+                emon.Testport.AssertThat(platform != eng, "and elsewhere never the automatic choice");
+            }
         }
         emon.Testport.AssertEq(Engines.PkPpEngine(pclass), pp, "the PP-OCR runtime of the class");
         emon.Testport.AssertEq(Engines.PkEngineOn(pp, pclass), 1, "runs on it");
@@ -185,12 +194,12 @@ public static class Enginestest {
     }
     [Xunit.Fact]
     public static void TestTheTurnkeyDefaultOfEveryPlatformClass() {
-        EnTurnkeyClass(0, Engines.PclsMacos(), Engines.EngAppleVision(), 1, Engines.EngPpocr());
-        EnTurnkeyClass(0, Engines.PclsIos(), Engines.EngAppleVision(), 1, Engines.EngPpocr());
-        EnTurnkeyClass(0, Engines.PclsLinux(), 0, 0, Engines.EngPpocr());
-        EnTurnkeyClass(0, Engines.PclsWindows(), Engines.EngWindowsMediaOcr(), 0, Engines.EngPpocr());
-        EnTurnkeyClass(0, Engines.PclsAndroid(), Engines.EngMlkitText(), 0, Engines.EngPpocr());
-        EnTurnkeyClass(0, Engines.PclsWeb(), 0, 0, Engines.EngPpocrWeb());
+        EnTurnkeyClass(0, Engines.PclsMacos(), Engines.EngTesseract(), Engines.EngAppleVision(), 1, Engines.EngPpocr());
+        EnTurnkeyClass(0, Engines.PclsIos(), Engines.EngTesseract(), Engines.EngAppleVision(), 1, Engines.EngPpocr());
+        EnTurnkeyClass(0, Engines.PclsLinux(), Engines.EngTesseract(), 0, 0, Engines.EngPpocr());
+        EnTurnkeyClass(0, Engines.PclsWindows(), Engines.EngWindowsMediaOcr(), Engines.EngWindowsMediaOcr(), 0, Engines.EngPpocr());
+        EnTurnkeyClass(0, Engines.PclsAndroid(), Engines.EngMlkitText(), Engines.EngMlkitText(), 0, Engines.EngPpocr());
+        EnTurnkeyClass(0, Engines.PclsWeb(), Engines.EngTesseract(), 0, 0, Engines.EngPpocrWeb());
         emon.Testport.AssertEq(Engines.PkDefaultEngine(0), 0, "an unknown class has no default");
         emon.Testport.AssertEq(Engines.PkDefaultEngine(7), 0, "nor class 7");
         emon.Testport.AssertEq(Engines.PkDefaultFetch(7), 0, "and no fetch policy");
@@ -300,6 +309,20 @@ public static class Enginestest {
         emon.Port.CellsPush(installed, Packdata.PkidTessOsd());
         emon.Testport.AssertEq(EnResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "an installed pack nobody needs is not a row");
         emon.Testport.AssertEq(Engines.PkRows(@out), 1, "still one row");
+    }
+    [Xunit.Fact]
+    public static void TestAnOsReaderAsTheTurnkeyDefaultNeedsNoPack() {
+        emon.Port.Cells langs = emon.Port.NewCells();
+        emon.Port.Cells engs = emon.Port.NewCells();
+        emon.Port.Cells installed = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Testport.AssertEq(EnResolve(Engines.PclsWindows(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "Windows resolves with Windows.Media.Ocr as the default");
+        emon.Testport.AssertEq(Engines.PkRows(@out), 0, "the OS reads: nothing to fetch (K5, D900)");
+        emon.Testport.AssertEq(EnResolve(Engines.PclsAndroid(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "Android resolves with ML Kit as the default");
+        emon.Testport.AssertEq(Engines.PkRows(@out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch");
+        EnCells1(engs, Engines.EngTesseract());
+        emon.Testport.AssertEq(EnResolve(Engines.PclsAndroid(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "asking for Tesseract on Android still resolves its packs");
+        emon.Testport.AssertEq(Engines.PkRows(@out), 2, "English and OSD");
     }
     [Xunit.Fact]
     public static void TestOrientationDetectionAddsTheOsdPackForTesseractOnly() {

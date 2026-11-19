@@ -48,8 +48,8 @@ Future<void> main() async {
 }
 ```
 
-`openEmon` (package `emon`) and `EmonFlutter.open` (package `emon_flutter`) register the adapters of the platform and fetch packs on demand. The default engine is Tesseract everywhere (kin's turnkey table);
-Apple Vision, Windows.Media.Ocr and PP-OCR are chosen with `ConvertOptions(ocrEngine: ...)`. `emon_flutter` makes ML Kit the Android default (`emon_ocr_mlkit`: Latin bundled; Chinese, Japanese, Korean and Devanagari
+`openEmon` (package `emon`) and `EmonFlutter.open` (package `emon_flutter`) register the adapters of the platform and fetch packs on demand. The default engine is Windows.Media.Ocr on Windows and Tesseract elsewhere (kin's turnkey table; Apple Vision becomes Apple's default with P13.21b);
+Apple Vision, Tesseract on Windows and PP-OCR are chosen with `ConvertOptions(ocrEngine: ...)`. `emon_flutter` makes ML Kit the Android default (kin's table says the same for Android) (`emon_ocr_mlkit`: Latin bundled; Chinese, Japanese, Korean and Devanagari
 by `emonMlkitScripts` in `gradle.properties`) and falls back to Tesseract when it cannot run.
 
 ## Engines and packs are the app's to steer (DEVLOG D896)

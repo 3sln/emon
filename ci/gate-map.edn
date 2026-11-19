@@ -232,7 +232,7 @@
   {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
   {:glob "host/dart/**" :gates [] :why "the Dart and Flutter packages (K7, D884, D885, D895): `bb dart --check` (bindings and pack catalogue drift, analyze), `bb dart --test` and `bb package --host dart --check` need a Dart 3.10+ SDK, a C archive and (the plugin) a Flutter SDK: not a hosted gate yet (K5 owns the release pipeline)"}
   {:glob "tools/dart.clj" :gates [] :why "`bb dart` (K7): the Dart packages' generator, stamp and test driver; not a gate"}
-  {:glob ".github/workflows/pub.yml" :gates [] :why "the disabled pub.dev publish workflow (K7, D885): runs on a tag pushed by the release, only when PUB_PUBLISH_ENABLED is true"}
+  {:glob ".github/workflows/pub.yml" :gates [] :why "the disabled pub.dev publish workflow (K7, D885): runs on a tag pushed by the release (K5, D900), only when EMON_PUB_ENABLED is true"}
   {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
   {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
   {:glob "host/js/src/{pdfium,render}.js" :gates ["pdfium-wasm"] :hosts ["wasm"] :why "the browser's pdfium adapter and the render port's form: the pdfium-wasm gate drives them live in Node"}

@@ -1,8 +1,9 @@
 # The platform's own OCR: Apple Vision and Windows.Media.Ocr
 
 An app can read scans with the recogniser the operating system already has, so there is no model to download and nothing to add to the
-app's size. Both are **explicit engines**: Tesseract stays the default everywhere, and `ocr-engine=` is how an app, or you on the command
-line, asks for the other (DEVLOG D895, D901).
+app's size. Both are **explicit engines** in every SDK and the CLI: `ocr-engine=` is how an app, or you on the command line, asks for one (DEVLOG D895, D901). Only a turnkey package chooses for an app that
+chooses nothing, by kin's turnkey table: Windows.Media.Ocr on Windows and ML Kit on Android (`emon_flutter`; the pure-Dart `emon` keeps Tesseract on Android), Tesseract on Apple platforms and Linux until
+P13.21b makes Apple Vision the default there (K5, DEVLOG D900).
 
 | `ocr-engine` | Runs on | What reads | Adapter library |
 |---|---|---|---|

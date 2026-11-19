@@ -180,17 +180,22 @@
 
 ;; ------------------------------------------------------------------ the turnkey defaults
 
-(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 platform ^I32 platform-calibrated ^I32 pp]
+(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp]
   (let [^I32 eng (pk-default-engine pclass)]
-    (assert-eq eng (eng-tesseract) "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)")
+    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
-    (assert-eq (pk-engine-calibrated eng) 1 "the default is calibrated")
-    (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent")
+    (if (== eng (eng-tesseract))
+      (do (assert-eq (pk-engine-calibrated eng) 1 "Tesseract is calibrated")
+          (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent"))
+      (do (assert-eq (pk-engine-calibrated eng) 0 "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)")
+          (assert-eq (pk-role-default eng pclass) (erole-reader) "and reads alone: a reader, never an incumbent or a challenger")))
     (assert-eq (pk-platform-engine pclass) platform "the class's own engine")
     (if (!= platform 0)
       (do (assert-eq (pk-engine-on platform pclass) 1 "the platform engine runs on the class")
           (assert-eq (pk-engine-calibrated platform) platform-calibrated "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map")
-          (assert-that (!= platform eng) "and never the automatic choice")))
+          (if (!= eng (eng-tesseract))
+            (assert-eq platform eng "where the default is not Tesseract it is the class's own engine")
+            (assert-that (!= platform eng) "and elsewhere never the automatic choice"))))
     (assert-eq (pk-pp-engine pclass) pp "the PP-OCR runtime of the class")
     (assert-eq (pk-engine-on pp pclass) 1 "runs on it")
     (assert-eq (pk-default-fetch pclass) (pfetch-auto) "a turnkey fetches on demand (D885, D896)")
@@ -198,12 +203,12 @@
     (return 0)))
 
 (deftest test-the-turnkey-default-of-every-platform-class
-  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) 1 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) 1 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-linux) 0 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-web) 0 0 (eng-ppocr-web))
+  (en-turnkey-class (test-t) (pcls-macos) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-linux) (eng-tesseract) 0 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-windows-media-ocr) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-mlkit-text) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-web) (eng-tesseract) 0 0 (eng-ppocr-web))
   (assert-eq (pk-default-engine 0) 0 "an unknown class has no default")
   (assert-eq (pk-default-engine 7) 0 "nor class 7")
   (assert-eq (pk-default-fetch 7) 0 "and no fetch policy")
@@ -296,6 +301,16 @@
     (cells-push installed (pkid-tess-osd))
     (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
     (assert-eq (pk-rows out) 1 "still one row")))
+
+(deftest test-an-os-reader-as-the-turnkey-default-needs-no-pack
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (en-resolve (pcls-windows) (pkf-osd) langs engs installed out) (pkerr-ok) "Windows resolves with Windows.Media.Ocr as the default")
+    (assert-eq (pk-rows out) 0 "the OS reads: nothing to fetch (K5, D900)")
+    (assert-eq (en-resolve (pcls-android) (pkf-osd) langs engs installed out) (pkerr-ok) "Android resolves with ML Kit as the default")
+    (assert-eq (pk-rows out) 0 "ML Kit's Latin model ships in the plugin: nothing to fetch")
+    (en-cells1 engs (eng-tesseract))
+    (assert-eq (en-resolve (pcls-android) (pkf-osd) langs engs installed out) (pkerr-ok) "asking for Tesseract on Android still resolves its packs")
+    (assert-eq (pk-rows out) 2 "English and OSD")))
 
 (deftest test-orientation-detection-adds-the-osd-pack-for-tesseract-only
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
