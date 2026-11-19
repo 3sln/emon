@@ -18,7 +18,7 @@
                  (.digest (MessageDigest/getInstance "SHA-256") bytes))))
 (defn space! []
  (doseq [p ["."]]
-  (assert (> (.getUsableSpace (java.io.File. p)) (* 10 1024 1024 1024)) (str "less than 10 GiB free: " p))))
+  (let [gib (parse-long (or (System/getenv "EMON_MIN_FREE_GIB") "10"))] (assert (> (.getUsableSpace (java.io.File. p)) (* gib 1024 1024 1024)) (str "less than " gib " GiB free: " p)))))
 (space!)
 (fs/create-dirs out)
 (defn run! [label argv & [opts]]

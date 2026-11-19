@@ -160,3 +160,7 @@ European decimal comma/minus, and a two-column restaurant bill. Generate via
 `bb -cp tools:tools/lib tools/synth/receipts.clj`. The receipt cohort joins the
 accuracy scoreboard as `pdf/receipts`, separately from the fixed historical
 `all` populations, without lowering any historical ratchet.
+
+## 4. Derived artifacts (not public datasets)
+
+**`ppocr-qualification`** (`corpus/_qual/ppocr-qual/`, shard kept, not regeneratable by fetch; ORTPIN D901). The PP-OCR native qualification artifact: the 225 qualification bitmaps (`inputs/`, receipt crops drawn from SROIE and CORD, so the same personal-data care applies), `bitmaps.json`, `fresh-bitmaps.json`, the six-transport `reference.answers` (SHA-256 `2a5fcc5b...`, byte-identical to the frozen OIL phase-1 reference), `PROVENANCE.edn`, the D864 `accuracy.json` and the frozen web inputs. It is what `bb ppocr-hosts` compares every host against by default. Regenerate with `bb ppocr-hosts --qualification <inputs> --record-qualification <new dir>`; it is derived data, so it is never pruned and its bytes are not fetchable from an upstream. The 198 document replay recordings of the old artifact were lost and are not part of it.
