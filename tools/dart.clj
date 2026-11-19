@@ -86,7 +86,7 @@
 
 (defn bindings! [check?]
   (let [pkg (str dart-root "/emon_core")
-        out (if check? (str (fs/create-temp-dir {:prefix "emon-bindings-"}) "/bindings.g.dart") (str pkg "/lib/src/bindings.g.dart"))]
+        out (if check? (str pkg "/.dart_tool/bindings.check.dart") (str pkg "/lib/src/bindings.g.dart"))]
     (sh! {:dir pkg} "dart" "pub" "get")
     (sh! {:dir pkg} "dart" "run" "tool/ffigen.dart" out)
     (when check?
