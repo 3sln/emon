@@ -450,13 +450,16 @@
   (let [os (str/lower-case (System/getProperty "os.name"))]
     (cond (str/includes? os "mac") {:dyn "libemon.dylib" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.dylib"}
           (str/includes? os "linux") {:dyn "libemon.so" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.so"}
-          :else (skip! (str "the C library and the pod are packaged on macOS and Linux (this is " os ")")))))
+          ;; Windows (K5, D900): the C bundle only (emon.dll, the Tesseract adapter, winocr, pdfium); no static library and no pod ship for it
+          (str/includes? os "windows") {:dyn "emon.dll" :static nil :pod nil :adapter "emon_ocr_tesseract.dll" :windows? true}
+          :else (skip! (str "the C library and the pod are packaged on macOS, Linux and Windows (this is " os ")")))))
 
 (defonce native-built (atom nil))
 (defonce native-pod-dir (atom nil)) ; the release directory holding emon-pod
 (defonce native-full (atom nil)) ; native-inputs' map when the build in native-built has the full pipeline
 (defonce native-adapter-dir (atom nil)) ; the release directory holding libemon_ocr_tesseract (K2, D899), when the full pipeline built it
 (defonce native-vision-lib (atom nil)) ; the path of libemon_ocr_vision.dylib (K8, D901), built on a macOS host: tools/native/vision_adapter.clj builds and audits it
+(defonce native-winocr-lib (atom nil)) ; the path of emon_ocr_winocr.dll (K8, D901; K5), built on a Windows host: tools/native/winocr.clj builds and audits it
 
 ;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
 ;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
@@ -530,13 +533,14 @@
                             (if (zero? (:exit r)) r (go []))))
                 ;; a shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
                 ;; works where it was built and nowhere else; @rpath/ (macOS) and a soname (Linux) make `-Wl,-rpath,DIR` the way it is found
-                ident (fn [n] (if mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/lib" n ".dylib")] ["-C" (str "link-arg=-Wl,-soname,lib" n ".so")]))
+                win? (str/includes? (host-triple) "windows-msvc")
+                ident (fn [n] (cond win? [] mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/lib" n ".dylib")] :else ["-C" (str "link-arg=-Wl,-soname,lib" n ".so")]))
                 ;; the core library: pdfium at run time, the pack fetch, no Tesseract
                 lib (attempt dir env ["rustc" "--release" "--lib" "--features" "packs-fetch"] (concat (ident "emon") cfgs crt))
-                pod (when (zero? (:exit lib))
+                pod (when (and (zero? (:exit lib)) (not win?)) ; no pod ships for Windows (K5)
                       (attempt dir (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
                                (concat ["build" "--release" "--bin" "emon-pod"] (when full? ["--features" "tesseract"])) []))
-                r (if (zero? (:exit lib)) pod lib)
+                r (if (and (zero? (:exit lib)) pod) pod lib)
                 ;; the Tesseract adapter library, from the same sources and its own manifest
                 adir (stage-dir :native-adapter)
                 adapter (when (and full? (zero? (:exit r)))
@@ -555,6 +559,12 @@
                       (let [v (run {:ok? false} "bb" "tools/native/vision_adapter.clj" "--triple" (host-triple) "--out" (str (stage-dir :native-vision)))]
                         (when-not (zero? (:exit v)) (bad! "the Apple Vision adapter library failed to build\n" (tail (str (:out v) "\n" (:err v)) 40)))
                         (str/trim (:out v)))))
+            ;; Windows.Media.Ocr (K8, D901; K5): the Windows bundle's platform adapter, built and audited by `bb winocr` (the MSVC environment and dumpbin are the runner's)
+            (reset! native-winocr-lib
+                    (when (and win? (zero? (:exit r)))
+                      (let [w (run {:ok? false} "bb" "tools/native/winocr.clj" "--out" (str (stage-dir :native-winocr)))]
+                        (when-not (zero? (:exit w)) (bad! "the Windows.Media.Ocr adapter library failed to build\n" (tail (str (:out w) "\n" (:err w)) 40)))
+                        (last (str/split-lines (str/trim (:out w)))))))
             (reset! native-pod-dir (str dir "/target-pod/release"))
             (reset! native-full (when full? inputs)))
           (reset! native-built (str dir "/target/release"))))))
@@ -578,7 +588,8 @@
       (fs/create-dirs (fs/parent (str d "/" rel)))
       (fs/copy src (str d "/" rel) {:replace-existing true :copy-attributes true}))
     (fs/create-dirs (out-dir host))
-    (run {:dir tmp} "tar" "-czf" tgz name)
+    ;; GNU tar (Git's, first on a Windows runner's bash PATH) reads `C:\...` as host:path; --force-local says it is a file
+    (apply run {:dir tmp} (concat ["tar"] (when (and (str/includes? (str/lower-case (System/getProperty "os.name")) "windows") (str/includes? (:out (run {:ok? false} "tar" "--version")) "GNU")) ["--force-local"]) ["-czf" tgz name]))
     tgz))
 
 (def packs-catalogue (delay (edn/read-string (slurp (str root "/release/packs/packs.edn")))))
@@ -598,6 +609,7 @@
       (merge {(str "lib/" (fs/file-name pdfium)) pdfium}
              (when @native-adapter-dir {(str "lib/emon/adapters/" adapter) (str @native-adapter-dir "/" adapter)})
              (when @native-vision-lib {"lib/emon/adapters/libemon_ocr_vision.dylib" @native-vision-lib})
+             (when @native-winocr-lib {"lib/emon/adapters/emon_ocr_winocr.dll" @native-winocr-lib})
              (into {} (for [{:keys [file src]} data] [(str "share/emon/packs/" (pack-dir-of file) "/" file) src]))))))
 
 (defn- exported-symbols
@@ -607,48 +619,54 @@
     (->> (str/split-lines (:out r)) (keep #(second (re-find #"\s[TtDdBbRrSs]\s+_?(\S+)$" %))) set)))
 
 (defn build-c! []
-  (let [{:keys [dyn static adapter]} (native-lib-names)
+  (let [{:keys [dyn static adapter windows?]} (native-lib-names)
         rel (build-native!)
         triple (host-triple)
         name (str "emon-c-" version "-" triple)
         tgz (archive! :c name (merge {"include/emon.h" (str root "/host/c/include/emon.h")
                                       "include/emon_adapter.h" (str root "/host/c/include/emon_adapter.h")
                                       (str "lib/" dyn) (str rel "/" dyn)
-                                      (str "lib/" static) (str rel "/" static)
                                       "LICENSE" (str root "/LICENSE")
                                       "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
                                       "README.md" (str root "/release/pkg/README.md")}
+                                     (when static {(str "lib/" static) (str rel "/" static)})
+                                     ;; Windows (K5): the import library of emon.dll and its static library, for a C program that links it
+                                     (when windows? (into {} (for [f ["emon.dll.lib" "emon.lib"] :when (fs/exists? (str rel "/" f))] [(str "lib/" f) (str rel "/" f)])))
                                      (native-extras-c)))
         names (tar-list tgz)]
     (when (some #(re-find #"test_hooks|emon_test" %) names) (bad! "the C archive carries a test header"))
     (when (str/includes? (slurp (str root "/host/c/include/emon.h")) "emon_test_panic") (bad! "emon.h declares emon_test_panic"))
-    (let [nm (run {:ok? false} "nm" "-g" (str rel "/" dyn))]
-      (when (str/includes? (:out nm) "emon_test_panic") (bad! "libemon exports emon_test_panic")))
-    ;; the library is found by @rpath/ (macOS) or its soname (Linux), never by the absolute path it was linked at (this was the case before D552)
-    (let [mac? (= "libemon.dylib" dyn)
-          r (if mac? (run {:ok? false} "otool" "-D" (str rel "/" dyn)) (run {:ok? false} "sh" "-c" (str "objdump -p " rel "/" dyn " | grep SONAME")))]
-      (when (and (zero? (:exit r)) (not (str/includes? (:out r) (if mac? "@rpath/libemon.dylib" "libemon.so"))))
-        (bad! dyn " is named by an absolute path, not @rpath/ or its soname:\n" (:out r)))
-      (when (and (zero? (:exit r)) (re-find #"/deps/" (:out r))) (bad! dyn " carries its build path in its name")))
-    ;; K2 (D899): THE CORE LIBRARY HAS NO TESSERACT, no Leptonica and no codec of theirs (the adapter library has all of them), and the adapter exports one function
-    (doseq [f [dyn static]]
-      (let [nm (run {:ok? false} "nm" (str rel "/" f))]
-        (when (re-find #"(?m)\b_?(TessBaseAPI[A-Za-z0-9_]*|pixRead[A-Za-z0-9_]*|pixCreate[A-Za-z0-9_]*)\b" (:out nm)) (bad! f " carries Tesseract or Leptonica: the core library has none (K2)"))))
-    (when @native-adapter-dir
-      (let [exports (exported-symbols (str @native-adapter-dir "/" adapter))]
-        (when-not (= #{"emon_ocr_adapter_v1"} exports) (bad! adapter " exports " (pr-str (sort exports)) ", not exactly emon_ocr_adapter_v1")))
-      (let [nm (run {:ok? false} "nm" (str @native-adapter-dir "/" adapter))]
-        (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! adapter " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))))
-    ;; bb native --audit's rule, held to the product (D540): no jbig2dec, JBIG-KIT or OpenJPEG symbol in either library, and no pdfium linked
-    (when @native-full
+    ;; The symbol audits below use nm, otool and objdump, which a Windows runner does not have: its library is audited by `bb native --audit` (the static libraries) and the
+    ;; winocr audit (dumpbin); what the bundle holds is checked by `bb release-ops archive` (tools/release/ops.clj, `bundle-problems`) when the archives are collected.
+    (when-not windows?
+      (let [nm (run {:ok? false} "nm" "-g" (str rel "/" dyn))]
+        (when (str/includes? (:out nm) "emon_test_panic") (bad! "libemon exports emon_test_panic")))
+      ;; the library is found by @rpath/ (macOS) or its soname (Linux), never by the absolute path it was linked at (this was the case before D552)
+      (let [mac? (= "libemon.dylib" dyn)
+            r (if mac? (run {:ok? false} "otool" "-D" (str rel "/" dyn)) (run {:ok? false} "sh" "-c" (str "objdump -p " rel "/" dyn " | grep SONAME")))]
+        (when (and (zero? (:exit r)) (not (str/includes? (:out r) (if mac? "@rpath/libemon.dylib" "libemon.so"))))
+          (bad! dyn " is named by an absolute path, not @rpath/ or its soname:\n" (:out r)))
+        (when (and (zero? (:exit r)) (re-find #"/deps/" (:out r))) (bad! dyn " carries its build path in its name")))
+      ;; K2 (D899): THE CORE LIBRARY HAS NO TESSERACT, no Leptonica and no codec of theirs (the adapter library has all of them), and the adapter exports one function
       (doseq [f [dyn static]]
         (let [nm (run {:ok? false} "nm" (str rel "/" f))]
-          (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! f " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))
-          (when (re-find #"(?m)^\S*\s+[Uu]\s+_?FPDF_InitLibrary" (:out nm)) (bad! f " links pdfium (it must be loaded at run time)")))))
+          (when (re-find #"(?m)\b_?(TessBaseAPI[A-Za-z0-9_]*|pixRead[A-Za-z0-9_]*|pixCreate[A-Za-z0-9_]*)\b" (:out nm)) (bad! f " carries Tesseract or Leptonica: the core library has none (K2)"))))
+      (when @native-adapter-dir
+        (let [exports (exported-symbols (str @native-adapter-dir "/" adapter))]
+          (when-not (= #{"emon_ocr_adapter_v1"} exports) (bad! adapter " exports " (pr-str (sort exports)) ", not exactly emon_ocr_adapter_v1")))
+        (let [nm (run {:ok? false} "nm" (str @native-adapter-dir "/" adapter))]
+          (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! adapter " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))))
+      ;; bb native --audit's rule, held to the product (D540): no jbig2dec, JBIG-KIT or OpenJPEG symbol in either library, and no pdfium linked
+      (when @native-full
+        (doseq [f [dyn static]]
+          (let [nm (run {:ok? false} "nm" (str rel "/" f))]
+            (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! f " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))
+            (when (re-find #"(?m)^\S*\s+[Uu]\s+_?FPDF_InitLibrary" (:out nm)) (bad! f " links pdfium (it must be loaded at run time)"))))))
     [tgz]))
 
 (defn build-pod! []
-  (let [{:keys [pod]} (native-lib-names)
+  (let [{:keys [pod windows?]} (native-lib-names)
+        _ (when windows? (skip! "no pod ships for Windows"))
         _ (build-native!)
         rel @native-pod-dir
         triple (host-triple)

@@ -10,7 +10,8 @@
 ;;   bb dart --bindings [--check]     regenerate lib/src/bindings.g.dart from host/c/include/{emon,emon_adapter}.h with ffigen (--check: fail when it differs)
 ;;   bb dart --packs [--check]        regenerate lib/src/packs.g.dart from release/packs/packs.json (--check: fail when it differs)
 ;;   bb dart --sha-table FILE         write lib/src/native_assets.g.dart from the SHA256SUMS of a release (the archives `emon-c-<version>-<triple>.tar.gz`), at release time (D886)
-;;   bb dart --stamp DIR [--publishable]  copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (--publishable: hosted dependencies, no publish_to: none: what pub.dev gets)
+;;   bb dart --stamp DIR [--publishable] [--sums SHA256SUMS]  copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (--publishable: hosted dependencies, no publish_to: none: what pub.dev gets;
+;;                                    --sums: also write the SHA-256 table of that release's SHA256SUMS into the COPY, as --sha-table does into the checkout: what `release-ops dart` attaches, D900)
 ;;   bb dart --analyze                `dart analyze` for every package
 ;;   bb dart --test                   `dart test` for every pure-Dart package (needs `EMON_NATIVE_DIR`: a directory with the C archive(s) of `bb package --host c`)
 ;;   bb dart --check                  the drift checks and --analyze
@@ -135,7 +136,7 @@
                        (concat (pub-tool p) ["test"]))]
           (if (zero? (:exit r)) (say "ok   dart test " (:dir p)) (die "dart test " (:dir p) "\n" (:out r) (:err r))))))))
 
-(defn stamp! [dir publishable?]
+(defn stamp! [dir publishable? sums]
   (fs/delete-tree dir)
   (let [skip? (fn [f] (some #{".dart_tool" "build" "Pods" ".gradle" ".idea"} (map str (fs/components (fs/relativize dart-root f)))))]
     (doseq [f (file-seq (java.io.File. dart-root))
@@ -159,6 +160,10 @@
                   (str/replace #"publish_to: none\n" ""))
               s)]
       (spit f s)))
+  ;; K5 (D886, D900): the release's SHA-256 table goes into the STAMPED COPY, never the checkout, so a release run leaves nothing to clean up
+  (when sums
+    (spit (str dir "/emon_core/lib/src/native_assets.g.dart") (native-table-dart sums))
+    (say "wrote the SHA-256 table of " sums " into " dir "/emon_core/lib/src/native_assets.g.dart"))
   (say "stamped " version " into " dir (when publishable? " (publishable)")))
 
 ;; ------------------------------------------------------------------------------------------------ main
@@ -169,10 +174,10 @@
   (flag? "--sha-table") (let [f (opt "--sha-table")]
                           (spit (str dart-root "/emon_core/lib/src/native_assets.g.dart") (native-table-dart f))
                           (say "wrote host/dart/emon_core/lib/src/native_assets.g.dart"))
-  (flag? "--stamp") (stamp! (or (opt "--stamp") (die "usage: bb dart --stamp DIR [--publishable]")) (flag? "--publishable"))
+  (flag? "--stamp") (stamp! (or (opt "--stamp") (die "usage: bb dart --stamp DIR [--publishable] [--sums SHA256SUMS]")) (flag? "--publishable") (opt "--sums"))
   (flag? "--analyze") (analyze!)
   (flag? "--test") (test!)
   (flag? "--check") (do (bindings! true)
                         (write-or-check! (str dart-root "/emon_core/lib/src/packs.g.dart") (packs-dart) true)
                         (analyze!))
-  :else (die "usage: bb dart --bindings | --packs | --sha-table FILE | --stamp DIR | --analyze | --test | --check   (see the header of tools/dart.clj)"))
+  :else (die "usage: bb dart --bindings | --packs | --sha-table FILE | --stamp DIR [--publishable] [--sums FILE] | --analyze | --test | --check   (see the header of tools/dart.clj)"))

@@ -8,7 +8,10 @@
 
 (def triples-cli ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu" "x86_64-pc-windows-msvc"])
 (def triples-lib ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"])
-(def registries ["crates" "npm" "nuget" "maven" "go"])
+;; K5 (D900): the C bundle (core libemon, pdfium, the adapters, the packs it carries) is built for the five desktop triples (Windows too: the Dart hook fetches it) and the five mobile ones
+(def triples-mobile ["aarch64-linux-android" "armv7-linux-androideabi" "x86_64-linux-android" "aarch64-apple-ios" "aarch64-apple-ios-sim"])
+(def triples-c (vec (concat triples-cli triples-mobile)))
+(def registries ["crates" "npm" "nuget" "maven" "go" "pub"])
 (def sums-file "SHA256SUMS")
 (def artifact-name "release-archives")
 
@@ -42,18 +45,56 @@
     (cond
       (and (not (str/blank? version)) (not= version current)) {:error "input version must equal version.edn at the selected ref"}
       (and (not (empty? (str only))) (str/blank? only)) {:error "only must not contain whitespace"}
-      (not-every? known selected) {:error "only must be a comma list of assets,crates,npm,nuget,maven,go"}
+      (not-every? known selected) {:error "only must be a comma list of assets,crates,npm,nuget,maven,go,pub"}
       (and tag-sha (not= tag-sha sha)) {:error (str "tag v" current " exists at another commit; never retarget it")}
       :else {:run (not (and (= event "push") tag-sha)) :version current})))
 
-(defn expected-assets
-  "Every file the release must carry besides SHA256SUMS, by name."
+(defn dart-asset "The stamped, publishable Dart package tree of a release (K5): made at release time from SHA256SUMS, not by verify.yml." [v] (str "emon-dart-" v ".tar.gz"))
+
+(defn built-assets
+  "Every file verify.yml builds and collects into `release-archives`, besides SHA256SUMS, by name: the CLI and the PP-OCR add-on (5 desktop triples), the C bundle (5 desktop and 5 mobile
+   triples; .tar.gz everywhere, Windows included: the Dart hook reads only that) and the pod (4)."
   [v]
   (vec (concat (for [t triples-cli] (str "emon-ppocr-" v "-" t (if (str/includes? t "windows") ".zip" ".tar.gz")))
                (for [t triples-cli ext (if (str/includes? t "windows") ["zip"] ["tar.gz"])] (str "emon-" v "-" t "." ext))
                (for [t triples-cli ext (if (str/includes? t "windows") ["zip"] ["tar.gz"])] (str "emon-" v "-" t "." ext ".sha256"))
-               (for [t triples-lib] (str "emon-c-" v "-" t ".tar.gz"))
+               (for [t triples-c] (str "emon-c-" v "-" t ".tar.gz"))
                (for [t triples-lib] (str "emon-pod-" v "-" t ".tar.gz")))))
+
+(defn expected-assets
+  "Every file the release must carry besides SHA256SUMS, by name: what verify.yml built, and the Dart package tree `release-ops dart` adds."
+  [v]
+  (conj (built-assets v) (dart-asset v)))
+
+;; ---------------------------------------------------------------------------------------------------- what a C bundle holds (K5)
+(def bundle-ppocr?
+  "Does the desktop C bundle carry the PP-OCR adapter (`lib/emon/adapters/libemon_ocr_ppocr.*`) and its runtime? Not yet: PP-OCR's ONNX Runtime pin is being replaced (`ortpin`), and until it lands the add-on
+   archives (`emon-ppocr-*`) are the only PP-OCR files. Flip this when tools/package.clj puts the adapter in the bundle: the collector then refuses a desktop bundle without it, and the Dart hook
+   of emon_ocr_ppocr (already `optional`) finds it."
+  false)
+
+(defn bundle-entries
+  "The entries a C bundle of this triple must hold, relative to its top directory `emon-c-<version>-<triple>/`: the headers, the core library, pdfium, each adapter library (Tesseract everywhere; Apple Vision on
+   macOS and iOS; Windows.Media.Ocr on Windows; PP-OCR on a desktop when `bundle-ppocr?`), the licence. Packs are checked apart (`share/emon/packs/`)."
+  [triple]
+  (let [os (cond (str/includes? triple "windows") :windows (str/includes? triple "apple-darwin") :mac (str/includes? triple "apple-ios") :ios
+                 (str/includes? triple "android") :android :else :linux)
+        lib (fn [stem] (case os :windows (str stem ".dll") (:mac :ios) (str "lib" stem ".dylib") (str "lib" stem ".so")))
+        ad (fn [stem] (str "lib/emon/adapters/" (lib stem)))]
+    (vec (concat ["include/emon.h" "include/emon_adapter.h" "LICENSE" (str "lib/" (lib "emon")) (str "lib/" (lib "pdfium")) (ad "emon_ocr_tesseract")]
+                 (when (#{:mac :ios} os) [(ad "emon_ocr_vision")])
+                 (when (= os :windows) [(ad "emon_ocr_winocr")])
+                 (when (and bundle-ppocr? (#{:mac :linux :windows} os)) [(ad "emon_ocr_ppocr")])))))
+
+(defn bundle-problems
+  "Problems of one C bundle: `entries` is its `tar -tzf` listing. [] when every entry of `bundle-entries` is there under the right top directory, and at least one pack is."
+  [version triple entries]
+  (let [top (str "emon-c-" version "-" triple "/")
+        names (remove str/blank? entries)
+        rel (set (for [n names :when (str/starts-with? n top)] (subs n (count top))))]
+    (vec (concat (for [n names :when (not (str/starts-with? n top))] (str "the bundle of " triple " holds " n ", outside " top))
+                 (for [e (bundle-entries triple) :when (not (contains? rel e))] (str "the bundle of " triple " has no " e))
+                 (when-not (some #(str/starts-with? % "share/emon/packs/") rel) [(str "the bundle of " triple " has no pack under share/emon/packs/")])))))
 
 (defn sums-text
   "The SHA256SUMS file: `<hash>  <name>` for every archive (not the .sha256 sidecars), sorted by name. hashes: name -> hex."
@@ -64,17 +105,18 @@
   (into (sorted-map) (for [l (str/split-lines (str text)) :when (not (str/blank? l)) :let [[h n] (str/split l #"\s+" 2)]] [n h])))
 
 (defn check-archives
-  "Problems with a set of archives: files = name -> hex sha256 of what is on disk, sums = the text of its SHA256SUMS (or nil). [] when it is complete and consistent."
-  [version files sums]
-  (let [want (expected-assets version)
-        listed (when sums (parse-sums sums))
+  "Problems with a set of archives: files = name -> hex sha256 of what is on disk, sums = the text of its SHA256SUMS (or nil). [] when it is complete and consistent.
+   `want` is the file list the set must have: `built-assets` for what verify.yml collected, `expected-assets` (the default) for what a release carries."
+  ([version files sums] (check-archives version files sums (expected-assets version)))
+  ([version files sums want]
+  (let [listed (when sums (parse-sums sums))
         archives (remove #(str/ends-with? % ".sha256") want)]
     (vec (concat
           (for [n want :when (not (contains? files n))] (str "missing " n))
           (cond (nil? sums) ["missing SHA256SUMS"]
                 :else (concat (for [n archives :when (not (contains? listed n))] (str "SHA256SUMS does not list " n))
                               (for [[n h] listed :when (and (contains? files n) (not= h (get files n)))] (str n " does not match SHA256SUMS"))
-                              (for [[n _] listed :when (not (some #{n} archives))] (str "SHA256SUMS lists " n ", which is no archive of " version))))))))
+                              (for [[n _] listed :when (not (some #{n} archives))] (str "SHA256SUMS lists " n ", which is no archive of " version)))))))))
 
 (defn verdict-state
   "success only when `plan` succeeded and every job ended success or skipped. rows: parse-results output."
@@ -173,24 +215,60 @@
         (for [d dirs, f (fs/glob d "**" {:follow-links false}) :when (fs/regular-file? f)]
           [(str (fs/file-name f)) (str f)])))
 
+(defn- bundle-problems-in
+  "The problems of every C bundle (`emon-c-*`) among `files` (name -> path): each is listed with `tar -tzf` and held to `bundle-problems`."
+  [version files]
+  (vec (mapcat (fn [t]
+                 (let [n (str "emon-c-" version "-" t ".tar.gz")]
+                   (when-let [f (get files n)]
+                     (let [r (rl/run "tar" "-tzf" f)]
+                       (if (zero? (:exit r)) (bundle-problems version t (str/split-lines (:out r))) [(str "cannot list " n ": " (str/trim (:err r)))])))))
+               triples-c)))
+
 (defn archive! [{:keys [dirs out version]}]
   (let [v (or version (cur-version))
         found (files-of dirs)
-        want (expected-assets v)
+        want (built-assets v)
         missing (remove found want)]
     (say "archive: " (count (filter (set want) (keys found))) " of " (count want) " files found under " (str/join ", " dirs))
     (when (seq missing) (rl/die 1 (str "release-ops archive: missing " (count missing) " file(s):\n  " (str/join "\n  " missing))))
+    (let [bad (bundle-problems-in v found)]
+      (when (seq bad) (rl/die 1 (str "release-ops archive: " (count bad) " problem(s) in the C bundles:\n  " (str/join "\n  " bad)))))
     (fs/create-dirs out)
     (doseq [n want] (fs/copy (get found n) (str out "/" n) {:replace-existing true}))
     (let [hashes (into {} (for [n want] [n (sha256-hex (str out "/" n))]))]
       (spit (str out "/" sums-file) (sums-text hashes))
       (say "wrote " (inc (count want)) " files to " out " (with " sums-file ")"))))
 
-(defn- check-dir [dir version]
-  (let [fs* (files-of [dir])
-        hashes (into {} (for [n (expected-assets version) :when (contains? fs* n)] [n (sha256-hex (get fs* n))]))
-        sums (when (contains? fs* sums-file) (slurp (get fs* sums-file)))]
-    (check-archives version hashes sums)))
+(defn- check-dir
+  "Problems of a directory of release files against `want` (default: all of `expected-assets`)."
+  ([dir version] (check-dir dir version (expected-assets version)))
+  ([dir version want]
+   (let [fs* (files-of [dir])
+         hashes (into {} (for [n want :when (contains? fs* n)] [n (sha256-hex (get fs* n))]))
+         sums (when (contains? fs* sums-file) (slurp (get fs* sums-file)))]
+     (check-archives version hashes sums want))))
+
+;; K5 (D900): the Dart package tree of the release. Made here, from the verified set, and not by verify.yml: its hook table is the SHA-256 of the C bundles, which is SHA256SUMS.
+(defn dart! [{:keys [dir version]}]
+  (let [v (or version (cur-version))
+        dir (str dir)
+        sums-path (str dir "/" sums-file)
+        asset (dart-asset v)
+        top (str "emon-dart-" v)]
+    ;; a rerun over a directory that already has the tree: its own line is not part of what is checked
+    (when (fs/exists? sums-path)
+      (spit sums-path (apply str (for [l (str/split-lines (slurp sums-path)) :when (not (str/ends-with? l (str "  " asset)))] (str l "\n")))))
+    (let [problems (check-dir dir v (built-assets v))]
+      (when (seq problems) (rl/die 1 (str "release-ops dart: " dir " is not the verified set:\n  " (str/join "\n  " problems)))))
+    (let [tmp (str (fs/create-temp-dir {:prefix "emon-dart-"}))]
+      (try
+        (rl/run! "bb" "tools/dart.clj" "--stamp" (str tmp "/" top) "--publishable" "--sums" sums-path)
+        (rl/run! "tar" "-czf" (str dir "/" asset) "-C" tmp top)
+        (finally (fs/delete-tree tmp))))
+    (let [hashes (into {} (for [n (expected-assets v)] [n (sha256-hex (str dir "/" n))]))]
+      (spit sums-path (sums-text hashes))
+      (say "wrote " asset " and rewrote " sums-file " (" (count (parse-sums (slurp sums-path))) " archives)"))))
 
 (defn prepare! [{:keys [version only event]}]
   (let [sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))
@@ -237,6 +315,52 @@
                     (concat (when (str/includes? v "-") ["--prerelease"])
                             (for [n (conj (expected-assets v) sums-file)] (str dir "/" n))))))))
     (rl/write-output! "outcome" (if dry-run? "dry-run" "release and assets ready"))))
+
+;; K5 (D885, D900): pub.dev accepts automated publishing only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none. So once the GitHub release has its
+;; assets (the Dart tree among them), the release run pushes the tag `emon-dart-v<version>` with a repository DEPLOY KEY (the secret PUB_DEPLOY_KEY, which `actions/checkout` installs as the
+;; checkout's SSH credential); pub.yml starts from that tag.
+(defn pub-tag-name [v] (str "emon-dart-v" v))
+
+(defn pub-tag-decision
+  "What to do about the tag: :push (absent), :exists (at this commit already: nothing to do, pub.yml has run or is running), :retrigger (at this commit, and the caller asked for pub
+   alone: delete it and push it again, which starts pub.yml again; every package it already published is skipped) or :refuse (at another commit: a tag is never moved)."
+  [{:keys [tag-sha sha retrigger?]}]
+  (cond
+    (and tag-sha (not= tag-sha sha)) {:action :refuse :why (str "the tag exists at " tag-sha ", not at " sha "; a tag is never moved")}
+    (and tag-sha retrigger?) {:action :retrigger}
+    tag-sha {:action :exists}
+    :else {:action :push}))
+
+(defn- release-has-asset?
+  "Is the release `tag` published and does it carry the asset `name`?"
+  [tag name]
+  (let [rel (find-release tag)]
+    (when (and rel (not (:draft rel)))
+      (let [r (rl/gh-json (str "repos/" (rl/repo) "/releases/" (:id rel)))]
+        (and (not (rl/error? r)) (boolean (some #(= name (:name %)) (:assets r))))))))
+
+(defn pub-tag! [{:keys [tag sha only dry-run?]}]
+  (let [v (rl/tag->version tag)
+        name (pub-tag-name v)
+        _ (when-not (and v (= v (cur-version)) (re-matches #"[0-9a-f]{40}" (str sha)) (= sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))))
+            (rl/die 1 "release-ops pub-tag: version or checkout does not equal the requested release"))
+        retrigger? (boolean (some #{"pub"} (str/split (str only) #",")))
+        tag-sha (remote-tag-sha name)
+        d (pub-tag-decision {:tag-sha tag-sha :sha sha :retrigger? retrigger?})]
+    (when (= :refuse (:action d)) (rl/die 1 (:why d)))
+    (when-not dry-run?
+      (when-not (release-has-asset? tag (dart-asset v))
+        (rl/die 1 (str "release-ops pub-tag: " tag " is not a published release with " (dart-asset v) "; run release.yml with assets selected first"))))
+    (case (:action d)
+      :exists (do (say name " is already at " sha ": nothing to push (select only=pub to push it again)") (rl/write-output! "outcome" "already-pushed"))
+      (do-or-say dry-run? (str (if (= :retrigger (:action d)) "delete and push " "push ") name " at " sha " with the deploy key")
+        #(do
+           (when (= :retrigger (:action d)) (rl/run! "git" "push" "origin" (str ":refs/tags/" name)))
+           (rl/run! "git" "tag" "-f" name sha)
+           (rl/run! "git" "push" "origin" (str "refs/tags/" name))
+           (say "pushed " name " (pub.yml starts from it)")))
+      )
+    (when-not (= :exists (:action d)) (rl/write-output! "outcome" (if dry-run? "dry-run" "tag pushed")))))
 
 (defn plan-fields
   "What the verdict needs from the JSON `bb ci verify-plan` printed ({} when the plan job failed): its description, the version, whether this run built the archives and, if not,
@@ -288,9 +412,9 @@
       (rl/write-output! "from" (:sha found))
       (do-or-say dry-run? (str "download it into " out)
                  #(do (rl/run! "gh" "run" "download" (:run found) "--repo" repo "-n" artifact-name "-D" out)
-                      (let [problems (check-dir out version)]
+                      (let [problems (concat (check-dir out version (built-assets version)) (bundle-problems-in version (files-of [out])))]
                         (when (seq problems) (rl/die 1 (str "release-ops fetch-archives: the artifact is not a good set:\n  " (str/join "\n  " problems))))
-                        (say "the 23 assets and " sums-file " are complete and consistent")))))))
+                        (say "the " (count (built-assets version)) " assets and " sums-file " are complete and consistent")))))))
 
 (defn attach! [{:keys [tag dir dry-run?]}]
   (let [v (rl/tag->version tag)
@@ -345,20 +469,64 @@
       (t! "whitespace selection refused" (:error (p {:only " "})))
       (t! "invalid registry refused" (:error (p {:only "npm,typo"})))
       (t! "selected registries accepted" (:run (p {:only "npm,assets"}))))
-    (let [a (expected-assets "0.1.0")]
-      (t! "expected assets: 5 CLI + 5 PP + 5 sums + 4 C + 4 pod = 23" (= 23 (count a)))
+    (let [a (expected-assets "0.1.0") built (built-assets "0.1.0")]
+      (t! "built assets: 5 CLI + 5 PP + 5 sums + 10 C + 4 pod = 29; the release adds the Dart tree = 30" (and (= 29 (count built)) (= 30 (count a)) (= (conj built "emon-dart-0.1.0.tar.gz") a)))
       (t! "expected assets are distinct" (= (count a) (count (set a))))
       (t! "windows ships a zip" (some #{"emon-0.1.0-x86_64-pc-windows-msvc.zip"} a))
       (t! "C and pod archives are named as bb package names them" (and (some #{"emon-c-0.1.0-aarch64-apple-darwin.tar.gz"} a) (some #{"emon-pod-0.1.0-x86_64-unknown-linux-gnu.tar.gz"} a)))
+      (t! "the C bundle is built for Windows (a .tar.gz: the Dart hook reads only that) and for the five mobile triples, the pod is not"
+          (and (some #{"emon-c-0.1.0-x86_64-pc-windows-msvc.tar.gz"} a)
+               (every? (set a) (for [t triples-mobile] (str "emon-c-0.1.0-" t ".tar.gz")))
+               (not-any? #(str/includes? % "emon-pod-0.1.0-x86_64-pc-windows") a)
+               (not-any? #(re-find #"emon-pod-.*(android|ios)" %) a)))
+      (t! "the Dart tree is one file of the release, named by version" (= ["emon-dart-0.1.0.tar.gz"] (filter #(str/starts-with? % "emon-dart-") a)))
       (let [hashes (into {} (for [n a] [n (str (hash n))]))
+            built-hashes (select-keys hashes built)
             sums (sums-text hashes)]
-        (t! "SHA256SUMS lists the 18 archives and not the .sha256 sidecars" (= 18 (count (parse-sums sums))))
+        (t! "SHA256SUMS lists the 25 archives and not the .sha256 sidecars" (= 25 (count (parse-sums sums))))
         (t! "a complete set matches its sums" (= [] (check-archives "0.1.0" hashes sums)))
+        (t! "what verify.yml collects (without the Dart tree) is complete against its own list, and not against the release's"
+            (and (= [] (check-archives "0.1.0" built-hashes (sums-text built-hashes) built))
+                 (= ["missing emon-dart-0.1.0.tar.gz"] (filterv #(str/starts-with? % "missing") (check-archives "0.1.0" built-hashes (sums-text built-hashes))))))
         (t! "a missing file is named" (= ["missing emon-c-0.1.0-aarch64-apple-darwin.tar.gz"]
                                          (filterv #(str/starts-with? % "missing emon-c") (check-archives "0.1.0" (dissoc hashes "emon-c-0.1.0-aarch64-apple-darwin.tar.gz") sums))))
+        (t! "a missing mobile bundle is named" (= ["missing emon-c-0.1.0-aarch64-linux-android.tar.gz"]
+                                                  (filterv #(str/starts-with? % "missing emon-c") (check-archives "0.1.0" (dissoc hashes "emon-c-0.1.0-aarch64-linux-android.tar.gz") sums))))
         (t! "a file that differs from its sum is named" (some #(str/includes? % "does not match SHA256SUMS") (check-archives "0.1.0" (assoc hashes "emon-pod-0.1.0-x86_64-unknown-linux-gnu.tar.gz" "0") sums)))
         (t! "no SHA256SUMS is a problem" (some #{"missing SHA256SUMS"} (check-archives "0.1.0" hashes nil)))
-        (t! "archives of another version are all missing" (= 23 (count (filter #(str/starts-with? % "missing emon") (check-archives "0.2.0" hashes sums)))))))
+        (t! "archives of another version are all missing" (= 30 (count (filter #(str/starts-with? % "missing emon") (check-archives "0.2.0" hashes sums)))))))
+    ;; the C bundles: what each triple must hold
+    (let [entries (fn [triple v] (let [top (str "emon-c-" v "-" triple "/")]
+                                   (concat [top (str top "lib/") (str top "share/emon/packs/tess-fast-eng/eng.traineddata")] (map #(str top %) (bundle-entries triple)))))]
+      (t! "a bundle of every triple holding exactly what the table says has no problem" (every? #(= [] (bundle-problems "0.1.0" % (entries % "0.1.0"))) triples-c))
+      (t! "Apple triples (macOS and iOS) carry the Vision adapter, Windows carries Windows OCR, Linux and Android neither"
+          (let [has (fn [t suffix] (boolean (some #(str/ends-with? % suffix) (bundle-entries t))))]
+            (and (has "aarch64-apple-darwin" "libemon_ocr_vision.dylib") (has "x86_64-apple-darwin" "libemon_ocr_vision.dylib") (has "aarch64-apple-ios" "libemon_ocr_vision.dylib") (has "aarch64-apple-ios-sim" "libemon_ocr_vision.dylib")
+                 (has "x86_64-pc-windows-msvc" "emon_ocr_winocr.dll") (not (has "x86_64-pc-windows-msvc" "libemon_ocr_vision.dylib"))
+                 (not-any? #(has % "libemon_ocr_vision.dylib") ["x86_64-unknown-linux-gnu" "aarch64-linux-android" "armv7-linux-androideabi" "x86_64-linux-android"])
+                 (not-any? #(has % "emon_ocr_winocr.dll") (remove #{"x86_64-pc-windows-msvc"} triples-c)))))
+      (t! "every triple carries core, pdfium and the Tesseract adapter, named for its OS"
+          (and (some #{"lib/emon.dll"} (bundle-entries "x86_64-pc-windows-msvc")) (some #{"lib/pdfium.dll"} (bundle-entries "x86_64-pc-windows-msvc"))
+               (some #{"lib/emon/adapters/emon_ocr_tesseract.dll"} (bundle-entries "x86_64-pc-windows-msvc"))
+               (some #{"lib/libemon.so"} (bundle-entries "aarch64-linux-android")) (some #{"lib/libpdfium.so"} (bundle-entries "armv7-linux-androideabi"))
+               (some #{"lib/emon/adapters/libemon_ocr_tesseract.dylib"} (bundle-entries "aarch64-apple-ios-sim"))
+               (some #{"lib/libemon.dylib"} (bundle-entries "x86_64-apple-darwin")) (some #{"lib/emon/adapters/libemon_ocr_tesseract.so"} (bundle-entries "aarch64-unknown-linux-gnu"))))
+      (t! "PP-OCR is not required in a bundle until bundle-ppocr? says so" (not-any? #(some (fn [e] (str/includes? e "ppocr")) (bundle-entries %)) triples-c))
+      (t! "a missing adapter is named"
+          (= ["the bundle of aarch64-apple-darwin has no lib/emon/adapters/libemon_ocr_vision.dylib"]
+             (bundle-problems "0.1.0" "aarch64-apple-darwin" (remove #(str/ends-with? % "libemon_ocr_vision.dylib") (entries "aarch64-apple-darwin" "0.1.0")))))
+      (t! "a bundle without its pdfium or without a pack is refused"
+          (and (some #(str/includes? % "lib/libpdfium.so") (bundle-problems "0.1.0" "x86_64-linux-android" (remove #(str/ends-with? % "libpdfium.so") (entries "x86_64-linux-android" "0.1.0"))))
+               (some #(str/includes? % "no pack") (bundle-problems "0.1.0" "x86_64-linux-android" (remove #(str/includes? % "share/emon/packs") (entries "x86_64-linux-android" "0.1.0"))))))
+      (t! "a bundle of another version or another top directory is refused" (seq (bundle-problems "0.2.0" "x86_64-linux-android" (entries "x86_64-linux-android" "0.1.0")))))
+    ;; the tag that starts pub.yml
+    (let [d #(pub-tag-decision (merge {:sha sha} %))]
+      (t! "pub tag: absent -> push" (= :push (:action (d {}))))
+      (t! "pub tag: at this commit -> nothing to do" (= :exists (:action (d {:tag-sha sha}))))
+      (t! "pub tag: at this commit and only=pub -> delete and push again, which starts pub.yml again" (= :retrigger (:action (d {:tag-sha sha :retrigger? true}))))
+      (t! "pub tag: at another commit -> refused, whatever was asked" (and (= :refuse (:action (d {:tag-sha other}))) (= :refuse (:action (d {:tag-sha other :retrigger? true}))))))
+    (t! "pub tag names the version, a pre-release included" (and (= "emon-dart-v0.3.0-preview.1" (pub-tag-name "0.3.0-preview.1")) (= "0.3.0-preview.1" (rl/tag->version "v0.3.0-preview.1"))))
+    (t! "pub is a selectable registry" (and (some #{"pub"} registries) (:run (prepare-decision {:current "1.2.3" :sha sha :event "workflow_dispatch" :only "assets,pub"}))))
     (t! "verdict: plan and every job success -> success" (= "success" (verdict-state (parse-results "plan=success,core=success,gates=success"))))
     (t! "verdict: skipped jobs are fine" (= "success" (verdict-state (parse-results "plan=success,core=success,gates=skipped,unit=skipped,archives=skipped"))))
     (t! "verdict: one failure" (= "failure" (verdict-state (parse-results "plan=success,core=failure,gates=success"))))
@@ -388,6 +556,41 @@
       (t! "summary: a dry run says so, and never claims anything was published"
           (let [m (:markdown (summary-md "v1.2.3" [["npm" "success" "dry-run"]] true))] (and (str/includes? m "DRY RUN: nothing was published") (not (str/includes? m "published |")))))
       (t! "summary: a skipped registry is not a failure" (:ok? (summary-md "v1.2.3" [["crates" "skipped" nil]]))))
+    ;; collect real (tiny) archives: ten C bundles that are tarballs with the entries the table asks for, the rest plain files, through `archive!` and `dart!`
+    (let [v (cur-version) tmp (str (fs/create-temp-dir {:prefix "emon-collect-test-"}))
+          in (str tmp "/in") out (str tmp "/out")
+          mk-bundle! (fn [t drop-entry]
+                       (let [top (str "emon-c-" v "-" t) d (str tmp "/src/" top)]
+                         (fs/delete-tree d)
+                         (doseq [e (concat (remove #{drop-entry} (bundle-entries t)) ["share/emon/packs/tess-fast-eng/eng.traineddata"])]
+                           (fs/create-dirs (fs/parent (str d "/" e))) (spit (str d "/" e) (str t " " e)))
+                         (rl/run! "tar" "-czf" (str in "/" top ".tar.gz") "-C" (str tmp "/src") top)))]
+      (try
+        (fs/create-dirs in)
+        (doseq [t triples-c] (mk-bundle! t nil))
+        (doseq [n (built-assets v) :when (not (str/starts-with? n "emon-c-"))] (spit (str in "/" n) n))
+        (archive! {:dirs [in] :out out :version v})
+        (t! "archive collects the 29 files and writes SHA256SUMS of the 24 archives" (and (= 30 (count (files-of [out]))) (= 24 (count (parse-sums (slurp (str out "/SHA256SUMS")))))))
+        (dart! {:dir out :version v})
+        (let [sums (parse-sums (slurp (str out "/SHA256SUMS")))
+              tree (str "emon-dart-" v)
+              table (:out (rl/run! "tar" "-xzOf" (str out "/" (dart-asset v)) (str tree "/emon_core/lib/src/native_assets.g.dart")))
+              pubspec (:out (rl/run! "tar" "-xzOf" (str out "/" (dart-asset v)) (str tree "/emon/pubspec.yaml")))
+              names (str/split-lines (:out (rl/run! "tar" "-tzf" (str out "/" (dart-asset v)))))]
+          (t! "dart: the tree is a release asset and SHA256SUMS lists it (and its hash is right)"
+              (and (= 25 (count sums)) (= (get sums (dart-asset v)) (sha256-hex (str out "/" (dart-asset v)))) (= [] (check-dir out v))))
+          (t! "dart: the hook table has the SHA-256 of every C bundle (desktop, Windows and mobile) as SHA256SUMS lists them"
+              (every? (fn [t] (let [n (str "emon-c-" v "-" t ".tar.gz")] (and (str/includes? table (str "'" t "': NativeArchive('" n "', '" (get sums n) "')"))))) triples-c))
+          (t! "dart: stamped with the version and publishable (a hosted dependency, no publish_to: none)"
+              (and (str/includes? pubspec (str "version: " v)) (str/includes? pubspec (str "emon_core: ^" v)) (not (str/includes? pubspec "publish_to: none")) (not (str/includes? pubspec "path: ../"))))
+          (t! "dart: every package of pub.yml is in the tree" (every? (fn [pkg] (some #{(str tree "/" pkg "/pubspec.yaml")} names)) ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon_ocr_mlkit" "emon" "emon_flutter"])))
+        (dart! {:dir out :version v})
+        (t! "dart: a rerun over its own output is the same set" (= [] (check-dir out v)))
+        ;; a bundle without its adapter is refused by the collector
+        (mk-bundle! "aarch64-apple-darwin" "lib/emon/adapters/libemon_ocr_vision.dylib")
+        (t! "archive: a bundle that lacks an adapter library is named and refused"
+            (= ["the bundle of aarch64-apple-darwin has no lib/emon/adapters/libemon_ocr_vision.dylib"] (bundle-problems-in v (files-of [in]))))
+        (finally (fs/delete-tree tmp))))
     ;; Exercise effect wiring with synthetic archives and mocked GitHub; never call a registry.
     (let [tmp (str (fs/create-temp-dir {:prefix "emon-release-test-"}))
           v "1.2.3-rc.1" tag (str "v" v)
@@ -450,8 +653,10 @@
       "verdict" (do (need :sha :results :run-url :plan) (verdict! o))
       "fetch-archives" (do (need :sha :version :out) (fetch-archives! o))
       "attach" (do (need :tag :dir) (attach! o))
+      "dart" (do (need :dir) (dart! o))
+      "pub-tag" (do (need :tag :sha) (pub-tag! o))
       "summary" (do (need :tag :results) (summary! o))
-      (rl/die 2 "usage: bb release-ops prepare|release|next|archive|verdict|fetch-archives|attach|summary ... [--dry-run] | --self-test"))))
+      (rl/die 2 "usage: bb release-ops prepare|release|next|archive|verdict|fetch-archives|attach|dart|pub-tag|summary ... [--dry-run] | --self-test"))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (if (= ["--self-test"] (vec *command-line-args*))

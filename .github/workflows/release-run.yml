@@ -1,4 +1,7 @@
 # D886: per-version serialized pipeline. Called only after release.yml validates the ref/version.
+# K5 (D900): `assets` also makes the Dart package tree from the verified archives (`bb release-ops dart`: the SHA-256 table of the C bundles stamped into emon_core, every package stamped with the
+# version and made publishable) and attaches it as emon-dart-<version>.tar.gz; `pub` then pushes the tag emon-dart-v<version> with the deploy key (the secret PUB_DEPLOY_KEY), which starts pub.yml.
+# `pub` runs only when the repository variable EMON_PUB_ENABLED is `true` (the maintainer's first manual publish and pub.dev's automated-publishing setup come first, docs/releasing.md).
 name: release pipeline
 on:
   workflow_call:
@@ -63,6 +66,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ inputs.sha }}
         run: bb release-ops fetch-archives --sha "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/archives"
+      # K5 (D900): the Dart packages, with the SHA-256 of the C bundles in emon_core's hook table. It is made HERE and not in verify.yml because the table is SHA256SUMS, which only exists once the
+      # verified archives are collected; the maintainer's first manual publish can start from this asset (docs/releasing.md). SHA256SUMS is rewritten to list it.
+      - name: The Dart package tree (stamped, publishable, with the hook's SHA-256 table), added to the archives and SHA256SUMS
+        run: bb release-ops dart --dir "$RUNNER_TEMP/archives" --version "${TAG#v}"
       - id: release
         name: Reuse or create the tag and published release with notes and archives
         env:
@@ -266,9 +273,40 @@ jobs:
         name: bb publish go (a tag-only commit holding go/, and the tag go/vX.Y.Z)
         run: bb publish go ${DRY_FLAG}
 
+  # K5 (D885, D900): pub.dev publishes only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none: this job pushes the tag emon-dart-v<version> with a repository
+  # deploy key (a read-write SSH key added under Settings > Deploy keys; its private half is the secret PUB_DEPLOY_KEY), once the release has emon-dart-<version>.tar.gz. pub.yml (on that tag) publishes
+  # the 8 packages with GitHub OIDC. Retry: `only=pub` deletes and pushes the tag again (pub.yml skips every package pub.dev has); at another commit the tag is refused.
+  pub:
+    needs: assets
+    if: ${{ (inputs.only == '' || contains(format(',{0},', inputs.only), ',pub,')) && vars.EMON_PUB_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      outcome: ${{ steps.tag.outputs.outcome }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.sha }}
+          path: emon
+          fetch-depth: 0
+          ssh-key: ${{ secrets.PUB_DEPLOY_KEY }} # also the checkout's push credential: `git push` below is made with the deploy key, not GITHUB_TOKEN
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
+      - id: tag
+        name: Push emon-dart-v<version> (the tag that starts pub.yml)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          ONLY: ${{ inputs.only }}
+        run: bb release-ops pub-tag --tag "$TAG" --sha "$SHA" --only "$ONLY" ${DRY_FLAG}
+
   summary:
     if: always()
-    needs: [verify, assets, crates, npm, nuget, maven, go]
+    needs: [verify, assets, crates, npm, nuget, maven, go, pub]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -283,5 +321,5 @@ jobs:
       - name: The report (fails if any registry did not succeed)
         env:
           RESULTS: >-
-            verify=${{ needs.verify.result }},assets=${{ needs.assets.result }}:${{ needs.assets.outputs.outcome }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }}
+            verify=${{ needs.verify.result }},assets=${{ needs.assets.result }}:${{ needs.assets.outputs.outcome }},crates=${{ needs.crates.result }}:${{ needs.crates.outputs.outcome }},npm=${{ needs.npm.result }}:${{ needs.npm.outputs.outcome }},nuget=${{ needs.nuget.result }}:${{ needs.nuget.outputs.outcome }},maven=${{ needs.maven.result }}:${{ needs.maven.outputs.outcome }},go=${{ needs.go.result }}:${{ needs.go.outputs.outcome }},pub=${{ needs.pub.result }}:${{ needs.pub.outputs.outcome }}
         run: bb release-ops summary --tag "$TAG" --results "$RESULTS" ${DRY_FLAG}

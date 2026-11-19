@@ -1,11 +1,16 @@
-# Publishes the Dart packages to pub.dev (K7, P13.20; DEVLOG D885, D886). PREPARED BUT DISABLED.
+# Publishes the Dart packages to pub.dev (K7 prepared it, K5 wired it: P13.18; DEVLOG D885, D886, D900). PREPARED BUT DISABLED until the maintainer enables it.
 #
-# pub.dev accepts automated publishing only from a workflow run triggered by a tag push, authenticated by GitHub's OIDC token, and only for a package that already exists: the first
-# publish of each package is manual (docs/releasing.md, "Dart: the first publish"). `release.yml` pushes the tag `emon-dart-v<version>` with a repository deploy key (a push made with
-# GITHUB_TOKEN triggers no workflow) once the GitHub release has its archives; this workflow then stamps the packages (`bb dart --stamp`), writes the SHA-256 table of the release's C archives
-# (`bb dart --sha-table`) and publishes in dependency order. Every pub.dev package is configured with the tag pattern `emon-dart-v{{version}}` and this repository.
+# pub.dev accepts automated publishing only from a workflow run that a TAG PUSH started, authenticated by GitHub's OIDC token, and only for a package that already exists: the first publish of each
+# package is manual (docs/releasing.md, "Dart: the first publish"). release-run.yml's `pub` job pushes the tag `emon-dart-v<version>` with a repository DEPLOY KEY (a push made with GITHUB_TOKEN
+# starts no workflow) once the GitHub release carries `emon-dart-<version>.tar.gz`; this workflow then downloads that asset, checks it against the release's SHA256SUMS and publishes the 8
+# packages in dependency order (`bb publish pub`: tools/release/publish.clj). The asset is the stamped, publishable tree the release made: the SHA-256 table of the C bundles is already in emon_core.
+# Every pub.dev package is configured with this repository and the tag pattern `emon-dart-v{{version}}` (docs/releasing.md lists each setting).
 #
-# DISABLED: nothing runs until the repository variable PUB_PUBLISH_ENABLED is `true`, which is set after the maintainer has made the first publish and enabled automated publishing on pub.dev.
+# IDEMPOTENT AND RETRYABLE: a package whose version pub.dev already has is skipped, so "Re-run failed jobs" (or `gh workflow run release.yml -f only=pub`, which pushes the tag again) finishes what
+# a failed run left. A package published before the failure stays published; pub.dev never accepts a version twice, so nothing is published twice.
+#
+# DISABLED: nothing runs until the repository variable EMON_PUB_ENABLED is `true` (Settings > Secrets and variables > Actions > Variables). release-run.yml's `pub` job reads the same variable, so
+# with it unset no tag is pushed and no deploy key is needed.
 name: pub
 
 on:
@@ -15,31 +20,33 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  id-token: write # pub.dev's automated publishing: the OIDC token of this run
+
+# one publish per tag; a run in progress is finished, never cancelled (a half-published set is finished by the next run, not corrupted by a cancelled one)
+concurrency:
+  group: pub-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   publish:
-    if: ${{ vars.PUB_PUBLISH_ENABLED == 'true' }}
+    # a deleted tag (release.yml only=pub deletes and pushes it again) is a push event too
+    if: ${{ vars.EMON_PUB_ENABLED == 'true' && github.event.deleted != true }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+        with:
+          bb: 1.3.190
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
-      - name: Fetch the release's SHA256SUMS
+      # emon_ocr_mlkit and emon_flutter are Flutter packages: `flutter pub publish` (the same pub client and the same OIDC token). Flutter's bundled Dart comes after setup-dart on PATH, and
+      # the stable channel's Dart is at least 3.10 (build hooks)
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Publish the packages the tag names that pub.dev does not have yet, in dependency order
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#emon-dart-v}"
-          gh release download "v${version}" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
-      - name: Stamp the packages and write the SHA-256 table of the release's archives
-        run: |
-          bb dart --sha-table "$RUNNER_TEMP/SHA256SUMS"
-          bb dart --stamp "$RUNNER_TEMP/dart" --publishable
-      - name: Publish, in dependency order (the first publish of a package is manual)
-        working-directory: ${{ runner.temp }}/dart
-        run: |
-          for pkg in emon_core emon_ocr_tesseract emon_ocr_ppocr emon_ocr_vision emon_ocr_winocr emon_ocr_mlkit emon emon_flutter; do
-            (cd "$pkg" && dart pub publish --force)
-          done
+        run: bb publish pub --tag "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/dart"
