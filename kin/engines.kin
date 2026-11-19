@@ -23,7 +23,7 @@
 ;;   table (`emon.ocrengine`'s `oe-roles`) is what the hybrid composes with; a law holds the two to one another. Tesseract is the incumbent everywhere (ruling 8), PP-OCR
 ;;   the challenger, and an uncalibrated platform engine a reader (alone) or a voter (corroborating), never an incumbent or a challenger that inserts.
 ;;
-;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895, K5 D900): the engine an app gets when it chooses nothing (Tesseract, except Windows.Media.Ocr on Windows and ML Kit on
+;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895, K5 D905): the engine an app gets when it chooses nothing (Tesseract, except Windows.Media.Ocr on Windows and ML Kit on
 ;;   Android: their own OS readers; Apple Vision on Apple platforms waits for P13.21b), the platform's own OS engine (selectable explicitly; uncalibrated ones are readers or voters, never incumbents, D895), the PP-OCR runtime of the class (the
 ;;   hybrid partner), whether packs are fetched on demand (`pfetch`: auto for a turnkey package; core and bare adapters never fetch, D885, and EMON_OFFLINE=1 or `never`
 ;;   always wins, D896) and the renderer.
@@ -165,7 +165,7 @@
               ^I32 en-roles-at [^I32 ignored ^I32 row ^I32 col]})
 
 ;; class engine platform-engine pp-engine fetch render. Tesseract on macOS, iOS, Linux and the web (D885; Apple's platform engine is explicit-only until P13.21b); Windows.Media.Ocr on Windows and
-;; ML Kit on Android (K5, D900: the OS's own reader, no model to fetch, nothing to download on first use); a turnkey fetches on demand (D885, D896). The Android row is the FLUTTER turnkey's:
+;; ML Kit on Android (K5, D905: the OS's own reader, no model to fetch, nothing to download on first use); a turnkey fetches on demand (D885, D896). The Android row is the FLUTTER turnkey's:
 ;; ML Kit is a plugin of the Dart package `emon_flutter` and is answered by the caller, so a host with no plugin (the pure-Dart `emon`, the C ABI, Rust, Go, Java, C#) names Tesseract itself
 ;; (a host that cannot load the default engine falls back to Tesseract, whose packs are fetched on demand, D896).
 (defdata ^:pub en-turnkey

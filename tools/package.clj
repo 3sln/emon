@@ -450,7 +450,7 @@
   (let [os (str/lower-case (System/getProperty "os.name"))]
     (cond (str/includes? os "mac") {:dyn "libemon.dylib" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.dylib"}
           (str/includes? os "linux") {:dyn "libemon.so" :static "libemon.a" :pod "emon-pod" :adapter "libemon_ocr_tesseract.so"}
-          ;; Windows (K5, D900): the C bundle only (emon.dll, the Tesseract adapter, winocr, pdfium); no static library and no pod ship for it
+          ;; Windows (K5, D905): the C bundle only (emon.dll, the Tesseract adapter, winocr, pdfium); no static library and no pod ship for it
           (str/includes? os "windows") {:dyn "emon.dll" :static nil :pod nil :adapter "emon_ocr_tesseract.dll" :windows? true}
           :else (skip! (str "the C library and the pod are packaged on macOS, Linux and Windows (this is " os ")")))))
 

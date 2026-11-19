@@ -1,4 +1,4 @@
-# Publishes the Dart packages to pub.dev (K7 prepared it, K5 wired it: P13.18; DEVLOG D885, D886, D900). PREPARED BUT DISABLED until the maintainer enables it.
+# Publishes the Dart packages to pub.dev (K7 prepared it, K5 wired it: P13.18; DEVLOG D885, D886, D905). PREPARED BUT DISABLED until the maintainer enables it.
 #
 # pub.dev accepts automated publishing only from a workflow run that a TAG PUSH started, authenticated by GitHub's OIDC token, and only for a package that already exists: the first publish of each
 # package is manual (docs/releasing.md, "Dart: the first publish"). release-run.yml's `pub` job pushes the tag `emon-dart-v<version>` with a repository DEPLOY KEY (a push made with GITHUB_TOKEN

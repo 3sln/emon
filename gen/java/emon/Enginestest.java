@@ -161,7 +161,7 @@ public final class Enginestest {
     }
     public static int enTurnkeyClass(int emonT, int pclass, int dflt, int platform, int platformCalibrated, int pp) {
         int eng = Engines.pkDefaultEngine(pclass);
-        emon.Testport.assertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)");
+        emon.Testport.assertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)");
         emon.Testport.assertEq(Engines.pkEngineOn(eng, pclass), 1, "the default runs on the class");
         if (eng == Engines.engTesseract()) {
             emon.Testport.assertEq(Engines.pkEngineCalibrated(eng), 1, "Tesseract is calibrated");
@@ -306,7 +306,7 @@ public final class Enginestest {
         emon.Port.Cells installed = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
         emon.Testport.assertEq(enResolve(Engines.pclsWindows(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "Windows resolves with Windows.Media.Ocr as the default");
-        emon.Testport.assertEq(Engines.pkRows(out), 0, "the OS reads: nothing to fetch (K5, D900)");
+        emon.Testport.assertEq(Engines.pkRows(out), 0, "the OS reads: nothing to fetch (K5, D905)");
         emon.Testport.assertEq(enResolve(Engines.pclsAndroid(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "Android resolves with ML Kit as the default");
         emon.Testport.assertEq(Engines.pkRows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch");
         enCells1(engs, Engines.engTesseract());

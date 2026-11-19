@@ -8,7 +8,7 @@
 #                 the value in version.edn plans no gate: that is the release bump.
 #   3. RUN        the fast core (`bb ci core`) always, plus the planned shards as FULL gates; `unit` (a job per arm, and its red twin) when planned.
 #   4. ARCHIVES   the release archives (the CLI and the C bundle for the five desktop targets, Windows included: native.yml; the C bundle for the five mobile triples: native.yml's `mobile` job; the C bundle
-#                 and the pod for four desktop targets: `bb package`; SHA256SUMS; 29 files, K5/D900) are built in this run only when the plan says
+#                 and the pod for four desktop targets: `bb package`; SHA256SUMS; 29 files, K5/D905) are built in this run only when the plan says
 #                 they are affected (a path they are built from changed, no valid archives came with the base, or the VERSION changed: the archives carry it). Otherwise the base's
 #                 stay valid. Either way `emon/archives` is posted on the commit, naming the run whose artifact `release-archives` (retention 90 days) holds them.
 #   5. VERDICT    `emon/verified` success only when the plan, the core and every job ran green; description `verified: N gates since <sha>`.
@@ -287,7 +287,7 @@ jobs:
 
   # ---- the release archives, only when the plan says they are affected (otherwise the base's stay valid) ---------------------------------------------------
   # five CLI targets (static Tesseract and Leptonica, pdfium, the `emon` binary: native.yml), the Windows C bundle (the `native` job of native.yml packs it on its Windows runner),
-  # the five mobile triples (`mobile`: Android and iOS, K6) and the platform adapters' own build, audit and smoke (`platform`: Apple Vision, Windows.Media.Ocr, K8). K5 (D900) turns the
+  # the five mobile triples (`mobile`: Android and iOS, K6) and the platform adapters' own build, audit and smoke (`platform`: Apple Vision, Windows.Media.Ocr, K8). K5 (D905) turns the
   # two that were off for callers on: a release carries the mobile bundles, and the adapters are in the bundles, so they are built (and smoke-tested where the engine runs) every time ...
   native:
     needs: plan

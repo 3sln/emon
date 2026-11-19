@@ -169,7 +169,7 @@ fn test_the_role_table_agrees_with_the_hybrid_roles_of_ocrengine() {
 }
 pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, dflt: i32, platform: i32, platform_calibrated: i32, pp: i32) -> i32 {
     let eng: i32 = pk_default_engine(pclass);
-    crate::testport::assert_eq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)");
+    crate::testport::assert_eq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)");
     crate::testport::assert_eq(pk_engine_on(eng, pclass), 1, "the default runs on the class");
     if eng == eng_tesseract() {
         crate::testport::assert_eq(pk_engine_calibrated(eng), 1, "Tesseract is calibrated");
@@ -319,7 +319,7 @@ fn test_an_os_reader_as_the_turnkey_default_needs_no_pack() {
     let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     crate::testport::assert_eq(en_resolve(pcls_windows(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "Windows resolves with Windows.Media.Ocr as the default");
-    crate::testport::assert_eq(pk_rows(out), 0, "the OS reads: nothing to fetch (K5, D900)");
+    crate::testport::assert_eq(pk_rows(out), 0, "the OS reads: nothing to fetch (K5, D905)");
     crate::testport::assert_eq(en_resolve(pcls_android(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "Android resolves with ML Kit as the default");
     crate::testport::assert_eq(pk_rows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch");
     en_cells1(engs, eng_tesseract());

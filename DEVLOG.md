@@ -14732,7 +14732,7 @@ The coordinator renumbers this entry. The Dart/Flutter evaluation release (D895)
 
 - [ ] **Signed off** (maintainer)
 
-### D900 — K5: the release carries every platform's C bundle and the Dart package tree, and pub.dev publishes from a deploy-key tag (P13.18)
+### D905 — K5: the release carries every platform's C bundle and the Dart package tree, and pub.dev publishes from a deploy-key tag (P13.18)
 
 The coordinator renumbers this entry. The release wiring of the Dart/Flutter preview (D895), built on K6 (D897), K7 (D904) and the D885 and D886 pipeline.
 

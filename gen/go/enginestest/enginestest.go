@@ -183,7 +183,7 @@ func TestTheRoleTableAgreesWithTheHybridRolesOfOcrengine(emonT *testing.T) {
 
 func enTurnkeyClass(emonT *testing.T, pclass int32, dflt int32, platform int32, platformCalibrated int32, pp int32) int32 {
 	var eng int32 = engines.PkDefaultEngine(pclass)
-	port.AssertEq(emonT, eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)")
+	port.AssertEq(emonT, eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)")
 	port.AssertEq(emonT, engines.PkEngineOn(eng, pclass), 1, "the default runs on the class")
 	if eng == engines.EngTesseract() {
 		port.AssertEq(emonT, engines.PkEngineCalibrated(eng), 1, "Tesseract is calibrated")
@@ -334,7 +334,7 @@ func TestAnOsReaderAsTheTurnkeyDefaultNeedsNoPack(emonT *testing.T) {
 	var installed *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
 	port.AssertEq(emonT, enResolve(engines.PclsWindows(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "Windows resolves with Windows.Media.Ocr as the default")
-	port.AssertEq(emonT, engines.PkRows(out), 0, "the OS reads: nothing to fetch (K5, D900)")
+	port.AssertEq(emonT, engines.PkRows(out), 0, "the OS reads: nothing to fetch (K5, D905)")
 	port.AssertEq(emonT, enResolve(engines.PclsAndroid(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "Android resolves with ML Kit as the default")
 	port.AssertEq(emonT, engines.PkRows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch")
 	enCells1(engs, engines.EngTesseract())

@@ -1,5 +1,5 @@
 # D886: per-version serialized pipeline. Called only after release.yml validates the ref/version.
-# K5 (D900): `assets` also makes the Dart package tree from the verified archives (`bb release-ops dart`: the SHA-256 table of the C bundles stamped into emon_core, every package stamped with the
+# K5 (D905): `assets` also makes the Dart package tree from the verified archives (`bb release-ops dart`: the SHA-256 table of the C bundles stamped into emon_core, every package stamped with the
 # version and made publishable) and attaches it as emon-dart-<version>.tar.gz; `pub` then pushes the tag emon-dart-v<version> with the deploy key (the secret PUB_DEPLOY_KEY), which starts pub.yml.
 # `pub` runs only when the repository variable EMON_PUB_ENABLED is `true` (the maintainer's first manual publish and pub.dev's automated-publishing setup come first, docs/releasing.md).
 name: release pipeline
@@ -66,7 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ inputs.sha }}
         run: bb release-ops fetch-archives --sha "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/archives"
-      # K5 (D900): the Dart packages, with the SHA-256 of the C bundles in emon_core's hook table. It is made HERE and not in verify.yml because the table is SHA256SUMS, which only exists once the
+      # K5 (D905): the Dart packages, with the SHA-256 of the C bundles in emon_core's hook table. It is made HERE and not in verify.yml because the table is SHA256SUMS, which only exists once the
       # verified archives are collected; the maintainer's first manual publish can start from this asset (docs/releasing.md). SHA256SUMS is rewritten to list it.
       - name: The Dart package tree (stamped, publishable, with the hook's SHA-256 table), added to the archives and SHA256SUMS
         run: bb release-ops dart --dir "$RUNNER_TEMP/archives" --version "${TAG#v}"
@@ -273,7 +273,7 @@ jobs:
         name: bb publish go (a tag-only commit holding go/, and the tag go/vX.Y.Z)
         run: bb publish go ${DRY_FLAG}
 
-  # K5 (D885, D900): pub.dev publishes only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none: this job pushes the tag emon-dart-v<version> with a repository
+  # K5 (D885, D905): pub.dev publishes only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none: this job pushes the tag emon-dart-v<version> with a repository
   # deploy key (a read-write SSH key added under Settings > Deploy keys; its private half is the secret PUB_DEPLOY_KEY), once the release has emon-dart-<version>.tar.gz. pub.yml (on that tag) publishes
   # the 8 packages with GitHub OIDC. Retry: `only=pub` deletes and pushes the tag again (pub.yml skips every package pub.dev has); at another commit the tag is refused.
   pub:

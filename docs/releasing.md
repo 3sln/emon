@@ -165,7 +165,7 @@ upload. Never invoke a real `bb publish` locally. `bb release-notes` derives not
 from DEVLOG and commits since the previous tag; `bb release-verify` checks the
 central version, templates, tag, release target and verified commit status.
 
-## Dart: pub.dev (K7, K5; D885, D895, D900)
+## Dart: pub.dev (K7, K5; D885, D895, D905)
 
 Eight packages are published, in this dependency order: `emon_core`, `emon_ocr_tesseract`, `emon_ocr_ppocr`, `emon_ocr_vision`, `emon_ocr_winocr`, `emon_ocr_mlkit`, `emon`,
 `emon_flutter`. They share the release's version, so a preview is `0.3.0-preview.1`: set it with `bb version set 0.3.0-preview.1` and merge as for any release.

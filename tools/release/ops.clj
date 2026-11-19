@@ -8,7 +8,7 @@
 
 (def triples-cli ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu" "x86_64-pc-windows-msvc"])
 (def triples-lib ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"])
-;; K5 (D900): the C bundle (core libemon, pdfium, the adapters, the packs it carries) is built for the five desktop triples (Windows too: the Dart hook fetches it) and the five mobile ones
+;; K5 (D905): the C bundle (core libemon, pdfium, the adapters, the packs it carries) is built for the five desktop triples (Windows too: the Dart hook fetches it) and the five mobile ones
 (def triples-mobile ["aarch64-linux-android" "armv7-linux-androideabi" "x86_64-linux-android" "aarch64-apple-ios" "aarch64-apple-ios-sim"])
 (def triples-c (vec (concat triples-cli triples-mobile)))
 (def registries ["crates" "npm" "nuget" "maven" "go" "pub"])
@@ -249,7 +249,7 @@
          sums (when (contains? fs* sums-file) (slurp (get fs* sums-file)))]
      (check-archives version hashes sums want))))
 
-;; K5 (D900): the Dart package tree of the release. Made here, from the verified set, and not by verify.yml: its hook table is the SHA-256 of the C bundles, which is SHA256SUMS.
+;; K5 (D905): the Dart package tree of the release. Made here, from the verified set, and not by verify.yml: its hook table is the SHA-256 of the C bundles, which is SHA256SUMS.
 (defn dart! [{:keys [dir version]}]
   (let [v (or version (cur-version))
         dir (str dir)
@@ -316,7 +316,7 @@
                             (for [n (conj (expected-assets v) sums-file)] (str dir "/" n))))))))
     (rl/write-output! "outcome" (if dry-run? "dry-run" "release and assets ready"))))
 
-;; K5 (D885, D900): pub.dev accepts automated publishing only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none. So once the GitHub release has its
+;; K5 (D885, D905): pub.dev accepts automated publishing only from a workflow run that a TAG PUSH started, and a push made with GITHUB_TOKEN starts none. So once the GitHub release has its
 ;; assets (the Dart tree among them), the release run pushes the tag `emon-dart-v<version>` with a repository DEPLOY KEY (the secret PUB_DEPLOY_KEY, which `actions/checkout` installs as the
 ;; checkout's SSH credential); pub.yml starts from that tag.
 (defn pub-tag-name [v] (str "emon-dart-v" v))

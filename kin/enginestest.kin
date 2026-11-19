@@ -182,7 +182,7 @@
 
 (defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp]
   (let [^I32 eng (pk-default-engine pclass)]
-    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D900); Apple Vision waits for P13.21b (D901)")
+    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
     (if (== eng (eng-tesseract))
       (do (assert-eq (pk-engine-calibrated eng) 1 "Tesseract is calibrated")
@@ -305,7 +305,7 @@
 (deftest test-an-os-reader-as-the-turnkey-default-needs-no-pack
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
     (assert-eq (en-resolve (pcls-windows) (pkf-osd) langs engs installed out) (pkerr-ok) "Windows resolves with Windows.Media.Ocr as the default")
-    (assert-eq (pk-rows out) 0 "the OS reads: nothing to fetch (K5, D900)")
+    (assert-eq (pk-rows out) 0 "the OS reads: nothing to fetch (K5, D905)")
     (assert-eq (en-resolve (pcls-android) (pkf-osd) langs engs installed out) (pkerr-ok) "Android resolves with ML Kit as the default")
     (assert-eq (pk-rows out) 0 "ML Kit's Latin model ships in the plugin: nothing to fetch")
     (en-cells1 engs (eng-tesseract))

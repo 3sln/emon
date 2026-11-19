@@ -160,7 +160,7 @@
                   (str/replace #"publish_to: none\n" ""))
               s)]
       (spit f s)))
-  ;; K5 (D886, D900): the release's SHA-256 table goes into the STAMPED COPY, never the checkout, so a release run leaves nothing to clean up
+  ;; K5 (D886, D905): the release's SHA-256 table goes into the STAMPED COPY, never the checkout, so a release run leaves nothing to clean up
   (when sums
     (spit (str dir "/emon_core/lib/src/native_assets.g.dart") (native-table-dart sums))
     (say "wrote the SHA-256 table of " sums " into " dir "/emon_core/lib/src/native_assets.g.dart"))
