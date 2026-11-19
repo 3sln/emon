@@ -4128,6 +4128,7 @@ Maintainer direction of 2026-11-11. The OCR adapter is emon's main seam: an engi
 - [x] P13.20 — K7 Dart package `emon` (turnkey) over `emon_core` + adapters, hook user-defines, web backend (supersedes P13.7, P13.12, P13.13; pub publishing: GitHub OIDC from `pub.yml` on a deploy-key-pushed tag, D885).
 - [x] P13.20b — `emon_flutter`, the Flutter turnkey: a federated plugin on top of `emon`. It adds `emon_ocr_mlkit` (an Android-only Flutter plugin: ML Kit through Play services, adapter contract) and the web implementation over the JS SDK. Build hooks cannot add Gradle dependencies or Android code, so Android platform OCR needs a plugin. Devices without Play services fall back to PP or Tesseract. The pure-Dart `emon` stays Flutter-free: Vision and Windows OCR come as hook-shipped adapter libraries.
 - [ ] P13.21 — K8 platform adapters Vision, Windows OCR, ML Kit (= P13.10, P13.11).
+- [ ] P13.17b — Remove `packs-fetch` (HTTP/TLS) from the core library (D903). The CLI fetches with the OS trust store inside the CLI crate (`rustls-platform-verifier` or the system curl). Each SDK turnkey (Dart in K7; JS, Java, .NET, Go in K3) supplies a platform fetcher through the D896 hook.
 - [ ] P13.21b — Apple turnkey: Vision default with a page-level Tesseract fallback (maintainer 2026-11-18, D901). First fix the Vision adapter language configuration: with no requested language it used a Latin-only set, so CJK pages were misread. Enable automatic language detection or every supported locale, then re-measure the non-Latin controls. Then route to Tesseract the seal/stamp pages (ruling 8), pages whose script Vision cannot read on the running OS, and form-like pages if forms CER stays worse. The Tesseract pack is fetched on demand via the D896 hooks. Acceptance: no worse than Tesseract on forms CER, stamps, non-Latin and numeric retention, while keeping Vision's receipt gains (CORD recall about .83, line items at least 32/151).
 - [ ] P13.22 — K9 turnkey defaults per platform, switched one engine at a time with its scoreboard rows.
 
@@ -14684,6 +14685,27 @@ Maintainer, 2026-11-18: "We can do the full matrix on release only. For PRs, we 
 - **Push to main:** a scoped `verify.yml` run (the plan since the newest verified ancestor), only when the `EMON_VERIFY_ON_PUSH` variable is true. Currently off.
 - **Weekly run:** the weekly full run (Monday cron) is removed.
 - **Local agent and coordinator runs** follow the same rule: `bb check`, `bb ci core`, and the `bb ci plan` selection. The full four-host `bb unit` runs only when the plan selects it.
+
+- [ ] **Signed off** (maintainer)
+
+### D903 — The library bundles no HTTP client or TLS; platforms fetch packs. CDLA-Permissive-2.0 is allowed.
+
+Maintainer, 2026-11-18: "we probably don't want to bundle an http client or tls in our library, these are things the os or platform sdk can generally provide for us." Also: "I don't care, we can allow that license."
+
+**The core library does not fetch.** The core `libemon` and the adapter libraries resolve, cache and verify packs: every file is checked against the catalogue SHA-256, app-provided bytes included (D896). They never fetch over the network. The Rust feature `packs-fetch` added in K2 (D899), with rustls and webpki-roots, is removed from the library.
+
+**Each SDK's turnkey layer fetches** with its platform's networking and trust store, through the D896 `onPackNeeded` hook ("provide"):
+- Dart: `dart:io` `HttpClient`, which uses the OS trust on iOS and Android, including MDM-installed roots;
+- JS: `fetch`;
+- Java: `java.net.http`;
+- .NET: `HttpClient`;
+- Go: `net/http`.
+
+That way pack downloads work behind TLS-inspecting corporate proxies, mobile binaries stay smaller, and root certificates update with the OS.
+
+**The CLI is an app, not the library.** It may fetch inside the CLI crate only, using the OS certificate store (`rustls-platform-verifier`) or the system `curl`.
+
+**Licence.** CDLA-Permissive-2.0 is added to the release-audit allowlist at the maintainer's direction. With `packs-fetch` gone, nothing currently ships it.
 
 - [ ] **Signed off** (maintainer)
 
