@@ -51,6 +51,7 @@ vision_mode="${EMON_RS_VISION:-}"
 if [ "$vision_mode" = 1 ]; then
   [ -z "$cli_mode" ] || { echo "emon-rs-build: EMON_RS_VISION=1 builds the reference driver; the CLI takes EMON_VISION_LINK" >&2; exit 1; }
   crate=.cache/emon-rs-vision
+  [ "${EMON_RS_LIVE:-}" = 1 ] && crate=.cache/emon-rs-vision-tess
   live=1
 fi
 # WINDOWS.MEDIA.OCR (K8, D901): EMON_RS_WINOCR=1 builds the same crate with the `winocr` feature (host/rust/src/winocr.rs, the `windows` crate) into .cache/emon-rs-winocr; Windows only, LIVE only,
@@ -184,6 +185,11 @@ elif [ "$vision_mode" = 1 ]; then
   vision_dir=$(bb tools/native/vision.clj --triple "$vision_triple") || exit 1
   flags="$flags $(cat "$vision_dir/link.rustflags")"
   cargo_features="--features vision$hooks"
+  # with EMON_RS_LIVE=1 the driver also has Tesseract (libtesseract from EMON_TESS_LIB), the fallback of Apple Vision's pages (`--tesseract`, P13.21b, D907)
+  if [ "${EMON_RS_LIVE:-}" = 1 ]; then
+    flags="$flags -L native=${EMON_TESS_LIB:-/opt/homebrew/lib}"
+    cargo_features="--features vision,tesseract$hooks"
+  fi
 elif [ "$live" = 1 ]; then
   if [ -n "$native_dir" ]; then
     flags="$flags $(cat "$native_dir/link.rustflags")"

@@ -9,7 +9,8 @@
 //!   word         the line's top candidate cut at whitespace, each word's box from `boundingBox(for: range)` (the shim falls back to cutting the quad by character position)
 //!   alternatives the line's other candidates that split into the same number of words, where a word differs: word alternatives (`walts`), with the candidate's confidence, only
 //!                when the request asks for symbols and alternatives (flag bit 1), as Tesseract's do
-//!   language     the word language is the request's when it names one language (`wlang`, derived); Vision reports no language
+//!   language     the word language is the request's when it names one language (`wlang`, derived); Vision reports no language. A request that names none is read with Vision's
+//!                every language `supportedRecognitionLanguages` has at the accurate level (P13.21b); the observed identity says how many
 //! WHAT IT DOES NOT: blocks, paragraphs, block kinds, a baseline, row metrics, orientation or script detection (OSD: the answer has no `orient` or `script`, so kin judges the script
 //! by its own census, D883 ruling 4, and a rotated page is not detected), a reading order (`order`: the lines are in Vision's order and kin sorts them by geometry), style, point
 //! size, a dictionary flag, symbols, a thresholded image.
@@ -17,7 +18,7 @@
 //! section 3). A crop that still reads nothing is UNREAD, not blank (a one-line re-read that finds no text did not read; the page is not claimed empty by it).
 use crate::adapter::PortInfo;
 use crate::engine::Ocr;
-use crate::platform::{config_text as kin_config, decode, fail, latin, prepare, unread};
+use crate::platform::{config_text as kin_config, decode, fail, names_other_engine, prepare, unread, Prepared};
 use crate::plan::{Answer, Bitmaps, PlanError, Request};
 use crate::port::{cells_at, cells_len, cells_push, Cells};
 use std::ffi::{c_char, CStr};
@@ -59,6 +60,7 @@ struct EvResult {
 extern "C" {
     fn emon_vision_identity(out: *mut c_char, cap: usize);
     fn emon_vision_languages(out: *mut c_char, cap: usize) -> i32;
+    fn emon_vision_can_detect() -> i32;
     fn emon_vision_read(
         pixels: *const u8,
         width: i32,
@@ -67,6 +69,7 @@ extern "C" {
         stride: i32,
         langs: *const *const c_char,
         nlangs: i32,
+        lmode: i32,
         fast: i32,
         correct: i32,
         ncands: i32,
@@ -98,6 +101,8 @@ pub fn config_text() -> String {
 pub struct VisionOcr {
     observed: String,
     supported: Vec<String>,
+    /// the OS can detect a page's language (macOS 13+, iOS 16+)
+    detect: bool,
     lock: Mutex<()>,
 }
 
@@ -105,14 +110,24 @@ impl VisionOcr {
     pub fn new() -> Result<VisionOcr, String> {
         let mut id = vec![0 as c_char; 512];
         unsafe { emon_vision_identity(id.as_mut_ptr(), id.len()) };
-        let observed = text_of(id.as_ptr());
+        let mut observed = text_of(id.as_ptr());
         let mut langs = vec![0 as c_char; 2048];
         let supported = if unsafe { emon_vision_languages(langs.as_mut_ptr(), langs.len()) } == 0 {
             text_of(langs.as_ptr()).split(',').map(|s| s.to_string()).filter(|s| !s.is_empty()).collect()
         } else {
             vec!["en-US".to_string()]
         };
-        Ok(VisionOcr { observed, supported, lock: Mutex::new(()) })
+        // A request that names no language is read in two steps where the OS can detect a page's language (macOS 13+, iOS 16+): Vision detects it, which reads a Chinese or Japanese page (the
+        // Latin-only set of K8 and an English-first set of every supported language both read half of one, or none); and when what it read is Latin, the page is read again with every language
+        // the OS supports, English first, which reads receipts best (CORD word recall .828 and 32 of 151 line items against .815 and 31 by detection: P13.21b, D907). On an older OS it reads with
+        // every supported language. No language is assumed (D038); the observed identity says which strategy ran.
+        let detect = unsafe { emon_vision_can_detect() } == 1;
+        if detect {
+            observed.push_str(&format!("; locales=detect-then-all-supported({})", supported.len()));
+        } else {
+            observed.push_str(&format!("; locales=all-supported({})", supported.len()));
+        }
+        Ok(VisionOcr { observed, supported, detect, lock: Mutex::new(()) })
     }
 
     pub fn observed(&self) -> &str {
@@ -146,26 +161,9 @@ struct Line {
     cands: Vec<(String, i32)>,
 }
 
-impl Ocr for VisionOcr {
-    fn producer(&self) -> Vec<(String, String)> {
-        vec![("engine".to_string(), "apple-vision".to_string()), ("observed".to_string(), self.observed.clone())]
-    }
-
-    fn fulfil(&self, req: &Request, bitmaps: &Bitmaps, _keep_binary: bool) -> Result<Answer, PlanError> {
-        // the request names this engine and this configuration, or it is not ours to read
-        let mut d = decode(req, bitmaps, crate::emon::oil::oen_apple_vision(), &config_text(), "Apple Vision")?;
-        let langs = d.langs(crate::emon::oil::oen_apple_vision());
-        // the tags Vision has at its current revision, in the request's order; a request that names none is read in the Latin-script languages (no language is assumed, D038)
-        let wanted = if langs.named == 0 { latin(crate::emon::oil::oen_apple_vision()) } else { langs.tags.clone() };
-        let tags: Vec<String> = wanted.iter().filter(|t| self.supported.iter().any(|s| s == *t)).cloned().collect();
-        if langs.named > 0 && tags.is_empty() {
-            return Ok(unread(req)); // `lang-unavailable`: Vision reads none of the languages asked
-        }
-        let lang = langs.one;
-        let want_alts = d.flags & crate::emon::ocr::ocf_symbols() != 0;
-        let (single, cropped) = (d.single(), d.cropped());
-        let (b, psm, flags) = (d.bitmap.clone(), d.psm, d.flags);
-        let p = prepare(&b, d.rect);
+impl VisionOcr {
+    // One reading of a prepared bitmap: the rows, owned, in the request bitmap's pixels. `detect` lets Vision detect the page's language, else it reads with `tags`.
+    fn read_lines(&self, p: &Prepared, bw: i32, bh: i32, detect: bool, tags: &[String], want_alts: bool) -> Result<Vec<Line>, PlanError> {
         let cstrs: Vec<std::ffi::CString> = tags.iter().map(|t| std::ffi::CString::new(t.as_str()).unwrap_or_default()).collect();
         let ptrs: Vec<*const c_char> = cstrs.iter().map(|c| c.as_ptr()).collect();
         let mut res = EvResult { nlines: 0, lines: std::ptr::null_mut() };
@@ -181,6 +179,7 @@ impl Ocr for VisionOcr {
                     p.width * p.channels,
                     if ptrs.is_empty() { std::ptr::null() } else { ptrs.as_ptr() },
                     ptrs.len() as i32,
+                    detect as i32,
                     0,
                     1,
                     if want_alts { 4 } else { 0 },
@@ -193,8 +192,6 @@ impl Ocr for VisionOcr {
         if rc != 0 {
             return Err(fail(&format!("Apple Vision: {}", text_of(err.as_ptr()))));
         }
-        // the rows, owned, in the request bitmap's pixels
-        let (bw, bh) = (b.width(), b.height());
         let mut lines: Vec<Line> = Vec::new();
         for i in 0..res.nlines.max(0) as usize {
             let l = unsafe { &*res.lines.add(i) };
@@ -217,6 +214,61 @@ impl Ocr for VisionOcr {
             lines.push(Line { conf: pm(l.confidence), quad, words, cands });
         }
         unsafe { emon_vision_free(&mut res) };
+        Ok(lines)
+    }
+}
+
+/// How much of a reading's letters are Latin (per mille): none at all counts as all (a blank or digits-only reading is read in English first). Vision's detection of a Latin page and its
+/// reading of a page it cannot read (Cyrillic, Thai, Hangul and kana among Latin) are told apart by this.
+fn latin_share(lines: &[Line]) -> i32 {
+    let (mut latin, mut total) = (0u32, 0u32);
+    for l in lines {
+        for (w, _) in &l.words {
+            for c in w.chars().filter(|c| c.is_alphabetic()) {
+                total += 1;
+                if (c as u32) < 0x250 || (0x1E00..0x1F00).contains(&(c as u32)) {
+                    latin += 1;
+                }
+            }
+        }
+    }
+    if total == 0 { 1000 } else { (latin * 1000 / total) as i32 }
+}
+
+impl Ocr for VisionOcr {
+    fn producer(&self) -> Vec<(String, String)> {
+        vec![("engine".to_string(), "apple-vision".to_string()), ("observed".to_string(), self.observed.clone())]
+    }
+
+    fn fulfil(&self, req: &Request, bitmaps: &Bitmaps, _keep_binary: bool) -> Result<Answer, PlanError> {
+        // another engine's request (the Tesseract fallback of a page, `emon.ofall`) is not ours: unread, as the registry answers an engine nobody registered
+        if names_other_engine(req, crate::emon::oil::oen_apple_vision()) {
+            return Ok(unread(req));
+        }
+        // the request names this engine and this configuration, or it is not ours to read
+        let mut d = decode(req, bitmaps, crate::emon::oil::oen_apple_vision(), &config_text(), "Apple Vision")?;
+        let langs = d.langs(crate::emon::oil::oen_apple_vision());
+        // the tags Vision has at its current revision, in the request's order; a request that names none is read with every language the OS supports (no language is assumed, D038)
+        let tags: Vec<String> = if langs.named == 0 {
+            self.supported.clone()
+        } else {
+            langs.tags.iter().filter(|t| self.supported.iter().any(|s| s == *t)).cloned().collect()
+        };
+        if langs.named > 0 && tags.is_empty() {
+            return Ok(unread(req)); // `lang-unavailable`: Vision reads none of the languages asked
+        }
+        let lang = langs.one;
+        let want_alts = d.flags & crate::emon::ocr::ocf_symbols() != 0;
+        let (single, cropped) = (d.single(), d.cropped());
+        let (b, psm, flags) = (d.bitmap.clone(), d.psm, d.flags);
+        let p = prepare(&b, d.rect);
+        let (bw, bh) = (b.width(), b.height());
+        let lines: Vec<Line> = if langs.named == 0 && self.detect {
+            let first = self.read_lines(&p, bw, bh, true, &[], want_alts)?;
+            if latin_share(&first) >= 850 { self.read_lines(&p, bw, bh, false, &self.supported, want_alts)? } else { first }
+        } else {
+            self.read_lines(&p, bw, bh, false, &tags, want_alts)?
+        };
         // a re-read of a cell or a word that finds nothing did not read: it is unread, never a blank claim
         if lines.is_empty() && (cropped || single) {
             return Ok(unread(req));

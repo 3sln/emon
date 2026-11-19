@@ -6,10 +6,11 @@
                  (contains? #{"ppocr" "ppocr-alone"} (second (drop-while #(not= % "--ocr-engine") args)))))
 (def vision? (or (some #{"--ocr-engine=apple-vision"} args)
                  (= "apple-vision" (second (drop-while #(not= % "--ocr-engine") args)))))
+(def fallback? (boolean (some #{"--fallback"} args)))
 (def custom-bin (or (System/getenv "EMON_RECEIPTS_BIN")
                     (second (drop-while #(not= % "--bin") args))))
 (when (and (not custom-bin) (not-any? #{"--report" "--rescore" "--help" "-h"} args))
-  (p/shell {:extra-env (cond vision? {"EMON_RS_VISION" "1"} :else (cond-> {"EMON_RS_LIVE" "1"} ppocr? (assoc "EMON_RS_PPOCR" "1")))
+  (p/shell {:extra-env (cond vision? (cond-> {"EMON_RS_VISION" "1"} fallback? (assoc "EMON_RS_LIVE" "1")) :else (cond-> {"EMON_RS_LIVE" "1"} ppocr? (assoc "EMON_RS_PPOCR" "1")))
             :out :err}
            "kin/scripts/emon-rs-build"))
 (apply p/shell "python3" "tools/receipts/receipts.py" args)

@@ -246,6 +246,23 @@ public static class Adapterstest {
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverReady(), "ready");
     }
     [Xunit.Fact]
+    public static void TestPrepareSaysReadyForAppleVisionWhateverIsInstalled() {
+        // P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no
+        // locale for makes the fallback the reader, and its pack is then needed as ever.
+        emon.Port.Cells langs = emon.Port.NewCells();
+        emon.Port.Cells engs = emon.Port.NewCells();
+        emon.Port.Cells installed = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        AdCells1(engs, Engines.EngAppleVision());
+        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves with nothing installed");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverReady(), "ready: the conditional pack is fetched on demand (D896), not ahead of time");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 1), Adapters.PverReady(), "and offline");
+        emon.Port.CellsPush(langs, 1751739904);
+        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "Hindi");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverBlocked(), "and may not come");
+    }
+    [Xunit.Fact]
     public static void TestPrepareSaysPartialWhenALanguageHasNoPackForTheEngine() {
         emon.Port.Cells langs = emon.Port.NewCells();
         emon.Port.Cells engs = emon.Port.NewCells();

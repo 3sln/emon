@@ -85,3 +85,11 @@
               (return tags)))
           (set i (+ i 1)))))
   (return 0))
+
+(defn ^:pub ^I32 ol-has [^I32 engine ^I32 lang]
+  (comment "1 when the engine has a locale for the language (or the script) cell, else 0: `ol-locales` without the tags, for a caller that holds no scratch to spare.")
+  (let [^:mut ^I32 i 0]
+    (while (< i (ol-row-count 0))
+      (do (if (and (== (ol-row-at 0 i 0) engine) (== (ol-row-at 0 i 1) lang)) (return 1))
+          (set i (+ i 1)))))
+  (return 0))

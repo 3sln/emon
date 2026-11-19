@@ -36,9 +36,16 @@ void main() {
     expect(html, File(p.join(repo, 'samples/scan-plain.html')).readAsStringSync());
   });
 
-  test('Apple Vision, selected explicitly, reads it too', () async {
+  test('Apple Vision, selected explicitly, reads it too, with Tesseract registered as its fallback', () async {
     if (!Platform.isMacOS) return;
     final html = await emon.convertToHtml(EmonInput.file(p.join(repo, 'samples/scan-plain.pdf')), const ConvertOptions(ocrEngine: OcrEngine.appleVision));
     expect(html, contains('Adaptive Sampling'));
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  test('prepare() for Apple Vision calls Tesseract\'s packs conditional, not missing', () async {
+    if (!Platform.isMacOS) return;
+    final prepared = await emon.prepare(const ConvertOptions(ocrEngine: OcrEngine.appleVision));
+    expect(prepared.missingPackIds, isEmpty, reason: 'Vision needs no pack; the fallback\'s are conditional');
+    expect(prepared.verdict, PrepareVerdict.ready);
+  });
 }

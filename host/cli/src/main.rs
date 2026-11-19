@@ -41,7 +41,7 @@ INPUT is a PDF or an image file, or - for standard input. The result goes to FIL
   --format   html (the default), json (the Model, compact) or model (the Model, indented)
   --assets   omit: the figures are left out; inline: figures and seals as PNGs inside the HTML; dir: as files in FILE.assets/ (needs -o)
   --ocr      when to read pages with Tesseract (the engine's own default when omitted)
-  --ocr-engine tesseract (default), ppocr (experimental, separate add-on; docs/ppocr.md), apple-vision (macOS: Apple's Vision framework) or windows-media-ocr (Windows: Windows.Media.Ocr); the platform engines need no models and are explicit only (docs/platform-ocr.md)
+  --ocr-engine tesseract (default), ppocr (experimental, separate add-on; docs/ppocr.md), apple-vision (macOS: Apple's Vision framework, with Tesseract as the fallback of the pages kin sends to it) or windows-media-ocr (Windows: Windows.Media.Ocr); the platform engines need no models and are explicit only (docs/platform-ocr.md)
   --lang     the Tesseract models to read with, joined by + (default: every model in the models directory)
   --tessdata the models directory (default: $EMON_TESSDATA, else ../share/emon/tessdata beside the executable)
   --pdfium   the pdfium library or the directory holding it (default: $EMON_PDFIUM_LIB, else ../lib or beside the executable)
@@ -237,56 +237,63 @@ fn convert(args: Vec<String>) {
             eprintln!("emon: note: no pdfium ({}): pages that need rendering fail; pass --pdfium PATH or set EMON_PDFIUM_LIB", PDFIUM_LIB);
         }
     }
-    // The platform engines read alone and need no model (K8, D901), and are explicit: the platform's own recogniser is never chosen for the app
-    let platform_engine = matches!(opts.ocr_engine, emon::OcrEngine::AppleVision | emon::OcrEngine::WindowsMediaOcr);
+    // Windows.Media.Ocr reads alone and needs no model (K8, D901), and is explicit. Apple Vision reads too, with Tesseract as the fallback of the pages kin's policy sends to it (P13.21b, D907):
+    // the models are looked for as for Tesseract, and with none Vision reads alone.
+    let apple = opts.ocr_engine == emon::OcrEngine::AppleVision;
+    let platform_engine = opts.ocr_engine == emon::OcrEngine::WindowsMediaOcr;
     if platform_engine && !never {
-        if opts.ocr_engine == emon::OcrEngine::AppleVision {
-            #[cfg(all(feature = "vision", target_os = "macos"))]
-            {
-                let port = emon::vision::VisionOcr::new().unwrap_or_else(|e| die(3, &e));
-                cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
-            }
-            #[cfg(not(all(feature = "vision", target_os = "macos")))]
-            die(3, "--ocr-engine apple-vision needs the macOS build of this tool (Apple's Vision framework); this build has none");
-        } else {
-            #[cfg(all(feature = "winocr", windows))]
-            {
-                let port = emon::winocr::WinOcr::new().unwrap_or_else(|e| die(3, &e));
-                cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
-            }
-            #[cfg(not(all(feature = "winocr", windows)))]
-            die(3, "--ocr-engine windows-media-ocr needs the Windows build of this tool (Windows.Media.Ocr); this build has none");
+        #[cfg(all(feature = "winocr", windows))]
+        {
+            let port = emon::winocr::WinOcr::new().unwrap_or_else(|e| die(3, &e));
+            cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
         }
+        #[cfg(not(all(feature = "winocr", windows)))]
+        die(3, "--ocr-engine windows-media-ocr needs the Windows build of this tool (Windows.Media.Ocr); this build has none");
     }
     // Tesseract's models, unless the pages are never read
     if !never && !platform_engine {
-        let dir = match find_tessdata(tessdata.as_deref()) {
-            Found::Path(p) => p,
-            Found::Missing(tried) => die(
-                3,
-                &format!(
-                    "no Tesseract models (*.traineddata) found. Looked at:\n{}\nPass --tessdata DIR, set EMON_TESSDATA, or keep share/emon/tessdata beside bin/ as the archive lays it out.",
-                    if tried.is_empty() { "    (nowhere: the executable's own location is unknown)".to_string() } else { list(&tried) }
+        let found = find_tessdata(tessdata.as_deref());
+        if apple && matches!(found, Found::Missing(_)) {
+            // Apple Vision alone: no fallback, and nothing to say about it (the fallback is best effort)
+        } else {
+            let dir = match found {
+                Found::Path(p) => p,
+                Found::Missing(tried) => die(
+                    3,
+                    &format!(
+                        "no Tesseract models (*.traineddata) found. Looked at:\n{}\nPass --tessdata DIR, set EMON_TESSDATA, or keep share/emon/tessdata beside bin/ as the archive lays it out.",
+                        if tried.is_empty() { "    (nowhere: the executable's own location is unknown)".to_string() } else { list(&tried) }
+                    ),
                 ),
-            ),
-        };
-        if !dir.join("osd.traineddata").exists() {
-            eprintln!("emon: note: {} has no osd.traineddata: page orientation cannot be detected", dir.display());
-        }
-        let d = dir.to_string_lossy().to_string();
-        let t = match &lang {
-            Some(l) => {
-                let langs: Vec<String> = l.split('+').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
-                if langs.is_empty() {
-                    usage("--lang wants models joined by +, e.g. eng+deu");
-                }
-                emon::tess::TessOcr::with_languages(&d, &langs).unwrap_or_else(|e| die(3, &format!("{} (--lang {}); add the .traineddata file to that directory or pass --tessdata", e, l)))
+            };
+            if !dir.join("osd.traineddata").exists() {
+                eprintln!("emon: note: {} has no osd.traineddata: page orientation cannot be detected", dir.display());
             }
-            None => emon::tess::TessOcr::new(Some(&d)).unwrap_or_else(|e| die(3, &e)),
-        };
-        cfg.ocr = Some(emon::OcrPort(Arc::new(t)));
-    } else if lang.is_some() {
+            let d = dir.to_string_lossy().to_string();
+            let t = match &lang {
+                Some(l) => {
+                    let langs: Vec<String> = l.split('+').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
+                    if langs.is_empty() {
+                        usage("--lang wants models joined by +, e.g. eng+deu");
+                    }
+                    emon::tess::TessOcr::with_languages(&d, &langs).unwrap_or_else(|e| die(3, &format!("{} (--lang {}); add the .traineddata file to that directory or pass --tessdata", e, l)))
+                }
+                None => emon::tess::TessOcr::new(Some(&d)).unwrap_or_else(|e| die(3, &e)),
+            };
+            cfg.ocr = Some(emon::OcrPort(Arc::new(t)));
+        }
+    } else if lang.is_some() && never {
         eprintln!("emon: note: --lang does nothing with ocr=never");
+    }
+    if apple && !never {
+        #[cfg(all(feature = "vision", target_os = "macos"))]
+        {
+            let v = emon::vision::VisionOcr::new().unwrap_or_else(|e| die(3, &e));
+            let info = v.info();
+            cfg.ocr = Some(emon::adapter::platform_fallback(info, Arc::new(v), cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
+        }
+        #[cfg(not(all(feature = "vision", target_os = "macos")))]
+        die(3, "--ocr-engine apple-vision needs the macOS build of this tool (Apple's Vision framework); this build has none");
     }
 
     if opts.ocr_engine.uses_pp() && !never {

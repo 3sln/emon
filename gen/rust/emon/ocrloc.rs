@@ -88,3 +88,14 @@ pub fn ol_locales(engine: i32, lang: i32, mut out: &mut crate::port::Cells) -> i
     }
     return 0;
 }
+pub fn ol_has(engine: i32, lang: i32) -> i32 {
+    // 1 when the engine has a locale for the language (or the script) cell, else 0: `ol-locales` without the tags, for a caller that holds no scratch to spare.
+    let mut i: i32 = 0;
+    while i < 40 {
+        if (OL_ROWS[(i * 4 + 0) as usize] == engine) && (OL_ROWS[(i * 4 + 1) as usize] == lang) {
+            return 1;
+        }
+        i += 1;
+    }
+    return 0;
+}

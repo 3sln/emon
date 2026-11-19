@@ -358,8 +358,9 @@ fn main() {
             usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_LIVE=1)");
         }
     }
-    if opts.ocr_engine == emon::OcrEngine::AppleVision && replay.is_none() {
-        if tess.is_some() { usage("ocr-engine=apple-vision cannot use --tesseract or --tessdata"); }
+    // Apple Vision reads; with `--tesseract` (the models Tesseract has) its pages fall back to Tesseract by kin's policy (P13.21b, D907), without it Vision reads alone
+    let vision_fallback = opts.ocr_engine == emon::OcrEngine::AppleVision && replay.is_none();
+    if vision_fallback && tess.is_none() {
         #[cfg(feature = "vision")]
         {
             let port = emon::vision::VisionOcr::new().unwrap_or_else(|e| usage(&e));
@@ -388,7 +389,19 @@ fn main() {
                 }
                 None => emon::tess::TessOcr::new(dir.as_deref()),
             }.unwrap_or_else(|e| usage(&e));
-            cfg.ocr = Some(emon::OcrPort(std::sync::Arc::new(t)));
+            let t = emon::OcrPort(std::sync::Arc::new(t));
+            #[cfg(feature = "vision")]
+            if vision_fallback {
+                let v = emon::vision::VisionOcr::new().unwrap_or_else(|e| usage(&e));
+                let info = v.info();
+                cfg.ocr = Some(emon::adapter::platform_fallback(info, std::sync::Arc::new(v), Some(t)).unwrap_or_else(|e| usage(&e)));
+            } else {
+                cfg.ocr = Some(t);
+            }
+            #[cfg(not(feature = "vision"))]
+            {
+                cfg.ocr = Some(t);
+            }
         }
         #[cfg(not(feature = "tesseract"))]
         {

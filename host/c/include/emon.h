@@ -343,9 +343,11 @@ int emon_engines_describe(const emon_engines *e, emon_buf *out, emon_error *err)
 /* `prepare(options)`: the packs a conversion with these options (`ocr`, `ocr-engine`, `locale`) needs, which are missing, and what that comes to, as JSON.  Fetches nothing.
  *   {"verdict":"downloadable","mode":"auto","offline":false,"engines":["tesseract"],"languages":["eng"],"osd":true,
  *    "packs":[{"id":"tess-fast-eng","state":"missing","engine":"tesseract","kind":"recognizer","bytes":4113088,"licence":"Apache-2.0","rev":1}, ...],
- *    "unsupported":[{"engine":"ppocr","language":"spa"}],"missing":2,"missing_bytes":14675815}
+ *    "unsupported":[{"engine":"ppocr","language":"spa"}],"missing":2,"missing_bytes":14675815,"conditional":0,"conditional_bytes":0}
  * `verdict`: "ready" (nothing missing), "partial" (nothing missing, but a language no pack reads: those pages are unread), "downloadable" (missing, and the mode may fetch) or
- * "blocked" (missing, and nothing may be fetched).  An option text that does not parse is a usage error. */
+ * "blocked" (missing, and nothing may be fetched).  A pack whose `state` is "conditional" (`ocr-engine=apple-vision`: Tesseract's packs, the fallback's) is needed only if a page of the conversion
+ * goes to the fallback; it is not counted in `missing` and not fetched ahead of time, a page that needs it asks for it (`emon_on_pack_needed`), and `conditional`, `conditional_bytes` count them.
+ * An option text that does not parse is a usage error. */
 int emon_prepare(const emon_engines *e, const char *options, emon_buf *out, emon_error *err);
 
 /* THE HOOK.  Called with what the library needs; fill `out->action` (and the rest for PROVIDE and SUBSTITUTE).  The pointers you give need only live until you return.

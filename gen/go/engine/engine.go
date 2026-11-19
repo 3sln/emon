@@ -22,6 +22,7 @@ import (
 	"emon/notes"
 	"emon/ocrengine"
 	"emon/ocrledger"
+	"emon/ofall"
 	"emon/oilrows"
 	"emon/oilsrc"
 	"emon/pageunit"
@@ -275,6 +276,26 @@ func enHybrid(c *enctx.Cfg) int32 {
 	return 0
 }
 
+func enFallback(c *enctx.Cfg) int32 {
+	// 1 when the reader is Apple Vision (`ocr-engine=apple-vision`, code 3) and its pages may fall back to Tesseract (P13.21b, D907, `emon.ofall`): the page unit's `fuse` bit 16.
+	if c.Oengine == 3 {
+		return 1
+	}
+	return 0
+}
+
+func enRouted(c *enctx.Cfg, ans *port.Cells, i int32) int32 {
+	// 1 when page `i` is Tesseract's: its fallback was asked and read, or the one asked beside a doubtful reading named a script Vision cannot read (`emon.ofall`'s `fb-taken-id`).
+	// Every request of the page is then Tesseract's.
+	if enFallback(c) == 0 {
+		return 0
+	}
+	if ofall.FbTakenId(ans, i) != 0 {
+		return 1
+	}
+	return 0
+}
+
 func enOeMode(c *enctx.Cfg) int32 {
 	// How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
 	// 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
@@ -303,9 +324,9 @@ func enPageInner(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx in
 	// on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
 	port.CellsDrop(d.Pscr, 0)
 	if d.Kind == EnKindPdf() {
-		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)))+(16*enFallback(c)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 	}
-	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, (((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)))+(16*enFallback(c)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 }
 
 func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
@@ -330,7 +351,11 @@ func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, 
 	var w0 int32 = evidence.WdCount(d.Wd)
 	var r0 int32 = evidence.OrCount(ev.Oruns)
 	var status int32 = enPageInner(c, d, ev, i, idx, nbytes, ans, rq, bms)
-	ocrengine.OeTag(rq, d.Pscr, enOeMode(c))
+	if enFallback(c) == 1 {
+		ocrengine.OeTagFb(rq, d.Pscr, enRouted(c, ans, i), ofall.FbSlotRead(), ofall.FbSlotSpec())
+	} else {
+		ocrengine.OeTag(rq, d.Pscr, enOeMode(c))
+	}
 	if status == 0 {
 		// Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
 		oilrows.OrAssemble(ev.Oruns, r0, ev.Rules, i+1, d.Ln, l0, d.Wd, w0, d.Pscr)

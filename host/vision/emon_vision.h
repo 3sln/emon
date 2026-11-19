@@ -47,11 +47,15 @@ void emon_vision_identity(char *out, size_t cap);
 /* The recognition languages Vision reads at its current revision, as one string of BCP-47 tags joined by ',' (the accurate level).  0 when it could be asked, else -1. */
 int emon_vision_languages(char *out, size_t cap);
 
-/* Read one bitmap.  `pixels` is row-major, `channels` 1 (gray) or 3 (RGB), `stride` bytes a row.  `langs` are BCP-47 tags (`nlangs` may be 0: Vision's default).  `fast`: the
+/* 1 when this OS has automatic language detection (`automaticallyDetectsLanguage`: macOS 13+, iOS 16+), else 0. */
+int emon_vision_can_detect(void);
+
+/* Read one bitmap.  `pixels` is row-major, `channels` 1 (gray) or 3 (RGB), `stride` bytes a row.  `langs` are BCP-47 tags (`nlangs` may be 0: Vision's default).  `detect`: 1 lets Vision
+ * detect the language of the page itself (only where emon_vision_can_detect; `langs` are then not used), 0 reads with `langs`.  `fast`: the
  * fast recognition level, else accurate.  `correct`: language correction.  `ncands`: how many candidates to keep besides the top (0..9).
  * Answers 0 and fills `out` (free it with emon_vision_free), or non-zero with `err` set to a sentence. */
 int emon_vision_read(const uint8_t *pixels, int32_t width, int32_t height, int32_t channels, int32_t stride,
-                     const char *const *langs, int32_t nlangs, int32_t fast, int32_t correct, int32_t ncands,
+                     const char *const *langs, int32_t nlangs, int32_t detect, int32_t fast, int32_t correct, int32_t ncands,
                      ev_result *out, char *err, size_t errcap);
 
 void emon_vision_free(ev_result *r);

@@ -7,19 +7,19 @@ use crate::emon::oil::*;
 use crate::emon::plan::*;
 
 pub static OE_IDENTITY: [i32; 74] = [
-    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 50, 98, 100, 55, 99, 98,
-    99, 51, 53, 102, 57, 51, 57, 52, 99, 100, 57, 100, 54, 52, 99, 100,
-    48, 101, 51, 98, 54, 101, 48, 55, 98, 49, 54, 50, 49, 53, 98, 56,
-    57, 51, 56, 54, 55, 55, 52, 56, 102, 97, 48, 57, 54, 101, 102, 51,
-    55, 101, 102, 53, 49, 53, 97, 100, 97, 48
+    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 55, 56, 97, 48, 98, 99,
+    54, 52, 55, 48, 97, 102, 102, 56, 97, 48, 49, 57, 98, 57, 100, 102,
+    48, 54, 50, 98, 48, 51, 56, 97, 49, 102, 54, 56, 49, 57, 50, 57,
+    52, 54, 55, 57, 50, 101, 51, 51, 49, 100, 97, 100, 54, 52, 54, 48,
+    97, 57, 48, 55, 57, 100, 102, 48, 97, 98
 ];
-pub static OE_VISION_CONFIG: [i32; 90] = [
+pub static OE_VISION_CONFIG: [i32; 91] = [
     97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
     101, 99, 111, 103, 110, 105, 122, 101, 84, 101, 120, 116, 82, 101, 113, 117,
     101, 115, 116, 59, 114, 101, 118, 61, 108, 97, 116, 101, 115, 116, 59, 108,
     101, 118, 101, 108, 61, 97, 99, 99, 117, 114, 97, 116, 101, 59, 108, 99,
     61, 49, 59, 108, 97, 110, 103, 61, 114, 101, 113, 117, 101, 115, 116, 45,
-    101, 108, 115, 101, 45, 108, 97, 116, 105, 110
+    101, 108, 115, 101, 45, 100, 101, 116, 101, 99, 116
 ];
 pub static OE_WINOCR_CONFIG: [i32; 60] = [
     119, 105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99,
@@ -39,7 +39,7 @@ pub(crate) fn oe_cfg_count(engine: i32) -> i32 {
         return 74;
     }
     if engine == 3 {
-        return 90;
+        return 91;
     }
     if engine == 4 {
         return 71;
@@ -184,6 +184,39 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
             }
             if mode == 8 {
                 oe_select(scratch, out, 4);
+            }
+        }
+        at += n;
+    }
+    crate::port::cells_drop(requests, 0);
+    i = 0;
+    while i < crate::port::cells_len(scratch) {
+        crate::port::cells_push(requests, crate::port::cells_at(scratch, i));
+        i += 1;
+    }
+    return 0;
+}
+pub fn oe_tag_fb(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells, routed: i32, slot_a: i32, slot_b: i32) -> i32 {
+    // `ocr-engine=apple-vision` with its Tesseract fallback (P13.21b, D907; `emon.ofall`): the page's OCR requests are Apple Vision's (engine 3) except the page's own fallback first pass
+    // (page-local ids `slot-a`, `slot-b`: the first pass the rules ask and the one asked beside a doubtful reading), which stay as they were built, Tesseract's, and every request of a page the fallback took (`routed` 1).
+    crate::port::cells_drop(scratch, 0);
+    let mut at: i32 = 0;
+    let mut i: i32 = 0;
+    let mut id: i32 = 0;
+    let mut k: i32 = 0;
+    while at < crate::port::cells_len(requests) {
+        let n: i32 = crate::port::cells_at(requests, at);
+        let out: i32 = crate::port::cells_len(scratch);
+        i = 0;
+        while i < n {
+            crate::port::cells_push(scratch, crate::port::cells_at(requests, at + i));
+            i += 1;
+        }
+        if crate::port::cells_at(requests, at + 1) == pk_ocr() {
+            id = crate::port::cells_at(requests, at + 2);
+            k = id - ((id / 256) * 256);
+            if (routed == 0) && ((k != slot_a) && (k != slot_b)) {
+                oe_select(scratch, out, 3);
             }
         }
         at += n;

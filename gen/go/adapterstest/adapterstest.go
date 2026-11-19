@@ -258,6 +258,23 @@ func TestPrepareSaysReadyWhenNothingIsMissing(emonT *testing.T) {
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverReady(), "ready")
 }
 
+func TestPrepareSaysReadyForAppleVisionWhateverIsInstalled(emonT *testing.T) {
+	// P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no
+	// locale for makes the fallback the reader, and its pack is then needed as ever.
+	var langs *port.Cells = port.NewCells()
+	var engs *port.Cells = port.NewCells()
+	var installed *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	adCells1(engs, engines.EngAppleVision())
+	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves with nothing installed")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverReady(), "ready: the conditional pack is fetched on demand (D896), not ahead of time")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 1), adapters.PverReady(), "and offline")
+	port.CellsPush(langs, 1751739904)
+	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "Hindi")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverBlocked(), "and may not come")
+}
+
 func TestPrepareSaysPartialWhenALanguageHasNoPackForTheEngine(emonT *testing.T) {
 	var langs *port.Cells = port.NewCells()
 	var engs *port.Cells = port.NewCells()

@@ -278,9 +278,9 @@ fn test_uncalibrated_candidate_can_never_insert_or_replace() {
 }
 #[test]
 fn test_platform_engines_have_their_own_requested_configuration() {
-    crate::testport::assert_eq(oe_config_len(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+    crate::testport::assert_eq(oe_config_len(3), 91, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect");
     crate::testport::assert_eq(oe_config_value(3, 0), 97, "it begins with the engine's name");
-    crate::testport::assert_eq(oe_config_value(3, 89), 110, "and ends with the language policy (latin)");
+    crate::testport::assert_eq(oe_config_value(3, 90), 116, "and ends with the language policy (detect: Vision detects the language, then Latin pages are read in English first)");
     crate::testport::assert_eq(oe_config_len(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
     crate::testport::assert_eq(oe_config_value(5, 0), 119, "it begins with the engine's name");
     crate::testport::assert_eq(oe_config_len(2), 74, "PP-OCR's is its frozen policy hash");
@@ -301,7 +301,7 @@ fn test_apple_vision_selection_retags_every_request_with_its_configuration() {
     crate::testport::assert_eq(crate::port::cells_at(r, 11), -3100, "identity marker");
     crate::testport::assert_eq(crate::port::cells_at(r, 12), 2, "requested identity version");
     crate::testport::assert_eq(crate::port::cells_at(r, 13), 3, "Apple Vision's engine");
-    crate::testport::assert_eq(crate::port::cells_at(r, 14), 90, "its configuration's length");
+    crate::testport::assert_eq(crate::port::cells_at(r, 14), 91, "its configuration's length");
     crate::testport::assert_eq(op_request_engine(r), 3, "the request says which engine reads it");
     crate::testport::assert_eq(op_lang_count(r), 1, "the language is still the one language");
     crate::testport::assert_eq(op_lang_at(r, 0), 1701734144, "English");
@@ -367,5 +367,5 @@ fn test_evidence_names_the_platform_engine_and_its_configuration() {
     crate::testport::assert_eq(oe_register(table, runs, lines, words, 4, scratch), 0, "registered");
     crate::testport::assert_eq(crate::port::cells_len(table), 7, "one engine, one row");
     crate::testport::assert_eq(oe_evidence(out, table, scratch), 0, "written");
-    crate::testport::assert_text(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+    crate::testport::assert_text(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect\",\"observed\":[0,0]}]", "the evidence's engine table");
 }

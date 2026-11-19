@@ -24,7 +24,7 @@
 ;;   the challenger, and an uncalibrated platform engine a reader (alone) or a voter (corroborating), never an incumbent or a challenger that inserts.
 ;;
 ;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895, K5 D905): the engine an app gets when it chooses nothing (Tesseract, except Windows.Media.Ocr on Windows and ML Kit on
-;;   Android: their own OS readers; Apple Vision on Apple platforms waits for P13.21b), the platform's own OS engine (selectable explicitly; uncalibrated ones are readers or voters, never incumbents, D895), the PP-OCR runtime of the class (the
+;;   Android: their own OS readers; Apple Vision on Apple platforms is explicit until it is accepted: its fallback is built, P13.21b D907), the platform's own OS engine (selectable explicitly; uncalibrated ones are readers or voters, never incumbents, D895), the PP-OCR runtime of the class (the
 ;;   hybrid partner), whether packs are fetched on demand (`pfetch`: auto for a turnkey package; core and bare adapters never fetch, D885, and EMON_OFFLINE=1 or `never`
 ;;   always wins, D896) and the renderer.
 ;;
@@ -40,6 +40,7 @@
 (ns emon.engines
   (:require [emon.lang :refer [I32 Cells Text Blob defenum emit-ascii shl32]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop text-i32 text-cp blob-u8]]
+            [emon.ocrloc :refer [ol-has]]
             [emon.packdata :refer [pack-row-count pack-row-at pack-lang-count pack-lang-at pack-file-at pack-name-at pkid-find
                                    pkid-tess-fast-eng pkid-tess-osd]]
             [kin.lang :refer [defdata defn return let set while if do comment + - * < > <= >= == != and or quot bit-and bit-or]]))
@@ -80,7 +81,8 @@
    [erole-incumbent 1 "incumbent"]
    [erole-challenger 2 "challenger"]
    [erole-reader 4 "reader"]
-   [erole-voter 8 "voter"]])
+   [erole-voter 8 "voter"]
+   [erole-fallback 16 "fallback"]])
 
 ;; The kinds of pack: one bit each, so what an engine needs is a number. The catalogue's `:kind`.
 (defenum ^:pub ^:parse pkind
@@ -100,7 +102,8 @@
 (defenum ^:pub pstate
   [[pstate-installed 1 "installed"]
    [pstate-missing 2 "missing"]
-   [pstate-unsupported 3 "unsupported"]])
+   [pstate-unsupported 3 "unsupported"]
+   [pstate-conditional 4 "conditional"]])
 
 ;; Why a resolution or a record was refused: the spelling is the sentence's start (`pk-explain` adds the subject).
 (defenum ^:pub pkerr
@@ -145,8 +148,8 @@
 (defdata ^:pub en-roles
   :emitter kin.lang/flat-array
   :stride 4
-  :data [1 1 5 1
-         1 2 5 1
+  :data [1 1 21 1
+         1 2 21 1
          1 3 5 1
          1 4 5 1
          1 5 5 1
@@ -164,19 +167,20 @@
   :accessors {^I32 en-roles-count [^I32 ignored]
               ^I32 en-roles-at [^I32 ignored ^I32 row ^I32 col]})
 
-;; class engine platform-engine pp-engine fetch render. Tesseract on macOS, iOS, Linux and the web (D885; Apple's platform engine is explicit-only until P13.21b); Windows.Media.Ocr on Windows and
+;; class engine platform-engine pp-engine fetch render fallback. Tesseract on macOS, iOS, Linux and the web (D885; Apple's platform engine, Vision, is explicit until the maintainer accepts it as the default,
+;; P13.21b D907: it is built, measured and has its fallback, and the switch is this table's first column on those two rows, `apple-vision` (4)); Windows.Media.Ocr on Windows and
 ;; ML Kit on Android (K5, D905: the OS's own reader, no model to fetch, nothing to download on first use); a turnkey fetches on demand (D885, D896). The Android row is the FLUTTER turnkey's:
 ;; ML Kit is a plugin of the Dart package `emon_flutter` and is answered by the caller, so a host with no plugin (the pure-Dart `emon`, the C ABI, Rust, Go, Java, C#) names Tesseract itself
 ;; (a host that cannot load the default engine falls back to Tesseract, whose packs are fetched on demand, D896).
 (defdata ^:pub en-turnkey
   :emitter kin.lang/flat-array
-  :stride 6
-  :data [1 1 4 2 3 7
-         2 1 4 2 3 7
-         3 1 0 2 3 7
-         4 5 5 2 3 7
-         5 6 6 2 3 7
-         6 1 0 3 3 7]
+  :stride 7
+  :data [1 1 4 2 3 7 1
+         2 1 4 2 3 7 1
+         3 1 0 2 3 7 0
+         4 5 5 2 3 7 0
+         5 6 6 2 3 7 0
+         6 1 0 3 3 7 0]
   :accessors {^I32 en-turnkey-count [^I32 ignored]
               ^I32 en-turnkey-at [^I32 ignored ^I32 row ^I32 col]})
 
@@ -271,6 +275,11 @@
 
 (defn ^:pub ^I32 pk-default-render [^I32 pclass]
   (return (pk-tk-col pclass 5)))
+
+(defn ^:pub ^I32 pk-fallback-engine [^I32 pclass]
+  (comment "The engine that reads the pages the class's own OS engine hands over (`emon.ofall`: a script it has no recogniser for, a seal or a stamp, a page it left unread), or 0 when that engine reads alone.")
+  (comment "Tesseract on Apple platforms, behind Apple Vision when it is selected (P13.21b, D907). Its packs are NOT fetched ahead of time: `pk-resolve` reports them `conditional`, and a page that needs one asks for it (D896).")
+  (return (pk-tk-col pclass 6)))
 
 (defn ^:pub ^I32 pk-bundled-count []
   (comment "The packs a turnkey package ships inside itself (D885: English and OSD); everything else is fetched.")
@@ -425,6 +434,12 @@
 
 ;; ----------------------------------------------------------------------------------------------- resolution
 
+(defn ^I32 pk-mark [^:mut ^Cells c ^I32 at ^I32 v]
+  (comment "Mark a pack of the resolution's scratch: 1 needed, 2 conditional (the fallback partner's), which a needed mark is never lowered to.")
+  (if (== v 1) (cells-set c at 1)
+    (if (== (cells-at c at) 0) (cells-set c at 2)))
+  (return 0))
+
 (defn ^I32 pk-has [^Cells c ^I32 from ^I32 v]
   (comment "1 when `v` is among the cells of `c` from `from` on.")
   (let [^I32 n (cells-len c) ^:mut ^I32 i from]
@@ -474,7 +489,7 @@
         ^I32 sel (+ np 1)
         ^I32 lb (+ (+ np 1) ne)
         ^:mut ^I32 i 0 ^:mut ^I32 r 0 ^:mut ^I32 v 0 ^:mut ^I32 eng 0 ^:mut ^I32 p 0 ^:mut ^I32 pe 0
-        ^:mut ^I32 needs 0 ^:mut ^I32 pk 0 ^:mut ^I32 lang 0 ^:mut ^I32 j 0]
+        ^:mut ^I32 needs 0 ^:mut ^I32 pk 0 ^:mut ^I32 lang 0 ^:mut ^I32 j 0 ^:mut ^I32 sv 0 ^:mut ^I32 want 0]
     (while (< i lb)
       (do (cells-push scratch 0) (set i (+ i 1))))
     ;; the engines: asked for, or the turnkey default
@@ -490,6 +505,12 @@
                 (if (== (pk-engine-on eng pclass) 0) (return (pk-fail out (pkerr-engine-class) eng pclass)))
                 (cells-set scratch (+ sel r) 1)
                 (set i (+ i 1))))))
+    ;; the fallback partner of Apple Vision (P13.21b, D907): Tesseract reads the pages Vision hands over, so its packs are needed IF such a page appears. It is selected as 2 (conditional), unless
+    ;; it was asked for itself (1)
+    (if (== (cells-at scratch (+ sel (pk-en-row (eng-apple-vision)))) 1)
+      (do (set eng (pk-fallback-engine pclass))
+          (set r (pk-en-row eng))
+          (if (and (>= r 0) (== (cells-at scratch (+ sel r)) 0)) (cells-set scratch (+ sel r) 2))))
     ;; the languages: sorted, without repeats; none means English
     (if (== (cells-len langs) 0)
       (cells-push scratch (pk-lang-eng))
@@ -505,10 +526,12 @@
       (do (set p (cells-at installed i))
           (if (== (pk-pack-known p) 0) (return (pk-fail out (pkerr-unknown-pack) p 0)))
           (set i (+ i 1))))
-    ;; pass 1: the packs each selected engine reads with
+    ;; pass 1: the packs each selected engine reads with. A selected engine is 1 (asked for) or 2 (the fallback partner, P13.21b): the partner's packs are `conditional` (marked 2) except
+    ;; the recogniser of a language Apple Vision has no locale for, which is as needed as if the partner had been asked for
     (set r 0)
     (while (< r ne)
-      (do (if (== (cells-at scratch (+ sel r)) 1)
+      (do (set sv (cells-at scratch (+ sel r)))
+          (if (> sv 0)
             (do (set eng (en-table-at 0 r 0))
                 (set needs (en-table-at 0 r 7))
                 (set p 1)
@@ -517,39 +540,48 @@
                       (set pk (pk-pack-kind p))
                       (if (and (or (== pe eng) (== pe 0)) (!= (bit-and needs pk) 0))
                         (do (if (== pk (pkind-osd))
-                              (if (!= (bit-and flags (pkf-osd)) 0) (cells-set scratch p 1)))
+                              (if (!= (bit-and flags (pkf-osd)) 0) (pk-mark scratch p sv)))
                             (if (or (== pk (pkind-detector)) (== pk (pkind-classifier)))
-                              (cells-set scratch p 1))))
+                              (pk-mark scratch p sv))))
                       (set p (+ p 1))))
                 (set j lb)
                 (while (< j (cells-len scratch))
                   (do (set lang (cells-at scratch j))
+                      (set want sv)
+                      (if (== sv 2)
+                        (if (== (ol-has (pk-engine-oen (eng-apple-vision)) lang) 0) (set want 1)))
                       (set p (pk-pack-for eng (pkind-recognizer) lang))
-                      (if (and (!= p 0) (!= (bit-and needs (pkind-recognizer)) 0)) (cells-set scratch p 1))
+                      (if (and (!= p 0) (!= (bit-and needs (pkind-recognizer)) 0)) (pk-mark scratch p want))
                       (set p (pk-pack-for eng (pkind-lexicon) lang))
-                      (if (and (!= p 0) (!= (bit-and needs (pkind-lexicon)) 0)) (cells-set scratch p 1))
+                      (if (and (!= p 0) (!= (bit-and needs (pkind-lexicon)) 0)) (pk-mark scratch p want))
                       (set j (+ j 1))))))
           (set r (+ r 1))))
-    ;; the packs needed, in the catalogue's order
+    (cells-drop out 0)
+    ;; the packs needed, in the catalogue's order: installed, missing, or conditional (the fallback partner's, needed only if a page of the conversion goes to it)
     (set p 1)
     (while (<= p np)
-      (do (if (== (cells-at scratch p) 1)
+      (do (if (> (cells-at scratch p) 0)
             (do (set v (pstate-missing))
+                (if (== (cells-at scratch p) 2) (set v (pstate-conditional)))
                 (if (== (pk-has installed 0 p) 1) (set v (pstate-installed)))
                 (cells-push out v)
                 (cells-push out (pk-pack-engine p))
                 (cells-push out p)
                 (cells-push out 0)))
           (set p (+ p 1))))
-    ;; pass 2: the languages no pack reads, by engine then language
+    ;; pass 2: the languages no pack reads, by engine then language (the fallback partner's only for a language Vision has no locale for either)
     (set r 0)
     (while (< r ne)
-      (do (if (and (== (cells-at scratch (+ sel r)) 1) (!= (bit-and (en-table-at 0 r 7) (pkind-recognizer)) 0))
+      (do (set sv (cells-at scratch (+ sel r)))
+          (if (and (> sv 0) (!= (bit-and (en-table-at 0 r 7) (pkind-recognizer)) 0))
             (do (set eng (en-table-at 0 r 0))
                 (set j lb)
                 (while (< j (cells-len scratch))
                   (do (set lang (cells-at scratch j))
-                      (if (== (pk-pack-for eng (pkind-recognizer) lang) 0)
+                      (set want sv)
+                      (if (== sv 2)
+                        (if (== (ol-has (pk-engine-oen (eng-apple-vision)) lang) 0) (set want 1)))
+                      (if (and (== want 1) (== (pk-pack-for eng (pkind-recognizer) lang) 0))
                         (do (cells-push out (pstate-unsupported))
                             (cells-push out eng)
                             (cells-push out 0)

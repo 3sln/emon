@@ -4,6 +4,7 @@
 package engines
 
 import (
+	"emon/ocrloc"
 	"emon/packdata"
 	"emon/port"
 	"strings"
@@ -520,6 +521,9 @@ func EroleReader() int32 {
 func EroleVoter() int32 {
 	return 8
 }
+func EroleFallback() int32 {
+	return 16
+}
 func EroleEmitName(t *strings.Builder, code int32) int32 {
 	if code == 0 {
 		port.TextAscii(t, "none")
@@ -539,6 +543,10 @@ func EroleEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 8 {
 		port.TextAscii(t, "voter")
+		return 1
+	}
+	if code == 16 {
+		port.TextAscii(t, "fallback")
 		return 1
 	}
 	return 0
@@ -621,6 +629,25 @@ func EroleFind(b []byte, from int32, to int32) int32 {
 					if port.BlobU8(b, from+3) == 101 {
 						if port.BlobU8(b, from+4) == 114 {
 							return 8
+						}
+					}
+				}
+			}
+		}
+	}
+	if (to - from) == 8 {
+		if port.BlobU8(b, from+0) == 102 {
+			if port.BlobU8(b, from+1) == 97 {
+				if port.BlobU8(b, from+2) == 108 {
+					if port.BlobU8(b, from+3) == 108 {
+						if port.BlobU8(b, from+4) == 98 {
+							if port.BlobU8(b, from+5) == 97 {
+								if port.BlobU8(b, from+6) == 99 {
+									if port.BlobU8(b, from+7) == 107 {
+										return 16
+									}
+								}
+							}
 						}
 					}
 				}
@@ -837,6 +864,9 @@ func PstateMissing() int32 {
 func PstateUnsupported() int32 {
 	return 3
 }
+func PstateConditional() int32 {
+	return 4
+}
 func PstateEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "installed")
@@ -848,6 +878,10 @@ func PstateEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 3 {
 		port.TextAscii(t, "unsupported")
+		return 1
+	}
+	if code == 4 {
+		port.TextAscii(t, "conditional")
 		return 1
 	}
 	return 0
@@ -921,8 +955,8 @@ var EnTable [56]int32 = [56]int32{
 }
 
 var EnRoles [64]int32 = [64]int32{
-	1, 1, 5, 1,
-	1, 2, 5, 1,
+	1, 1, 21, 1,
+	1, 2, 21, 1,
 	1, 3, 5, 1,
 	1, 4, 5, 1,
 	1, 5, 5, 1,
@@ -939,13 +973,13 @@ var EnRoles [64]int32 = [64]int32{
 	6, 5, 12, 4,
 }
 
-var EnTurnkey [36]int32 = [36]int32{
-	1, 1, 4, 2, 3, 7,
-	2, 1, 4, 2, 3, 7,
-	3, 1, 0, 2, 3, 7,
-	4, 5, 5, 2, 3, 7,
-	5, 6, 6, 2, 3, 7,
-	6, 1, 0, 3, 3, 7,
+var EnTurnkey [42]int32 = [42]int32{
+	1, 1, 4, 2, 3, 7, 1,
+	2, 1, 4, 2, 3, 7, 1,
+	3, 1, 0, 2, 3, 7, 0,
+	4, 5, 5, 2, 3, 7, 0,
+	5, 6, 6, 2, 3, 7, 0,
+	6, 1, 0, 3, 3, 7, 0,
 }
 
 func pkEnRow(eng int32) int32 {
@@ -1065,8 +1099,8 @@ func PkRoleDefault(eng int32, pclass int32) int32 {
 func pkTkCol(pclass int32, col int32) int32 {
 	var i int32 = 0
 	for i < 6 {
-		if EnTurnkey[i*6+0] == pclass {
-			return EnTurnkey[i*6+col]
+		if EnTurnkey[i*7+0] == pclass {
+			return EnTurnkey[i*7+col]
 		}
 		i += 1
 	}
@@ -1095,6 +1129,12 @@ func PkDefaultFetch(pclass int32) int32 {
 
 func PkDefaultRender(pclass int32) int32 {
 	return pkTkCol(pclass, 5)
+}
+
+func PkFallbackEngine(pclass int32) int32 {
+	// The engine that reads the pages the class's own OS engine hands over (`emon.ofall`: a script it has no recogniser for, a seal or a stamp, a page it left unread), or 0 when that engine reads alone.
+	// Tesseract on Apple platforms, behind Apple Vision when it is selected (P13.21b, D907). Its packs are NOT fetched ahead of time: `pk-resolve` reports them `conditional`, and a page that needs one asks for it (D896).
+	return pkTkCol(pclass, 6)
 }
 
 func PkBundledCount() int32 {
@@ -1336,6 +1376,16 @@ func PkExplain(code int32, subject *port.Cells, msg *strings.Builder) int32 {
 	return code
 }
 
+func pkMark(c *port.Cells, at int32, v int32) int32 {
+	// Mark a pack of the resolution's scratch: 1 needed, 2 conditional (the fallback partner's), which a needed mark is never lowered to.
+	if v == 1 {
+		port.CellsSet(c, at, 1)
+	} else if port.CellsAt(c, at) == 0 {
+		port.CellsSet(c, at, 2)
+	}
+	return 0
+}
+
 func pkHas(c *port.Cells, from int32, v int32) int32 {
 	// 1 when `v` is among the cells of `c` from `from` on.
 	var n int32 = port.CellsLen(c)
@@ -1415,6 +1465,8 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 	var pk int32 = 0
 	var lang int32 = 0
 	var j int32 = 0
+	var sv int32 = 0
+	var want int32 = 0
 	for i < lb {
 		port.CellsPush(scratch, 0)
 		i += 1
@@ -1442,6 +1494,13 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 			i += 1
 		}
 	}
+	if port.CellsAt(scratch, sel+pkEnRow(EngAppleVision())) == 1 {
+		eng = PkFallbackEngine(pclass)
+		r = pkEnRow(eng)
+		if (r >= 0) && (port.CellsAt(scratch, sel+r) == 0) {
+			port.CellsSet(scratch, sel+r, 2)
+		}
+	}
 	if port.CellsLen(langs) == 0 {
 		port.CellsPush(scratch, PkLangEng())
 	} else {
@@ -1465,7 +1524,8 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 	}
 	r = 0
 	for r < ne {
-		if port.CellsAt(scratch, sel+r) == 1 {
+		sv = port.CellsAt(scratch, sel+r)
+		if sv > 0 {
 			eng = EnTable[r*8+0]
 			needs = EnTable[r*8+7]
 			p = 1
@@ -1475,11 +1535,11 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 				if ((pe == eng) || (pe == 0)) && ((needs & pk) != 0) {
 					if pk == PkindOsd() {
 						if (flags & PkfOsd()) != 0 {
-							port.CellsSet(scratch, p, 1)
+							pkMark(scratch, p, sv)
 						}
 					}
 					if (pk == PkindDetector()) || (pk == PkindClassifier()) {
-						port.CellsSet(scratch, p, 1)
+						pkMark(scratch, p, sv)
 					}
 				}
 				p += 1
@@ -1487,23 +1547,33 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 			j = lb
 			for j < port.CellsLen(scratch) {
 				lang = port.CellsAt(scratch, j)
+				want = sv
+				if sv == 2 {
+					if ocrloc.OlHas(PkEngineOen(EngAppleVision()), lang) == 0 {
+						want = 1
+					}
+				}
 				p = PkPackFor(eng, PkindRecognizer(), lang)
 				if (p != 0) && ((needs & PkindRecognizer()) != 0) {
-					port.CellsSet(scratch, p, 1)
+					pkMark(scratch, p, want)
 				}
 				p = PkPackFor(eng, PkindLexicon(), lang)
 				if (p != 0) && ((needs & PkindLexicon()) != 0) {
-					port.CellsSet(scratch, p, 1)
+					pkMark(scratch, p, want)
 				}
 				j += 1
 			}
 		}
 		r += 1
 	}
+	port.CellsDrop(out, 0)
 	p = 1
 	for p <= np {
-		if port.CellsAt(scratch, p) == 1 {
+		if port.CellsAt(scratch, p) > 0 {
 			v = PstateMissing()
+			if port.CellsAt(scratch, p) == 2 {
+				v = PstateConditional()
+			}
 			if pkHas(installed, 0, p) == 1 {
 				v = PstateInstalled()
 			}
@@ -1516,12 +1586,19 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 	}
 	r = 0
 	for r < ne {
-		if (port.CellsAt(scratch, sel+r) == 1) && ((EnTable[r*8+7] & PkindRecognizer()) != 0) {
+		sv = port.CellsAt(scratch, sel+r)
+		if (sv > 0) && ((EnTable[r*8+7] & PkindRecognizer()) != 0) {
 			eng = EnTable[r*8+0]
 			j = lb
 			for j < port.CellsLen(scratch) {
 				lang = port.CellsAt(scratch, j)
-				if PkPackFor(eng, PkindRecognizer(), lang) == 0 {
+				want = sv
+				if sv == 2 {
+					if ocrloc.OlHas(PkEngineOen(EngAppleVision()), lang) == 0 {
+						want = 1
+					}
+				}
+				if (want == 1) && (PkPackFor(eng, PkindRecognizer(), lang) == 0) {
 					port.CellsPush(out, PstateUnsupported())
 					port.CellsPush(out, eng)
 					port.CellsPush(out, 0)

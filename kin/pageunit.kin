@@ -38,6 +38,7 @@
                                    or-count op-region op-first op-upscaled]]
             [emon.retarget :refer [rt-receipt-source rt-receipt-ignored rt-mark-adopted rt-prep rt-plan rt-record rt-adopt rt-upright rt-witness rt-run-meta rt-pad rtp-q rtp-primary rtp-hash rtp-trigger]]
             [emon.ocrengine :refer [oe-select oe-request-slot]]
+            [emon.ofall :refer [fb-taken-id fb-route fb-ask-if fb-form fb-tess-reads fb-seal-hits]]
             [emon.oapp :refer [pp-sums]]
             [emon.ofuse :refer [of-fuse of-pp-complete]]
             [emon.oaline :refer [oa-line-fuse]]
@@ -424,7 +425,7 @@
   (comment "slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);")
   (comment "`seals` 1 looks for seals and signatures in the pixels (PDF pages and image frames); 0 skips those stages.")
   (comment "D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.")
-  (let [^I32 oid (pu-id i (pi-ocr))
+  (let [^:mut ^I32 oid (pu-id i (pi-ocr))
         ^I32 uid (pu-id i (ri-upscale))
         ^I32 uvid (pu-view-id i (rv-upscaled))
         ^:mut ^I32 rid did
@@ -447,13 +448,25 @@
         ^:mut ^I32 rotmed 0
         ^:mut ^I32 asked 0
         ^:mut ^I32 ppasked 0
-        ^:mut ^I32 nsel 0]
+        ^:mut ^I32 nsel 0
+        ^:mut ^I32 fbn 0
+        ^:mut ^I32 fbq -1
+        ^:mut ^I32 fbh 0]
     (set pxw (an-arg ans ad 0))
     (set pxh (an-arg ans ad 1))
+    (comment "P13.21b (D907, `emon.ofall`): a page Apple Vision's policy sent to Tesseract (its fallback pass was asked and read) has Tesseract's reading as its first pass, from here on in every way")
+    (if (== (bit-and fuse 16) 16)
+      (do (set fbq (fb-taken-id ans i))
+          (if (> fbq 0)
+            (do (set oid fbq) (set roid oid) (set fbn 1)))))
     (set ao (an-find ans oid))
     (if (< ao 0)
       (do (sc-request rq oid did (quot (+ dpi100 50) 100) loc)
           (return (us-requests))))
+    (if (and (== (bit-and fuse 16) 16) (== fbn 0))
+      (do (comment "Vision's reading of the page, kept or sent to Tesseract (UNREAD and SCRIPT rules)")
+          (if (== (pu-dry fuse) 1) (return (us-done)))
+          (if (== (fb-route i ans ao did (quot (+ dpi100 50) 100) rq loc s6) -1) (return (us-requests)))))
     (if (!= (an-ok ans ao) 1) (return (us-done)))
     (if (== (pu-dry fuse) 1) (return (us-done)))
     (set ua (sk-route ans ao (pu-id i 28) did (quot (+ dpi100 50) 100) rq s6))
@@ -504,6 +517,17 @@
       (rt-run-meta oruns run (op-upscaled) 3 3 0 0 0 0))
     (set nw (- (ow-count owords) w0))
     (pn-features (+ i 1) bms (pn-k-text) (bms-get bms rid) roid w0 nw ws comps owords feats scr)
+    (comment "SEAL and FORM rules (`emon.ofall`): a seal or a stamp in the page's pixels (ruling 8, D907); a table of numbers that is not a receipt. Tesseract reads the page.")
+    (if (and (== (bit-and fuse 16) 16) (== fbn 0))
+      (do (set fbh 0)
+          (if (== (fb-tess-reads ans ao s2) 1)
+            (do (if (and (== seals 1) (== (cells-at ws 12906) 0))
+                  (do (sx-find (+ i 1) views vdec prims inks pw ph s1)
+                      (set fbh (fb-seal-hits s1))))
+                (if (== fbh 0) (set fbh (fb-form olines owords etext l0 nl (cells-at ws 12906) s1)))))
+          (if (== (fb-ask-if i ans fbh did (quot (+ dpi100 50) 100) rq loc) -1)
+            (do (pn-undo snap epages views etext feats oruns oblocks olines owords osyms oalts inks comps rules prims tpts tlines refs images words lines)
+                (return (us-requests))))))
     ;; OP1c: inspect the incumbent and measured ink before paying for PP.
     ;; Share the retarget round; keep the original bitmap/scale for PP.
     (if (and (== (bit-and fuse 8) 8) (< (an-find ans (pu-id i (oe-request-slot 2))) 0))

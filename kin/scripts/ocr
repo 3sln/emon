@@ -431,6 +431,59 @@
                (when-let [l (some #(when (str/includes? % "accuracy[emon-replay-vision]") (str/trim %)) (str/split-lines (:out r)))]
                  (str " (" (str/replace l #"^ok +accuracy\[emon-replay-vision\]: " "") ")")))))))
 
+
+;; ---------------------------------------------------------------------------------------------------------------------------
+;; 8. APPLE VISION WITH ITS TESSERACT FALLBACK (P13.21b, D907). test/ocr/vision-fallback/ID/ holds the transcripts of pages the fallback policy (`emon.ofall`) sent to Tesseract, recorded
+;; with both engines (`bb tools/ocr/record-scan.clj --engine=apple-vision --fallback --keep-bitmaps ID`, on a Mac with Tesseract). The page's transcript holds Vision's answer to the first pass
+;; AND Tesseract's answer to the fallback's (page-local request id 27) and to every pass after it; a replay names `ocr-engine=apple-vision` only, and kin chooses again from the same answers, so
+;; the choice (a pure function of the answers) is the same on every host. What must hold:
+;;   * the Rust, Go, Java and C# Engines and the C binding give the identical bundle, and the evidence names TESSERACT as the engine that read the page (the fallback was taken);
+;;   * the transcript's engine table names both engines and holds the fallback's request (id 27 of its page, or 20 when a doubtful reading asked it) under Tesseract's trailer, beside Vision's first pass;
+;;   * a changed request (the `psm` of the first) is `transcript-miss` on every host, nothing guessed.
+(def vfall-dir "test/ocr/vision-fallback")
+(def vfall-ids (when (fs/exists? vfall-dir) (vec (sort (map fs/file-name (filter fs/directory? (fs/list-dir vfall-dir)))))))
+
+(when (seq vfall-ids)
+  (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
+        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))
+        jdrv (java-driver)
+        cdrv (cs-driver)]
+    (when (and rdrv gdrv)
+      (let [drive (fn [drv & a] (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+                                  {:exit (:exit r) :out (:out r) :err (:err r)}))
+            same? (fn [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+            engine "--ocr-engine=apple-vision"]
+        (doseq [id vfall-ids]
+          (let [pdf (abs (str "test/corpus/synth/scan/" id ".pdf"))
+                dir (abs (str vfall-dir "/" id))
+                edn (slurp (str dir "/transcript.edn"))
+                rr (drive rdrv "--out=bundle" engine (str "--replay=" dir) pdf)
+                rg (drive gdrv "--out=bundle" engine (str "--replay=" dir) pdf)
+                tam (str work "/vfall-tamper-" id)]
+            (check (and (zero? (:exit rr)) (same? rr rg))
+                   "[vision+tesseract] " id ": the Rust Engine and the Go Engine replay the transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes: JSON, HTML, evidence)")
+            (when jdrv (check (same? rr (drive jdrv "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision+tesseract] " id ": the Java Engine replays it to the same bundle"))
+            (when cdrv (check (same? rr (drive cdrv "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision+tesseract] " id ": the C# Engine replays it to the same bundle"))
+            (when-let [{cd :drv} @c-driver]
+              (check (same? rr (drive cd "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision+tesseract] " id ": the C binding replays it to the same bundle"))
+            (check (str/includes? (:out rr) "\"engine\":\"tesseract\"")
+                   "[vision+tesseract] " id ": the evidence names Tesseract as the engine that read the page: kin sent it there, from the answers alone")
+            (check (and (str/includes? edn ":engine \"apple-vision\"") (str/includes? edn ":engine \"tesseract\"")
+                        (re-find #":kind :ocr :req \[\d+ 3 (283|276) " edn) (re-find #":kind :ocr :req \[\d+ 3 272 " edn)
+                        (str/includes? edn ":config \"apple-vision;VNRecognizeTextRequest;") (str/includes? edn ":config \"tesseract;"))
+                   "[vision+tesseract] " id ": the transcript names both engines and holds Vision's first pass (id 272) beside the fallback's (id 283, or 276 when a doubt asked it)")
+            (fs/create-dirs tam)
+            (fs/copy-tree dir tam {:replace-existing true}) ; the bitmaps too: the fixtures keep them, a replay reads the pixels the pages' later stages need
+            (spit (str tam "/transcript.edn") (str/replace edn #"(:kind :ocr :req \[\d+ 3 272 \d+ )3 " (fn [[_ p]] (str p "4 "))))
+            (let [tr (drive rdrv "--out=bundle" engine (str "--replay=" tam) pdf)
+                  tg (drive gdrv "--out=bundle" engine (str "--replay=" tam) pdf)]
+              (check (and (not= edn (slurp (str tam "/transcript.edn"))) (= 4 (:exit tr)) (same? tr tg) (str/includes? (:err tr) "error: transcript-miss"))
+                     "[vision+tesseract] " id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed")
+              (when jdrv (check (same? tg (drive jdrv "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision+tesseract] " id ": and on the Java Engine, with the same stderr"))
+              (when cdrv (check (same? tg (drive cdrv "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision+tesseract] " id ": and on the C# Engine, with the same stderr"))
+              (when-let [{cd :drv} @c-driver]
+                (check (same? tg (drive cd "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision+tesseract] " id ": and on the C binding, with the same stderr")))))))))
+
 (when (pos? @fails) (System/exit 1))
 (when (and rust go (zero? @fails))
   (ok "one Tesseract transcript, recorded on Rust, replayed on Rust and Go: one evidence dump"))

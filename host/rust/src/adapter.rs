@@ -813,6 +813,8 @@ impl Engines {
         let mut packs_json = Vec::new();
         let mut unsupported = Vec::new();
         let (mut missing, mut missing_bytes) = (0, 0u64);
+        // conditional packs (P13.21b, D907): the fallback's, needed only if a page of the conversion goes to it; never counted as missing, fetched when the page asks (D896)
+        let (mut conditional, mut conditional_bytes) = (0, 0u64);
         for r in &rows {
             if r.state == ke::pstate_unsupported() {
                 unsupported.push(format!("{{\"engine\":{},\"language\":{}}}", js(&Engines::eng_name(r.engine)), js(&lang_name(r.lang))));
@@ -825,6 +827,10 @@ impl Engines {
                 missing += 1;
                 missing_bytes += info.bytes;
             }
+            if r.state == ke::pstate_conditional() {
+                conditional += 1;
+                conditional_bytes += info.bytes;
+            }
             packs_json.push(format!("{{\"id\":{},\"state\":{},\"engine\":{},\"kind\":{},\"bytes\":{},\"licence\":{},\"rev\":{}}}", js(&info.id), js(&st), js(&info.engine_name), js(&info.kind_name), info.bytes, js(&info.licence), info.rev));
         }
         let engine_names: Vec<String> = if never { Vec::new() } else { engines.iter().map(|e| js(&Engines::eng_name(*e))).collect() };
@@ -832,8 +838,8 @@ impl Engines {
         let mut m = String::new();
         ke::pfetch_emit_name(&mut m, mode);
         Ok(format!(
-            "{{\"verdict\":{},\"mode\":{},\"offline\":{},\"engines\":[{}],\"languages\":[{}],\"osd\":{},\"packs\":[{}],\"unsupported\":[{}],\"missing\":{},\"missing_bytes\":{}}}",
-            js(&vname), js(&m), off, engine_names.join(","), lang_names.join(","), !never, packs_json.join(","), unsupported.join(","), missing, missing_bytes
+            "{{\"verdict\":{},\"mode\":{},\"offline\":{},\"engines\":[{}],\"languages\":[{}],\"osd\":{},\"packs\":[{}],\"unsupported\":[{}],\"missing\":{},\"missing_bytes\":{},\"conditional\":{},\"conditional_bytes\":{}}}",
+            js(&vname), js(&m), off, engine_names.join(","), lang_names.join(","), !never, packs_json.join(","), unsupported.join(","), missing, missing_bytes, conditional, conditional_bytes
         ))
     }
 }
@@ -1419,6 +1425,23 @@ impl Engines {
         let p = port_adapter(info, ocr);
         self.add_adapter(unsafe { *p })
     }
+}
+
+// A platform reader with its Tesseract fallback (`ocr-engine=apple-vision`, P13.21b, D907) for a host that links both in process (the CLI, the reference driver): the platform port is
+// registered under its engine and the Tesseract port, when there is one, under Tesseract's; the router of the two is the port, and kin chooses, page by page, which a request names
+// (`emon.ofall`). Tesseract reads from the tessdata directory it was given, so it registers needing no pack of the registry (the registry's pack store is for adapters it loads); with no
+// Tesseract a request that names it is answered unsupported, and kin keeps the platform reading.
+pub fn platform_fallback(primary: PortInfo, platform: Arc<dyn Ocr>, fallback: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
+    let e = Engines::new();
+    e.add_port(primary, platform).map_err(|r| format!("{}: {}", r.name, r.message))?;
+    if let Some(t) = fallback {
+        let producer = t.0.producer();
+        let mut info = PortInfo::tesseract(producer);
+        info.needs = 0;
+        e.add_port(info, t.0).map_err(|r| format!("{}: {}", r.name, r.message))?;
+    }
+    let router = e.router().ok_or_else(|| "no adapter".to_string())?;
+    Ok(crate::engine::OcrPort(Arc::new(router)))
 }
 
 // PP-OCR's hybrid (`ocr-engine=ppocr`) for a host that links Tesseract itself: the host's port is registered as Tesseract, the PP adapter library is loaded (`$EMON_PPOCR_LIB`, else

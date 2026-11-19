@@ -200,6 +200,7 @@ def main():
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--n',type=int,default=60)
     p.add_argument('--ocr-engine',choices=('tesseract','ppocr','ppocr-alone','apple-vision'),default='tesseract')
+    p.add_argument('--fallback',action='store_true',help='apple-vision with its Tesseract fallback (P13.21b, D907): the driver is built with Tesseract and reads with --tesseract beside it; TESSDATA_PREFIX names its models')
     p.add_argument('--set',default='sroie,cord')
     p.add_argument('--report',action='store_true')
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
@@ -213,10 +214,10 @@ def main():
     p.add_argument('--transcript-dir',help='separate external transcript directory; defaults to the output directory')
     p.add_argument('--save',default=str(SCRATCH/'baseline.json'))
     a=p.parse_args()
-    if a.ocr_engine!='tesseract' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
+    if a.ocr_engine in ('ppocr','ppocr-alone') and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
         a.bin=str(ROOT/'.cache/emon-rs-live-ppocr/target/release/emon-rs')
     if a.ocr_engine=='apple-vision' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
-        a.bin=str(ROOT/'.cache/emon-rs-vision/target/release/emon-rs')
+        a.bin=str(ROOT/('.cache/emon-rs-vision-tess/target/release/emon-rs' if a.fallback else '.cache/emon-rs-vision/target/release/emon-rs'))
     if a.n<1: p.error('--n must be positive')
     if a.rescore and (a.record_transcripts or a.replay_transcripts):
         p.error('--rescore cannot record or replay transcripts')
@@ -241,7 +242,7 @@ def main():
             if a.replay_transcripts and not (transcript/'transcript.edn').is_file():
                 raise RuntimeError('missing receipt replay: '+str(transcript))
             cpu_before=resource.getrusage(resource.RUSAGE_CHILDREN)
-            command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine='+a.ocr_engine),'--out=bundle',*extra,str(image)]
+            command=[a.bin,('--tesseract' if a.ocr_engine=='tesseract' else '--ocr-engine='+a.ocr_engine),*(['--tesseract'] if a.fallback and a.ocr_engine=='apple-vision' else []),'--out=bundle',*extra,str(image)]
             if a.measure_cost: command=[sys.executable,str(ROOT/'tools/oracle/ppocr/measure.py'),*command]
             r=(subprocess.CompletedProcess([],0,(SCRATCH/(g['id']+'.bundle')).read_text(),'') if a.rescore else subprocess.run(command,capture_output=True,text=True,timeout=int(os.environ.get('EMON_RECEIPTS_TIMEOUT','180'))))
             if not a.rescore: (SCRATCH/(g['id']+'.bundle')).write_text(r.stdout)

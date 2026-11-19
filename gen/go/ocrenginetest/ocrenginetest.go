@@ -284,9 +284,9 @@ func TestUncalibratedCandidateCanNeverInsertOrReplace(emonT *testing.T) {
 }
 
 func TestPlatformEnginesHaveTheirOwnRequestedConfiguration(emonT *testing.T) {
-	port.AssertEq(emonT, ocrengine.OeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin")
+	port.AssertEq(emonT, ocrengine.OeConfigLen(3), 91, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect")
 	port.AssertEq(emonT, ocrengine.OeConfigValue(3, 0), 97, "it begins with the engine's name")
-	port.AssertEq(emonT, ocrengine.OeConfigValue(3, 89), 110, "and ends with the language policy (latin)")
+	port.AssertEq(emonT, ocrengine.OeConfigValue(3, 90), 116, "and ends with the language policy (detect: Vision detects the language, then Latin pages are read in English first)")
 	port.AssertEq(emonT, ocrengine.OeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed")
 	port.AssertEq(emonT, ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name")
 	port.AssertEq(emonT, ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash")
@@ -307,7 +307,7 @@ func TestAppleVisionSelectionRetagsEveryRequestWithItsConfiguration(emonT *testi
 	port.AssertEq(emonT, port.CellsAt(r, 11), -3100, "identity marker")
 	port.AssertEq(emonT, port.CellsAt(r, 12), 2, "requested identity version")
 	port.AssertEq(emonT, port.CellsAt(r, 13), 3, "Apple Vision's engine")
-	port.AssertEq(emonT, port.CellsAt(r, 14), 90, "its configuration's length")
+	port.AssertEq(emonT, port.CellsAt(r, 14), 91, "its configuration's length")
 	port.AssertEq(emonT, ocrport.OpRequestEngine(r), 3, "the request says which engine reads it")
 	port.AssertEq(emonT, ocrport.OpLangCount(r), 1, "the language is still the one language")
 	port.AssertEq(emonT, ocrport.OpLangAt(r, 0), 1701734144, "English")
@@ -373,5 +373,5 @@ func TestEvidenceNamesThePlatformEngineAndItsConfiguration(emonT *testing.T) {
 	port.AssertEq(emonT, ocrengine.OeRegister(table, runs, lines, words, 4, scratch), 0, "registered")
 	port.AssertEq(emonT, port.CellsLen(table), 7, "one engine, one row")
 	port.AssertEq(emonT, ocrengine.OeEvidence(out, table, scratch), 0, "written")
-	port.AssertText(emonT, out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table")
+	port.AssertText(emonT, out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect\",\"observed\":[0,0]}]", "the evidence's engine table")
 }

@@ -10,6 +10,7 @@ import (
 	"emon/oapct"
 	"emon/oapp"
 	"emon/ocrengine"
+	"emon/ofall"
 	"emon/ofuse"
 	"emon/pageink"
 	"emon/pdfdoc"
@@ -514,12 +515,33 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	var asked int32 = 0
 	var ppasked int32 = 0
 	var nsel int32 = 0
+	var fbn int32 = 0
+	var fbq int32 = -1
+	var fbh int32 = 0
 	pxw = plan.AnArg(ans, ad, 0)
 	pxh = plan.AnArg(ans, ad, 1)
+	// P13.21b (D907, `emon.ofall`): a page Apple Vision's policy sent to Tesseract (its fallback pass was asked and read) has Tesseract's reading as its first pass, from here on in every way
+	if (fuse & 16) == 16 {
+		fbq = ofall.FbTakenId(ans, i)
+		if fbq > 0 {
+			oid = fbq
+			roid = oid
+			fbn = 1
+		}
+	}
 	ao = plan.AnFind(ans, oid)
 	if ao < 0 {
 		scan.ScRequest(rq, oid, did, (dpi100+50)/100, loc)
 		return plan.UsRequests()
+	}
+	if ((fuse & 16) == 16) && (fbn == 0) {
+		// Vision's reading of the page, kept or sent to Tesseract (UNREAD and SCRIPT rules)
+		if PuDry(fuse) == 1 {
+			return plan.UsDone()
+		}
+		if ofall.FbRoute(i, ans, ao, did, (dpi100+50)/100, rq, loc, s6) == -1 {
+			return plan.UsRequests()
+		}
 	}
 	if plan.AnOk(ans, ao) != 1 {
 		return plan.UsDone()
@@ -586,6 +608,23 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	}
 	nw = evidence.OwCount(owords) - w0
 	pageink.PnFeatures(i+1, bms, pageink.PnKText(), port.BmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr)
+	// SEAL and FORM rules (`emon.ofall`): a seal or a stamp in the page's pixels (ruling 8, D907); a table of numbers that is not a receipt. Tesseract reads the page.
+	if ((fuse & 16) == 16) && (fbn == 0) {
+		fbh = 0
+		if ofall.FbTessReads(ans, ao, s2) == 1 {
+			if (seals == 1) && (port.CellsAt(ws, 12906) == 0) {
+				sealpx.SxFind(i+1, views, vdec, prims, inks, pw, ph, s1)
+				fbh = ofall.FbSealHits(s1)
+			}
+			if fbh == 0 {
+				fbh = ofall.FbForm(olines, owords, etext, l0, nl, port.CellsAt(ws, 12906), s1)
+			}
+		}
+		if ofall.FbAskIf(i, ans, fbh, did, (dpi100+50)/100, rq, loc) == -1 {
+			pageink.PnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines)
+			return plan.UsRequests()
+		}
+	}
 	if ((fuse & 8) == 8) && (plan.AnFind(ans, plan.PuId(i, ocrengine.OeRequestSlot(2))) < 0) {
 		if ofuse.OfPpComplete(owords, etext, w0, nw, comps, i+1) == 0 {
 			var requestAt int32 = port.CellsLen(rq)

@@ -1309,7 +1309,7 @@ pub unsafe extern "C" fn emon_engines_describe(e: *const emon_engines, out: *mut
 }
 
 // `prepare(options)` (D896): the packs a conversion with these options needs and which are missing, as JSON: {"verdict" (ready, partial, downloadable, blocked),"mode","offline",
-// "engines","languages","osd","packs":[{"id","state" (installed, missing),"engine","kind","bytes","licence","rev"}],"unsupported":[{"engine","language"}],"missing","missing_bytes"}.
+// "engines","languages","osd","packs":[{"id","state" (installed, missing, conditional),"engine","kind","bytes","licence","rev"}],"unsupported":[{"engine","language"}],"missing","missing_bytes","conditional","conditional_bytes"}.
 // Fetches nothing.
 #[no_mangle]
 pub unsafe extern "C" fn emon_prepare(e: *const emon_engines, options: *const c_char, out: *mut emon_buf, err: *mut emon_error) -> c_int {

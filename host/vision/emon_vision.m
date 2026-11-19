@@ -89,8 +89,13 @@ static NSArray<NSValue *> *tokens_of(NSString *s) {
     return out;
 }
 
+int emon_vision_can_detect(void) {
+    if (@available(macOS 13.0, iOS 16.0, *)) return 1;
+    return 0;
+}
+
 int emon_vision_read(const uint8_t *pixels, int32_t width, int32_t height, int32_t channels, int32_t stride,
-                     const char *const *langs, int32_t nlangs, int32_t fast, int32_t correct, int32_t ncands,
+                     const char *const *langs, int32_t nlangs, int32_t detect, int32_t fast, int32_t correct, int32_t ncands,
                      ev_result *out, char *err, size_t errcap) {
     @autoreleasepool {
         out->nlines = 0;
@@ -106,7 +111,10 @@ int emon_vision_read(const uint8_t *pixels, int32_t width, int32_t height, int32
         VNRecognizeTextRequest *req = [[VNRecognizeTextRequest alloc] init];
         req.recognitionLevel = fast ? VNRequestTextRecognitionLevelFast : VNRequestTextRecognitionLevelAccurate;
         req.usesLanguageCorrection = correct ? YES : NO;
-        if (nlangs > 0) {
+        if (detect) {
+            // no language named: Vision detects the page's own (the caller asks for this only where the OS has it)
+            if (@available(macOS 13.0, iOS 16.0, *)) req.automaticallyDetectsLanguage = YES;
+        } else if (nlangs > 0) {
             NSMutableArray *a = [NSMutableArray array];
             for (int i = 0; i < nlangs; i++) [a addObject:[NSString stringWithUTF8String:langs[i]]];
             req.recognitionLanguages = a;

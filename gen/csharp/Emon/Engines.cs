@@ -512,6 +512,9 @@ public static class Engines {
     public static int EroleVoter() {
         return 8;
     }
+    public static int EroleFallback() {
+        return 16;
+    }
     public static int EroleEmitName(System.Text.StringBuilder t, int code) {
         if (code == 0) {
             emon.Port.TextAscii(t, "none");
@@ -531,6 +534,10 @@ public static class Engines {
         }
         if (code == 8) {
             emon.Port.TextAscii(t, "voter");
+            return 1;
+        }
+        if (code == 16) {
+            emon.Port.TextAscii(t, "fallback");
             return 1;
         }
         return 0;
@@ -613,6 +620,25 @@ public static class Engines {
                         if (emon.Port.BlobU8(b, from + 3) == 101) {
                             if (emon.Port.BlobU8(b, from + 4) == 114) {
                                 return 8;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ((to - from) == 8) {
+            if (emon.Port.BlobU8(b, from + 0) == 102) {
+                if (emon.Port.BlobU8(b, from + 1) == 97) {
+                    if (emon.Port.BlobU8(b, from + 2) == 108) {
+                        if (emon.Port.BlobU8(b, from + 3) == 108) {
+                            if (emon.Port.BlobU8(b, from + 4) == 98) {
+                                if (emon.Port.BlobU8(b, from + 5) == 97) {
+                                    if (emon.Port.BlobU8(b, from + 6) == 99) {
+                                        if (emon.Port.BlobU8(b, from + 7) == 107) {
+                                            return 16;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -826,6 +852,9 @@ public static class Engines {
     public static int PstateUnsupported() {
         return 3;
     }
+    public static int PstateConditional() {
+        return 4;
+    }
     public static int PstateEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "installed");
@@ -837,6 +866,10 @@ public static class Engines {
         }
         if (code == 3) {
             emon.Port.TextAscii(t, "unsupported");
+            return 1;
+        }
+        if (code == 4) {
+            emon.Port.TextAscii(t, "conditional");
             return 1;
         }
         return 0;
@@ -906,8 +939,8 @@ public static class Engines {
         7, 0, 2, 1, 0, 63, 0, 0
     };
     public static readonly int[] EnRoles = new int[] {
-        1, 1, 5, 1,
-        1, 2, 5, 1,
+        1, 1, 21, 1,
+        1, 2, 21, 1,
         1, 3, 5, 1,
         1, 4, 5, 1,
         1, 5, 5, 1,
@@ -924,12 +957,12 @@ public static class Engines {
         6, 5, 12, 4
     };
     public static readonly int[] EnTurnkey = new int[] {
-        1, 1, 4, 2, 3, 7,
-        2, 1, 4, 2, 3, 7,
-        3, 1, 0, 2, 3, 7,
-        4, 5, 5, 2, 3, 7,
-        5, 6, 6, 2, 3, 7,
-        6, 1, 0, 3, 3, 7
+        1, 1, 4, 2, 3, 7, 1,
+        2, 1, 4, 2, 3, 7, 1,
+        3, 1, 0, 2, 3, 7, 0,
+        4, 5, 5, 2, 3, 7, 0,
+        5, 6, 6, 2, 3, 7, 0,
+        6, 1, 0, 3, 3, 7, 0
     };
     internal static int PkEnRow(int eng) {
         // The row of an engine in the table, or -1.
@@ -1031,8 +1064,8 @@ public static class Engines {
     internal static int PkTkCol(int pclass, int col) {
         int i = 0;
         while (i < 6) {
-            if (EnTurnkey[i * 6 + 0] == pclass) {
-                return EnTurnkey[i * 6 + col];
+            if (EnTurnkey[i * 7 + 0] == pclass) {
+                return EnTurnkey[i * 7 + col];
             }
             i += 1;
         }
@@ -1056,6 +1089,11 @@ public static class Engines {
     }
     public static int PkDefaultRender(int pclass) {
         return PkTkCol(pclass, 5);
+    }
+    public static int PkFallbackEngine(int pclass) {
+        // The engine that reads the pages the class's own OS engine hands over (`emon.ofall`: a script it has no recogniser for, a seal or a stamp, a page it left unread), or 0 when that engine reads alone.
+        // Tesseract on Apple platforms, behind Apple Vision when it is selected (P13.21b, D907). Its packs are NOT fetched ahead of time: `pk-resolve` reports them `conditional`, and a page that needs one asks for it (D896).
+        return PkTkCol(pclass, 6);
     }
     public static int PkBundledCount() {
         // The packs a turnkey package ships inside itself (D885: English and OSD); everything else is fetched.
@@ -1275,6 +1313,15 @@ public static class Engines {
         }
         return code;
     }
+    internal static int PkMark(emon.Port.Cells c, int at, int v) {
+        // Mark a pack of the resolution's scratch: 1 needed, 2 conditional (the fallback partner's), which a needed mark is never lowered to.
+        if (v == 1) {
+            emon.Port.CellsSet(c, at, 1);
+        } else if (emon.Port.CellsAt(c, at) == 0) {
+            emon.Port.CellsSet(c, at, 2);
+        }
+        return 0;
+    }
     internal static int PkHas(emon.Port.Cells c, int from, int v) {
         // 1 when `v` is among the cells of `c` from `from` on.
         int n = emon.Port.CellsLen(c);
@@ -1351,6 +1398,8 @@ public static class Engines {
         int pk = 0;
         int lang = 0;
         int j = 0;
+        int sv = 0;
+        int want = 0;
         while (i < lb) {
             emon.Port.CellsPush(scratch, 0);
             i += 1;
@@ -1378,6 +1427,13 @@ public static class Engines {
                 i += 1;
             }
         }
+        if (emon.Port.CellsAt(scratch, sel + PkEnRow(EngAppleVision())) == 1) {
+            eng = PkFallbackEngine(pclass);
+            r = PkEnRow(eng);
+            if ((r >= 0) && (emon.Port.CellsAt(scratch, sel + r) == 0)) {
+                emon.Port.CellsSet(scratch, sel + r, 2);
+            }
+        }
         if (emon.Port.CellsLen(langs) == 0) {
             emon.Port.CellsPush(scratch, PkLangEng());
         } else {
@@ -1401,7 +1457,8 @@ public static class Engines {
         }
         r = 0;
         while (r < ne) {
-            if (emon.Port.CellsAt(scratch, sel + r) == 1) {
+            sv = emon.Port.CellsAt(scratch, sel + r);
+            if (sv > 0) {
                 eng = EnTable[r * 8 + 0];
                 needs = EnTable[r * 8 + 7];
                 p = 1;
@@ -1411,11 +1468,11 @@ public static class Engines {
                     if (((pe == eng) || (pe == 0)) && ((needs & pk) != 0)) {
                         if (pk == PkindOsd()) {
                             if ((flags & PkfOsd()) != 0) {
-                                emon.Port.CellsSet(scratch, p, 1);
+                                PkMark(scratch, p, sv);
                             }
                         }
                         if ((pk == PkindDetector()) || (pk == PkindClassifier())) {
-                            emon.Port.CellsSet(scratch, p, 1);
+                            PkMark(scratch, p, sv);
                         }
                     }
                     p += 1;
@@ -1423,23 +1480,33 @@ public static class Engines {
                 j = lb;
                 while (j < emon.Port.CellsLen(scratch)) {
                     lang = emon.Port.CellsAt(scratch, j);
+                    want = sv;
+                    if (sv == 2) {
+                        if (Ocrloc.OlHas(PkEngineOen(EngAppleVision()), lang) == 0) {
+                            want = 1;
+                        }
+                    }
                     p = PkPackFor(eng, PkindRecognizer(), lang);
                     if ((p != 0) && ((needs & PkindRecognizer()) != 0)) {
-                        emon.Port.CellsSet(scratch, p, 1);
+                        PkMark(scratch, p, want);
                     }
                     p = PkPackFor(eng, PkindLexicon(), lang);
                     if ((p != 0) && ((needs & PkindLexicon()) != 0)) {
-                        emon.Port.CellsSet(scratch, p, 1);
+                        PkMark(scratch, p, want);
                     }
                     j += 1;
                 }
             }
             r += 1;
         }
+        emon.Port.CellsDrop(@out, 0);
         p = 1;
         while (p <= np) {
-            if (emon.Port.CellsAt(scratch, p) == 1) {
+            if (emon.Port.CellsAt(scratch, p) > 0) {
                 v = PstateMissing();
+                if (emon.Port.CellsAt(scratch, p) == 2) {
+                    v = PstateConditional();
+                }
                 if (PkHas(installed, 0, p) == 1) {
                     v = PstateInstalled();
                 }
@@ -1452,12 +1519,19 @@ public static class Engines {
         }
         r = 0;
         while (r < ne) {
-            if ((emon.Port.CellsAt(scratch, sel + r) == 1) && ((EnTable[r * 8 + 7] & PkindRecognizer()) != 0)) {
+            sv = emon.Port.CellsAt(scratch, sel + r);
+            if ((sv > 0) && ((EnTable[r * 8 + 7] & PkindRecognizer()) != 0)) {
                 eng = EnTable[r * 8 + 0];
                 j = lb;
                 while (j < emon.Port.CellsLen(scratch)) {
                     lang = emon.Port.CellsAt(scratch, j);
-                    if (PkPackFor(eng, PkindRecognizer(), lang) == 0) {
+                    want = sv;
+                    if (sv == 2) {
+                        if (Ocrloc.OlHas(PkEngineOen(EngAppleVision()), lang) == 0) {
+                            want = 1;
+                        }
+                    }
+                    if ((want == 1) && (PkPackFor(eng, PkindRecognizer(), lang) == 0)) {
                         emon.Port.CellsPush(@out, PstateUnsupported());
                         emon.Port.CellsPush(@out, eng);
                         emon.Port.CellsPush(@out, 0);

@@ -248,6 +248,23 @@ fn test_prepare_says_ready_when_nothing_is_missing() {
     crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_ready(), "ready");
 }
 #[test]
+fn test_prepare_says_ready_for_apple_vision_whatever_is_installed() {
+    // P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no
+    // locale for makes the fallback the reader, and its pack is then needed as ever.
+    let langs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    ad_cells1(engs, eng_apple_vision());
+    crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "resolves with nothing installed");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_ready(), "ready: the conditional pack is fetched on demand (D896), not ahead of time");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 1), pver_ready(), "and offline");
+    crate::port::cells_push(langs, 1751739904);
+    crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "Hindi");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_downloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_blocked(), "and may not come");
+}
+#[test]
 fn test_prepare_says_partial_when_a_language_has_no_pack_for_the_engine() {
     let langs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();

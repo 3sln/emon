@@ -2,8 +2,8 @@
 
 An app can read scans with the recogniser the operating system already has, so there is no model to download and nothing to add to the
 app's size. Both are **explicit engines** in every SDK and the CLI: `ocr-engine=` is how an app, or you on the command line, asks for one (DEVLOG D895, D901). Only a turnkey package chooses for an app that
-chooses nothing, by kin's turnkey table: Windows.Media.Ocr on Windows and ML Kit on Android (`emon_flutter`; the pure-Dart `emon` keeps Tesseract on Android), Tesseract on Apple platforms and Linux until
-P13.21b makes Apple Vision the default there (K5, DEVLOG D905).
+chooses nothing, by kin's turnkey table: Windows.Media.Ocr on Windows and ML Kit on Android (`emon_flutter`; the pure-Dart `emon` keeps Tesseract on Android), Tesseract on Apple platforms and Linux: Apple Vision is built,
+calibrated and has its Tesseract fallback (below), and becomes the default on Apple platforms when the maintainer accepts it (P13.21b, DEVLOG D907).
 
 | `ocr-engine` | Runs on | What reads | Adapter library |
 |---|---|---|---|
@@ -13,6 +13,21 @@ P13.21b makes Apple Vision the default there (K5, DEVLOG D905).
 `emon convert --ocr-engine apple-vision scan.pdf` on a Mac, `--ocr-engine windows-media-ocr` on Windows. In the C library the adapter
 sits in `lib/emon/adapters/` beside Tesseract's, and `emon_engines_defaults` finds it; the app names the engine in the options of the
 conversion (`ocr-engine=apple-vision`). An engine that cannot run on the platform is `unavailable` in `engines()`.
+
+## Apple Vision's Tesseract fallback
+
+`ocr-engine=apple-vision` reads every page with Vision, and kin sends a PAGE to Tesseract when Vision is the wrong reader for it (`kin/ofall.kin`, DEVLOG D907). The policy is a pure function
+of what Vision answered and of the page's pixels, so a replay makes the same choice on every host. A page goes to Tesseract when
+- **Vision gave no reading** (a language it has no locale for, a failure);
+- **its reading is too thin**: fewer than 35 letters and digits. A page in a script Vision has no recogniser for (Arabic, Persian, Urdu, Devanagari, Hebrew, Khmer and the rest of the scripts not listed below, on macOS 14.6) comes out
+  as a few stray marks, and a blank page costs Tesseract a reading;
+- **its reading is a mix of scripts that no page has**: 10 per cent or more of its letters outside the script family most of them are in (Han and kana are one; Greek letters and, on a page that is not Latin, Latin ones count for nothing);
+- **its pixels show a seal or a stamp** (D883 ruling 8: Tesseract holds seal and stamp pages: Vision reads a stamp as text and reads a ring badly);
+- **it is a table of numbers that is not a receipt** (an invoice, a statement: Vision answers the cells of a row as lines and the rows come out in another order).
+
+A page of Chinese, Japanese, Korean, Russian, Ukrainian or Thai text stays Vision's: Tesseract without a language read a quarter of the characters. The page is then read by Tesseract as it always was, passes and cells
+included; if Tesseract cannot read it either (no adapter, a pack the app declined) the page keeps its Vision reading, so a host with Vision alone behaves as before. `prepare()` reports Tesseract's packs
+as `conditional` (not missing, and not fetched ahead of time: the page that needs one asks for it, D896), except for a language Vision has no locale for, whose model is needed as ever.
 
 ## What they say, and what they do not
 
@@ -41,7 +56,7 @@ but it never inserts or replaces a reading, its confidences are capped and flagg
   The reliability report is `test/calibration/engines/3/`.
 - **Windows.Media.Ocr** has no confidence, so no map can exist: its readings stay uncalibrated for good.
 
-Neither engine is chosen for an app that chooses nothing, and neither is ever the incumbent on a page with a seal or a stamp (ruling 8).
+Neither engine is ever the incumbent on a page with a seal or a stamp (ruling 8): Apple's turnkey sends such a page to Tesseract, above.
 
 ## Replay
 
@@ -53,7 +68,8 @@ it is for; asking for another is `transcript-miss`, never a guess.
 ## Language
 
 An engine reads the languages of its platform. emon's codes (`eng`, `deu`, `chs`, ...) and scripts (`Latn`, `Hani`, ...) are turned into
-Vision's locale tags or Windows' language tags by one table in kin (`emon.ocrloc`); a request that names no language is read in Vision's
-Latin-script languages (no language is assumed), or in the user's profile languages on Windows. Vision reads English, French, Italian, German,
-Spanish, Portuguese, Chinese (simplified and traditional), Japanese, Korean, Russian, Ukrainian, Thai and Vietnamese; Windows reads the
-languages whose OCR pack is installed (`Add-WindowsCapability -Online -Name Language.OCR~~~en-US~0.0.1.0`).
+Vision's locale tags or Windows' language tags by one table in kin (`emon.ocrloc`); a request that names no language is read by Vision's own detection of the page's language (macOS 13+, iOS 16+) and, when
+what it read is Latin, again with every language the OS supports, English first (receipts read best that way); on an older OS with every supported language. The observed identity says which (`locales=`).
+Windows reads in the user's profile languages. Vision on macOS 14.6 reads English, French, Italian, German, Spanish, Portuguese, Chinese (simplified, traditional and Cantonese), Japanese, Korean, Russian, Ukrainian,
+Thai and Vietnamese, and no Arabic, Persian, Urdu, Hindi or other Indic script, Hebrew, Greek, Armenian, Georgian, Ethiopic or Khmer; Windows reads the languages whose OCR pack is installed
+(`Add-WindowsCapability -Online -Name Language.OCR~~~en-US~0.0.1.0`).

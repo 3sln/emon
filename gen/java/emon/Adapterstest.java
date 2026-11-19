@@ -220,6 +220,22 @@ public final class Adapterstest {
         emon.Testport.assertEq(adResolve(Engines.pclsMacos(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "with OSD installed");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverReady(), "ready");
     }
+    public static void testPrepareSaysReadyForAppleVisionWhateverIsInstalled() {
+        // P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no
+        // locale for makes the fallback the reader, and its pack is then needed as ever.
+        emon.Port.Cells langs = emon.Port.newCells();
+        emon.Port.Cells engs = emon.Port.newCells();
+        emon.Port.Cells installed = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        adCells1(engs, Engines.engAppleVision());
+        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves with nothing installed");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverReady(), "ready: the conditional pack is fetched on demand (D896), not ahead of time");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 1), Adapters.pverReady(), "and offline");
+        emon.Port.cellsPush(langs, 1751739904);
+        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "Hindi");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverBlocked(), "and may not come");
+    }
     public static void testPrepareSaysPartialWhenALanguageHasNoPackForTheEngine() {
         emon.Port.Cells langs = emon.Port.newCells();
         emon.Port.Cells engs = emon.Port.newCells();
