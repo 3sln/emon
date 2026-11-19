@@ -25,3 +25,9 @@ flutter:
       android:
         package: com.threesln.emon_ocr_mlkit
         pluginClass: EmonOcrMlkitPlugin
+
+# Development in this repository: the archives `bb package --host c` writes to dist/c (the plugin's tests run on the host; an app names its own, see emon_core's pubspec).
+hooks:
+  user_defines:
+    emon_core:
+      native_dir: ../../../dist/c

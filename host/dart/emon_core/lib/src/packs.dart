@@ -324,6 +324,11 @@ class PackStore {
         var got = 0;
         var lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
         await for (final chunk in res) {
+          if (token.isCancelled) {
+            await sink.close();
+            if (out.existsSync()) out.deleteSync();
+            throw EmonError('pack-fetch-cancelled:${pack.id}', 'the download was cancelled', EmonErrorCategory.io);
+          }
           sink.add(chunk);
           hasher.add(chunk);
           got += chunk.length;

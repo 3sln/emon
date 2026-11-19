@@ -46,7 +46,7 @@ void main() {
     expect(tess.registered, isTrue);
     expect(tess.state, EngineState.downloadable, reason: 'registered, packs missing, and the mode may fetch them');
     expect(tess.downloadBytes, greaterThanOrEqualTo(4113088));
-    expect(tess.needs.map((n) => n.id), containsAll(['tess-fast-eng', 'tess-osd']));
+    expect(tess.needs.map((n) => n.id), contains('tess-fast-eng'), reason: 'the packs of a conversion with the default options; orientation detection is prepare()\'s');
     expect(tess.needs.first.licence, 'Apache-2.0');
     expect(engines.firstWhere((e) => e.name == 'pdfium').state, EngineState.builtIn);
     expect(engines.firstWhere((e) => e.name == 'ppocr').usable, isFalse);
