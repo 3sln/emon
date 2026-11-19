@@ -62,9 +62,11 @@ The only quality-qualified native runtime remains macOS arm64.
 To re-qualify after an answer-format change, use the restored OP1c selections:
 
 ```sh
-bb ppocr-hosts --qualification "$EMON_SCRATCH/op1c" \
-  --record-qualification "corpus/_qual/ppocr-qual"
+bb ppocr-hosts --qualification corpus/_qual/ppocr-qual \
+  --record-qualification "$EMON_SCRATCH/ppocr-qual-new"
 ```
+
+The artifact is the corpus shard `ppocr-qualification` (`corpus/_qual/ppocr-qual`; the default of `bb ppocr-hosts`). Never record into `/tmp`; copy the new directory into `corpus/_qual/`, re-register the shard digest in `test/corpus/shards.json` and push it with `bb corpus push`. ORTPIN (D901) re-recorded it on the NuGet ONNX Runtime 1.22.0 and its `reference.answers` hash equals the frozen reference's.
 
 This records a new Rust reference, requires exact transport and replay bytes,
 and scores the same 60+60 fixed receipts against D864's P/R tolerance of 0.002.
