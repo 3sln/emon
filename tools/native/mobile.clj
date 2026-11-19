@@ -6,7 +6,7 @@
 ;;   bb mobile --triple T --smoke        a C program (tools/native/mobile/smoke.c) built for T against the shipped library: LINKED for every triple;
 ;;                                       RUN where it can be: the iOS simulator (xcrun simctl), or a connected Android device or emulator of that ABI (adb)
 ;;   bb mobile --triple T --check        build, `bb native --audit`, smoke: what the CI jobs run
-;;   bb mobile --triple T --ort [--fetch]  install the pinned ONNX Runtime of T for the PP adapter (ORTPIN, D901) into .cache/ppocr/onnxruntime-<platform>-1.22.0/{lib,include}:
+;;   bb mobile --triple T --ort [--fetch]  install the pinned ONNX Runtime of T for the PP adapter (ORTPIN, D906) into .cache/ppocr/onnxruntime-<platform>-1.22.0/{lib,include}:
 ;;                                       Android: the AAR's jni/<abi>/libonnxruntime.so (Maven Central, 16 KB aligned, NEEDED only libdl, liblog, libm, libc); iOS: the static
 ;;                                       libonnxruntime.a of the device or simulator slice of the onnxruntime-c pod archive (onnxruntime.ai). Every file by SHA-256 in
 ;;                                       tools/ppocr/runtimes.edn, which `bb native --check` requires for each triple. The PP adapter library for mobile (K2 follow-up) links these.
@@ -88,13 +88,14 @@
 (def pdfium-file (when cfg (str pdfium-dir "/" (get-in pdfium-pin [:platforms (:pdfium cfg) :lib]))))
 (def lib-name (if android? "libemon.so" "libemon.dylib"))
 (def adapter-name (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
+(def vision-name "libemon_ocr_vision.dylib") ; Apple Vision (K8, D901): the iOS slices only; Android's platform OCR is ML Kit, a plugin of the Dart package (K7)
 (def pdfium-name (if android? "libpdfium.so" "libpdfium.dylib"))
 (def archive-name (str "emon-c-" version "-" triple))
 (def archive (str root "/dist/c/" archive-name ".tar.gz"))
 
 ;; ------------------------------------------------------------------------------------------------ the crate (as `bb package --host c` assembles it)
 ;; keep equal to `rust-host-files` of tools/package.clj (`--check-sources` below compares them)
-(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter"])
+(def rust-host-files ["lib" "port" "plan" "source" "engine" "imgdec" "tess" "render" "pdfium" "pdfimg" "session" "par" "adapter" "packs" "tess_adapter" "platform" "vision" "vision_adapter" "winocr" "winocr_adapter"])
 
 (defn package-host-files [] (some->> (slurp "tools/package.clj") (re-find #"\(def rust-host-files (\[[^\]]*\])") second edn/read-string))
 
@@ -187,7 +188,7 @@
   (or (some (fn [p] (when (and (= :tesseract (:engine p)) (some #(= file (:name %)) (:files p))) (:id p))) (:packs @packs-catalogue))
       (die "the pack catalogue has no Tesseract pack with the file " file)))
 
-(defn artifacts [{:keys [lib adapter]}]
+(defn artifacts [{:keys [lib adapter vision]}]
   (merge {(str "lib/" lib-name) lib
           (str "lib/emon/adapters/" adapter-name) adapter
           (str "lib/" pdfium-name) pdfium-file
@@ -196,6 +197,7 @@
           "LICENSE" (str root "/LICENSE")
           "THIRD_PARTY_NOTICES.md" (str root "/THIRD_PARTY_NOTICES.md")
           "README.md" (str root "/release/pkg/README.md")}
+         (when vision {(str "lib/emon/adapters/" vision-name) vision})
          ;; the models are PACKS (D885, D899): share/emon/packs/<id>/<file>, where emon_engines_defaults looks
          (into {} (for [d (:data pins)] [(str "share/emon/packs/" (pack-dir-of (:file d)) "/" (:file d)) (str native-prefix "/share/tessdata/" (:file d))]))))
 
@@ -233,9 +235,16 @@
     (say (format "  %-34s %10s" (str (fs/relativize target-dir f)) (human (fs/size f)))))
   (say (format "  %-34s %10s" (str "dist/c/" archive-name ".tar.gz") (human (fs/size archive)))))
 
+(defn build-vision!
+  "libemon_ocr_vision.dylib for this iOS triple (K8, D901): `tools/native/vision_adapter.clj` (the shim, the Rust port and adapter over the same sources, audited as it is built)."
+  []
+  (let [r (sh {:env {"IPHONEOS_DEPLOYMENT_TARGET" (:ios-deployment cfg)}} "bb" "tools/native/vision_adapter.clj" "--triple" triple "--out" (str root "/.cache/mobile/stage/vision"))]
+    (print (:err r)) (flush)
+    (str/trim (:out r))))
+
 (defn build! []
   (let [t0 (System/currentTimeMillis)
-        libs {:lib (build-crate! :core) :adapter (build-crate! :adapter)}]
+        libs {:lib (build-crate! :core) :adapter (build-crate! :adapter) :vision (when-not android? (build-vision!))}]
     (assemble! libs)
     (pack! libs)
     (say (format "built %s in %.0f s" triple (/ (- (System/currentTimeMillis) t0) 1000.0)))
@@ -296,7 +305,15 @@
             (when-not (zero? (:exit r)) (die "the native (pdfium + the Tesseract adapter) run failed in the simulator (exit " (:exit r) "): " (:out r) (:err r)))
             (say "  ran      " (str/trim (:out r)))
             (when-not (str/includes? (slurp sout) scan-word) (die "the scan's HTML lacks " (pr-str scan-word) ": pdfium or Tesseract did not read it"))
-            (say "  ok       samples/scan-plain.pdf read by pdfium and Tesseract inside the iOS simulator: the heading " (pr-str scan-word) " is there")))
+            (say "  ok       samples/scan-plain.pdf read by pdfium and Tesseract inside the iOS simulator: the heading " (pr-str scan-word) " is there"))
+          ;; Apple Vision (K8, D901): the same scan, read by the Vision adapter library of lib/emon/adapters/ (`ocr-engine=apple-vision`). The simulator's Vision may not be able to
+          ;; run its text model (the neural engine is the device's); an answer that is not a reading is a NOTE with the reason, not a failure of the Tesseract smoke above
+          (when (fs/exists? (str target-dir "/lib/emon/adapters/" vision-name))
+            (let [vout (str smoke-dir "/scan.vision.html")
+                  r (spawn exe scan-in vout "native" "" "" "" "ocr-engine=apple-vision")]
+              (cond (not (zero? (:exit r))) (say "  NOTE     Apple Vision did not read inside the iOS simulator (exit " (:exit r) "): " (str/trim (str (:out r) (:err r))))
+                    (not (str/includes? (slurp vout) scan-word)) (say "  NOTE     Apple Vision ran inside the iOS simulator but the heading " (pr-str scan-word) " is not in what it read")
+                    :else (say "  ok       samples/scan-plain.pdf read by the Apple Vision adapter inside the iOS simulator: the heading " (pr-str scan-word) " is there")))))
         true
         (finally (sh {:ok? false} "xcrun" "simctl" "shutdown" udid) (sh {:ok? false} "xcrun" "simctl" "delete" udid))))
     (do (say "  NOTE     no iOS simulator runtime is installed (xcodebuild -downloadPlatform iOS): the simulator program was linked, not run") false)))

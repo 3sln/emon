@@ -274,4 +274,97 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ofuse.OfRule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion");
         emon.Testport.AssertEq(Ofuse.OfRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
     }
+    [Xunit.Fact]
+    public static void TestPlatformEnginesHaveTheirOwnRequestedConfiguration() {
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(3, 0), 97, "it begins with the engine's name");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(3, 89), 110, "and ends with the language policy (latin)");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(4, 0), 109, "it begins with the engine's name");
+    }
+    [Xunit.Fact]
+    public static void TestAppleVisionSelectionRetagsEveryRequestWithItsConfiguration() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, at);
+        Ocrengine.OeTag(r, scratch, 4);
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(3), "the trailer is Vision's, not Tesseract's");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), emon.Port.CellsLen(r), "the record length includes it");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 11), -3100, "identity marker");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 12), 2, "requested identity version");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 13), 3, "Apple Vision's engine");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 14), 90, "its configuration's length");
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "the request says which engine reads it");
+        emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "the language is still the one language");
+        emon.Testport.AssertEq(Ocrport.OpLangAt(r, 0), 1701734144, "English");
+        Ocrengine.OeTag(r, scratch, 4);
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(3), "idempotent: one trailer");
+    }
+    [Xunit.Fact]
+    public static void TestWindowsSelectionRetagsWithTheWindowsConfiguration() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, at);
+        Ocrengine.OeTag(r, scratch, 6);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 5, "Windows.Media.Ocr");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(5), "its trailer");
+        Ocrengine.OeTag(r, scratch, 4);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(3), "one trailer");
+    }
+    [Xunit.Fact]
+    public static void TestMlKitSelectionRetagsWithItsConfiguration() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int at = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, at);
+        Ocrengine.OeTag(r, scratch, 8);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 4, "ML Kit");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(4), "its trailer");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 14), 71, "its configuration's length");
+        Ocrengine.OeTag(r, scratch, 8);
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), 15 + Ocrengine.OeConfigLen(4), "idempotent: one trailer");
+        Ocrengine.OeTag(r, scratch, 4);
+        emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "a later selection replaces it, never stacks");
+    }
+    [Xunit.Fact]
+    public static void TestAnEngineSelectionReachesEveryOcrRequestOfABatch() {
+        emon.Port.Cells r = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        int a = Plan.RqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, a);
+        int b = Plan.RqOcr(r, 13, 7, 7, 1, 5, 6, 40, 12);
+        Plan.RqOcrLang(r, 101, 110, 103, 0);
+        Plan.RqOcrEnd(r, b);
+        Ocrengine.OeTag(r, scratch, 4);
+        int first = 15 + Ocrengine.OeConfigLen(3);
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 0), first, "the first request's length");
+        emon.Testport.AssertEq(emon.Port.CellsLen(r), first + (15 + Ocrengine.OeConfigLen(3)), "two records, each with exactly one trailer");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, first + 13), 3, "and the second names Vision too");
+    }
+    [Xunit.Fact]
+    public static void TestEvidenceNamesThePlatformEngineAndItsConfiguration() {
+        emon.Port.Cells table = emon.Port.NewCells();
+        emon.Port.Cells runs = emon.Port.NewCells();
+        emon.Port.Cells lines = emon.Port.NewCells();
+        emon.Port.Cells words = emon.Port.NewCells();
+        emon.Port.Cells scratch = emon.Port.NewCells();
+        System.Text.StringBuilder @out = emon.Testport.NewText();
+        int a = Evidence.OrNew(runs, 1, 0);
+        Evidence.OrSet(runs, a, Evidence.OrfEngine(), 3);
+        emon.Testport.AssertEq(Ocrengine.OeRegister(table, runs, lines, words, 4, scratch), 0, "registered");
+        emon.Testport.AssertEq(emon.Port.CellsLen(table), 7, "one engine, one row");
+        emon.Testport.AssertEq(Ocrengine.OeEvidence(@out, table, scratch), 0, "written");
+        emon.Testport.AssertText(@out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+    }
 }

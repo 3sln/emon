@@ -11,7 +11,7 @@ on:
         type: string
         default: ''
       only:
-        description: 'Comma list: assets,crates,npm,nuget,maven,go; blank selects all'
+        description: 'Comma list: assets,crates,npm,nuget,maven,go,pub; blank selects all (pub also needs the variable EMON_PUB_ENABLED; only=pub pushes the Dart tag again)'
         type: string
         default: ''
       dry_run:

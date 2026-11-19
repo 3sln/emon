@@ -47,6 +47,20 @@ pub mod tess;
 #[cfg(feature = "tesseract-adapter")]
 pub mod tess_adapter;
 
+// Apple Vision as an `Ocr` port (K8, D901): macOS and iOS, built under the `vision` feature with the shim of host/vision linked in (tools/native/vision.clj), and as a native
+// adapter LIBRARY, `libemon_ocr_vision` (`vision-adapter`).
+#[cfg(any(feature = "vision", all(feature = "winocr", windows)))]
+mod platform;
+#[cfg(feature = "vision")]
+pub mod vision;
+#[cfg(feature = "vision-adapter")]
+pub mod vision_adapter;
+// Windows.Media.Ocr (K8, D901), through the `windows` crate; Windows only. The adapter library is `libemon_ocr_winocr` (`winocr-adapter`).
+#[cfg(all(feature = "winocr", windows))]
+pub mod winocr;
+#[cfg(all(feature = "winocr-adapter", windows))]
+pub mod winocr_adapter;
+
 pub use engine::{is_option_key, parse_options, Asset, AssetFile, AssetUse, Assets, Attr, Config, Dropped, Engine, Error, Furniture, HtmlAssets, HtmlOptions, Intake, JsonOptions, Kind, Model, Node, Ocr, OcrEngine, OcrPolicy, OcrPort, OcrScope, Options, Output, Page, Parsed, Region, RunStats, Transcript};
 pub use pdfimg::{CodecFail, PdfCodecs, Pix};
 pub use render::{Clip, KindMux, RenderError, RenderFulfiller, RenderInput, RenderRequest, Renderer};

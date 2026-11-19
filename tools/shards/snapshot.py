@@ -42,7 +42,7 @@ else:
     # Receipt set added after the original manifest.
     if not any(s['id']=='expressexpense-srd' for s in shards):
         add('expressexpense-srd','expressexpense-srd',['financial/expressexpense-srd','_gold/expressexpense-srd/*.gold.json'],keep=True,reason='locally fetched image set; pinned exact fetch recipe unavailable')
-    # Derived PP-OCR qualification artifact (ORTPIN, D901): 225 bitmaps, the six-transport reference answers and provenance.
+    # Derived PP-OCR qualification artifact (ORTPIN, D906): 225 bitmaps, the six-transport reference answers and provenance.
     if not any(s['id']=='ppocr-qualification' for s in shards):
         add('ppocr-qualification','ppocr-qualification',['_qual/ppocr-qual'],keep=True,reason='derived PP qualification artifact; regenerate with bb ppocr-hosts --record-qualification')
     # Account for every other file (including importer summaries) without making it pruneable.

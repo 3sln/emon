@@ -3,7 +3,7 @@
 (ns emon.enginestest
   (:require [emon.lang :refer [I32 Cells Text Blob fd]]
             [emon.transcriptctx :refer [Tr]]
-            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob]]
+            [emon.test :refer [deftest assert-eq assert-that assert-text new-cells new-text new-ctx test-t TestT Str text-blob test-file]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop blob-len]]
             [emon.oil :refer [oil-tess-begin oil-get oh-caps oen-emit-name]]
             [emon.ocrengine :refer [oe-role]]
@@ -172,22 +172,30 @@
   (assert-eq (oe-role (pk-engine-oen (eng-windows-media-ocr))) 0 "nor Windows OCR")
   (assert-eq (oe-role (pk-engine-oen (eng-mlkit-text))) 0 "nor ML Kit")
   (assert-eq (pk-role-mask (eng-tesseract) (pcls-ios)) 5 "Tesseract is the incumbent or the sole reader")
-  (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "an uncalibrated engine reads or votes")
+  (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)")
+  (assert-eq (pk-engine-calibrated (eng-apple-vision)) 1 "a frozen reliability map keyed by its identity (D883 ruling 3, K8)")
+  (assert-eq (pk-engine-calibrated (eng-windows-media-ocr)) 0 "Windows.Media.Ocr has no confidence to calibrate, for good")
+  (assert-eq (bit-and (pk-role-mask (eng-apple-vision) (pcls-ios)) (erole-incumbent)) 0 "never the incumbent")
   (assert-eq (pk-role-default (eng-apple-vision) (pcls-windows)) 0 "no role on the wrong class"))
 
 ;; ------------------------------------------------------------------ the turnkey defaults
 
-(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 platform ^I32 pp]
+(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp]
   (let [^I32 eng (pk-default-engine pclass)]
-    (assert-eq eng (eng-tesseract) "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)")
+    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
-    (assert-eq (pk-engine-calibrated eng) 1 "the default is calibrated")
-    (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent")
+    (if (== eng (eng-tesseract))
+      (do (assert-eq (pk-engine-calibrated eng) 1 "Tesseract is calibrated")
+          (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent"))
+      (do (assert-eq (pk-engine-calibrated eng) 0 "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)")
+          (assert-eq (pk-role-default eng pclass) (erole-reader) "and reads alone: a reader, never an incumbent or a challenger")))
     (assert-eq (pk-platform-engine pclass) platform "the class's own engine")
     (if (!= platform 0)
       (do (assert-eq (pk-engine-on platform pclass) 1 "the platform engine runs on the class")
-          (assert-eq (pk-engine-calibrated platform) 0 "uncalibrated (D895)")
-          (assert-that (!= platform eng) "and never the automatic choice")))
+          (assert-eq (pk-engine-calibrated platform) platform-calibrated "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map")
+          (if (!= eng (eng-tesseract))
+            (assert-eq platform eng "where the default is not Tesseract it is the class's own engine")
+            (assert-that (!= platform eng) "and elsewhere never the automatic choice"))))
     (assert-eq (pk-pp-engine pclass) pp "the PP-OCR runtime of the class")
     (assert-eq (pk-engine-on pp pclass) 1 "runs on it")
     (assert-eq (pk-default-fetch pclass) (pfetch-auto) "a turnkey fetches on demand (D885, D896)")
@@ -195,12 +203,12 @@
     (return 0)))
 
 (deftest test-the-turnkey-default-of-every-platform-class
-  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-linux) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-web) 0 (eng-ppocr-web))
+  (en-turnkey-class (test-t) (pcls-macos) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-linux) (eng-tesseract) 0 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-windows-media-ocr) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-mlkit-text) 0 (eng-ppocr))
+  (en-turnkey-class (test-t) (pcls-web) (eng-tesseract) 0 0 (eng-ppocr-web))
   (assert-eq (pk-default-engine 0) 0 "an unknown class has no default")
   (assert-eq (pk-default-engine 7) 0 "nor class 7")
   (assert-eq (pk-default-fetch 7) 0 "and no fetch policy")
@@ -293,6 +301,16 @@
     (cells-push installed (pkid-tess-osd))
     (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
     (assert-eq (pk-rows out) 1 "still one row")))
+
+(deftest test-an-os-reader-as-the-turnkey-default-needs-no-pack
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (en-resolve (pcls-windows) (pkf-osd) langs engs installed out) (pkerr-ok) "Windows resolves with Windows.Media.Ocr as the default")
+    (assert-eq (pk-rows out) 0 "the OS reads: nothing to fetch (K5, D905)")
+    (assert-eq (en-resolve (pcls-android) (pkf-osd) langs engs installed out) (pkerr-ok) "Android resolves with ML Kit as the default")
+    (assert-eq (pk-rows out) 0 "ML Kit's Latin model ships in the plugin: nothing to fetch")
+    (en-cells1 engs (eng-tesseract))
+    (assert-eq (en-resolve (pcls-android) (pkf-osd) langs engs installed out) (pkerr-ok) "asking for Tesseract on Android still resolves its packs")
+    (assert-eq (pk-rows out) 2 "English and OSD")))
 
 (deftest test-orientation-detection-adds-the-osd-pack-for-tesseract-only
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
@@ -522,3 +540,14 @@
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n" (tb-engines))
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n" (tb-engines))
   (en-refused (test-t) "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n" (tb-engines)))
+
+;; A committed transcript that Apple's Vision answered (K8, D901; tools/ocr/record-scan.clj --engine=apple-vision): it carries the engine table as the recorder wrote it from the engine's
+;; own report, so a replay on any host, with no adapter, knows which engine read and with what it was allowed to say.
+(deftest test-a-committed-apple-vision-transcript-names-the-engine-that-read
+  (let [^Blob b (test-file "ocr/vision/h-plain/transcript.edn")
+        ^Tr t (new-ctx Tr)]
+    (assert-eq (tr-read t b) 0 "it reads")
+    (assert-eq (tr-n-engines t) 1 "one engine read")
+    (assert-eq (tr-eng-engine t 0) (eng-apple-vision) "Apple Vision")
+    (assert-eq (tr-eng-caps t 0) (pk-engine-caps (eng-apple-vision)) "with the capabilities of its table's ceiling")
+    (assert-eq (tr-eng-role t 0) (erole-reader) "it read alone: a reader, never an incumbent")))

@@ -1,5 +1,5 @@
 #!/usr/bin/env bb
-;; The pinned ONNX Runtime of tools/ppocr/runtimes.edn (ORTPIN, D901): fetch Microsoft's package, verify it whole and again entry by entry, install into
+;; The pinned ONNX Runtime of tools/ppocr/runtimes.edn (ORTPIN, D906): fetch Microsoft's package, verify it whole and again entry by entry, install into
 ;; .cache/ppocr/<directory>/ in the layout of the old release archives (lib/, include/, LICENSE, ThirdPartyNotices.txt). Never a gate; never anything unpinned.
 ;;
 ;;   bb tools/ppocr/ort.clj [--fetch] [--triple T | --host | --desktop | --mobile | --all]   install (default: this host). Without --fetch a package that is not

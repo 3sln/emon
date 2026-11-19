@@ -70,6 +70,9 @@ pub struct Session {
     replayer: Option<Replayer>,
     recording: Option<Transcript>,
     local: Box<dyn FnMut(&Request, &Bitmaps) -> Result<Answer, PlanError>>,
+    // the registry's renderer (pdfium), when the engines have one and the caller does not render (`js-render=1`): the session answers `render` and `crop` itself (K7). It reads the input
+    // through the session's chunk cache, so the caller gives the whole input (every chunk) before it steps.
+    render: Option<crate::render::RenderFulfiller>,
     // a round of requests is in progress (the Run holds it: its requests, the answers offered so far, the bitmaps), and the ids of
     // those that are the caller's to answer
     in_round: bool,
@@ -133,12 +136,16 @@ impl Session {
         let cache = ChunkCache::pushed(ulen, p.config.chunk_size.max(1));
         let engine = Engine::new(p.config.clone());
         let idx = 0usize;
+        let password_for_render = password.clone();
         let run = engine.start_pushed(idx, cache.clone(), password, &p.options, intake_only)?;
         let has_router = router.is_some();
         // the decode answers keep their pixels when something reads them: the caller's engine, or an adapter
         let keep = p.record || p.js_ocr || has_router;
         let ocr = if let Some(r) = &router { Some(OcrPort(Arc::new(r.clone()))) } else if p.js_ocr { Some(OcrPort(Arc::new(HostOcr))) } else { None };
         let source: Arc<dyn ByteSource> = cache.clone();
+        let render = engines.and_then(|e| e.renderer()).filter(|_| !p.js_render).map(|r| {
+            crate::render::RenderFulfiller::for_input(r, idx, crate::render::RenderInput { source: source.clone(), password: password_for_render.clone() })
+        });
         let local = Box::new(crate::engine::port_fulfiller(source, idx, keep, p.record, ocr, None));
         let mut recording = None;
         if p.record {
@@ -171,6 +178,7 @@ impl Session {
             replayer: None,
             recording,
             local,
+            render,
             in_round: false,
             external: BTreeSet::new(),
             done: false,
@@ -310,6 +318,11 @@ impl Session {
                                 s.tokens.lock().unwrap_or_else(|e| e.into_inner()).insert(t);
                             }
                         }
+                        continue;
+                    }
+                    if let Some(rf) = s.render.as_ref().filter(|_| plan::route(req.kind(), false, true) == plan::Route::Render) {
+                        let a = rf.fulfil(req).map_err(|e| run.error_of(e))?;
+                        run.offer(a)?;
                         continue;
                     }
                     let a = (s.local)(req, run.bitmaps()).map_err(|e| run.error_of(e))?;

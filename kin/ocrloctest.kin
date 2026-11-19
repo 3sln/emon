@@ -1,0 +1,63 @@
+;; Laws for `emon.ocrloc` (K8, D901; D883 ruling 7): a request's languages as an engine's own locale tags. Apple Vision reads BCP-47 tags of its recognition languages, Windows.Media.Ocr
+;; the Windows language tags of the installed language packs; Tesseract's resolution is `emon.ocrtess`'s and has no row here. A language the engine has no tag for is none: an adapter
+;; that is left with no language answers `lang-unavailable`, and the page is unread, never blank (D038).
+(ns emon.ocrloctest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells]]
+            [emon.port :refer [cells-len cells-at]]
+            [emon.ocrport :refer [sc-latn sc-hani sc-cyrl sc-jpan sc-thai]]
+            [emon.ocrloc :refer [ol-locales ol-row-count]]
+            [kin.lang :refer [let + -]]))
+
+;; the packed codes of emon's request languages: three letters and a NUL
+(deftest test-vision-reads-english-as-en-us
+  (let [^Cells out (new-cells)]
+    (assert-eq (ol-locales 3 1701734144 out) 1 "eng is one tag")
+    (assert-eq (cells-len out) 5 "en-US")
+    (assert-eq (cells-at out 0) 101 "e")
+    (assert-eq (cells-at out 1) 110 "n")
+    (assert-eq (cells-at out 2) 45 "-")
+    (assert-eq (cells-at out 3) 85 "U")
+    (assert-eq (cells-at out 4) 83 "S")))
+
+(deftest test-vision-names-the-two-chinese-models-by-script
+  (let [^Cells out (new-cells)]
+    (assert-eq (ol-locales 3 1667789568 out) 1 "chs")
+    (assert-eq (cells-len out) 7 "zh-Hans")
+    (assert-eq (cells-at out 3) 72 "Hans' H")
+    (assert-eq (ol-locales 3 1667789824 out) 1 "cht")
+    (assert-eq (cells-len out) 7 "zh-Hant")
+    (assert-eq (cells-at out 6) 116 "Hant ends in t")))
+
+(deftest test-a-script-is-every-language-vision-reads-in-it
+  (let [^Cells out (new-cells)]
+    (assert-eq (ol-locales 3 (sc-latn) out) 6 "Latin: en fr it de es pt")
+    (assert-eq (cells-len out) 35 "six five-letter tags and five commas")
+    (assert-eq (ol-locales 3 (sc-hani) out) 2 "Han: both Chinese scripts")
+    (assert-eq (cells-len out) 15 "zh-Hans,zh-Hant")
+    (assert-eq (ol-locales 3 (sc-cyrl) out) 2 "Cyrillic: Russian and Ukrainian")
+    (assert-eq (ol-locales 3 (sc-jpan) out) 1 "Japanese")
+    (assert-eq (ol-locales 3 (sc-thai) out) 1 "Thai")))
+
+(deftest test-a-language-the-engine-has-no-tag-for-is-none-and-the-list-is-cleared
+  (let [^Cells out (new-cells)]
+    (assert-eq (ol-locales 3 1701734144 out) 1 "eng first")
+    (assert-eq (ol-locales 3 2020501504 out) 0 "xyz has no tag")
+    (assert-eq (cells-len out) 0 "the list is cleared each time")
+    (assert-eq (ol-locales 1 1701734144 out) 0 "Tesseract's languages are emon.ocrtess's")
+    (assert-eq (cells-len out) 0 "no tag for an engine with no table here")))
+
+(deftest test-windows-has-its-own-language-tags
+  (let [^Cells out (new-cells)]
+    (assert-eq (ol-locales 5 1701734144 out) 1 "eng")
+    (assert-eq (cells-len out) 5 "en-US")
+    (assert-eq (ol-locales 5 1667789568 out) 1 "chs")
+    (assert-eq (cells-len out) 10 "zh-Hans-CN")
+    (assert-eq (ol-locales 5 1986618624 out) 1 "vie")
+    (assert-eq (cells-len out) 5 "vi-VN")
+    (assert-eq (cells-at out 4) 78 "Windows spells Vietnam VN, Vision VT")
+    (assert-eq (ol-locales 3 1986618624 out) 1 "vie under Vision")
+    (assert-eq (cells-at out 4) 84 "vi-VT")))
+
+(deftest test-the-table-has-a-row-for-each-engine-language
+  (assert-eq (ol-row-count 0) 40 "twenty for Vision and twenty for Windows"))

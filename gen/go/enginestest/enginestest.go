@@ -174,21 +174,33 @@ func TestTheRoleTableAgreesWithTheHybridRolesOfOcrengine(emonT *testing.T) {
 	port.AssertEq(emonT, ocrengine.OeRole(engines.PkEngineOen(engines.EngWindowsMediaOcr())), 0, "nor Windows OCR")
 	port.AssertEq(emonT, ocrengine.OeRole(engines.PkEngineOen(engines.EngMlkitText())), 0, "nor ML Kit")
 	port.AssertEq(emonT, engines.PkRoleMask(engines.EngTesseract(), engines.PclsIos()), 5, "Tesseract is the incumbent or the sole reader")
-	port.AssertEq(emonT, engines.PkRoleMask(engines.EngAppleVision(), engines.PclsMacos()), 12, "an uncalibrated engine reads or votes")
+	port.AssertEq(emonT, engines.PkRoleMask(engines.EngAppleVision(), engines.PclsMacos()), 12, "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)")
+	port.AssertEq(emonT, engines.PkEngineCalibrated(engines.EngAppleVision()), 1, "a frozen reliability map keyed by its identity (D883 ruling 3, K8)")
+	port.AssertEq(emonT, engines.PkEngineCalibrated(engines.EngWindowsMediaOcr()), 0, "Windows.Media.Ocr has no confidence to calibrate, for good")
+	port.AssertEq(emonT, engines.PkRoleMask(engines.EngAppleVision(), engines.PclsIos())&engines.EroleIncumbent(), 0, "never the incumbent")
 	port.AssertEq(emonT, engines.PkRoleDefault(engines.EngAppleVision(), engines.PclsWindows()), 0, "no role on the wrong class")
 }
 
-func enTurnkeyClass(emonT *testing.T, pclass int32, platform int32, pp int32) int32 {
+func enTurnkeyClass(emonT *testing.T, pclass int32, dflt int32, platform int32, platformCalibrated int32, pp int32) int32 {
 	var eng int32 = engines.PkDefaultEngine(pclass)
-	port.AssertEq(emonT, eng, engines.EngTesseract(), "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)")
+	port.AssertEq(emonT, eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)")
 	port.AssertEq(emonT, engines.PkEngineOn(eng, pclass), 1, "the default runs on the class")
-	port.AssertEq(emonT, engines.PkEngineCalibrated(eng), 1, "the default is calibrated")
-	port.AssertEq(emonT, engines.PkRoleDefault(eng, pclass), engines.EroleIncumbent(), "and the incumbent")
+	if eng == engines.EngTesseract() {
+		port.AssertEq(emonT, engines.PkEngineCalibrated(eng), 1, "Tesseract is calibrated")
+		port.AssertEq(emonT, engines.PkRoleDefault(eng, pclass), engines.EroleIncumbent(), "and the incumbent")
+	} else {
+		port.AssertEq(emonT, engines.PkEngineCalibrated(eng), 0, "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)")
+		port.AssertEq(emonT, engines.PkRoleDefault(eng, pclass), engines.EroleReader(), "and reads alone: a reader, never an incumbent or a challenger")
+	}
 	port.AssertEq(emonT, engines.PkPlatformEngine(pclass), platform, "the class's own engine")
 	if platform != 0 {
 		port.AssertEq(emonT, engines.PkEngineOn(platform, pclass), 1, "the platform engine runs on the class")
-		port.AssertEq(emonT, engines.PkEngineCalibrated(platform), 0, "uncalibrated (D895)")
-		port.AssertThat(emonT, platform != eng, "and never the automatic choice")
+		port.AssertEq(emonT, engines.PkEngineCalibrated(platform), platformCalibrated, "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map")
+		if eng != engines.EngTesseract() {
+			port.AssertEq(emonT, platform, eng, "where the default is not Tesseract it is the class's own engine")
+		} else {
+			port.AssertThat(emonT, platform != eng, "and elsewhere never the automatic choice")
+		}
 	}
 	port.AssertEq(emonT, engines.PkPpEngine(pclass), pp, "the PP-OCR runtime of the class")
 	port.AssertEq(emonT, engines.PkEngineOn(pp, pclass), 1, "runs on it")
@@ -198,12 +210,12 @@ func enTurnkeyClass(emonT *testing.T, pclass int32, platform int32, pp int32) in
 }
 
 func TestTheTurnkeyDefaultOfEveryPlatformClass(emonT *testing.T) {
-	enTurnkeyClass(emonT, engines.PclsMacos(), engines.EngAppleVision(), engines.EngPpocr())
-	enTurnkeyClass(emonT, engines.PclsIos(), engines.EngAppleVision(), engines.EngPpocr())
-	enTurnkeyClass(emonT, engines.PclsLinux(), 0, engines.EngPpocr())
-	enTurnkeyClass(emonT, engines.PclsWindows(), engines.EngWindowsMediaOcr(), engines.EngPpocr())
-	enTurnkeyClass(emonT, engines.PclsAndroid(), engines.EngMlkitText(), engines.EngPpocr())
-	enTurnkeyClass(emonT, engines.PclsWeb(), 0, engines.EngPpocrWeb())
+	enTurnkeyClass(emonT, engines.PclsMacos(), engines.EngTesseract(), engines.EngAppleVision(), 1, engines.EngPpocr())
+	enTurnkeyClass(emonT, engines.PclsIos(), engines.EngTesseract(), engines.EngAppleVision(), 1, engines.EngPpocr())
+	enTurnkeyClass(emonT, engines.PclsLinux(), engines.EngTesseract(), 0, 0, engines.EngPpocr())
+	enTurnkeyClass(emonT, engines.PclsWindows(), engines.EngWindowsMediaOcr(), engines.EngWindowsMediaOcr(), 0, engines.EngPpocr())
+	enTurnkeyClass(emonT, engines.PclsAndroid(), engines.EngMlkitText(), engines.EngMlkitText(), 0, engines.EngPpocr())
+	enTurnkeyClass(emonT, engines.PclsWeb(), engines.EngTesseract(), 0, 0, engines.EngPpocrWeb())
 	port.AssertEq(emonT, engines.PkDefaultEngine(0), 0, "an unknown class has no default")
 	port.AssertEq(emonT, engines.PkDefaultEngine(7), 0, "nor class 7")
 	port.AssertEq(emonT, engines.PkDefaultFetch(7), 0, "and no fetch policy")
@@ -314,6 +326,20 @@ func TestTheDefaultResolutionNeedsEnglishAndSaysWhetherItIsThere(emonT *testing.
 	port.CellsPush(installed, packdata.PkidTessOsd())
 	port.AssertEq(emonT, enResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "an installed pack nobody needs is not a row")
 	port.AssertEq(emonT, engines.PkRows(out), 1, "still one row")
+}
+
+func TestAnOsReaderAsTheTurnkeyDefaultNeedsNoPack(emonT *testing.T) {
+	var langs *port.Cells = port.NewCells()
+	var engs *port.Cells = port.NewCells()
+	var installed *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	port.AssertEq(emonT, enResolve(engines.PclsWindows(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "Windows resolves with Windows.Media.Ocr as the default")
+	port.AssertEq(emonT, engines.PkRows(out), 0, "the OS reads: nothing to fetch (K5, D905)")
+	port.AssertEq(emonT, enResolve(engines.PclsAndroid(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "Android resolves with ML Kit as the default")
+	port.AssertEq(emonT, engines.PkRows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch")
+	enCells1(engs, engines.EngTesseract())
+	port.AssertEq(emonT, enResolve(engines.PclsAndroid(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "asking for Tesseract on Android still resolves its packs")
+	port.AssertEq(emonT, engines.PkRows(out), 2, "English and OSD")
 }
 
 func TestOrientationDetectionAddsTheOsdPackForTesseractOnly(emonT *testing.T) {
@@ -614,4 +640,14 @@ func TestATranscriptWithAnUnknownEngineOrABadRowIsRefused(emonT *testing.T) {
 	enRefused(emonT, "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n", transcript.TbEngines())
 	enRefused(emonT, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", transcript.TbEngines())
 	enRefused(emonT, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", transcript.TbEngines())
+}
+
+func TestACommittedAppleVisionTranscriptNamesTheEngineThatRead(emonT *testing.T) {
+	var b []byte = port.TestFile("ocr/vision/h-plain/transcript.edn")
+	var t *transcriptctx.Tr = transcriptctx.NewTr()
+	port.AssertEq(emonT, transcript.TrRead(t, b), 0, "it reads")
+	port.AssertEq(emonT, transcript.TrNEngines(t), 1, "one engine read")
+	port.AssertEq(emonT, transcript.TrEngEngine(t, 0), engines.EngAppleVision(), "Apple Vision")
+	port.AssertEq(emonT, transcript.TrEngCaps(t, 0), engines.PkEngineCaps(engines.EngAppleVision()), "with the capabilities of its table's ceiling")
+	port.AssertEq(emonT, transcript.TrEngRole(t, 0), engines.EroleReader(), "it read alone: a reader, never an incumbent")
 }

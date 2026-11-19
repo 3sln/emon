@@ -13,11 +13,72 @@ import (
 )
 
 var OeIdentity [74]int32 = [74]int32{
-	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 52, 102, 101, 99, 55, 100,
-	51, 51, 102, 55, 51, 55, 54, 55, 53, 57, 57, 49, 54, 102, 50, 97,
-	102, 50, 98, 55, 57, 55, 55, 100, 101, 98, 55, 102, 98, 49, 55, 50,
-	51, 98, 50, 101, 57, 51, 55, 49, 54, 101, 100, 57, 101, 51, 50, 50,
-	53, 54, 53, 97, 52, 99, 101, 102, 53, 53,
+	112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 50, 98, 100, 55, 99, 98,
+	99, 51, 53, 102, 57, 51, 57, 52, 99, 100, 57, 100, 54, 52, 99, 100,
+	48, 101, 51, 98, 54, 101, 48, 55, 98, 49, 54, 50, 49, 53, 98, 56,
+	57, 51, 56, 54, 55, 55, 52, 56, 102, 97, 48, 57, 54, 101, 102, 51,
+	55, 101, 102, 53, 49, 53, 97, 100, 97, 48,
+}
+
+var OeVisionConfig [90]int32 = [90]int32{
+	97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
+	101, 99, 111, 103, 110, 105, 122, 101, 84, 101, 120, 116, 82, 101, 113, 117,
+	101, 115, 116, 59, 114, 101, 118, 61, 108, 97, 116, 101, 115, 116, 59, 108,
+	101, 118, 101, 108, 61, 97, 99, 99, 117, 114, 97, 116, 101, 59, 108, 99,
+	61, 49, 59, 108, 97, 110, 103, 61, 114, 101, 113, 117, 101, 115, 116, 45,
+	101, 108, 115, 101, 45, 108, 97, 116, 105, 110,
+}
+
+var OeWinocrConfig [60]int32 = [60]int32{
+	119, 105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99,
+	114, 59, 87, 105, 110, 100, 111, 119, 115, 46, 77, 101, 100, 105, 97, 46,
+	79, 99, 114, 46, 79, 99, 114, 69, 110, 103, 105, 110, 101, 59, 108, 97,
+	110, 103, 61, 105, 110, 115, 116, 97, 108, 108, 101, 100,
+}
+
+var OeMlkitConfig [71]int32 = [71]int32{
+	109, 108, 107, 105, 116, 45, 116, 101, 120, 116, 59, 84, 101, 120, 116, 82,
+	101, 99, 111, 103, 110, 105, 116, 105, 111, 110, 59, 114, 101, 99, 111, 103,
+	110, 105, 122, 101, 114, 61, 98, 121, 45, 115, 99, 114, 105, 112, 116, 59,
+	108, 97, 110, 103, 61, 114, 101, 113, 117, 101, 115, 116, 45, 101, 108, 115,
+	101, 45, 108, 97, 116, 105, 110,
+}
+
+func oeCfgCount(engine int32) int32 {
+	if engine == 2 {
+		return 74
+	}
+	if engine == 3 {
+		return 90
+	}
+	if engine == 4 {
+		return 71
+	}
+	if engine == 5 {
+		return 60
+	}
+	return 0
+}
+
+func oeCfgAt(engine int32, i int32) int32 {
+	if engine == 2 {
+		return OeIdentity[i]
+	}
+	if engine == 3 {
+		return OeVisionConfig[i]
+	}
+	if engine == 4 {
+		return OeMlkitConfig[i]
+	}
+	return OeWinocrConfig[i]
+}
+
+func OeConfigLen(engine int32) int32 {
+	return oeCfgCount(engine)
+}
+
+func OeConfigValue(engine int32, i int32) int32 {
+	return oeCfgAt(engine, i)
 }
 
 func OeIdLen() int32 {
@@ -62,7 +123,7 @@ func OeRequestSlot(engine int32) int32 {
 
 func OeSelect(requests *port.Cells, at int32, engine int32) int32 {
 	// Select an engine immediately after closing the last request. Allocation slots never select engines.
-	if engine != 2 {
+	if oeCfgCount(engine) == 0 {
 		return 0
 	}
 	var end int32 = port.CellsLen(requests)
@@ -81,10 +142,10 @@ func OeSelect(requests *port.Cells, at int32, engine int32) int32 {
 	port.CellsPush(requests, -3100)
 	port.CellsPush(requests, 2)
 	port.CellsPush(requests, engine)
-	port.CellsPush(requests, 74)
+	port.CellsPush(requests, oeCfgCount(engine))
 	k = 0
-	for k < 74 {
-		port.CellsPush(requests, OeIdentity[k])
+	for k < oeCfgCount(engine) {
+		port.CellsPush(requests, oeCfgAt(engine, k))
 		k += 1
 	}
 	port.CellsSet(requests, at, port.CellsLen(requests)-at)
@@ -136,6 +197,15 @@ func OeTag(requests *port.Cells, scratch *port.Cells, mode int32) int32 {
 			if mode == 2 {
 				oeContext(scratch, out)
 			}
+			if mode == 4 {
+				OeSelect(scratch, out, 3)
+			}
+			if mode == 6 {
+				OeSelect(scratch, out, 5)
+			}
+			if mode == 8 {
+				OeSelect(scratch, out, 4)
+			}
 		}
 		at += n
 	}
@@ -164,6 +234,13 @@ func oeConfig(out *port.Cells, engine int32, context int32) int32 {
 		i = 0
 		for i < 74 {
 			port.CellsPush(out, OeIdentity[i])
+			i += 1
+		}
+	}
+	if (engine == 3) || ((engine == 4) || (engine == 5)) {
+		i = 0
+		for i < oeCfgCount(engine) {
+			port.CellsPush(out, oeCfgAt(engine, i))
 			i += 1
 		}
 	}

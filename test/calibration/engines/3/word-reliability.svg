@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 290" font-family="sans-serif" font-size="11">
+<title>apple-vision word calibration, held-out split</title>
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="10" y="22" font-size="14" font-weight="bold">apple-vision word calibration, held-out split</text>
+<g>
+<rect x="34" y="64" width="152" height="152" fill="none" stroke="#999"/>
+<line x1="34" y1="216.0" x2="186" y2="64.0" stroke="#bbb" stroke-dasharray="4 3"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="96.2,149.0 134.5,119.9 155.0,93.4"/>
+<circle cx="96.2" cy="149.0" r="3.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="134.5" cy="119.9" r="5.5" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="155.0" cy="93.4" r="7.6" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="34" y="52" font-weight="bold">word  n=8801</text>
+<text x="34" y="230">ECE 0.016  Brier 0.178</text>
+<text x="34" y="242" fill="#666">confidence (x) vs accuracy (y)</text>
+</g>
+<g>
+<rect x="254" y="64" width="152" height="152" fill="none" stroke="#999"/>
+<line x1="254" y1="216.0" x2="406" y2="64.0" stroke="#bbb" stroke-dasharray="4 3"/>
+<polyline fill="none" stroke="#1f6feb" stroke-width="1.5" points="316.2,149.0 354.5,119.9 375.0,93.4"/>
+<circle cx="316.2" cy="149.0" r="3.6" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="354.5" cy="119.9" r="5.5" fill="#1f6feb" fill-opacity="0.55"/>
+<circle cx="375.0" cy="93.4" r="7.6" fill="#1f6feb" fill-opacity="0.55"/>
+<text x="254" y="52" font-weight="bold">all  n=8801</text>
+<text x="254" y="230">ECE 0.016  Brier 0.178</text>
+<text x="254" y="242" fill="#666">confidence (x) vs accuracy (y)</text>
+</g>
+</svg>

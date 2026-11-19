@@ -22,7 +22,7 @@
                (= "aarch64" (System/getProperty "os.arch")))
   (throw (ex-info "PP-OCR reference runtime currently pinned for macOS arm64 only" {})))
 (def runtime (str root "/onnxruntime-osx-arm64-1.22.0"))
-;; Re-extract the pinned package (tools/ppocr/runtimes.edn, ORTPIN D901) so local library/header edits cannot bypass pins; never downloads.
+;; Re-extract the pinned package (tools/ppocr/runtimes.edn, ORTPIN, D906) so local library/header edits cannot bypass pins; never downloads.
 (shell {:shutdown nil} "bb" "tools/ppocr/ort.clj" "--triple" "aarch64-apple-darwin")
 (shell {:shutdown nil} "cc" "-Wall" "-Wextra" "-Werror" "-c" "host/rust/src/ppocr_ort.c"
        (str "-I" runtime "/include") "-o" (str root "/ppocr_ort.o"))

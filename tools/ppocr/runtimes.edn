@@ -1,4 +1,4 @@
-;; ONNX Runtime 1.22.0: the runtime the optional PP-OCR adapter loads, pinned to MICROSOFT'S OWN distribution channels (ORTPIN, D901).
+;; ONNX Runtime 1.22.0: the runtime the optional PP-OCR adapter loads, pinned to MICROSOFT'S OWN distribution channels (ORTPIN, D906).
 ;;
 ;; WHY: the GitHub release assets this file used to name (github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-<os>-<arch>-1.22.0.tgz|zip)
 ;; went away on 2026-11-17, when the repository stopped being publicly visible (D900, DEVLOG).  The pins here are the SAME release, 1.22.0, from the channels

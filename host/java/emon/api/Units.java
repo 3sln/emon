@@ -143,7 +143,7 @@ final class Units {
     static Enctx.Cfg cfgOf(Options opts) {
         Enctx.Cfg c = new Enctx.Cfg();
         c.ocr = opts.ocr.code();
-        c.oengine = opts.ppOcr ? 1 : 0;
+        c.oengine = opts.ocrEngine != 0 ? opts.ocrEngine : (opts.ppOcr ? 1 : 0);
         c.scope = opts.ocrScope.code();
         c.furn = opts.furniture.mode();
         c.level = opts.assets.level();

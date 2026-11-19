@@ -146,7 +146,7 @@
     ;; Windows (D558): the C runtime is linked STATICALLY (/MT, +crt-static), the UCRT with it, so no msvcp140, vcruntime140, vcruntime140_1, ucrtbase or
     ;; api-ms-win-crt-* may appear: a dependency on any of them means a /MD object got in, and the exe would need the VC++ redistributable (or, for the UCRT, a
     ;; Windows older than 10). What remains are Windows' own DLLs, and the api-ms-win-core-* etc. API sets rustc's std imports (they ship with Windows 10+).
-    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|bcryptprimitives|userenv|ole32|shell32|gdi32|oleaut32|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-(?!crt-).*)\.dll$"))
+    :windows #"(?i)^(kernel32|user32|advapi32|ws2_32|ntdll|bcrypt|bcryptprimitives|userenv|ole32|shell32|gdi32|oleaut32|combase|crypt32|secur32|shlwapi|mswsock|version|imm32|api-ms-win-(?!crt-).*)\.dll$"))
 
 (defn dependencies [exe]
   (case (:os tcfg)
@@ -236,6 +236,13 @@
               (do (println (format "         %s (%s) converted in %.1f s" n what secs))
                   (compare-html! (str n ".pdf (" what ")") (:out r) (slurp (sample n "html"))))
               (fail! n ".pdf: exit " (:exit r) " " (:err r)))))
+        ;; the platform's own recogniser (K8, D901): explicit, never chosen for the app. A Mac's reads with Apple's Vision, a Windows machine's with Windows.Media.Ocr (it needs an OCR language
+        ;; pack). A runner or machine whose OS recogniser cannot run is a NOTE with its reason, not a failure of the archive: the engine is the OS's.
+        (when-let [engine (cond (= "Darwin" (System/getProperty "os.name")) "apple-vision" (str/includes? (System/getProperty "os.name") "Windows") "windows-media-ocr")]
+          (let [r (run root exe "convert" (sample "scan-plain" "pdf") "--ocr-engine" engine)]
+            (cond (not (zero? (:exit r))) (println (str "  NOTE --ocr-engine " engine " did not read here (exit " (:exit r) "): " (str/trim (str (:err r)))))
+                  (not (str/includes? (:out r) "Adaptive Sampling")) (println (str "  NOTE --ocr-engine " engine " ran but the scan's heading is not in what it read"))
+                  :else (ok! "scan-plain.pdf with --ocr-engine " engine ": read by the platform's own recogniser, the heading is there"))))
         ;; -o and --assets dir
         (let [o (str tmp "/figs.html")
               r (run root exe "convert" (sample "figures-charts" "pdf") "-o" o "--assets" "dir" "--ocr" "never")]

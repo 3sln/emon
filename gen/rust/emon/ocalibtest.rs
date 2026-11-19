@@ -28,11 +28,34 @@ fn test_pp_inverted_bins_pool_the_original_fit_observations() {
     crate::testport::assert_eq(ocal_word(2, 0, 600), 422, "57 correct of 135");
     crate::testport::assert_eq(ocal_word(2, 0, 799), 422, "same pooled bin");
     crate::testport::assert_eq(ocal_word(2, 0, 800), 521, "next frozen bin");
-    crate::testport::assert_eq(ocal_word(3, 0, 1000), -1, "unfitted engine is not a zero probability");
+    crate::testport::assert_eq(ocal_word(5, 0, 1000), -1, "an unfitted engine (Windows.Media.Ocr has no confidence to fit) is not a zero probability");
 }
 #[test]
 fn test_word_calibration_preserves_absence_and_refuses_unknown_class() {
     crate::testport::assert_eq(ocal_word(2, 0, -1), -1, "absent PP raw score remains absent");
     crate::testport::assert_eq(ocal_word(1, 9, 800), -1, "unknown Tesseract calibration class is unfitted");
     crate::testport::assert_eq(ocal_word(2, 9, 800), -1, "unknown PP calibration class is unfitted");
+}
+#[test]
+fn test_apple_vision_word_calibration_is_monotone_at_every_permille() {
+    let mut i: i32 = 0;
+    let mut previous: i32 = 0;
+    while i < 1001 {
+        let p: i32 = ocal_word(3, 0, i);
+        crate::testport::assert_that(p >= previous, "weighted isotonic calibration");
+        crate::testport::assert_that(p >= 0, "a fitted engine has a probability at every raw value");
+        previous = p;
+        i += 1;
+    }
+}
+#[test]
+fn test_apple_vision_word_calibration_steps_are_the_frozen_fit() {
+    crate::testport::assert_eq(ocal_word(3, 0, 300), 409, "the quantized 300");
+    crate::testport::assert_eq(ocal_word(3, 0, 500), 661, "the quantized 500");
+    crate::testport::assert_eq(ocal_word(3, 0, 1000), 796, "the quantized 1000");
+    crate::testport::assert_eq(ocal_word(3, 0, 0), 409, "below the first step the first step holds");
+    crate::testport::assert_eq(ocal_word(3, 0, 999), 661, "a step holds up to the next");
+    crate::testport::assert_eq(ocal_word(3, 0, -1), -1, "an absent raw value stays absent");
+    crate::testport::assert_eq(ocal_word(3, 9, 500), -1, "another calibration class is unfitted: the map is the accurate level with language correction");
+    crate::testport::assert_eq(ocal_word(1, 0, 500), 500, "Tesseract keeps the policy scale of P13.2");
 }

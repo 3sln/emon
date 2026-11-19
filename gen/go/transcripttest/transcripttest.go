@@ -760,7 +760,7 @@ func TestEveryCommittedTranscriptIsReadAndWrittenAgainByteForByte(emonT *testing
 		}
 		at = e + 1
 	}
-	port.AssertEq(emonT, row, 129, "the transcripts under test/")
+	port.AssertEq(emonT, row, 132, "the transcripts under test/")
 }
 
 func TestRequestedAndObservedEngineVectorRoundtripsAndDeduplicatesReadings(emonT *testing.T) {

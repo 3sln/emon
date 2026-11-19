@@ -7,7 +7,10 @@
 # `px` first (the predictor `emon-replay-px`, D392): the WHOLE transcripts of test/ocr/scan-px/ (bitmaps kept: the engine reads pixels).
 set -e
 dir=scan
+engine=""
 if [ "$1" = "px" ]; then dir=scan-px; shift; fi
+# `vision` first (the predictor `emon-replay-vision`, K8, D901): the transcripts of test/ocr/vision/ID/, which Apple's Vision answered; a request names its engine, so the replay does too
+if [ "$1" = "vision" ]; then dir=vision; engine="--ocr-engine=apple-vision"; shift; fi
 if ! command -v cargo > /dev/null; then
   echo "emon-replay: cargo is not on PATH, so the Rust Engine cannot be built (SKIP)" >&2
   exit 3
@@ -27,4 +30,4 @@ if [ ! -x "$bin" ] || [ "$(cat "$root/.cache/emon-rs/stamp" 2>/dev/null)" != "$s
   "$root/kin/scripts/emon-rs-build" > /dev/null || exit 1
   printf '%s' "$stamp" > "$root/.cache/emon-rs/stamp"
 fi
-exec "$bin" --replay="$t" "$3"
+exec "$bin" $engine --replay="$t" "$3"

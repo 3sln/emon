@@ -91,7 +91,7 @@
  ]
 
  ;; Not packs: the native runtime a PP adapter loads travels in the adapter's own archive (pkg1 section 0 item 4), never in the pack store. Pinned here so that the
- ;; one catalogue holds every downloaded byte; nothing resolves or generates from this section. ORTPIN (D901): ONNX Runtime 1.22.0 from Microsoft's own channels, the same
+ ;; one catalogue holds every downloaded byte; nothing resolves or generates from this section. ORTPIN (D906): ONNX Runtime 1.22.0 from Microsoft's own channels, the same
  ;; three package pins as tools/ppocr/runtimes.edn (the authored source of the per-library pins; `bb packs --emit --check` holds the two to each other). The GitHub
  ;; release assets this section used to name are gone (the repository stopped being public on 2026-11-17). K4 will mirror these binaries in emon's packs release.
  :runtimes

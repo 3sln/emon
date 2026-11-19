@@ -25,7 +25,7 @@
           (str/includes? os "Windows") "x86_64-pc-windows-msvc")))
 (def triple (host-triple))
 (def pins (edn/read-string (slurp "tools/ppocr/runtimes.edn")))
-;; ONNX Runtime: Microsoft's NuGet package, pinned by SHA-256 (tools/ppocr/runtimes.edn, ORTPIN D901); installed by tools/ppocr/ort.clj
+;; ONNX Runtime: Microsoft's NuGet package, pinned by SHA-256 (tools/ppocr/runtimes.edn, ORTPIN, D906); installed by tools/ppocr/ort.clj
 (def runtime (get-in pins [:platforms triple]))
 (assert runtime "unsupported PP add-on host")
 (def root (str (fs/absolutize ".cache/ppocr")))

@@ -7,11 +7,12 @@
 #                 answering, means everything runs. `bb ci plan` maps the diff since the base through ci/gate-map.edn, exactly as for a pull request. A diff that only changes
 #                 the value in version.edn plans no gate: that is the release bump.
 #   3. RUN        the fast core (`bb ci core`) always, plus the planned shards as FULL gates; `unit` (a job per arm, and its red twin) when planned.
-#   4. ARCHIVES   the release archives (the CLI for five targets: native.yml; the C library and pod for four: `bb package`; SHA256SUMS) are built in this run only when the plan says
+#   4. ARCHIVES   the release archives (the CLI and the C bundle for the five desktop targets, Windows included: native.yml; the C bundle for the five mobile triples: native.yml's `mobile` job; the C bundle
+#                 and the pod for four desktop targets: `bb package`; SHA256SUMS; 29 files, K5/D905) are built in this run only when the plan says
 #                 they are affected (a path they are built from changed, no valid archives came with the base, or the VERSION changed: the archives carry it). Otherwise the base's
 #                 stay valid. Either way `emon/archives` is posted on the commit, naming the run whose artifact `release-archives` (retention 90 days) holds them.
 #   5. VERDICT    `emon/verified` success only when the plan, the core and every job ran green; description `verified: N gates since <sha>`.
-# Also: weekly (Monday, all gates, archives rebuilt, status posted), `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
+# Also (no weekly run: the full matrix runs only for a release, D902): `workflow_dispatch` (scoped or full, for the tip of main or a given commit of main), and `workflow_call`
 # (release.yml calls it in full for the release commit). A commit that is not on main is refused.
 # Needs the repository secrets listed in SPEC 15.3 (the corpus bucket). All scripting is babashka. Never run (D524: no Actions credits yet).
 name: verify
@@ -20,8 +21,6 @@ on:
   push:
     branches: [main]
     paths-ignore: [version.edn] # release.yml verifies a version-only push in full
-  schedule:
-    - cron: "17 4 * * 1"
   workflow_dispatch:
     inputs:
       mode:
@@ -60,13 +59,13 @@ defaults:
 env:
   CI: "true"
   SHA: ${{ inputs.sha || github.sha }}
-  MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'full') || 'scoped' }}
+  MODE: ${{ inputs.mode || 'scoped' }}
 
 jobs:
   # ---- what this commit calls for: the base, the plan, and whether the archives are rebuilt ---------------------------------------------------------
   # A push runs only when the repository variable EMON_VERIFY_ON_PUSH is 'true' (the repository is private and billed; the maintainer sets it when there are credits or the
   # repository is public). Skipped, every dependent is skipped with it (`needs: plan` / `plan.result == 'success'`) and `verdict` (on_main empty) posts no status at all.
-  # The schedule, workflow_dispatch and workflow_call are not affected.
+  # workflow_dispatch and workflow_call are not affected.
   plan:
     if: inputs.sha != '' || github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
     runs-on: ubuntu-latest
@@ -287,7 +286,9 @@ jobs:
         run: bb package --host js-ppocr --check
 
   # ---- the release archives, only when the plan says they are affected (otherwise the base's stay valid) ---------------------------------------------------
-  # five CLI targets (static Tesseract and Leptonica, pdfium, the `emon` binary: native.yml) ...
+  # five CLI targets (static Tesseract and Leptonica, pdfium, the `emon` binary: native.yml), the Windows C bundle (the `native` job of native.yml packs it on its Windows runner),
+  # the five mobile triples (`mobile`: Android and iOS, K6) and the platform adapters' own build, audit and smoke (`platform`: Apple Vision, Windows.Media.Ocr, K8). K5 (D905) turns the
+  # two that were off for callers on: a release carries the mobile bundles, and the adapters are in the bundles, so they are built (and smoke-tested where the engine runs) every time ...
   native:
     needs: plan
     if: fromJSON(needs.plan.outputs.plan).build_archives
@@ -295,10 +296,12 @@ jobs:
     with:
       ref: ${{ inputs.sha || github.sha }}
       cli: true
+      mobile: true
+      platform: true
     permissions:
       contents: read
 
-  # ... and the C library and the babashka pod for four
+  # ... and the C bundle and the babashka pod for four desktop triples
   package:
     needs: plan
     if: fromJSON(needs.plan.outputs.plan).build_archives
@@ -363,7 +366,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # the 23 assets (18 archives) and SHA256SUMS in one artifact, kept 90 days: release.yml downloads exactly this
+  # the 29 files (24 archives, the five CLI sidecars) and SHA256SUMS in one artifact, kept 90 days: release.yml downloads exactly this. (The Dart package tree is not here: the release makes it
+  # from SHA256SUMS, `bb release-ops dart`.) `bb release-ops archive` also opens every C bundle and refuses one without its libraries (tools/release/ops.clj, `bundle-entries`).
   archives:
     needs: [plan, native, package]
     if: ${{ !cancelled() && needs.native.result == 'success' && needs.package.result == 'success' }}
@@ -383,12 +387,19 @@ jobs:
           pattern: emon-cli-*
           path: ${{ runner.temp }}/in
           merge-multiple: true
+      # package-<triple>: the C bundle and pod of `package` above, and the Windows C bundle of native.yml's Windows job
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: package-*
           path: ${{ runner.temp }}/in
           merge-multiple: true
-      - name: Collect (all 23 files must be there) and write SHA256SUMS
+      # emon-c-mobile-<triple>: the C bundle of each Android ABI and iOS slice (native.yml's `mobile` job)
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: emon-c-mobile-*
+          path: ${{ runner.temp }}/in
+          merge-multiple: true
+      - name: Collect (all 29 files must be there, every C bundle with its libraries) and write SHA256SUMS
         run: bb release-ops archive --dir "$RUNNER_TEMP/in" --out "$RUNNER_TEMP/release-archives"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

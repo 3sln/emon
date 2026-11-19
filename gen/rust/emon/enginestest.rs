@@ -161,20 +161,32 @@ fn test_the_role_table_agrees_with_the_hybrid_roles_of_ocrengine() {
     crate::testport::assert_eq(oe_role(pk_engine_oen(eng_windows_media_ocr())), 0, "nor Windows OCR");
     crate::testport::assert_eq(oe_role(pk_engine_oen(eng_mlkit_text())), 0, "nor ML Kit");
     crate::testport::assert_eq(pk_role_mask(eng_tesseract(), pcls_ios()), 5, "Tesseract is the incumbent or the sole reader");
-    crate::testport::assert_eq(pk_role_mask(eng_apple_vision(), pcls_macos()), 12, "an uncalibrated engine reads or votes");
+    crate::testport::assert_eq(pk_role_mask(eng_apple_vision(), pcls_macos()), 12, "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)");
+    crate::testport::assert_eq(pk_engine_calibrated(eng_apple_vision()), 1, "a frozen reliability map keyed by its identity (D883 ruling 3, K8)");
+    crate::testport::assert_eq(pk_engine_calibrated(eng_windows_media_ocr()), 0, "Windows.Media.Ocr has no confidence to calibrate, for good");
+    crate::testport::assert_eq(pk_role_mask(eng_apple_vision(), pcls_ios()) & erole_incumbent(), 0, "never the incumbent");
     crate::testport::assert_eq(pk_role_default(eng_apple_vision(), pcls_windows()), 0, "no role on the wrong class");
 }
-pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, platform: i32, pp: i32) -> i32 {
+pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, dflt: i32, platform: i32, platform_calibrated: i32, pp: i32) -> i32 {
     let eng: i32 = pk_default_engine(pclass);
-    crate::testport::assert_eq(eng, eng_tesseract(), "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)");
+    crate::testport::assert_eq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)");
     crate::testport::assert_eq(pk_engine_on(eng, pclass), 1, "the default runs on the class");
-    crate::testport::assert_eq(pk_engine_calibrated(eng), 1, "the default is calibrated");
-    crate::testport::assert_eq(pk_role_default(eng, pclass), erole_incumbent(), "and the incumbent");
+    if eng == eng_tesseract() {
+        crate::testport::assert_eq(pk_engine_calibrated(eng), 1, "Tesseract is calibrated");
+        crate::testport::assert_eq(pk_role_default(eng, pclass), erole_incumbent(), "and the incumbent");
+    } else {
+        crate::testport::assert_eq(pk_engine_calibrated(eng), 0, "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)");
+        crate::testport::assert_eq(pk_role_default(eng, pclass), erole_reader(), "and reads alone: a reader, never an incumbent or a challenger");
+    }
     crate::testport::assert_eq(pk_platform_engine(pclass), platform, "the class's own engine");
     if platform != 0 {
         crate::testport::assert_eq(pk_engine_on(platform, pclass), 1, "the platform engine runs on the class");
-        crate::testport::assert_eq(pk_engine_calibrated(platform), 0, "uncalibrated (D895)");
-        crate::testport::assert_that(platform != eng, "and never the automatic choice");
+        crate::testport::assert_eq(pk_engine_calibrated(platform), platform_calibrated, "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map");
+        if eng != eng_tesseract() {
+            crate::testport::assert_eq(platform, eng, "where the default is not Tesseract it is the class's own engine");
+        } else {
+            crate::testport::assert_that(platform != eng, "and elsewhere never the automatic choice");
+        }
     }
     crate::testport::assert_eq(pk_pp_engine(pclass), pp, "the PP-OCR runtime of the class");
     crate::testport::assert_eq(pk_engine_on(pp, pclass), 1, "runs on it");
@@ -184,12 +196,12 @@ pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, platform: i32, pp: i32)
 }
 #[test]
 fn test_the_turnkey_default_of_every_platform_class() {
-    en_turnkey_class(0, pcls_macos(), eng_apple_vision(), eng_ppocr());
-    en_turnkey_class(0, pcls_ios(), eng_apple_vision(), eng_ppocr());
-    en_turnkey_class(0, pcls_linux(), 0, eng_ppocr());
-    en_turnkey_class(0, pcls_windows(), eng_windows_media_ocr(), eng_ppocr());
-    en_turnkey_class(0, pcls_android(), eng_mlkit_text(), eng_ppocr());
-    en_turnkey_class(0, pcls_web(), 0, eng_ppocr_web());
+    en_turnkey_class(0, pcls_macos(), eng_tesseract(), eng_apple_vision(), 1, eng_ppocr());
+    en_turnkey_class(0, pcls_ios(), eng_tesseract(), eng_apple_vision(), 1, eng_ppocr());
+    en_turnkey_class(0, pcls_linux(), eng_tesseract(), 0, 0, eng_ppocr());
+    en_turnkey_class(0, pcls_windows(), eng_windows_media_ocr(), eng_windows_media_ocr(), 0, eng_ppocr());
+    en_turnkey_class(0, pcls_android(), eng_mlkit_text(), eng_mlkit_text(), 0, eng_ppocr());
+    en_turnkey_class(0, pcls_web(), eng_tesseract(), 0, 0, eng_ppocr_web());
     crate::testport::assert_eq(pk_default_engine(0), 0, "an unknown class has no default");
     crate::testport::assert_eq(pk_default_engine(7), 0, "nor class 7");
     crate::testport::assert_eq(pk_default_fetch(7), 0, "and no fetch policy");
@@ -299,6 +311,20 @@ fn test_the_default_resolution_needs_english_and_says_whether_it_is_there() {
     crate::port::cells_push(installed, pkid_tess_osd());
     crate::testport::assert_eq(en_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "an installed pack nobody needs is not a row");
     crate::testport::assert_eq(pk_rows(out), 1, "still one row");
+}
+#[test]
+fn test_an_os_reader_as_the_turnkey_default_needs_no_pack() {
+    let langs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(en_resolve(pcls_windows(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "Windows resolves with Windows.Media.Ocr as the default");
+    crate::testport::assert_eq(pk_rows(out), 0, "the OS reads: nothing to fetch (K5, D905)");
+    crate::testport::assert_eq(en_resolve(pcls_android(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "Android resolves with ML Kit as the default");
+    crate::testport::assert_eq(pk_rows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch");
+    en_cells1(engs, eng_tesseract());
+    crate::testport::assert_eq(en_resolve(pcls_android(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "asking for Tesseract on Android still resolves its packs");
+    crate::testport::assert_eq(pk_rows(out), 2, "English and OSD");
 }
 #[test]
 fn test_orientation_detection_adds_the_osd_pack_for_tesseract_only() {
@@ -591,4 +617,14 @@ fn test_a_transcript_with_an_unknown_engine_or_a_bad_row_is_refused() {
     en_refused(0, "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n", tb_engines());
     en_refused(0, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", tb_engines());
     en_refused(0, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", tb_engines());
+}
+#[test]
+fn test_a_committed_apple_vision_transcript_names_the_engine_that_read() {
+    let b: &[u8] = &crate::testport::test_file("ocr/vision/h-plain/transcript.edn")[..];
+    let t: &mut crate::emon::transcriptctx::Tr = &mut crate::emon::transcriptctx::Tr::new();
+    crate::testport::assert_eq(tr_read(t, b), 0, "it reads");
+    crate::testport::assert_eq(tr_n_engines(t), 1, "one engine read");
+    crate::testport::assert_eq(tr_eng_engine(t, 0), eng_apple_vision(), "Apple Vision");
+    crate::testport::assert_eq(tr_eng_caps(t, 0), pk_engine_caps(eng_apple_vision()), "with the capabilities of its table's ceiling");
+    crate::testport::assert_eq(tr_eng_role(t, 0), erole_reader(), "it read alone: a reader, never an incumbent");
 }

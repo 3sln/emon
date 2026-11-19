@@ -1,5 +1,5 @@
 ;; The identity of the PP-OCR policy and the calibration's pin hash are over the BYTES of tools/ppocr/assets.edn (identity.clj, check_calibration.clj).
-;; ORTPIN (D901) moved the ONNX Runtime pin out of that file, into tools/ppocr/runtimes.edn, when the GitHub archive it named went away.  Behaviour did not change
+;; ORTPIN (D906) moved the ONNX Runtime pin out of that file, into tools/ppocr/runtimes.edn, when the GitHub archive it named went away.  Behaviour did not change
 ;; (bb ppocr-hosts proved it), so the identity must not either: it would re-key every recording.  The hashes are therefore taken over `canonical`: assets.edn with
 ;; the marked ORTPIN region put back as the entry text it replaced, byte for byte.  The runtime itself is pinned, by SHA-256 and size, in runtimes.edn.
 (ns ppocr.pins-canon

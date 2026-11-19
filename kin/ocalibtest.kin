@@ -25,9 +25,29 @@
   (assert-eq (ocal-word 2 0 600) 422 "57 correct of 135")
   (assert-eq (ocal-word 2 0 799) 422 "same pooled bin")
   (assert-eq (ocal-word 2 0 800) 521 "next frozen bin")
-  (assert-eq (ocal-word 3 0 1000) -1 "unfitted engine is not a zero probability"))
+  (assert-eq (ocal-word 5 0 1000) -1 "an unfitted engine (Windows.Media.Ocr has no confidence to fit) is not a zero probability"))
 
 (deftest test-word-calibration-preserves-absence-and-refuses-unknown-class
   (assert-eq (ocal-word 2 0 -1) -1 "absent PP raw score remains absent")
   (assert-eq (ocal-word 1 9 800) -1 "unknown Tesseract calibration class is unfitted")
   (assert-eq (ocal-word 2 9 800) -1 "unknown PP calibration class is unfitted"))
+
+;; Apple Vision's word map (K8, D901; D883 ruling 3): frozen from `test/calibration/engines/3/word-fit.edn`, fitted on 60 receipts and checked on 60 others. Vision gives one number for a
+;; line, quantized (300, 500 or 1000 on the receipts), so the map has three steps: a line it was unsure of is right about 4 words in 10, a middling one 2 in 3, a sure one 4 in 5.
+(deftest test-apple-vision-word-calibration-is-monotone-at-every-permille
+  (let [^:mut ^I32 i 0 ^:mut ^I32 previous 0]
+    (while (< i 1001)
+      (let [^I32 p (ocal-word 3 0 i)]
+        (assert-that (>= p previous) "weighted isotonic calibration")
+        (assert-that (>= p 0) "a fitted engine has a probability at every raw value")
+        (set previous p) (set i (+ i 1))))))
+
+(deftest test-apple-vision-word-calibration-steps-are-the-frozen-fit
+  (assert-eq (ocal-word 3 0 300) 409 "the quantized 300")
+  (assert-eq (ocal-word 3 0 500) 661 "the quantized 500")
+  (assert-eq (ocal-word 3 0 1000) 796 "the quantized 1000")
+  (assert-eq (ocal-word 3 0 0) 409 "below the first step the first step holds")
+  (assert-eq (ocal-word 3 0 999) 661 "a step holds up to the next")
+  (assert-eq (ocal-word 3 0 -1) -1 "an absent raw value stays absent")
+  (assert-eq (ocal-word 3 9 500) -1 "another calibration class is unfitted: the map is the accurate level with language correction")
+  (assert-eq (ocal-word 1 0 500) 500 "Tesseract keeps the policy scale of P13.2"))

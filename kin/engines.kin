@@ -13,8 +13,9 @@
 ;;     impl        `eimpl`: built into the core library, a native adapter library, or a platform plugin (the embedder's: a Flutter plugin, the browser's own code)
 ;;     caps        the OIL capability bits (`emon.oil`'s `oc`) the engine CAN declare: the ceiling. What an adapter's `describe` reports at registration narrows it
 ;;     classes     the platform classes (`pcls`) the engine can run on, a bit set: bit (class - 1)
-;;     calibrated  1 when the engine has a frozen reliability map (D883 ruling 3). The platform engines are present and UNCALIBRATED (D895): they may vote, may not
-;;                 insert or replace, are never the incumbent, and a preview may select them only explicitly
+;;     calibrated  1 when the engine has a frozen reliability map (D883 ruling 3). Apple Vision has one since K8 (D901); Windows.Media.Ocr, with no confidence at all, never can. A platform engine
+;;                 is not an incumbent or a default for that: the roles below stay reader or voter until the maintainer accepts one, a preview may select it only explicitly (D895), and Tesseract holds
+;;                 seal and stamp pages (ruling 8). An UNCALIBRATED engine may vote, may not insert or replace and is never the incumbent
 ;;     needs       the kinds of pack (`pkind`, a bit set) the engine reads with. A language-specific kind (recognizer) is resolved per language; osd is needed only when
 ;;                 the conversion wants orientation and script detection
 ;;
@@ -22,8 +23,8 @@
 ;;   table (`emon.ocrengine`'s `oe-roles`) is what the hybrid composes with; a law holds the two to one another. Tesseract is the incumbent everywhere (ruling 8), PP-OCR
 ;;   the challenger, and an uncalibrated platform engine a reader (alone) or a voter (corroborating), never an incumbent or a challenger that inserts.
 ;;
-;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895): the engine an app gets when it chooses nothing (Tesseract on every class until each platform
-;;   engine passes its own acceptance, D885), the platform's own OS engine (selectable explicitly, never chosen automatically, D895), the PP-OCR runtime of the class (the
+;;   THE TURNKEY DEFAULTS (`en-turnkey`), per platform class (D885 plus D895, K5 D905): the engine an app gets when it chooses nothing (Tesseract, except Windows.Media.Ocr on Windows and ML Kit on
+;;   Android: their own OS readers; Apple Vision on Apple platforms waits for P13.21b), the platform's own OS engine (selectable explicitly; uncalibrated ones are readers or voters, never incumbents, D895), the PP-OCR runtime of the class (the
 ;;   hybrid partner), whether packs are fetched on demand (`pfetch`: auto for a turnkey package; core and bare adapters never fetch, D885, and EMON_OFFLINE=1 or `never`
 ;;   always wins, D896) and the renderer.
 ;;
@@ -121,8 +122,10 @@
 ;;   tesseract 7339791 = blocks paras btype baseline wconf deskew wdir wlang lexicon style psize order (2225423, what `oil-tess-begin` always sets)
 ;;                       + symbols symconf alts (917504) + orient script (2560) + binary (4194304)
 ;;   ppocr     24928   = quad angle wconf wlang lexicon (what host/rust/src/ppocr.rs declares)
-;;   apple-vision 1048992 = quad lconf wconf walts (a 2-3 level ordinal confidence; topCandidates; no OSD, dart1 4.2)
-;;   windows-media-ocr 64 = angle (lines, words and their rectangles; no confidence at all)
+;;   apple-vision 1056992 = quad angle lconf wlang walts (K8, D901: a confidence per LINE, quantized, so `lconf` and no `wconf`; the quad is the observation's, the angle
+;;                           its top edge, the word language the request's, the word alternatives the line candidates that split into as many words; no OSD, no row metrics,
+;;                           no blocks, dart1 4.2)
+;;   windows-media-ocr 9216 = deskew wlang (K8, D901: OcrResult.TextAngle for the page, the language of the engine; lines, words and their rectangles, and no confidence at all)
 ;;   mlkit-text 401825 = blocks quad lconf wconf wlang symbols symconf
 ;; classes: macos 1, ios 2, linux 4, windows 8, android 16, web 32. needs: recognizer 1, osd 2, detector 4, classifier 8.
 (defdata ^:pub en-table
@@ -131,8 +134,8 @@
   :data [1 1 1 2 7339791 63 1 3
          2 2 1 2 24928 31 1 13
          3 2 1 3 24928 32 1 13
-         4 3 1 2 1048992 3 0 0
-         5 5 1 2 64 8 0 0
+         4 3 1 2 1056992 3 1 0
+         5 5 1 2 9216 8 0 0
          6 4 1 3 401825 16 0 0
          7 0 2 1 0 63 0 0]
   :accessors {^I32 en-table-count [^I32 ignored]
@@ -161,15 +164,18 @@
   :accessors {^I32 en-roles-count [^I32 ignored]
               ^I32 en-roles-at [^I32 ignored ^I32 row ^I32 col]})
 
-;; class engine platform-engine pp-engine fetch render. Tesseract everywhere (D885); the platform engine is explicit-only (D895); a turnkey fetches on demand (D885, D896).
+;; class engine platform-engine pp-engine fetch render. Tesseract on macOS, iOS, Linux and the web (D885; Apple's platform engine is explicit-only until P13.21b); Windows.Media.Ocr on Windows and
+;; ML Kit on Android (K5, D905: the OS's own reader, no model to fetch, nothing to download on first use); a turnkey fetches on demand (D885, D896). The Android row is the FLUTTER turnkey's:
+;; ML Kit is a plugin of the Dart package `emon_flutter` and is answered by the caller, so a host with no plugin (the pure-Dart `emon`, the C ABI, Rust, Go, Java, C#) names Tesseract itself
+;; (a host that cannot load the default engine falls back to Tesseract, whose packs are fetched on demand, D896).
 (defdata ^:pub en-turnkey
   :emitter kin.lang/flat-array
   :stride 6
   :data [1 1 4 2 3 7
          2 1 4 2 3 7
          3 1 0 2 3 7
-         4 1 5 2 3 7
-         5 1 6 2 3 7
+         4 5 5 2 3 7
+         5 6 6 2 3 7
          6 1 0 3 3 7]
   :accessors {^I32 en-turnkey-count [^I32 ignored]
               ^I32 en-turnkey-at [^I32 ignored ^I32 row ^I32 col]})

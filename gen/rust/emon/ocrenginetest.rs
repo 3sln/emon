@@ -276,3 +276,96 @@ fn test_uncalibrated_candidate_can_never_insert_or_replace() {
     crate::testport::assert_eq(of_rule(0, 1, 0, 1, 1, 3, 0, -1, 0), 0, "votes cannot authorize uncalibrated insertion");
     crate::testport::assert_eq(of_rule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
 }
+#[test]
+fn test_platform_engines_have_their_own_requested_configuration() {
+    crate::testport::assert_eq(oe_config_len(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+    crate::testport::assert_eq(oe_config_value(3, 0), 97, "it begins with the engine's name");
+    crate::testport::assert_eq(oe_config_value(3, 89), 110, "and ends with the language policy (latin)");
+    crate::testport::assert_eq(oe_config_len(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
+    crate::testport::assert_eq(oe_config_value(5, 0), 119, "it begins with the engine's name");
+    crate::testport::assert_eq(oe_config_len(2), 74, "PP-OCR's is its frozen policy hash");
+    crate::testport::assert_eq(oe_config_len(1), 0, "Tesseract's is emon.ocridentity's, which tess.rs and its inputs change");
+    crate::testport::assert_eq(oe_config_len(4), 71, "ML Kit's (K7): mlkit-text;TextRecognition;recognizer=by-script;lang=request-else-latin");
+    crate::testport::assert_eq(oe_config_value(4, 0), 109, "it begins with the engine's name");
+}
+#[test]
+fn test_apple_vision_selection_retags_every_request_with_its_configuration() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, at);
+    oe_tag(r, scratch, 4);
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "the trailer is Vision's, not Tesseract's");
+    crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "the record length includes it");
+    crate::testport::assert_eq(crate::port::cells_at(r, 11), -3100, "identity marker");
+    crate::testport::assert_eq(crate::port::cells_at(r, 12), 2, "requested identity version");
+    crate::testport::assert_eq(crate::port::cells_at(r, 13), 3, "Apple Vision's engine");
+    crate::testport::assert_eq(crate::port::cells_at(r, 14), 90, "its configuration's length");
+    crate::testport::assert_eq(op_request_engine(r), 3, "the request says which engine reads it");
+    crate::testport::assert_eq(op_lang_count(r), 1, "the language is still the one language");
+    crate::testport::assert_eq(op_lang_at(r, 0), 1701734144, "English");
+    oe_tag(r, scratch, 4);
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "idempotent: one trailer");
+}
+#[test]
+fn test_windows_selection_retags_with_the_windows_configuration() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, at);
+    oe_tag(r, scratch, 6);
+    crate::testport::assert_eq(op_request_engine(r), 5, "Windows.Media.Ocr");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(5), "its trailer");
+    oe_tag(r, scratch, 4);
+    crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "one trailer");
+}
+#[test]
+fn test_ml_kit_selection_retags_with_its_configuration() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, at);
+    oe_tag(r, scratch, 8);
+    crate::testport::assert_eq(op_request_engine(r), 4, "ML Kit");
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "its trailer");
+    crate::testport::assert_eq(crate::port::cells_at(r, 14), 71, "its configuration's length");
+    oe_tag(r, scratch, 8);
+    crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "idempotent: one trailer");
+    oe_tag(r, scratch, 4);
+    crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
+}
+#[test]
+fn test_an_engine_selection_reaches_every_ocr_request_of_a_batch() {
+    let r: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let a: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, a);
+    let b: i32 = rq_ocr(r, 13, 7, 7, 1, 5, 6, 40, 12);
+    rq_ocr_lang(r, 101, 110, 103, 0);
+    rq_ocr_end(r, b);
+    oe_tag(r, scratch, 4);
+    let first: i32 = 15 + oe_config_len(3);
+    crate::testport::assert_eq(crate::port::cells_at(r, 0), first, "the first request's length");
+    crate::testport::assert_eq(crate::port::cells_len(r), first + (15 + oe_config_len(3)), "two records, each with exactly one trailer");
+    crate::testport::assert_eq(crate::port::cells_at(r, first + 13), 3, "and the second names Vision too");
+}
+#[test]
+fn test_evidence_names_the_platform_engine_and_its_configuration() {
+    let table: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let runs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let lines: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let words: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut String = &mut crate::port::new_text();
+    let a: i32 = or_new(runs, 1, 0);
+    or_set(runs, a, orf_engine(), 3);
+    crate::testport::assert_eq(oe_register(table, runs, lines, words, 4, scratch), 0, "registered");
+    crate::testport::assert_eq(crate::port::cells_len(table), 7, "one engine, one row");
+    crate::testport::assert_eq(oe_evidence(out, table, scratch), 0, "written");
+    crate::testport::assert_text(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+}

@@ -3,6 +3,9 @@
 [Experimental PP-OCR](ppocr.md) is a separate opt-in download; enable it with
 `emon convert --ocr-engine=ppocr INPUT` after configuring the add-on.
 
+On a Mac, `emon convert --ocr-engine apple-vision INPUT` reads scans with Apple's Vision framework, and on Windows `--ocr-engine windows-media-ocr`
+with `Windows.Media.Ocr`: no model to download, explicit only, never chosen for you ([the platform's own OCR](platform-ocr.md)).
+
 `emon` converts a PDF or an image of a document into semantic HTML or the JSON Model. One archive per
 platform holds everything it needs: the binary, pdfium (renders pages), Tesseract and Leptonica (read
 scans; linked into the binary) and the English and orientation models. Nothing else has to be installed.

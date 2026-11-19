@@ -267,7 +267,8 @@ func EnAttempt(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, ev *enc
 }
 
 func enHybrid(c *enctx.Cfg) int32 {
-	// 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, D850): the page unit then asks for it in its own slot.
+	// 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
+	// The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
 	if c.Oengine == 1 {
 		return 1
 	}
@@ -275,13 +276,22 @@ func enHybrid(c *enctx.Cfg) int32 {
 }
 
 func enOeMode(c *enctx.Cfg) int32 {
-	// How the OCR requests are tagged and the engines registered: 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-	// 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger.
+	// How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
+	// 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
 	if c.Oengine == 1 {
 		return 2
 	}
 	if c.Oengine == 2 {
 		return 1
+	}
+	if c.Oengine == 3 {
+		return 4
+	}
+	if c.Oengine == 4 {
+		return 6
+	}
+	if c.Oengine == 5 {
+		return 8
 	}
 	return 0
 }

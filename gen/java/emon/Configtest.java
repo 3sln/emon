@@ -215,7 +215,7 @@ public final class Configtest {
         tKeyName(0, 21, "ocr-engine");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(18, 18, "eighteen words");
+        emon.Testport.assertEq(21, 21, "twenty-one words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr; K7: mlkit-text: the engines of `ocr-engine`)");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -234,6 +234,9 @@ public final class Configtest {
         tWordName(0, 15, 21, 0, "tesseract");
         tWordName(0, 16, 21, 1, "ppocr");
         tWordName(0, 17, 21, 2, "ppocr-alone");
+        tWordName(0, 18, 21, 3, "apple-vision");
+        tWordName(0, 19, 21, 4, "windows-media-ocr");
+        tWordName(0, 20, 21, 5, "mlkit-text");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");
@@ -453,6 +456,12 @@ public final class Configtest {
         emon.Testport.assertEq(c.oengine, 0, "explicit Tesseract");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)");
         emon.Testport.assertEq(c.oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
-        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr or ppocr-alone");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses");
+        emon.Testport.assertEq(c.oengine, 3, "the platform engines read alone: their own codes, not PP's");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses");
+        emon.Testport.assertEq(c.oengine, 4, "code 4");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=mlkit-text")), 0, "ML Kit parses (K7)");
+        emon.Testport.assertEq(c.oengine, 5, "code 5");
+        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text");
     }
 }

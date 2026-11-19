@@ -3,6 +3,7 @@
 ;; `bb release-verify` passed and `bb package --host H` built the artifact of that registry into dist/ from the verified commit.
 ;;
 ;;   bb publish crates|npm|nuget|maven|go [--dry-run]
+;;   bb publish pub --tag emon-dart-vX.Y.Z --dir DIR [--dry-run]       (pub.yml, K5)
 ;;   bb publish --self-test
 ;;
 ;; Every registry follows the same four steps: (1) the credential it needs is set (it fails before doing anything if not); (2) is this version already
@@ -17,6 +18,9 @@
 ;;   maven   MAVEN_CENTRAL_USERNAME, MAVEN_CENTRAL_PASSWORD, MAVEN_GPG_PRIVATE_KEY, MAVEN_GPG_PASSPHRASE
 ;;           sign the four files of dist/java/maven/com/3sln/emon/V with the key, re-zip the bundle, upload it to the Central Portal
 ;;           (https://central.sonatype.com/api/v1/publisher, publishingType AUTOMATIC) and wait for PUBLISHED or FAILED
+;;   pub     (none: pub.dev's automated publishing, GitHub OIDC; the run must be one a TAG PUSH started, `emon-dart-vX.Y.Z`, K5, D885)
+;;           download the release's emon-dart-X.Y.Z.tar.gz and SHA256SUMS, check the tree's SHA-256, unpack it and publish its 8 packages in dependency order, each with `dart pub publish --force`
+;;           (`flutter pub publish --force` for the two Flutter plugins); a package whose version pub.dev already has is skipped, so a rerun finishes what a failed run left
 ;;   go      (no registry) GITHUB_TOKEN or a pushing checkout: commit dist/stage/go/tree/go as go/ on a TAG-ONLY commit on top of HEAD and push the tag go/vV
 ;;           (D542); the Go proxy learns of it on first request, and this asks it once
 (require '[babashka.fs :as fs]
@@ -52,6 +56,38 @@
 
 (defn missing-env "The names in `names` that `env` (a map) does not set to something non-blank." [names env]
   (vec (remove #(not (str/blank? (get env %))) names)))
+
+;; ---------------------------------------------------------------------------------------------------- pub.dev (K5)
+(def pub-packages
+  "The Dart packages in dependency order: each depends only on packages before it (a self-test reads the pubspecs and holds it). `flutter?`: published with `flutter pub publish`."
+  [{:name "emon_core"} {:name "emon_ocr_tesseract"} {:name "emon_ocr_ppocr"} {:name "emon_ocr_vision"} {:name "emon_ocr_winocr"}
+   {:name "emon_ocr_mlkit" :flutter? true} {:name "emon"} {:name "emon_flutter" :flutter? true}])
+
+(defn pub-version-url "pub.dev's answer about one version of one package: 200 when it exists, 404 when not." [pkg v] (str "https://pub.dev/api/packages/" pkg "/versions/" v))
+
+(defn pub-tag->version "emon-dart-v0.3.0-preview.1 -> 0.3.0-preview.1; nil when it is not such a tag." [tag]
+  (second (re-matches #"emon-dart-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)" (str tag))))
+
+(defn pub-deps
+  "The `emon*` packages a pubspec's text depends on (its `dependencies:` section only: not dev_dependencies, not the hooks)."
+  [pubspec]
+  (let [lines (str/split-lines (str pubspec))
+        section (->> lines (drop-while #(not= "dependencies:" %)) rest (take-while #(or (str/blank? %) (str/starts-with? % " "))))]
+    (set (for [l section :let [[_ n] (re-matches #"  (emon\w*):.*" l)] :when n] n))))
+
+(defn pub-order-problems
+  "Packages of `order` (names) that depend on one that comes later, or on one that is not in it. deps: name -> set of the emon packages it depends on."
+  [order deps]
+  (let [pos (zipmap order (range))]
+    (vec (for [p order, d (get deps p) :when (not (and (contains? pos d) (< (pos d) (pos p))))]
+           (str p " depends on " d (if (contains? pos d) ", which is published after it" ", which is not published"))))))
+
+(defn sums-hash "The hash SHA256SUMS lists for a file name, or nil." [sums name]
+  (some (fn [l] (let [[h n] (str/split (str/trim l) #"\s+\*?" 2)] (when (and n (= n name)) h))) (str/split-lines (str sums))))
+
+(defn pub-attempts
+  "How a publish of one package is retried: pub.dev may need a moment to serve a package the one before it just published. [pause-ms ...] between attempts."
+  [first?] (if first? [] [20000 40000 60000]))
 
 (defn crates-url [v] (str "https://crates.io/api/v1/crates/emon/" v))
 (defn nuget-index-url [] "https://api.nuget.org/v3-flatcontainer/emon/index.json")
@@ -277,6 +313,42 @@
                 (say "published com.3sln:emon:" v " (visible on repo1.maven.org within about 30 minutes)")
                 (outcome! "published"))))))
 
+;; ---------------------------------------------------------------------------------------------------- pub.dev
+(defn pub [dry? {:keys [tag dir]}]
+  (let [v (or (pub-tag->version tag) (rl/die 2 "bb publish pub: --tag must be emon-dart-vX.Y.Z, the tag that started this run"))
+        _ (when-not (= v (version)) (rl/die 1 (str "bb publish pub: the tag is for " v " but version.edn at this commit says " (version) ": the tag must point at the release commit")))
+        dir (or dir (rl/die 2 "bb publish pub: --dir is required"))
+        asset (str "emon-dart-" v ".tar.gz")
+        rel (str "v" v)]
+    (say "pub.dev: emon-dart " v " from release " rel)
+    (fs/create-dirs dir)
+    (run-live! {} "gh" "release" "download" rel "--repo" (rl/repo) "--pattern" asset "--pattern" "SHA256SUMS" "--dir" dir "--clobber")
+    (let [listed (sums-hash (slurp (str dir "/SHA256SUMS")) asset)
+          got (digest-hex "SHA-256" (io/file (str dir "/" asset)))]
+      (when-not listed (rl/die 1 (str "bb publish pub: SHA256SUMS of " rel " does not list " asset)))
+      (when-not (= listed got) (rl/die 1 (str "bb publish pub: " asset " is " got ", not the " listed " SHA256SUMS lists: refusing to publish it")))
+      (say "  " asset " matches SHA256SUMS (" (subs got 0 16) "...)"))
+    (rl/run! "tar" "-xzf" (str dir "/" asset) "-C" dir)
+    (let [tree (str dir "/emon-dart-" v)
+          results (doall
+                   (for [{:keys [name flutter?]} pub-packages]
+                     (let [st (:status (http-get (pub-version-url name v)))
+                           pkg-dir (str tree "/" name)]
+                       (when-not (fs/exists? (str pkg-dir "/pubspec.yaml")) (rl/die 1 (str "bb publish pub: " asset " has no package " name)))
+                       (cond
+                         (= 200 st) (do (say "  " name " " v " is already on pub.dev: skipped") [name :skipped])
+                         (not= 404 st) (rl/die 1 (str "pub.dev answered HTTP " st " for " name " " v))
+                         dry? (do (say "  [dry run] would publish " name " " v " (" (if flutter? "flutter" "dart") " pub publish --force)") [name :dry-run])
+                         :else
+                         (let [cmd [(if flutter? "flutter" "dart") "pub" "publish" "--force"]]
+                           (loop [pauses (cons 0 (pub-attempts (= name "emon_core")))]
+                             (when (pos? (first pauses)) (say "  waiting " (quot (first pauses) 1000) "s before trying " name " again") (Thread/sleep (first pauses)))
+                             (let [r (apply run-live! {:dir pkg-dir} cmd)]
+                               (cond (zero? (:exit r)) (do (say "  published " name " " v) [name :published])
+                                     (next pauses) (recur (next pauses))
+                                     :else (rl/die 1 (str "bb publish pub: " name " " v " was not published (exit " (:exit r) "). Packages before it are published; re-run this job: they are skipped.")))))))))) ]
+      (outcome! (cond dry? "dry-run" (every? #{:skipped} (map second results)) "already-published" :else "published")))))
+
 ;; ---------------------------------------------------------------------------------------------------- Go
 (defn go [dry?]
   (let [v (version) tag (go-tag v) tree "dist/stage/go/tree/go" head (rl/head-sha)]
@@ -397,17 +469,41 @@
                        (= :conflict (go-decision {:remote commit :parent head :head head :valid-tree? false}))))))
             (finally (fs/delete-tree dir)))))
     (t! "prerelease?" (and (prerelease? "1.0.0-rc.1") (not (prerelease? "1.0.0"))))
+    ;; pub (K5)
+    (t! "pub: the tag names the version, a pre-release included; nothing else is a tag of pub.yml"
+        (and (= "0.3.0" (pub-tag->version "emon-dart-v0.3.0")) (= "0.3.0-preview.1" (pub-tag->version "emon-dart-v0.3.0-preview.1"))
+             (nil? (pub-tag->version "v0.3.0")) (nil? (pub-tag->version "emon-dart-v0.3")) (nil? (pub-tag->version "emon-v0.3.0"))))
+    (t! "pub: the url asks pub.dev about one version of one package" (= "https://pub.dev/api/packages/emon_core/versions/0.3.0-preview.1" (pub-version-url "emon_core" "0.3.0-preview.1")))
+    (t! "pub: eight packages, once each, the two Flutter plugins marked"
+        (and (= 8 (count pub-packages)) (= 8 (count (set (map :name pub-packages)))) (= #{"emon_ocr_mlkit" "emon_flutter"} (set (map :name (filter :flutter? pub-packages))))))
+    (t! "pub: dependency order is checked" (and (= [] (pub-order-problems ["a" "b"] {"b" #{"a"}}))
+                                                 (= ["a depends on b, which is published after it"] (pub-order-problems ["a" "b"] {"a" #{"b"}}))
+                                                 (= ["a depends on c, which is not published"] (pub-order-problems ["a"] {"a" #{"c"}}))))
+    (t! "pub: the order of pub-packages is a dependency order of the real pubspecs (dependencies only: not dev_dependencies, not hooks)"
+        (let [dirs (for [{:keys [name]} pub-packages] [name (slurp (str "host/dart/" name "/pubspec.yaml"))])
+              deps (into {} (for [[n text] dirs] [n (pub-deps text)]))]
+          (and (= #{"emon_core"} (deps "emon_ocr_tesseract")) (contains? (deps "emon") "emon_ocr_winocr") (contains? (deps "emon_flutter") "emon_ocr_mlkit")
+               (= [] (pub-order-problems (map :name pub-packages) deps)))))
+    (t! "pub: every package of host/dart that is published is listed, and no other"
+        (= (set (map :name pub-packages))
+           (set (for [d (fs/list-dir "host/dart") :when (fs/exists? (str d "/pubspec.yaml")) :let [n (str (fs/file-name d))]] n))))
+    (t! "pub: the hash SHA256SUMS lists for the tree" (= "ab12" (sums-hash "ab12  emon-dart-1.tar.gz\ncd34  emon-c-1-x.tar.gz\n" "emon-dart-1.tar.gz")))
+    (t! "pub: no hash for a name SHA256SUMS lacks" (nil? (sums-hash "ab12  emon-dart-1.tar.gz\n" "emon-dart-2.tar.gz")))
+    (t! "pub: the first package is tried once, the others get pauses" (and (= [] (pub-attempts true)) (= 3 (count (pub-attempts false)))))
     (done!)))
 
 ;; ---------------------------------------------------------------------------------------------------- main
 (defn -main [args]
   (let [dry? (boolean (some #{"--dry-run"} args))
-        [registry & more] (remove #{"--dry-run"} args)]
-    (when (seq more) (rl/die 2 "usage: bb publish crates|npm|nuget|maven|go [--dry-run] | --self-test"))
+        opt (fn [f] (second (drop-while #(not= f %) args)))
+        [registry & more] (remove #{"--dry-run"} args)
+        usage "usage: bb publish crates|npm|nuget|maven|go [--dry-run] | pub --tag emon-dart-vX.Y.Z --dir DIR [--dry-run] | --self-test"]
+    (when (and (seq more) (not= registry "pub")) (rl/die 2 usage))
     (say "bb publish " registry (when dry? " (dry run)") " " (version))
     (case registry
       "crates" (crates dry?) "npm" (npm dry?) "nuget" (nuget dry?) "maven" (maven dry?) "go" (go dry?)
-      (rl/die 2 "usage: bb publish crates|npm|nuget|maven|go [--dry-run] | --self-test"))))
+      "pub" (pub dry? {:tag (opt "--tag") :dir (opt "--dir")})
+      (rl/die 2 usage))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (if (= ["--self-test"] (vec *command-line-args*))

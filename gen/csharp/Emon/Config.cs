@@ -51,7 +51,9 @@ public static class Config {
         111, 102, 102, 102, 117, 108, 108, 119, 105, 116, 110, 101, 115, 115, 108, 101,
         103, 97, 99, 121, 115, 99, 111, 114, 101, 100, 116, 101, 115, 115, 101, 114,
         97, 99, 116, 112, 112, 111, 99, 114, 112, 112, 111, 99, 114, 45, 97, 108,
-        111, 110, 101
+        111, 110, 101, 97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 119,
+        105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99, 114,
+        109, 108, 107, 105, 116, 45, 116, 101, 120, 116
     };
     public static readonly int[] CvRows = new int[] {
         1, 2, 0, 6,
@@ -71,7 +73,10 @@ public static class Config {
         20, 1, 68, 6,
         21, 0, 74, 9,
         21, 1, 83, 5,
-        21, 2, 88, 11
+        21, 2, 88, 11,
+        21, 3, 99, 12,
+        21, 4, 111, 17,
+        21, 5, 128, 10
     };
     internal const int KLocale = 0;
     internal const int KOcr = 1;
@@ -186,7 +191,7 @@ public static class Config {
     internal static int CfWord(emon.Port.Cells t, int from, int to, int key) {
         // The code of the word t[from, to) is for enum key `key`, or -1.
         int r = 0;
-        while (r < 18) {
+        while (r < 21) {
             if (CvRows[r * 4 + 0] == key) {
                 int nl = CvRows[r * 4 + 3];
                 int off = CvRows[r * 4 + 2];
@@ -279,14 +284,14 @@ public static class Config {
         int m = 0;
         int seen = 0;
         int r = 0;
-        while (r < 18) {
+        while (r < 21) {
             if (CvRows[r * 4 + 0] == k) {
                 m += 1;
             }
             r += 1;
         }
         r = 0;
-        while (r < 18) {
+        while (r < 21) {
             if (CvRows[r * 4 + 0] == k) {
                 if (seen > 0) {
                     if (seen == (m - 1)) {

@@ -15,7 +15,7 @@
   {:file "ch_ppocr_mobile_v2.0_cls_mobile.onnx" :url "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx"
    :sha256 "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c" :bytes 585532 :licence "Apache-2.0"}
   ;; ORTPIN-BEGIN
-  ;; The ONNX Runtime 1.22.0 pin is not here any more (ORTPIN, D901): its GitHub archive is gone. The runtime is pinned, by SHA-256 and size, to Microsoft's
+  ;; The ONNX Runtime 1.22.0 pin is not here any more (ORTPIN, D906): its GitHub archive is gone. The runtime is pinned, by SHA-256 and size, to Microsoft's
   ;; NuGet, Maven Central and onnxruntime.ai distributions in tools/ppocr/runtimes.edn. The policy identity and the calibration's pin hash are still taken over
   ;; this file as it was (tools/ppocr/pins_canon.clj puts the old entry back before hashing), so behaviour and recordings keep their keys.
   ;; ORTPIN-END

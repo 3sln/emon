@@ -37,19 +37,21 @@ public static class Calibtest {
     }
     [Xunit.Fact]
     public static void TestTheTableIsSortedAndMonotoneInTheRawScore() {
-        // Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
-        // and the calibrated value never falls (isotonic), and a value is a confidence.
-        int n = 30;
+        // Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
+        // and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.
+        int n = 40;
         int i = 1;
         emon.Testport.AssertThat(n > 0, "the table has a row (the identity table has one that no node matches)");
         while (i < n) {
             int k0 = Calibdata.CdRows[(i - 1) * 5 + 0];
             int c0 = Calibdata.CdRows[(i - 1) * 5 + 1];
+            int e0 = Calibdata.CdRows[(i - 1) * 5 + 2];
             int k1 = Calibdata.CdRows[i * 5 + 0];
             int c1 = Calibdata.CdRows[i * 5 + 1];
-            emon.Testport.AssertThat((k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class");
-            if ((k0 == k1) && (c0 == c1)) {
-                emon.Testport.AssertThat(Calibdata.CdRows[(i - 1) * 5 + 3] < Calibdata.CdRows[i * 5 + 3], "raw-lo rises within a kind and class");
+            int e1 = Calibdata.CdRows[i * 5 + 2];
+            emon.Testport.AssertThat((k0 < k1) || ((k0 == k1) && ((c0 < c1) || ((c0 == c1) && (e0 <= e1)))), "sorted by kind, then class, then engine");
+            if ((k0 == k1) && ((c0 == c1) && (e0 == e1))) {
+                emon.Testport.AssertThat(Calibdata.CdRows[(i - 1) * 5 + 3] < Calibdata.CdRows[i * 5 + 3], "raw-lo rises within a kind, class and engine");
                 emon.Testport.AssertThat(Calibdata.CdRows[(i - 1) * 5 + 4] <= Calibdata.CdRows[i * 5 + 4], "calibrated never falls with the raw score");
             }
             emon.Testport.AssertThat((Calibdata.CdRows[i * 5 + 4] >= 0) && (Calibdata.CdRows[i * 5 + 4] <= 1000), "a calibrated value is 0..1000");
@@ -61,7 +63,7 @@ public static class Calibtest {
         // At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
         // for the class the row names (an `any` row is read through a class that has no row of its own: a class code
         // the table never names, 9, falls back to `any`).
-        int n = 30;
+        int n = 40;
         int i = 0;
         while (i < n) {
             if (Calibdata.CdRows[i * 5 + 1] == -1) {
@@ -73,7 +75,7 @@ public static class Calibtest {
     [Xunit.Fact]
     public static void TestTheLookupClampsAtBothEndsOfAStepFunction() {
         // Below a row's first step the first step's value; above the last the last's (no extrapolation).
-        int n = 30;
+        int n = 40;
         int i = 0;
         while (i < n) {
             if (Calibdata.CdRows[i * 5 + 1] == -1) {
@@ -136,5 +138,14 @@ public static class Calibtest {
         emon.Testport.AssertEq(Calib.CalLookupEngine(3, 1, 2, 508), Calib.CalLookup(3, 9, 508), "PP has no Tesseract-specific fit");
         emon.Testport.AssertEq(Calib.CalLookupEngine(3, 1, 100, 508), Calib.CalLookup(3, 9, 508), "unknown engine uses pooled fallback");
         emon.Testport.AssertEq(Calib.CalLookupEngine(3, 1, 2, -1), -1, "absence survives engine lookup");
+    }
+    [Xunit.Fact]
+    public static void TestAppleVisionNodesHaveTheirOwnFittedRowsAndFallBackToThePooledMap() {
+        // K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+        emon.Testport.AssertEq(Calib.CalLookupEngine(3, 1, 3, 231), 250, "a table's OCR map for engine 3");
+        emon.Testport.AssertThat(Calib.CalLookupEngine(3, 1, 3, 947) != Calib.CalLookupEngine(3, 1, 1, 947), "is not Tesseract's");
+        emon.Testport.AssertEq(Calib.CalLookupEngine(3, 1, 1, 508), Calib.CalLookup(3, 1, 508), "and Tesseract's is untouched");
+        emon.Testport.AssertEq(Calib.CalLookupEngine(2, 1, 3, 500), Calib.CalLookup(2, 9, 500), "a kind with too few Vision nodes uses the pooled map");
+        emon.Testport.AssertEq(Calib.CalLookupEngine(3, 0, 3, 508), Calib.CalLookup(3, 0, 508), "so does the text layer's class");
     }
 }

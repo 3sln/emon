@@ -14,6 +14,7 @@
     bb accuracy --ids ID,ID            score only these documents
     bb accuracy --predictor emon-live  the Rust Engine WITH LIVE TESSERACT (P6.5, D211): the scan variants through real OCR.
                                        NOT a gate (it needs Tesseract and takes minutes); `bb ocr-live` runs it for the scans
+    bb accuracy --predictor emon-live-vision  the same with Apple's Vision (`ocr-engine=apple-vision`, K8, D901): macOS only, NOT a gate (the OS build is whose engine it is)
     bb accuracy --predictor emon-sealpx  the Rust Engine REPLAYING the committed transcripts of test/sealpx/replay/ovl-ID (scanned pages with seals, recorded WITH the bitmaps
                                        the page units read; P8.2, D417): `bb sealpx` runs it with `--variants scan-ovl --ids stamp-seal,seal-over-text,sig-over-name`
     bb accuracy --predictor emon-sigs  the Rust Engine REPLAYING the committed transcripts of test/signatures/replay/ID (P8.3, D433): the fixture set test/signatures (a contract
@@ -29,6 +30,7 @@
                                        the input forms and recorded under `:references` by --update; never a gate, never the ratchet
     bb accuracy --predictor emon-replay  the Rust Engine REPLAYING the committed OCR transcripts of test/ocr/scan/ID/ (a gate's:
                                        `bb ocr` scores the documents that have one; no engine runs)
+    bb accuracy --predictor emon-replay-vision  the same over the transcripts Apple's Vision answered, test/ocr/vision/ID/ (K8, D901; a gate's: no engine runs, on any host)
     bb accuracy --predictor emon-replay-px  the same over the WHOLE transcripts (bitmaps kept) of test/ocr/scan-px/ID/: the scans whose
                                        tables the engine reads from pixels (invoice, bank-statement: the `scan/forms` gate, D392)
 
@@ -79,10 +81,12 @@ forms, predict_oracle.clj / predict_degraded.clj, print the same JSON)."
    "degraded" degraded/predict
    "emon" ["sh" (str (fs/path HERE "predict-emon.sh"))]
    "emon-live" ["sh" (str (fs/path HERE "predict-emon-live.sh"))]
+   "emon-live-vision" ["sh" (str (fs/path HERE "predict-emon-live-vision.sh"))]
    "emon-replay" ["sh" (str (fs/path HERE "predict-emon-replay.sh"))]
    "emon-sealpx" ["sh" (str (fs/path HERE "predict-emon-sealpx.sh"))]
    "emon-sigs" ["sh" (str (fs/path HERE "predict-emon-sigs.sh"))]
    "emon-replay-px" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "px"]
+   "emon-replay-vision" ["sh" (str (fs/path HERE "predict-emon-replay.sh")) "vision"]
    "emon-fusion" ["sh" (str (fs/path HERE "predict-emon-fusion.sh"))]
    "emon-fusion-live" ["sh" (str (fs/path HERE "predict-emon-fusion-live.sh"))]
    "emon-gfuse" ["sh" (str (fs/path HERE "predict-emon-gfuse.sh"))]

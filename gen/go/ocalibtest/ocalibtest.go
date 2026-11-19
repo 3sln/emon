@@ -33,11 +33,34 @@ func TestPpInvertedBinsPoolTheOriginalFitObservations(emonT *testing.T) {
 	port.AssertEq(emonT, ocalib.OcalWord(2, 0, 600), 422, "57 correct of 135")
 	port.AssertEq(emonT, ocalib.OcalWord(2, 0, 799), 422, "same pooled bin")
 	port.AssertEq(emonT, ocalib.OcalWord(2, 0, 800), 521, "next frozen bin")
-	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 1000), -1, "unfitted engine is not a zero probability")
+	port.AssertEq(emonT, ocalib.OcalWord(5, 0, 1000), -1, "an unfitted engine (Windows.Media.Ocr has no confidence to fit) is not a zero probability")
 }
 
 func TestWordCalibrationPreservesAbsenceAndRefusesUnknownClass(emonT *testing.T) {
 	port.AssertEq(emonT, ocalib.OcalWord(2, 0, -1), -1, "absent PP raw score remains absent")
 	port.AssertEq(emonT, ocalib.OcalWord(1, 9, 800), -1, "unknown Tesseract calibration class is unfitted")
 	port.AssertEq(emonT, ocalib.OcalWord(2, 9, 800), -1, "unknown PP calibration class is unfitted")
+}
+
+func TestAppleVisionWordCalibrationIsMonotoneAtEveryPermille(emonT *testing.T) {
+	var i int32 = 0
+	var previous int32 = 0
+	for i < 1001 {
+		var p int32 = ocalib.OcalWord(3, 0, i)
+		port.AssertThat(emonT, p >= previous, "weighted isotonic calibration")
+		port.AssertThat(emonT, p >= 0, "a fitted engine has a probability at every raw value")
+		previous = p
+		i += 1
+	}
+}
+
+func TestAppleVisionWordCalibrationStepsAreTheFrozenFit(emonT *testing.T) {
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 300), 409, "the quantized 300")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 500), 661, "the quantized 500")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 1000), 796, "the quantized 1000")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 0), 409, "below the first step the first step holds")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, 999), 661, "a step holds up to the next")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 0, -1), -1, "an absent raw value stays absent")
+	port.AssertEq(emonT, ocalib.OcalWord(3, 9, 500), -1, "another calibration class is unfitted: the map is the accurate level with language correction")
+	port.AssertEq(emonT, ocalib.OcalWord(1, 0, 500), 500, "Tesseract keeps the policy scale of P13.2")
 }

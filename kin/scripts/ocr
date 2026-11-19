@@ -373,6 +373,64 @@
                  (when-let [l (some #(when (str/includes? % "accuracy[emon-replay-px]") (str/trim %)) (str/split-lines (:out r)))]
                    (str " (" (str/replace l #"^ok +accuracy\[emon-replay-px\]: " "") ")"))))))))
 
+;; ---------------------------------------------------------------------------------------------------------------------------
+;; 7. THE APPLE VISION SCANS (K8, D901). test/ocr/vision/ID/ holds the transcripts Apple's Vision answered (`bb tools/ocr/record-scan.clj --engine=apple-vision ID`, on a Mac: the
+;; engine runs only there). The reading is OIL like every engine's, so a replay is the same on every host, which has no Vision: here every installed Engine replays it, naming
+;; `ocr-engine=apple-vision` (a request names the engine it is for, D893), to the IDENTICAL bundle. What must hold:
+;;   * the Rust, Go, Java and C# Engines and the C binding give the identical bundle, and the evidence says the engine was `apple-vision`, in the transcript's engine table too;
+;;   * a replay that asks for the default engine finds no answer to its requests: `transcript-miss`, nothing guessed (a cross-engine replay is a plain miss);
+;;   * a changed request (the `psm`) is `transcript-miss` on every host, with kin's sentence;
+;;   * `bb accuracy --predictor emon-replay-vision` over these documents holds its scoreboard entry.
+(def vision-dir "test/ocr/vision")
+(def vision-ids (when (fs/exists? vision-dir) (vec (sort (map fs/file-name (filter fs/directory? (fs/list-dir vision-dir)))))))
+
+(when (seq vision-ids)
+  (let [rdrv (when (fs/which "cargo") (build-driver "kin/scripts/emon-rs-build" {} "Rust"))
+        gdrv (when (fs/which "go") (build-driver "kin/scripts/emon-go-build" {} "Go"))
+        jdrv (java-driver)
+        cdrv (cs-driver)]
+    (when (and rdrv gdrv)
+      (let [drive (fn [drv & a] (let [r @(apply process {:out :string :err :string} (abs drv) (map str a))]
+                                  {:exit (:exit r) :out (:out r) :err (:err r)}))
+            same? (fn [a b] (and (= (:exit a) (:exit b)) (= (:out a) (:out b)) (= (:err a) (:err b))))
+            engine "--ocr-engine=apple-vision"]
+        (doseq [id vision-ids]
+          (let [pdf (abs (str "test/corpus/synth/scan/" id ".pdf"))
+                dir (abs (str vision-dir "/" id))
+                edn (slurp (str dir "/transcript.edn"))
+                rr (drive rdrv "--out=bundle" engine (str "--replay=" dir) pdf)
+                rg (drive gdrv "--out=bundle" engine (str "--replay=" dir) pdf)
+                tam (str work "/vision-tamper-" id)]
+            (check (and (zero? (:exit rr)) (same? rr rg))
+                   "[vision] " id ": the Rust Engine and the Go Engine replay the Apple Vision transcript to the IDENTICAL bundle (" (count (:out rr)) " bytes: JSON, HTML, evidence)")
+            (when jdrv (check (same? rr (drive jdrv "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision] " id ": the Java Engine replays it to the same bundle"))
+            (when cdrv (check (same? rr (drive cdrv "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision] " id ": the C# Engine replays it to the same bundle"))
+            (when-let [{cd :drv} @c-driver]
+              (check (same? rr (drive cd "--out=bundle" engine (str "--replay=" dir) pdf)) "[vision] " id ": the C binding replays it to the same bundle"))
+            (check (and (str/includes? (:out rr) "\"engine\":\"apple-vision\"") (str/includes? (:out rr) "\"src\":[\"ocr\",\"infer\"]"))
+                   "[vision] " id ": the evidence names the engine that read, and the Model says the text came from OCR")
+            (check (and (str/includes? edn ":producer {:engine \"apple-vision\"") (str/includes? edn ":pk-engines [{:engine \"apple-vision\"")
+                        (str/includes? edn ":config \"apple-vision;VNRecognizeTextRequest;") (not (str/includes? edn ":bitmap")))
+                   "[vision] " id ": the transcript names its engine, its requested configuration and the observed OS and Vision revision, and carries no bitmap")
+            (let [dr (drive rdrv "--out=bundle" (str "--replay=" dir) pdf)]
+              (check (and (= 4 (:exit dr)) (str/includes? (:err dr) "error: transcript-miss"))
+                     "[vision] " id ": a replay that asks for the default engine is transcript-miss, nothing guessed"))
+            (fs/create-dirs tam)
+            (spit (str tam "/transcript.edn") (str/replace edn #"(:kind :ocr :req \[\d+ 3 \d+ \d+ )3 " (fn [[_ p]] (str p "4 "))))
+            (let [tr (drive rdrv "--out=bundle" engine (str "--replay=" tam) pdf)
+                  tg (drive gdrv "--out=bundle" engine (str "--replay=" tam) pdf)]
+              (check (and (not= edn (slurp (str tam "/transcript.edn"))) (= 4 (:exit tr)) (same? tr tg) (str/includes? (:err tr) "error: transcript-miss"))
+                     "[vision] " id ": a changed request (psm 3 -> 4) is transcript-miss on both Engines, nothing guessed")
+              (when jdrv (check (same? tg (drive jdrv "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision] " id ": and on the Java Engine, with the same stderr"))
+              (when cdrv (check (same? tg (drive cdrv "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision] " id ": and on the C# Engine, with the same stderr"))
+              (when-let [{cd :drv} @c-driver]
+                (check (same? tg (drive cd "--out=bundle" engine (str "--replay=" tam) pdf)) "[vision] " id ": and on the C binding, with the same stderr"))))))
+      (let [r @(process {:out :string :err :string} "bb" "tools/accuracy/accuracy.clj" "--predictor" "emon-replay-vision" "--variants" "scan" "--ids" (str/join "," vision-ids))]
+        (check (and (zero? (:exit r)) (str/includes? (:out r) "ok   accuracy[emon-replay-vision]") (not (str/includes? (:out r) "FAIL")))
+               "accuracy[emon-replay-vision]: the Apple Vision transcripts, replayed, hold their scoreboard entry"
+               (when-let [l (some #(when (str/includes? % "accuracy[emon-replay-vision]") (str/trim %)) (str/split-lines (:out r)))]
+                 (str " (" (str/replace l #"^ok +accuracy\[emon-replay-vision\]: " "") ")")))))))
+
 (when (pos? @fails) (System/exit 1))
 (when (and rust go (zero? @fails))
   (ok "one Tesseract transcript, recorded on Rust, replayed on Rust and Go: one evidence dump"))

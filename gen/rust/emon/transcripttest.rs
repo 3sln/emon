@@ -735,7 +735,7 @@ fn test_every_committed_transcript_is_read_and_written_again_byte_for_byte() {
         }
         at = e + 1;
     }
-    crate::testport::assert_eq(row, 129, "the transcripts under test/");
+    crate::testport::assert_eq(row, 132, "the transcripts under test/");
 }
 #[test]
 fn test_requested_and_observed_engine_vector_roundtrips_and_deduplicates_readings() {

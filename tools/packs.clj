@@ -120,7 +120,7 @@
         (str "pack " (pr-str (:id p)) " has " (:name f) ", which tools/ppocr/assets.edn does not pin")))))))
 
 (defn runtime-problems
-  "The catalogue's :runtimes section held to tools/ppocr/runtimes.edn (ORTPIN, D901), the authored pins of ONNX Runtime: every package of `ort` is in one runtime
+  "The catalogue's :runtimes section held to tools/ppocr/runtimes.edn (ORTPIN, D906), the authored pins of ONNX Runtime: every package of `ort` is in one runtime
   entry with the same file name, sha256 and size, and every runtime file is a package of `ort`. Pure."
   [cat ort]
   (let [srcs (into {} (for [[_ s] (:sources ort)] [(:file s) s]))

@@ -119,7 +119,7 @@
   ;; ---- kin: the modules, by family (EVERY kin/*.kin must be in one; a new module with no family fails map-coverage) -----------------------------------
   {:glob "kin/{hello,hellotest,ctxprobe,ctxtest,docprobe,enumprobe,modelprobe,planprobe,pngprobe,porttest,alignprobe,ocrprobe,fuzzprobe,buftest,bytestest,splitmixtest,srctest,cryptotest,configtest}.kin"
    :gates ["unit"] :why "probes (the fast core's check runs them in four languages) and laws of the base types (unit); nothing else reads them"}
-  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrtess,ocrscript,ocridentity,ocrporttest,ocrengine,ocrenginetest,engines,enginestest,adapters,adapterstest,packdata,oil,oiltest,oilnumerictest,oilregistry,oilsrc,oilsrctest,oilfixturetest,ocalib,ocalibdata,ocalibtest}.kin"
+  {:glob "kin/{engine,model,modeltest,mscript,config,limits,json,jsontest,html,htmltest,style,evidence,evidencetest,transcript,transcriptctx,transcripttest,bytes,splitmix,buf,fx,fxtest,plan,planctx,planloop,planlooptest,plantest,player,playertest,pageunit,pageunittest,pageink,ocrport,ocrtess,ocrscript,ocridentity,ocrporttest,ocrengine,ocrenginetest,engines,enginestest,adapters,adapterstest,ocrloc,ocrloctest,oilvisiontest,packdata,oil,oiltest,oilnumerictest,oilregistry,oilsrc,oilsrctest,oilfixturetest,ocalib,ocalibdata,ocalibtest}.kin"
    :gates ["@engine"] :why "the Engine's spine (model, JSON/HTML writers, the plan machine, the page unit, fixed point): every conversion and every replay moves with it"}
   {:glob "kin/{limits,engine}.kin" :gates ["fuzz"] :why "the bounds and the Engine's loop: the fuzz gate holds them against hostile input"}
   {:glob "kin/{pdf*,inflate*,deflate*,ccitt*,imgcheck,pngread*,tiffcheck*}.kin" :gates ["unit" "slice" "identity" "repeat" "accuracy" "fuzz" "asset" "fusion" "image"]
@@ -191,6 +191,7 @@
   {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
   {:glob "tools/table/**" :gates [] :why "offline protected-ownership and word controls over private Models; not a public CI gate"}
   {:glob "tools/receipts/**" :gates [] :why "live receipt measurement, not a gate"}
+  {:glob "tools/controls/**" :gates [] :why "the 54 controls under two OCR engines (K8, D901): a live, macOS measurement, not a gate"}
   {:glob "test/receipts/**" :gates [] :why "numerical live receipt baselines and metric documentation"}
   {:glob "test/tables-ab/**" :gates [] :why "the frozen populations, baseline scores, expectations, repairs and acceptance criteria of `bb tables-ab` (IDs and numbers only); not a gate"}
   {:glob "test/controls/**" :gates [] :why "named live control selections (corpus paths only); read by tools/shards to keep their shards"}
@@ -229,6 +230,9 @@
   {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}
   {:glob "host/csharp/**" :gates ["@host"] :hosts ["csharp"] :why "the C# host"}
   {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
+  {:glob "host/dart/**" :gates [] :why "the Dart and Flutter packages (K7, D884, D885, D895): `bb dart --check` (bindings and pack catalogue drift, analyze), `bb dart --test` and `bb package --host dart --check` need a Dart 3.10+ SDK, a C archive and (the plugin) a Flutter SDK: not a hosted gate yet (K5 owns the release pipeline)"}
+  {:glob "tools/dart.clj" :gates [] :why "`bb dart` (K7): the Dart packages' generator, stamp and test driver; not a gate"}
+  {:glob ".github/workflows/pub.yml" :gates [] :why "the disabled pub.dev publish workflow (K7, D885): runs on a tag pushed by the release (K5, D905), only when EMON_PUB_ENABLED is true"}
   {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
   {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
   {:glob "host/js/src/{pdfium,render}.js" :gates ["pdfium-wasm"] :hosts ["wasm"] :why "the browser's pdfium adapter and the render port's form: the pdfium-wasm gate drives them live in Node"}

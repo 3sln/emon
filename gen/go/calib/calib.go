@@ -50,7 +50,7 @@ func CalLookupEngine(kind int32, cls int32, engine int32, raw int32) int32 {
 		i = 0
 		first = -1
 		hit = -1
-		for i < 30 {
+		for i < 40 {
 			if (calibdata.CdRows[i*5+0] == kind) && (calibdata.CdRows[i*5+1] == wantClass) && (calibdata.CdRows[i*5+2] == wantEngine) {
 				if first < 0 {
 					first = calibdata.CdRows[i*5+4]

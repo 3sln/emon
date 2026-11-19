@@ -42,19 +42,21 @@ func TestAKindWithNoRowGoesThroughAsItIs(emonT *testing.T) {
 }
 
 func TestTheTableIsSortedAndMonotoneInTheRawScore(emonT *testing.T) {
-	// Rows are [kind class raw-lo calibrated], sorted by kind, class, raw-lo; within one kind and class the raw-lo rises strictly
-	// and the calibrated value never falls (isotonic), and a value is a confidence.
-	var n int32 = 30
+	// Rows are [kind class engine raw-lo calibrated], sorted by kind, class, engine, raw-lo; within one kind, class and engine the raw-lo rises strictly
+	// and the calibrated value never falls (isotonic), and a value is a confidence. A platform engine's rows (K8, D901) are a group of their own.
+	var n int32 = 40
 	var i int32 = 1
 	port.AssertThat(emonT, n > 0, "the table has a row (the identity table has one that no node matches)")
 	for i < n {
 		var k0 int32 = calibdata.CdRows[(i-1)*5+0]
 		var c0 int32 = calibdata.CdRows[(i-1)*5+1]
+		var e0 int32 = calibdata.CdRows[(i-1)*5+2]
 		var k1 int32 = calibdata.CdRows[i*5+0]
 		var c1 int32 = calibdata.CdRows[i*5+1]
-		port.AssertThat(emonT, (k0 < k1) || ((k0 == k1) && (c0 <= c1)), "sorted by kind then class")
-		if (k0 == k1) && (c0 == c1) {
-			port.AssertThat(emonT, calibdata.CdRows[(i-1)*5+3] < calibdata.CdRows[i*5+3], "raw-lo rises within a kind and class")
+		var e1 int32 = calibdata.CdRows[i*5+2]
+		port.AssertThat(emonT, (k0 < k1) || ((k0 == k1) && ((c0 < c1) || ((c0 == c1) && (e0 <= e1)))), "sorted by kind, then class, then engine")
+		if (k0 == k1) && ((c0 == c1) && (e0 == e1)) {
+			port.AssertThat(emonT, calibdata.CdRows[(i-1)*5+3] < calibdata.CdRows[i*5+3], "raw-lo rises within a kind, class and engine")
 			port.AssertThat(emonT, calibdata.CdRows[(i-1)*5+4] <= calibdata.CdRows[i*5+4], "calibrated never falls with the raw score")
 		}
 		port.AssertThat(emonT, (calibdata.CdRows[i*5+4] >= 0) && (calibdata.CdRows[i*5+4] <= 1000), "a calibrated value is 0..1000")
@@ -66,7 +68,7 @@ func TestEveryStepOfTheTableAnswersWithItsOwnValue(emonT *testing.T) {
 	// At a step's raw-lo (and one above it, if that is still below the next step) the lookup is the step's value,
 	// for the class the row names (an `any` row is read through a class that has no row of its own: a class code
 	// the table never names, 9, falls back to `any`).
-	var n int32 = 30
+	var n int32 = 40
 	var i int32 = 0
 	for i < n {
 		if calibdata.CdRows[i*5+1] == -1 {
@@ -78,7 +80,7 @@ func TestEveryStepOfTheTableAnswersWithItsOwnValue(emonT *testing.T) {
 
 func TestTheLookupClampsAtBothEndsOfAStepFunction(emonT *testing.T) {
 	// Below a row's first step the first step's value; above the last the last's (no extrapolation).
-	var n int32 = 30
+	var n int32 = 40
 	var i int32 = 0
 	for i < n {
 		if calibdata.CdRows[i*5+1] == -1 {
@@ -141,4 +143,13 @@ func TestNodeMapIsEngineSpecificWithPooledFallback(emonT *testing.T) {
 	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 2, 508), calib.CalLookup(3, 9, 508), "PP has no Tesseract-specific fit")
 	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 100, 508), calib.CalLookup(3, 9, 508), "unknown engine uses pooled fallback")
 	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 2, -1), -1, "absence survives engine lookup")
+}
+
+func TestAppleVisionNodesHaveTheirOwnFittedRowsAndFallBackToThePooledMap(emonT *testing.T) {
+	// K8, D901: `bb calibration --fit --engine 3` fitted the OCR class of the kinds with enough Vision nodes in the scan corpus; every other kind and class is as it was.
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 3, 231), 250, "a table's OCR map for engine 3")
+	port.AssertThat(emonT, calib.CalLookupEngine(3, 1, 3, 947) != calib.CalLookupEngine(3, 1, 1, 947), "is not Tesseract's")
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 1, 1, 508), calib.CalLookup(3, 1, 508), "and Tesseract's is untouched")
+	port.AssertEq(emonT, calib.CalLookupEngine(2, 1, 3, 500), calib.CalLookup(2, 9, 500), "a kind with too few Vision nodes uses the pooled map")
+	port.AssertEq(emonT, calib.CalLookupEngine(3, 0, 3, 508), calib.CalLookup(3, 0, 508), "so does the text layer's class")
 }

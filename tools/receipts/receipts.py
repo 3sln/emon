@@ -199,7 +199,7 @@ def baseline_comparison(dataset, rows, totals, baseline):
 def main():
     p=argparse.ArgumentParser(__doc__)
     p.add_argument('--n',type=int,default=60)
-    p.add_argument('--ocr-engine',choices=('tesseract','ppocr','ppocr-alone'),default='tesseract')
+    p.add_argument('--ocr-engine',choices=('tesseract','ppocr','ppocr-alone','apple-vision'),default='tesseract')
     p.add_argument('--set',default='sroie,cord')
     p.add_argument('--report',action='store_true')
     p.add_argument('--baseline',default=str(ROOT/'test/receipts/baseline.json'),help='compare only when document IDs match this baseline')
@@ -215,6 +215,8 @@ def main():
     a=p.parse_args()
     if a.ocr_engine!='tesseract' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
         a.bin=str(ROOT/'.cache/emon-rs-live-ppocr/target/release/emon-rs')
+    if a.ocr_engine=='apple-vision' and a.bin==str(ROOT/'.cache/emon-rs-live/target/release/emon-rs'):
+        a.bin=str(ROOT/'.cache/emon-rs-vision/target/release/emon-rs')
     if a.n<1: p.error('--n must be positive')
     if a.rescore and (a.record_transcripts or a.replay_transcripts):
         p.error('--rescore cannot record or replay transcripts')

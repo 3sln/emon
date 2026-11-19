@@ -153,20 +153,32 @@ public final class Enginestest {
         emon.Testport.assertEq(Ocrengine.oeRole(Engines.pkEngineOen(Engines.engWindowsMediaOcr())), 0, "nor Windows OCR");
         emon.Testport.assertEq(Ocrengine.oeRole(Engines.pkEngineOen(Engines.engMlkitText())), 0, "nor ML Kit");
         emon.Testport.assertEq(Engines.pkRoleMask(Engines.engTesseract(), Engines.pclsIos()), 5, "Tesseract is the incumbent or the sole reader");
-        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsMacos()), 12, "an uncalibrated engine reads or votes");
+        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsMacos()), 12, "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)");
+        emon.Testport.assertEq(Engines.pkEngineCalibrated(Engines.engAppleVision()), 1, "a frozen reliability map keyed by its identity (D883 ruling 3, K8)");
+        emon.Testport.assertEq(Engines.pkEngineCalibrated(Engines.engWindowsMediaOcr()), 0, "Windows.Media.Ocr has no confidence to calibrate, for good");
+        emon.Testport.assertEq(Engines.pkRoleMask(Engines.engAppleVision(), Engines.pclsIos()) & Engines.eroleIncumbent(), 0, "never the incumbent");
         emon.Testport.assertEq(Engines.pkRoleDefault(Engines.engAppleVision(), Engines.pclsWindows()), 0, "no role on the wrong class");
     }
-    public static int enTurnkeyClass(int emonT, int pclass, int platform, int pp) {
+    public static int enTurnkeyClass(int emonT, int pclass, int dflt, int platform, int platformCalibrated, int pp) {
         int eng = Engines.pkDefaultEngine(pclass);
-        emon.Testport.assertEq(eng, Engines.engTesseract(), "Tesseract is every class's turnkey default until a platform engine passes its acceptance (D885)");
+        emon.Testport.assertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)");
         emon.Testport.assertEq(Engines.pkEngineOn(eng, pclass), 1, "the default runs on the class");
-        emon.Testport.assertEq(Engines.pkEngineCalibrated(eng), 1, "the default is calibrated");
-        emon.Testport.assertEq(Engines.pkRoleDefault(eng, pclass), Engines.eroleIncumbent(), "and the incumbent");
+        if (eng == Engines.engTesseract()) {
+            emon.Testport.assertEq(Engines.pkEngineCalibrated(eng), 1, "Tesseract is calibrated");
+            emon.Testport.assertEq(Engines.pkRoleDefault(eng, pclass), Engines.eroleIncumbent(), "and the incumbent");
+        } else {
+            emon.Testport.assertEq(Engines.pkEngineCalibrated(eng), 0, "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)");
+            emon.Testport.assertEq(Engines.pkRoleDefault(eng, pclass), Engines.eroleReader(), "and reads alone: a reader, never an incumbent or a challenger");
+        }
         emon.Testport.assertEq(Engines.pkPlatformEngine(pclass), platform, "the class's own engine");
         if (platform != 0) {
             emon.Testport.assertEq(Engines.pkEngineOn(platform, pclass), 1, "the platform engine runs on the class");
-            emon.Testport.assertEq(Engines.pkEngineCalibrated(platform), 0, "uncalibrated (D895)");
-            emon.Testport.assertThat(platform != eng, "and never the automatic choice");
+            emon.Testport.assertEq(Engines.pkEngineCalibrated(platform), platformCalibrated, "calibrated or not as its frozen map says (D883 ruling 3, K8): Vision has one, Windows.Media.Ocr has no confidence to map");
+            if (eng != Engines.engTesseract()) {
+                emon.Testport.assertEq(platform, eng, "where the default is not Tesseract it is the class's own engine");
+            } else {
+                emon.Testport.assertThat(platform != eng, "and elsewhere never the automatic choice");
+            }
         }
         emon.Testport.assertEq(Engines.pkPpEngine(pclass), pp, "the PP-OCR runtime of the class");
         emon.Testport.assertEq(Engines.pkEngineOn(pp, pclass), 1, "runs on it");
@@ -175,12 +187,12 @@ public final class Enginestest {
         return 0;
     }
     public static void testTheTurnkeyDefaultOfEveryPlatformClass() {
-        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engAppleVision(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsIos(), Engines.engAppleVision(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsLinux(), 0, Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsWindows(), Engines.engWindowsMediaOcr(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsAndroid(), Engines.engMlkitText(), Engines.engPpocr());
-        enTurnkeyClass(0, Engines.pclsWeb(), 0, Engines.engPpocrWeb());
+        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engTesseract(), Engines.engAppleVision(), 1, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsIos(), Engines.engTesseract(), Engines.engAppleVision(), 1, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsLinux(), Engines.engTesseract(), 0, 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsWindows(), Engines.engWindowsMediaOcr(), Engines.engWindowsMediaOcr(), 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsAndroid(), Engines.engMlkitText(), Engines.engMlkitText(), 0, Engines.engPpocr());
+        enTurnkeyClass(0, Engines.pclsWeb(), Engines.engTesseract(), 0, 0, Engines.engPpocrWeb());
         emon.Testport.assertEq(Engines.pkDefaultEngine(0), 0, "an unknown class has no default");
         emon.Testport.assertEq(Engines.pkDefaultEngine(7), 0, "nor class 7");
         emon.Testport.assertEq(Engines.pkDefaultFetch(7), 0, "and no fetch policy");
@@ -287,6 +299,19 @@ public final class Enginestest {
         emon.Port.cellsPush(installed, Packdata.pkidTessOsd());
         emon.Testport.assertEq(enResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "an installed pack nobody needs is not a row");
         emon.Testport.assertEq(Engines.pkRows(out), 1, "still one row");
+    }
+    public static void testAnOsReaderAsTheTurnkeyDefaultNeedsNoPack() {
+        emon.Port.Cells langs = emon.Port.newCells();
+        emon.Port.Cells engs = emon.Port.newCells();
+        emon.Port.Cells installed = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Testport.assertEq(enResolve(Engines.pclsWindows(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "Windows resolves with Windows.Media.Ocr as the default");
+        emon.Testport.assertEq(Engines.pkRows(out), 0, "the OS reads: nothing to fetch (K5, D905)");
+        emon.Testport.assertEq(enResolve(Engines.pclsAndroid(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "Android resolves with ML Kit as the default");
+        emon.Testport.assertEq(Engines.pkRows(out), 0, "ML Kit's Latin model ships in the plugin: nothing to fetch");
+        enCells1(engs, Engines.engTesseract());
+        emon.Testport.assertEq(enResolve(Engines.pclsAndroid(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "asking for Tesseract on Android still resolves its packs");
+        emon.Testport.assertEq(Engines.pkRows(out), 2, "English and OSD");
     }
     public static void testOrientationDetectionAddsTheOsdPackForTesseractOnly() {
         emon.Port.Cells langs = emon.Port.newCells();
@@ -568,5 +593,14 @@ public final class Enginestest {
         enRefused(0, "{:emon-transcript 1\n :pk-engines [{:engine \"tesseract\" :caps 1 :role :boss}]\n :inputs []\n :entries []}\n", Transcript.tbEngines());
         enRefused(0, "{:emon-transcript 1\n :pk-engines {:engine \"tesseract\"}\n :inputs []\n :entries []}\n", Transcript.tbEngines());
         enRefused(0, "{:emon-transcript 1\n :pk-engines [3]\n :inputs []\n :entries []}\n", Transcript.tbEngines());
+    }
+    public static void testACommittedAppleVisionTranscriptNamesTheEngineThatRead() {
+        byte[] b = emon.Testport.testFile("ocr/vision/h-plain/transcript.edn");
+        emon.Transcriptctx.Tr t = new emon.Transcriptctx.Tr();
+        emon.Testport.assertEq(Transcript.trRead(t, b), 0, "it reads");
+        emon.Testport.assertEq(Transcript.trNEngines(t), 1, "one engine read");
+        emon.Testport.assertEq(Transcript.trEngEngine(t, 0), Engines.engAppleVision(), "Apple Vision");
+        emon.Testport.assertEq(Transcript.trEngCaps(t, 0), Engines.pkEngineCaps(Engines.engAppleVision()), "with the capabilities of its table's ceiling");
+        emon.Testport.assertEq(Transcript.trEngRole(t, 0), Engines.eroleReader(), "it read alone: a reader, never an incumbent");
     }
 }

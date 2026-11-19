@@ -18,7 +18,7 @@ It is not part of any gate. Re-running it with verified cached files is offline.
 each against its own pin in `runtimes.edn`, into `.cache/ppocr/onnxruntime-<platform>-1.22.0/`.
 `runtimes.edn` also pins the mobile runtimes: Maven Central's `onnxruntime-android` AAR and the
 `onnxruntime-c` CocoaPods archive on onnxruntime.ai (`bb mobile --triple T --ort --fetch`).
-The GitHub release assets ORT was first pinned to went away on 2026-11-17 (D901).
+The GitHub release assets ORT was first pinned to went away on 2026-11-17 (D906).
 `bb ppocr-check` verifies the cached assets, re-extracts the pinned runtime package,
 compiles the C ABI ownership shim, runs the Rust CTC/geometry/runtime smoke
 checks and builds the raw calibration probe. It never downloads. The current
@@ -66,7 +66,7 @@ bb ppocr-hosts --qualification corpus/_qual/ppocr-qual \
   --record-qualification "$EMON_SCRATCH/ppocr-qual-new"
 ```
 
-The artifact is the corpus shard `ppocr-qualification` (`corpus/_qual/ppocr-qual`; the default of `bb ppocr-hosts`). Never record into `/tmp`; copy the new directory into `corpus/_qual/`, re-register the shard digest in `test/corpus/shards.json` and push it with `bb corpus push`. ORTPIN (D901) re-recorded it on the NuGet ONNX Runtime 1.22.0 and its `reference.answers` hash equals the frozen reference's.
+The artifact is the corpus shard `ppocr-qualification` (`corpus/_qual/ppocr-qual`; the default of `bb ppocr-hosts`). Never record into `/tmp`; copy the new directory into `corpus/_qual/`, re-register the shard digest in `test/corpus/shards.json` and push it with `bb corpus push`. ORTPIN (D906) re-recorded it on the NuGet ONNX Runtime 1.22.0 and its `reference.answers` equalled the frozen reference's byte for byte; after the merge with main (K8, K7 moved the policy identity to `ppocr5-en-2bd7cbc3...`) it was re-recorded (SHA-256 `1498d639...`): it differs from the frozen one only in the two policy-identity words of each answer (D906).
 
 This records a new Rust reference, requires exact transport and replay bytes,
 and scores the same 60+60 fixed receipts against D864's P/R tolerance of 0.002.
