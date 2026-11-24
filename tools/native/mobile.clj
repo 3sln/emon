@@ -8,8 +8,8 @@
 ;;                                       With --ppocr-packs DIR, also read a receipt with PP-OCR using the models fetched by bb ppocr-fetch into DIR.
 ;;   bb mobile --triple T --check        build, `bb native --audit`, smoke: what the CI jobs run
 ;;   bb mobile --triple T --ort [--fetch]  install the pinned ONNX Runtime of T for the PP adapter (ORTPIN, D906) into .cache/ppocr/onnxruntime-<platform>-1.22.0/{lib,include}:
-;;                                       Android: the AAR's jni/<abi>/libonnxruntime.so (Maven Central, 16 KB aligned, NEEDED only libdl, liblog, libm, libc); iOS: the static
-;;                                       libonnxruntime.a of the device or simulator slice of the onnxruntime-c pod archive (onnxruntime.ai). Every file by SHA-256 in
+;;                                       Android: the embedded AAR's jni/<abi>/libonnxruntime.so (16 KB aligned); iOS: the static libonnxruntime.a from the embedded
+;;                                       XCFramework's device or simulator slice. Both archives come from the NuGet package. Every file by SHA-256 in
 ;;                                       tools/ppocr/runtimes.edn, which `bb native --check` requires for each triple. The PP adapter library for mobile (K2 follow-up) links these.
 ;;   bb mobile --list                    the mobile triples
 ;;

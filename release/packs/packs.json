@@ -463,7 +463,7 @@
   "runtimes" : [ {
     "id" : "onnxruntime-1.22.0-nupkg",
     "engine" : "ppocr",
-    "targets" : [ "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc" ],
+    "targets" : [ "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android", "aarch64-apple-ios", "aarch64-apple-ios-sim" ],
     "licence" : "MIT",
     "upstream" : {
       "repo" : "Microsoft.ML.OnnxRuntime",
@@ -474,36 +474,6 @@
       "name" : "Microsoft.ML.OnnxRuntime.1.22.0.nupkg",
       "sha256" : "d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a",
       "bytes" : 121402697
-    } ]
-  }, {
-    "id" : "onnxruntime-1.22.0-android-aar",
-    "engine" : "ppocr",
-    "targets" : [ "aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android" ],
-    "licence" : "MIT",
-    "upstream" : {
-      "repo" : "com.microsoft.onnxruntime:onnxruntime-android",
-      "revision" : "1.22.0",
-      "url" : "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.22.0/onnxruntime-android-1.22.0.aar"
-    },
-    "files" : [ {
-      "name" : "onnxruntime-android-1.22.0.aar",
-      "sha256" : "04a4617a9c797cf49225595e45b5546081cb34c86ac817581141577d3b7dbfe2",
-      "bytes" : 28515295
-    } ]
-  }, {
-    "id" : "onnxruntime-1.22.0-ios-pod",
-    "engine" : "ppocr",
-    "targets" : [ "aarch64-apple-ios", "aarch64-apple-ios-sim" ],
-    "licence" : "MIT",
-    "upstream" : {
-      "repo" : "CocoaPods onnxruntime-c",
-      "revision" : "1.22.0",
-      "url" : "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.22.0.zip"
-    },
-    "files" : [ {
-      "name" : "pod-archive-onnxruntime-c-1.22.0.zip",
-      "sha256" : "90d9de5a139087a6b05a18125d01d01d198820e1731e6f0f11b38749b2ab181f",
-      "bytes" : 47124222
     } ]
   } ]
 }

@@ -6,7 +6,8 @@
 ;;                                                                                          in .cache/ppocr already is an error, nothing is downloaded.
 ;;   bb tools/ppocr/ort.clj --check                                                          the pin file alone is well formed (offline; run by `bb native --check`)
 (ns ppocr.ort
-  (:require [babashka.fs :as fs] [babashka.process :refer [shell]] [clojure.edn :as edn] [clojure.string :as str]))
+  (:require [babashka.fs :as fs] [babashka.process :refer [shell]] [clojure.edn :as edn]
+            [clojure.java.io :as io] [clojure.string :as str]))
 (import '[java.security MessageDigest] '[java.util.zip ZipFile])
 
 (def pins (edn/read-string (slurp "tools/ppocr/runtimes.edn")))
@@ -28,24 +29,33 @@
 
 (defn platform [triple] (or (get-in pins [:platforms triple]) (get-in pins [:mobile-platforms triple])))
 
+(defn- entry-pin? [{:keys [entry bytes sha256]}]
+  (and (string? entry) (not (str/blank? entry)) (pos-int? bytes)
+       (string? sha256) (re-matches #"[a-f0-9]{64}" sha256)))
+
 (defn check-pins!
-  "The pin file alone: shapes, https URLs, 64-hex digests, every platform's source exists, no two entries of a directory write the same path."
+  "Check pin fields, HTTPS URLs, source and nested archive references, and unique platform directories."
   []
   (let [bad (atom [])
         f! (fn [& m] (swap! bad conj (apply str m)))
         hex64? #(boolean (and (string? %) (re-matches #"[a-f0-9]{64}" %)))
-        pin? (fn [p] (and (string? (:entry p)) (string? (:to p)) (pos-int? (:bytes p)) (hex64? (:sha256 p)) (not (str/includes? (:to p) ".."))))]
+        file-pin? (fn [p] (and (entry-pin? p) (string? (:to p)) (not (str/includes? (:to p) ".."))))]
     (when-not (= "1.22.0" (:version pins)) (f! "version"))
     (doseq [[id s] (:sources pins)]
       (when-not (and (re-matches #"[A-Za-z0-9_.-]+" (:file s)) (str/starts-with? (:url s) "https://") (pos-int? (:bytes s)) (hex64? (:sha256 s)))
         (f! "source " id ": file, url, bytes or sha256"))
       (when (str/includes? (:url s) "github.com/microsoft/onnxruntime") (f! "source " id ": the dead GitHub URL"))
-      (doseq [p (concat (:include s) (:notices s))] (when-not (pin? p) (f! "source " id ": bad entry pin " (:entry p)))))
+      (doseq [[archive a] (:archives s)]
+        (when-not (entry-pin? a) (f! "source " id ": bad archive pin " archive)))
+      (doseq [p (concat (:include s) (:notices s) (mapcat :include (vals (:archives s))))]
+        (when-not (file-pin? p) (f! "source " id ": bad entry pin " (:entry p)))))
     (doseq [[t p] (concat (:platforms pins) (:mobile-platforms pins))]
       (when-not (get-in pins [:sources (:source p)]) (f! t ": no source " (:source p)))
+      (when (and (:archive p) (not (get-in pins [:sources (:source p) :archives (:archive p)])))
+        (f! t ": no nested archive " (:archive p)))
       (when-not (re-matches #"onnxruntime-[a-z0-9_-]+-1\.22\.0" (str (:directory p))) (f! t ": directory"))
       (when-not (seq (:libs p)) (f! t ": no libraries"))
-      (doseq [l (:libs p)] (when-not (pin? l) (f! t ": bad library pin " (:entry l)))))
+      (doseq [l (:libs p)] (when-not (file-pin? l) (f! t ": bad library pin " (:entry l)))))
     (let [dirs (map :directory (vals (merge (:platforms pins) (:mobile-platforms pins))))]
       (when-not (= (count dirs) (count (set dirs))) (f! "two platforms share a directory")))
     (when (seq @bad) (throw (ex-info (str "runtimes.edn: " (str/join "; " @bad)) {})))
@@ -69,27 +79,52 @@
           (finally (fs/delete-if-exists tmp)))))
     dest))
 
+(defn- entry-stream [^ZipFile zip entry]
+  (let [e (or (.getEntry zip entry) (throw (ex-info (str "package has no entry " entry) {})))]
+    (.getInputStream zip e)))
+
+(defn- install-entries! [zip entries dir triple]
+  (doseq [{:keys [entry to bytes sha256 links]} entries]
+    (let [b (with-open [in (entry-stream zip entry)] (.readAllBytes in))
+          dest (str dir "/" to)]
+      (when-not (and (= bytes (count b)) (= sha256 (sha-bytes b)))
+        (throw (ex-info "entry size or sha256 mismatch" {:entry entry :triple triple})))
+      (fs/create-dirs (fs/parent dest))
+      (with-open [o (io/output-stream dest)] (.write o ^bytes b))
+      (doseq [l links]
+        (fs/create-sym-link (str dir "/" l) (fs/file-name to))))))
+
+(defn- install-nested! [zip {:keys [entry bytes sha256 include]} libs dir triple]
+  (let [tmp (fs/create-temp-file {:dir root :prefix "nested-"})]
+    (try
+      (with-open [in (entry-stream zip entry)
+                  out (io/output-stream (str tmp))]
+        (io/copy in out))
+      (when-not (and (= bytes (fs/size tmp)) (= sha256 (sha-file tmp)))
+        (throw (ex-info "nested archive size or sha256 mismatch" {:entry entry :triple triple})))
+      (with-open [inner (ZipFile. (str tmp))]
+        (install-entries! inner (concat include libs) dir triple))
+      (finally (fs/delete-if-exists tmp)))))
+
 (defn install!
   "Extract and verify TRIPLE's runtime from the pinned package. A packager owns its staging directory."
   ([triple fetch?] (install! triple fetch? root))
   ([triple fetch? out]
    (let [p (or (platform triple) (throw (ex-info (str "no ONNX Runtime pin for " triple) {})))
          src (get-in pins [:sources (:source p)])
+         nested (when-let [archive (:archive p)]
+                  (or (get-in src [:archives archive])
+                      (throw (ex-info "missing nested archive pin" {:archive archive :triple triple}))))
          _ (when (fs/sym-link? root) (throw (ex-info "ppocr cache must not be a symlink" {})))
          _ (fs/create-dirs root)
          pkg (fetch-source! (:source p) fetch?)
          dir (str out "/" (:directory p))]
      (fs/delete-tree dir)
      (with-open [zf (ZipFile. ^String pkg)]
-       (doseq [{:keys [entry to bytes sha256 links]} (concat (:include src) (:notices src) (:libs p))]
-         (let [e (or (.getEntry zf entry) (throw (ex-info (str "package has no entry " entry) {})))
-               b (with-open [in (.getInputStream zf e)] (.readAllBytes in))
-               dest (str dir "/" to)]
-           (when-not (and (= bytes (count b)) (= sha256 (sha-bytes b))) (throw (ex-info "entry size or sha256 mismatch" {:entry entry :triple triple})))
-           (fs/create-dirs (fs/parent dest))
-           (with-open [o (java.io.FileOutputStream. dest)] (.write o ^bytes b))
-           (doseq [l links]
-             (fs/create-sym-link (str dir "/" l) (fs/file-name to))))))
+       (if nested
+         (install-nested! zf nested (:libs p) dir triple)
+         (install-entries! zf (concat (:include src) (:libs p)) dir triple))
+       (install-entries! zf (:notices src) dir triple))
      (println "ort:" triple "->" dir "(" (:file src) ")")
      dir)))
 

@@ -16,16 +16,15 @@ It is not part of any gate. Re-running it with verified cached files is offline.
 `bb ppocr-fetch` also installs ONNX Runtime 1.22.0 for this host (`tools/ppocr/ort.clj`): Microsoft's
 `Microsoft.ML.OnnxRuntime` NuGet package, verified whole by SHA-256 and extracted entry by entry,
 each against its own pin in `runtimes.edn`, into `.cache/ppocr/onnxruntime-<platform>-1.22.0/`.
-`runtimes.edn` also pins the mobile runtimes: Maven Central's `onnxruntime-android` AAR and the
-`onnxruntime-c` CocoaPods archive on onnxruntime.ai (`bb mobile --triple T --ort --fetch`).
+`runtimes.edn` also pins the mobile runtimes from the same NuGet package. Android uses its embedded AAR
+and iOS uses its embedded XCFramework ZIP (`bb mobile --triple T --ort --fetch`).
 The GitHub release assets ORT was first pinned to went away on 2026-11-17 (D906).
 `bb ppocr-check` verifies the cached assets, re-extracts the pinned runtime package,
 compiles the C ABI ownership shim, runs the Rust CTC/geometry/runtime smoke
 checks and builds the raw calibration probe. It never downloads. The current
-reference checker uses the macOS arm64 runtime. The release builder has separate
-five-platform pins in `runtimes.edn`, all from the one NuGet package; the other four platforms need their CI
-build/smoke checks and are not quality-qualified here. Model files and runtime binaries are carried only by the separate experimental
-[release add-on](../../docs/ppocr.md), never the default artifacts.
+reference checker uses the macOS arm64 runtime. The [release add-on](../../docs/ppocr.md)
+carries the models and runtime for the desktop targets. The desktop and mobile C bundles
+carry the PP-OCR adapter and runtime, with models available as on-demand packs.
 
 Build the reference driver with `EMON_RS_PPOCR=1 kin/scripts/emon-rs-build`.
 The optional build includes the incumbent Tesseract adapter automatically;

@@ -6,7 +6,7 @@
 
 (def stem "emon_ocr_ppocr")
 (def adapter-dir "lib/emon/adapters")
-;; The iOS floor of the pinned onnxruntime-c 1.22.0 podspec.
+;; The arm64 device and simulator objects in the pinned ONNX Runtime XCFramework target iOS 15.1.
 (def ios-deployment "15.1")
 (def rust-modules ["ppocr" "ppocr_abi" "ppocr_ctc" "ppocr_image" "ppocr_pipeline" "ppocr_runtime" "ppocr_tess_drop"])
 

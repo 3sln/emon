@@ -372,23 +372,20 @@
               (when-not (fs/exists? (path root (str texts-dir "/" f)))
                 (fail! (:id c) ": licence text " texts-dir "/" f " is missing (bb release-audit --import-texts for a crate)")))
             (when (= b (n-before)) (ok! "every licence text the inventory names is in release/licenses/")))
-          ;; PP is shipped only in its separate experimental add-on. The five
-          ;; runtime pins are packaging inputs, independent of frozen OCR policy.
+          ;; The C bundles and PP add-on use runtime pins independently of the frozen OCR policy.
           (when-let [source (rd root "tools/ppocr/runtimes.edn")]
             (let [b (n-before)
                   pins (edn/read-string source)
-                  ;; the five desktop targets: the PP add-on is not built for the mobile triples (K6, D897; the PP adapter library of K2 will be)
+                  ;; The separate PP add-on is built for desktop.
                   triples (set (for [[t c] (:triples (edn/read-string (rd root "tools/native/native.edn"))) :when (not (#{:android :ios} (:os c)))] t))]
               (when-not (= triples (set (keys (:platforms pins)))) (fail! "PP runtime pins must cover all five native targets"))
               (when-not (= "1.22.0" (:version pins)) (fail! "PP runtime version differs from qualified ORT"))
               (when-not (= (set (for [[t c] (:triples (edn/read-string (rd root "tools/native/native.edn"))) :when (#{:android :ios} (:os c))] t)) (set (keys (:mobile-platforms pins))))
                 (fail! "PP runtime pins must cover every mobile triple of native.edn"))
-              ;; ORTPIN (D906): Microsoft's own channels only (NuGet.org, Maven Central, onnxruntime.ai); the GitHub release assets are gone. Every library is pinned by SHA-256 and size.
-              (let [official ["https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.22.0/"
-                              "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.22.0/"
-                              "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.22.0.zip"]]
+              ;; D906 and D908 pin Microsoft's NuGet package for desktop and mobile.
+              (let [official "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.22.0/"]
                 (doseq [[id s] (:sources pins)]
-                  (when-not (and (pos-int? (:bytes s)) (re-matches #"[a-f0-9]{64}" (:sha256 s)) (some #(str/starts-with? (:url s) %) official))
+                  (when-not (and (pos-int? (:bytes s)) (re-matches #"[a-f0-9]{64}" (:sha256 s)) (str/starts-with? (:url s) official))
                     (fail! "invalid PP runtime source pin " id)))
                 (doseq [[triple pin] (concat (:platforms pins) (:mobile-platforms pins))]
                   (when-not (and (get-in pins [:sources (:source pin)]) (seq (:libs pin))
