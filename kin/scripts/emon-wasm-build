@@ -1,11 +1,11 @@
 #!/bin/sh
 # Build the WASM binding (the Rust host for wasm32-unknown-unknown); print the module's path.   kin/scripts/emon-wasm-build
 #
-# The browser's host (DEVLOG P9.3, SPEC 13.1, D356-D361): the SAME crate `emon-rs-build` assembles (the generated modules and
-# `host/rust/src/`), plus `host/wasm/src/wasm.rs`, the C ABI the JS SDK (`host/js/`) drives, built as a `cdylib`:
+# The browser's host (DEVLOG P9.3, SPEC 13.1, D356-D361): the generated modules, the shared Rust host, and
+# `host/wasm/src/wasm.rs`, the ABI the JS SDK (`host/js/`) drives, built as a `cdylib`:
 #
-#     .cache/emon-wasm/src/            what `.cache/emon-rs/src/` has, and `wasm.rs` (host/wasm/src/wasm.rs)
-#     .cache/emon-wasm/Cargo.toml      the same dependencies (host/rust/Cargo.lock), `crate-type = ["cdylib"]`
+#     .cache/emon-wasm/src/            the shared Rust host files and the browser binding
+#     .cache/emon-wasm/Cargo.toml      the image codec dependencies (host/rust/Cargo.lock), `crate-type = ["cdylib"]`
 #     .cache/emon-wasm/target/wasm32-unknown-unknown/release/emon.wasm      the module
 #
 # THE TOOLCHAIN is a pinned nightly (EMON_WASM_TOOLCHAIN, default nightly-2026-09-16), with the `wasm32-unknown-unknown` target and
@@ -68,7 +68,7 @@ for m in $keep; do echo "pub mod $m;"; done > "$crate/src/emon.rs.new"
 put "$crate/src/emon.rs.new" "$crate/src/emon.rs"
 rm -f "$crate/src/emon.rs.new"
 
-for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs session par adapter packs; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
+for f in lib port plan source engine imgdec render pdfimg session; do put "host/rust/src/$f.rs" "$crate/src/$f.rs"; done
 put host/wasm/src/wasm.rs "$crate/src/wasm.rs"
 if [ "${EMON_WASM_PPOCR:-}" = 1 ]; then
   bb tools/ppocr/wasm_assemble.clj "$crate"
@@ -97,11 +97,17 @@ zune-core = "=0.5.3"
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(pdfium)", "cfg(codecs)", "cfg(ppocr)"] }
 
-# the same arithmetic as the native hosts: overflow checks stay on (a breach is a named limit)
+# Overflow checks stay on (a breach is a named limit).
 [profile.release]
 opt-level = 3
 overflow-checks = true
 debug = false
+
+# Size-optimize the generated engine and its browser host together in one LLVM module.
+# Keep the normal release optimization for the codecs and the unwinding standard library.
+[profile.release.package.emon]
+opt-level = "s"
+codegen-units = 1
 TOML
 bb tools/version.clj --stamp-copy "$crate/Cargo.toml.new" "$crate/Cargo.toml"
 rm -f "$crate/Cargo.toml.new"

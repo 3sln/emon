@@ -14867,3 +14867,17 @@ Windows C packaging reached the native build with a working Rust host probe, the
 Packaging uses one lazy Rust host-triple lookup per invocation. Run `bb -m process-env-test` to check Windows key retention and override behavior with a synthetic environment and inheritance in a real child on the current host.
 
 - [ ] **Signed off** (maintainer)
+
+### D911 — Restore the Pages first-load budget
+
+Pages measured a 7,000,683-byte first load against the 6,815,744-byte budget. The unmodified build on macOS arm64 reproduced the failure at 7,000,740 bytes. Its 6,168,340-byte module had 3,378,364 bytes of code, 2,582,162 bytes of data and 202,141 bytes of names. Named native adapter, pack and renderer functions accounted for at least 61,734 bytes of code. The pre-K1/K2 snapshot at `0a7ec2f9` built to 5,973,695 bytes with the same pinned nightly.
+
+The browser build excludes the native adapter registry and model-pack manager. The shared step session compiles its registered renderers, adapter routing, completion mailbox and waiting state only on native targets. The browser still fulfils OCR and render requests through the JS SDK. Its engine options and transcript handling use the shared Kin definitions. The wasm manifest carries the image codecs, and the published Rust manifest makes the optional HTTP/TLS dependency native-only.
+
+The pinned nightly uses `opt-level = "s"` and one codegen unit for the generated engine and browser host. The codecs and the standard library use the normal release profile. Keep overflow checks and wasm exception unwinding so named limit breaches and missed reads have the same behavior as on the native hosts. The build requires no post-link optimizer.
+
+The first load now measures 5,638,976 bytes (5.38 MiB), with 1,176,768 bytes to spare at the existing cap. The module is 4,806,576 bytes, with 2,053,368 bytes of code, 2,567,826 bytes of data and 180,050 bytes of names. It has the same 38 exports and zero imports. The default build's SHA-256 on this machine is `4c1f5a37722ca16207b226043874729d7c92134e3880f2acab1448deb64fab23`.
+
+The Pages budget and static site checks passed. Chromium in Docker passed the demo smoke test and 76 browser slice conversions. A scoped `bb identity` run matched Rust, Go and the browser on the footnotes fixture. The browser's transcript matched Rust's, and replaying Rust's transcript produced the same bundle. Node matched the unmodified module's output on three samples and a named stream limit.
+
+- [ ] **Signed off** (maintainer)

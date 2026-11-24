@@ -16,8 +16,11 @@ use crate::engine::{parse_options, ChunkCache, Engine, Error, HtmlAssets, HtmlOp
 use crate::plan::{self, Answer, Bitmaps, PlanError, Range, Replayer, Request, Transcript};
 use crate::port::Cells;
 use crate::source::ByteSource;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{collections::{HashMap, HashSet}, sync::Mutex};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::adapter::{Begun, Completion, Engines, Mailbox, Router};
 
 // What a session call can fail with: the engine's own error, or the caller's mistake (`usage`).
@@ -41,6 +44,7 @@ pub enum Step {
     // requests the caller owes (`ocr`, with `js-ocr=1`; `render` and `crop`, with `js-render=1`): each a record `[len kind id arg...]`
     Requests(Vec<Vec<i32>>),
     // only async adapters' work is outstanding (K2, D899): wait for a completion (`Completer::wait`) and step again
+    #[cfg(not(target_arch = "wasm32"))]
     Waiting,
 }
 
@@ -72,6 +76,7 @@ pub struct Session {
     local: Box<dyn FnMut(&Request, &Bitmaps) -> Result<Answer, PlanError>>,
     // the registry's renderer (pdfium), when the engines have one and the caller does not render (`js-render=1`): the session answers `render` and `crop` itself (K7). It reads the input
     // through the session's chunk cache, so the caller gives the whole input (every chunk) before it steps.
+    #[cfg(not(target_arch = "wasm32"))]
     render: Option<crate::render::RenderFulfiller>,
     // a round of requests is in progress (the Run holds it: its requests, the answers offered so far, the bitmaps), and the ids of
     // those that are the caller's to answer
@@ -79,21 +84,27 @@ pub struct Session {
     external: BTreeSet<i32>,
     done: bool,
     // the registry's OCR adapters (K2, D899): the session answers the requests they are registered for itself; what they answer later arrives in the mailbox
+    #[cfg(not(target_arch = "wasm32"))]
     router: Option<Router>,
+    #[cfg(not(target_arch = "wasm32"))]
     mailbox: Arc<Mailbox>,
     // token of an async adapter's work -> the request it is for
+    #[cfg(not(target_arch = "wasm32"))]
     pending: HashMap<u64, i32>,
+    #[cfg(not(target_arch = "wasm32"))]
     tokens: Arc<Mutex<HashSet<u64>>>,
 }
 
 // What may be done from any thread while a session steps (`emon_complete`, `emon_wait`): hand an async adapter's answer to the session, or wait for one.
 #[derive(Clone)]
+#[cfg(not(target_arch = "wasm32"))]
 pub struct Completer {
     router: Option<Router>,
     mailbox: Arc<Mailbox>,
     tokens: Arc<Mutex<HashSet<u64>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Completer {
     // The answer to the work `token` names (`Completion::Answer`: the OIL record; `Refused`: unsupported or failed, the page is unread). Err when the token is none of this session's.
     pub fn complete(&self, token: u64, c: Completion) -> Result<(), String> {
@@ -116,12 +127,19 @@ impl Session {
     // requests the caller's. The bound on the input's length is checked BEFORE the cache of its chunks is allocated: a chunk of 1 and a
     // length of 2 GiB would ask for gigabytes (the engine checks it again, against the same limit).
     pub fn open(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str) -> Result<Session, Fault> {
-        Session::open_with(length, chunk, intake_only, password, options, None)
+        Self::open_impl(length, chunk, intake_only, password, options, #[cfg(not(target_arch = "wasm32"))] None)
     }
 
     // `open`, with the engines an embedder registered (K2, D899): when they have OCR adapters the session answers the `ocr` requests those are registered for itself, and only
     // the bytes, the requests nobody registered for (with `js-ocr=1`) and WAITING come out of `step`.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn open_with(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str, engines: Option<&Engines>) -> Result<Session, Fault> {
+        Self::open_impl(length, chunk, intake_only, password, options, engines)
+    }
+
+    fn open_impl(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str,
+                 #[cfg(not(target_arch = "wasm32"))] engines: Option<&Engines>) -> Result<Session, Fault> {
+        #[cfg(not(target_arch = "wasm32"))]
         let router = engines.and_then(|e| e.router());
         let mut p = parse_options(options).map_err(Fault::Usage)?;
         if let Some(c) = chunk {
@@ -136,13 +154,18 @@ impl Session {
         let cache = ChunkCache::pushed(ulen, p.config.chunk_size.max(1));
         let engine = Engine::new(p.config.clone());
         let idx = 0usize;
+        #[cfg(not(target_arch = "wasm32"))]
         let password_for_render = password.clone();
         let run = engine.start_pushed(idx, cache.clone(), password, &p.options, intake_only)?;
-        let has_router = router.is_some();
+        let host_ocr = || p.js_ocr.then(|| OcrPort(Arc::new(HostOcr)));
+        #[cfg(not(target_arch = "wasm32"))]
+        let ocr = router.as_ref().map(|r| OcrPort(Arc::new(r.clone()))).or_else(host_ocr);
+        #[cfg(target_arch = "wasm32")]
+        let ocr = host_ocr();
         // the decode answers keep their pixels when something reads them: the caller's engine, or an adapter
-        let keep = p.record || p.js_ocr || has_router;
-        let ocr = if let Some(r) = &router { Some(OcrPort(Arc::new(r.clone()))) } else if p.js_ocr { Some(OcrPort(Arc::new(HostOcr))) } else { None };
+        let keep = p.record || ocr.is_some();
         let source: Arc<dyn ByteSource> = cache.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         let render = engines.and_then(|e| e.renderer()).filter(|_| !p.js_render).map(|r| {
             crate::render::RenderFulfiller::for_input(r, idx, crate::render::RenderInput { source: source.clone(), password: password_for_render.clone() })
         });
@@ -153,6 +176,7 @@ impl Session {
             t.inputs = vec![(idx as i32, ulen as i32)];
             t.producer = p.producer.clone();
             // the engines that answer say so in the transcript (`:producer`, and the engine table written first: D898), as the Engine's own recording does
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(r) = &router {
                 let mut prod = r.producer_pairs();
                 for (k, v) in &p.producer {
@@ -178,13 +202,18 @@ impl Session {
             replayer: None,
             recording,
             local,
+            #[cfg(not(target_arch = "wasm32"))]
             render,
             in_round: false,
             external: BTreeSet::new(),
             done: false,
+            #[cfg(not(target_arch = "wasm32"))]
             router,
+            #[cfg(not(target_arch = "wasm32"))]
             mailbox: Mailbox::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             pending: HashMap::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             tokens: Arc::new(Mutex::new(HashSet::new())),
         })
     }
@@ -229,7 +258,8 @@ impl Session {
     // renderer (`js-render=1`, P11.4c). Without a renderer they are answered `unsupported` here like any request no port is configured for.
     fn is_external(&self, req: &Request) -> bool {
         // an `ocr` request an adapter is registered for is answered here, whatever `js-ocr` says: the caller owes what nobody registered for (K2, kin's `ad-route`)
-            if let Some(r) = &self.router {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(r) = &self.router {
             if r.claims(req) {
                 return false;
             }
@@ -238,6 +268,7 @@ impl Session {
     }
 
     // What `emon_complete` and `emon_wait` use from any thread.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn completer(&self) -> Completer {
         Completer { router: self.router.clone(), mailbox: self.mailbox.clone(), tokens: self.tokens.clone() }
     }
@@ -282,6 +313,7 @@ impl Session {
                 let reqs: Vec<Request> = run.requests().to_vec();
                 let mut local: Vec<&Request> = Vec::new();
                 for r in &reqs {
+                    #[cfg(not(target_arch = "wasm32"))]
                     if s.pending.values().any(|id| *id == r.id()) {
                         continue;
                     }
@@ -310,6 +342,7 @@ impl Session {
                 }
                 // 2. the local requests, answered here
                 for req in &local {
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Some(r) = s.router.clone().filter(|r| r.claims(req)) {
                         match r.begin(req, run.bitmaps(), s.recording.is_some(), &s.mailbox).map_err(|e| run.error_of(e))? {
                             Begun::Done(a) => run.offer(a)?,
@@ -320,6 +353,7 @@ impl Session {
                         }
                         continue;
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Some(rf) = s.render.as_ref().filter(|_| plan::route(req.kind(), false, true) == plan::Route::Render) {
                         let a = rf.fulfil(req).map_err(|e| run.error_of(e))?;
                         run.offer(a)?;
@@ -339,6 +373,7 @@ impl Session {
                     return Ok(Step::Requests(owed));
                 }
                 // 3b. what async adapters have answered since: taken in, and while any is still outstanding the caller is told to wait
+                #[cfg(not(target_arch = "wasm32"))]
                 if !s.pending.is_empty() {
                     let router = s.router.clone().expect("work is pending only with a router");
                     let arrived = s.mailbox.take();
@@ -497,6 +532,7 @@ impl Session {
 }
 
 // A session that goes while an async adapter still works on its requests tells the adapter to stop: a late answer is ignored.
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for Session {
     fn drop(&mut self) {
         if let Some(r) = &self.router {

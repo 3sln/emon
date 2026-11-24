@@ -26,9 +26,10 @@ pub mod pdfium;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod par;
 // the native OCR adapters (host/c/include/emon_adapter.h) and the engine registry (K2, D899): loading, routing, answering later; and the model packs they read
-// with: found, verified against the catalogue's SHA-256, fetched (feature `packs-fetch`). Kin decides (`emon.adapters`); these are the mechanics. A build for the
-// browser carries them and can load nothing.
+// with: found, verified against the catalogue's SHA-256, fetched (feature `packs-fetch`). The browser fulfils requests through the JS SDK.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod adapter;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod packs;
 pub mod plan;
 pub mod port;
@@ -41,19 +42,19 @@ pub mod source;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 // the Tesseract adapter of the `Ocr` port (D211): live only, built under the `tesseract` feature (it links libtesseract)
-#[cfg(feature = "tesseract")]
+#[cfg(all(feature = "tesseract", not(target_arch = "wasm32")))]
 pub mod tess;
 // the same Tesseract as a native adapter LIBRARY (K2, D899): `libemon_ocr_tesseract` exports `emon_ocr_adapter_v1` (emon_adapter.h). Assembled in only by the adapter's build.
-#[cfg(feature = "tesseract-adapter")]
+#[cfg(all(feature = "tesseract-adapter", not(target_arch = "wasm32")))]
 pub mod tess_adapter;
 
 // Apple Vision as an `Ocr` port (K8, D901): macOS and iOS, built under the `vision` feature with the shim of host/vision linked in (tools/native/vision.clj), and as a native
 // adapter LIBRARY, `libemon_ocr_vision` (`vision-adapter`).
-#[cfg(any(feature = "vision", all(feature = "winocr", windows)))]
+#[cfg(any(all(feature = "vision", not(target_arch = "wasm32")), all(feature = "winocr", windows)))]
 mod platform;
-#[cfg(feature = "vision")]
+#[cfg(all(feature = "vision", not(target_arch = "wasm32")))]
 pub mod vision;
-#[cfg(feature = "vision-adapter")]
+#[cfg(all(feature = "vision-adapter", not(target_arch = "wasm32")))]
 pub mod vision_adapter;
 // Windows.Media.Ocr (K8, D901), through the `windows` crate; Windows only. The adapter library is `libemon_ocr_winocr` (`winocr-adapter`).
 #[cfg(all(feature = "winocr", windows))]

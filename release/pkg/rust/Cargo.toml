@@ -44,7 +44,8 @@ miniz_oxide = "=0.8.9"
 # the `decode-img` request's DCT decoder: the very library `image` already uses for JPEG, used directly for the Adobe CMYK and YCCK samples
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
-# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
+# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): native only, including when the feature is enabled for wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
