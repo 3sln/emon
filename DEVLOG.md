@@ -14881,3 +14881,9 @@ The first load now measures 5,638,976 bytes (5.38 MiB), with 1,176,768 bytes to 
 The Pages budget and static site checks passed. Chromium in Docker passed the demo smoke test and 76 browser slice conversions. A scoped `bb identity` run matched Rust, Go and the browser on the footnotes fixture. The browser's transcript matched Rust's, and replaying Rust's transcript produced the same bundle. Node matched the unmodified module's output on three samples and a named stream limit.
 
 - [ ] **Signed off** (maintainer)
+
+### D912 — Retry registry publishing with updated workflows
+
+A manual registry-only dispatch can use the workflows from a later commit on `main` and publish from the existing version tag. Both commits must carry the same version in `version.edn`, and the tagged commit must have a successful `emon/verified` status. The retry skips full verification and still requires validated archives and a published GitHub release before the registry jobs run. The release tag stays at its original commit.
+
+- [ ] **Signed off** (maintainer)

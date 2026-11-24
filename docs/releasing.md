@@ -37,21 +37,28 @@ Commands below are operational examples (unverified locally; require GitHub Acti
 
 ```sh
 # emon-docs: unverified — operator commands, require repository permissions
-# Default dispatch is a dry run. Choose the original release ref when main moved.
+# Default dispatch is a dry run.
 gh workflow run release.yml --ref main -f version=X.Y.Z
 # Publish all missing targets:
 gh workflow run release.yml --ref main -f version=X.Y.Z -f dry_run=false
-# Retry npm only:
-gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z -f only=npm -f dry_run=false
 ```
+
+After a CI fix lands on `main`, retry a registry with
+`gh workflow run release.yml --ref main -f version=X -f only=npm,nuget -f dry_run=false`.
+It publishes the tagged, already-verified commit using `main`'s workflows.
+Use the release version for `X`. The version in `version.edn` must match at the
+selected ref and the tag.
 
 The `version` input may be blank to read `version.edn` at the chosen ref; a supplied
 value must equal that file exactly. `only` is a comma list of
 `assets,crates,npm,nuget,maven,go,pub`; blank selects all (`pub` also needs the variable `EMON_PUB_ENABLED`, see "Dart: pub.dev"). Unknown names, spaces and
 empty list entries are rejected. Selecting registries without `assets` requires
-an existing published GitHub release and tag at that commit. Assets are always
-validated, even for a registry retry. Dry runs still verify, build, download and
-validate, but create no tag/release and publish nothing. NuGet mints no key.
+an existing published GitHub release and tag at the commit being published.
+A registry-only dispatch from a later commit requires a successful
+`emon/verified` status on the tagged commit and skips full verification. The
+pipeline still downloads and validates the verified archives. Dry runs perform
+the same checks and builds, with no tag creation, release updates, registry
+publishing or NuGet key minting.
 GitHub's **Re-run failed jobs** also works: the successful prerequisite jobs
 remain valid and each registry skips a version it already has.
 

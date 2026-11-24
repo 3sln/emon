@@ -48,8 +48,10 @@
       (and (not (str/blank? version)) (not= version current)) {:error "input version must equal version.edn at the selected ref"}
       (and (not (empty? (str only))) (str/blank? only)) {:error "only must not contain whitespace"}
       (not-every? known selected) {:error "only must be a comma list of assets,crates,npm,nuget,maven,go,pub"}
+      (and tag-sha (not= tag-sha sha) (= event "workflow_dispatch") (seq selected) (not (selected "assets")))
+      {:run true :version current :sha tag-sha :retry true}
       (and tag-sha (not= tag-sha sha)) {:error (str "tag v" current " exists at another commit; never retarget it")}
-      :else {:run (not (and (= event "push") tag-sha)) :version current})))
+      :else {:run (not (and (= event "push") tag-sha)) :version current :sha sha :retry false})))
 
 (defn dart-asset "The stamped, publishable Dart package tree of a release (K5): made at release time from SHA256SUMS, not by verify.yml." [v] (str "emon-dart-" v ".tar.gz"))
 
@@ -272,6 +274,11 @@
       (spit sums-path (sums-text hashes))
       (say "wrote " asset " and rewrote " sums-file " (" (count (parse-sums (slurp sums-path))) " archives)"))))
 
+(defn- require-verified! [sha subject]
+  (let [statuses (rl/statuses-of (rl/repo) sha)]
+    (when-not (rl/verified-ok? (rl/newest rl/status-context statuses))
+      (rl/die 1 (str "release: " subject " has no successful emon/verified status")))))
+
 (defn prepare! [{:keys [version only event]}]
   (let [sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))
         _ (when-not (zero? (:exit (rl/git "merge-base" "--is-ancestor" sha "origin/main")))
@@ -280,17 +287,22 @@
         decision (prepare-decision {:current current :version version :only only :event event
                                     :tag-sha (remote-tag-sha (str "v" current)) :sha sha})]
     (when (:error decision) (rl/die 1 (:error decision)))
+    (when (:retry decision)
+      (let [tagged-sha (:sha decision)
+            tagged-version (:version (edn/read-string (:out (rl/git! "show" (str tagged-sha ":version.edn")))))]
+        (when-not (= current tagged-version)
+          (rl/die 1 "release: version.edn at the selected ref differs from version.edn at the tag"))
+        (require-verified! tagged-sha (str "tag v" current " commit " tagged-sha))))
     (rl/run! "bb" "tools/version.clj" "--check" (str "v" current))
-    (doseq [[k v] {"sha" sha "version" current "run" (str (boolean (:run decision)))}] (rl/write-output! k v))))
+    (doseq [k [:sha :version :run :retry]]
+      (rl/write-output! (name k) (str (get decision k))))))
 
 (defn release! [{:keys [tag sha notes dir only dry-run?]}]
   (let [v (rl/tag->version tag)
         _ (when-not (and (= v (cur-version)) (re-matches #"[0-9a-f]{40}" (str sha))
                          (= sha (str/trim (:out (rl/git! "rev-parse" "HEAD")))))
             (rl/die 1 "release: version or checkout does not equal the requested release"))
-        statuses (rl/statuses-of (rl/repo) sha)
-        _ (when (or (rl/error? statuses) (not (rl/verified-ok? (rl/newest rl/status-context statuses))))
-            (rl/die 1 "release: commit has no successful emon/verified status"))
+        _ (require-verified! sha "commit")
         problems (check-dir dir v)
         _ (when (seq problems) (rl/die 1 (str/join "\n" problems)))
         rel (find-release tag)
@@ -465,12 +477,45 @@
     (let [p #(prepare-decision (merge {:current "1.2.3" :sha sha :event "push"} %))]
       (t! "new version (tag absent) triggers" (:run (p {})))
       (t! "released version push skips" (false? (:run (p {:tag-sha sha}))))
-      (t! "manual retry reuses tag" (:run (p {:event "workflow_dispatch" :tag-sha sha})))
-      (t! "wrong-commit tag refused even on push" (:error (p {:tag-sha other})))
+      (t! "same-commit dispatch still verifies"
+          (= {:run true :version "1.2.3" :sha sha :retry false} (p {:event "workflow_dispatch" :tag-sha sha :only "npm"})))
+      (t! "wrong-commit tag refused on push even with a registry selection" (:error (p {:tag-sha other :only "npm"})))
+      (let [dispatch #(p (merge {:event "workflow_dispatch" :tag-sha other :only "npm,nuget"} %))]
+        (t! "registry-only dispatch uses the tagged commit"
+            (= {:run true :version "1.2.3" :sha other :retry true} (dispatch {})))
+        (t! "dispatch including assets refuses a different tag commit" (:error (dispatch {:only "npm,assets"})))
+        (t! "dispatch with blank only refuses a different tag commit" (:error (dispatch {:only ""})))
+        (t! "registry retry refuses an input version mismatch" (:error (dispatch {:version "1.2.4"}))))
       (t! "input version mismatch refused" (:error (p {:version "1.2.4"})))
       (t! "whitespace selection refused" (:error (p {:only " "})))
       (t! "invalid registry refused" (:error (p {:only "npm,typo"})))
       (t! "selected registries accepted" (:run (p {:only "npm,assets"}))))
+    (let [outputs (atom {})
+          tagged-version (atom "1.2.3")
+          options {:event "workflow_dispatch" :version "1.2.3" :only "npm,nuget"}
+          green {:context rl/status-context :state "success" :description "verified: full gates"
+                 :target_url "https://github.com/3sln/emon/actions/runs/99"}
+          refusal #(try (prepare! options) nil (catch clojure.lang.ExceptionInfo e (ex-message e)))]
+      (with-redefs [cur-version (constantly "1.2.3") remote-tag-sha (constantly other)
+                    rl/git (fn [& _] {:exit 0})
+                    rl/git! (fn [& args] (condp = (vec args)
+                                          ["rev-parse" "HEAD"] {:out sha}
+                                          ["show" (str other ":version.edn")] {:out (pr-str {:version @tagged-version})}))
+                    rl/run! (constantly nil)
+                    rl/write-output! (fn [k v] (swap! outputs assoc k v))
+                    rl/die (fn [_ message] (throw (ex-info message {})))]
+        (with-redefs [rl/statuses-of (fn [_ checked-sha] (when (= other checked-sha) [green]))]
+          (prepare! options)
+          (t! "prepare outputs the verified tag sha and retry flag"
+              (= {"run" "true" "version" "1.2.3" "sha" other "retry" "true"} @outputs)))
+        (reset! outputs {})
+        (with-redefs [rl/statuses-of (constantly [])]
+          (t! "prepare refuses a retry without a successful verification status"
+              (and (str/includes? (str (refusal)) "has no successful emon/verified status") (empty? @outputs))))
+        (reset! tagged-version "1.2.2")
+        (with-redefs [rl/statuses-of (constantly [green])]
+          (t! "prepare refuses a tagged version.edn mismatch"
+              (and (str/includes? (str (refusal)) "differs from version.edn at the tag") (empty? @outputs))))))
     (let [a (expected-assets "0.1.0") built (built-assets "0.1.0")]
       (t! "built assets: 5 CLI + 5 PP + 5 sums + 10 C + 4 pod = 29; the release adds the Dart tree = 30" (and (= 29 (count built)) (= 30 (count a)) (= (conj built "emon-dart-0.1.0.tar.gz") a)))
       (t! "expected assets are distinct" (= (count a) (count (set a))))

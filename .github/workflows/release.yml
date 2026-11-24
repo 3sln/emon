@@ -15,7 +15,7 @@ on:
         type: string
         default: ''
       dry_run:
-        description: 'Verify and build everything selected; publish nothing'
+        description: 'Run release checks and builds; publish nothing'
         type: boolean
         default: true
 permissions:
@@ -23,10 +23,14 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
     outputs:
       version: ${{ steps.prepare.outputs.version }}
       sha: ${{ steps.prepare.outputs.sha }}
       run: ${{ steps.prepare.outputs.run }}
+      retry: ${{ steps.prepare.outputs.retry }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -49,6 +53,7 @@ jobs:
       sha: ${{ needs.prepare.outputs.sha }}
       version: ${{ needs.prepare.outputs.version }}
       only: ${{ inputs.only || '' }}
+      retry: ${{ needs.prepare.outputs.retry == 'true' }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
     secrets: inherit
     permissions:

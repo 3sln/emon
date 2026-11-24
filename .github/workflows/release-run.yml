@@ -15,6 +15,9 @@ on:
       only:
         type: string
         default: ''
+      retry:
+        type: boolean
+        default: false
       dry_run:
         type: boolean
         default: true
@@ -33,6 +36,7 @@ env:
   DRY_FLAG: ${{ inputs.dry_run && '--dry-run' || ' ' }}
 jobs:
   verify:
+    if: ${{ !inputs.retry }}
     uses: ./.github/workflows/verify.yml
     with:
       sha: ${{ inputs.sha }}
@@ -44,6 +48,7 @@ jobs:
 
   assets:
     needs: verify
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -80,8 +85,8 @@ jobs:
           bb release-notes --until "$SHA" --version "${TAG#v}" --out "$RUNNER_TEMP/notes.md"
           bb release-ops release --tag "$TAG" --sha "$SHA" --notes "$RUNNER_TEMP/notes.md" --dir "$RUNNER_TEMP/archives" --only "$ONLY" ${DRY_FLAG}
   crates:
-    needs: assets
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',crates,')
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',crates,')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -104,8 +109,8 @@ jobs:
         run: bb publish crates ${DRY_FLAG}
 
   npm:
-    needs: assets
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',npm,')
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',npm,')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -147,6 +152,9 @@ jobs:
         run: |
           bb pdfium-fetch
           bb pdfium-fetch --platform wasm
+      - name: The JS SDK's locked dependencies (the PP package validates its wasm with wabt)
+        working-directory: emon/host/js
+        run: npm ci --no-audit --no-fund
       - name: Package the SDK, pdfium and separate experimental PP npm package
         env:
           EMON_PACKAGE_REQUIRE_NATIVE: "1"
@@ -162,8 +170,8 @@ jobs:
         run: bb publish npm ${DRY_FLAG}
 
   nuget:
-    needs: assets
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',nuget,')
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',nuget,')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -175,7 +183,7 @@ jobs:
       - name: Check NuGet profile variable
         working-directory: .
         env:
-          NUGET_USER: ${{ vars.NUGET_USER }}
+          NUGET_USER: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
         run: |
           if [[ -z "${NUGET_USER//[[:space:]]/}" ]]; then
             echo "::error::NUGET_USER is empty. Grant the organization Actions variable repository access to emon, or create a repository Actions variable NUGET_USER containing your nuget.org profile name."
@@ -198,7 +206,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
-          user: ${{ vars.NUGET_USER }}
+          user: ${{ vars.NUGET_USER || secrets.NUGET_USER }}
       - id: publish
         name: bb publish nuget
         env:
@@ -206,8 +214,8 @@ jobs:
         run: bb publish nuget ${DRY_FLAG}
 
   maven:
-    needs: assets
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',maven,')
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',maven,')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90 # the Central Portal validates a bundle for up to ~40 minutes
     outputs:
@@ -237,8 +245,8 @@ jobs:
         run: bb publish maven ${DRY_FLAG}
 
   go:
-    needs: assets
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',go,')
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',go,')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -267,8 +275,8 @@ jobs:
   # deploy key (a read-write SSH key added under Settings > Deploy keys; its private half is the secret PUB_DEPLOY_KEY), once the release has emon-dart-<version>.tar.gz. pub.yml (on that tag) publishes
   # the 8 packages with GitHub OIDC. Retry: `only=pub` deletes and pushes the tag again (pub.yml skips every package pub.dev has); at another commit the tag is refused.
   pub:
-    needs: assets
-    if: ${{ (inputs.only == '' || contains(format(',{0},', inputs.only), ',pub,')) && vars.EMON_PUB_ENABLED == 'true' }}
+    needs: [verify, assets]
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || (inputs.retry && needs.verify.result == 'skipped')) && needs.assets.result == 'success' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',pub,')) && vars.EMON_PUB_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
