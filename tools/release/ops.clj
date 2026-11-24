@@ -4,6 +4,7 @@
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.string :as str]
+         '[ppocr.bundle :as pp]
          '[release.lib :as rl])
 
 (def triples-cli ["aarch64-apple-darwin" "x86_64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu" "x86_64-pc-windows-msvc"])
@@ -68,14 +69,12 @@
 
 ;; ---------------------------------------------------------------------------------------------------- what a C bundle holds (K5)
 (def bundle-ppocr?
-  "Does the desktop C bundle carry the PP-OCR adapter (`lib/emon/adapters/libemon_ocr_ppocr.*`) and its runtime? Not yet: the ONNX Runtime pin has landed (`ortpin`, D906: tools/ppocr/runtimes.edn) but tools/package.clj does not pack the adapter and its pinned runtime into the bundles, and until it does the add-on
-   archives (`emon-ppocr-*`) are the only PP-OCR files. Flip this when tools/package.clj puts the adapter and the pinned runtime in the bundle: the collector then refuses a desktop bundle without it, and the Dart hook
-   of emon_ocr_ppocr (already `optional`) finds it."
-  false)
+  "Require the PP-OCR adapter and its ONNX Runtime payload in every platform's C bundle."
+  true)
 
 (defn bundle-entries
   "The entries a C bundle of this triple must hold, relative to its top directory `emon-c-<version>-<triple>/`: the headers, the core library, pdfium, each adapter library (Tesseract everywhere; Apple Vision on
-   macOS and iOS; Windows.Media.Ocr on Windows; PP-OCR on a desktop when `bundle-ppocr?`), the licence. Packs are checked apart (`share/emon/packs/`)."
+   macOS and iOS; Windows.Media.Ocr on Windows; PP-OCR with ONNX Runtime), the licence. Packs are checked apart (`share/emon/packs/`)."
   [triple]
   (let [os (cond (str/includes? triple "windows") :windows (str/includes? triple "apple-darwin") :mac (str/includes? triple "apple-ios") :ios
                  (str/includes? triple "android") :android :else :linux)
@@ -84,7 +83,7 @@
     (vec (concat ["include/emon.h" "include/emon_adapter.h" "LICENSE" (str "lib/" (lib "emon")) (str "lib/" (lib "pdfium")) (ad "emon_ocr_tesseract")]
                  (when (#{:mac :ios} os) [(ad "emon_ocr_vision")])
                  (when (= os :windows) [(ad "emon_ocr_winocr")])
-                 (when (and bundle-ppocr? (#{:mac :linux :windows} os)) [(ad "emon_ocr_ppocr")])))))
+                 (when bundle-ppocr? (pp/entries triple))))))
 
 (defn bundle-problems
   "Problems of one C bundle: `entries` is its `tar -tzf` listing. [] when every entry of `bundle-entries` is there under the right top directory, and at least one pack is."
@@ -94,6 +93,7 @@
         rel (set (for [n names :when (str/starts-with? n top)] (subs n (count top))))]
     (vec (concat (for [n names :when (not (str/starts-with? n top))] (str "the bundle of " triple " holds " n ", outside " top))
                  (for [e (bundle-entries triple) :when (not (contains? rel e))] (str "the bundle of " triple " has no " e))
+                 (for [e (sort rel) :when (str/ends-with? e ".onnx")] (str "the bundle of " triple " ships an on-demand ONNX model: " e))
                  (when-not (some #(str/starts-with? % "share/emon/packs/") rel) [(str "the bundle of " triple " has no pack under share/emon/packs/")])))))
 
 (defn sums-text
@@ -511,7 +511,34 @@
                (some #{"lib/libemon.so"} (bundle-entries "aarch64-linux-android")) (some #{"lib/libpdfium.so"} (bundle-entries "armv7-linux-androideabi"))
                (some #{"lib/emon/adapters/libemon_ocr_tesseract.dylib"} (bundle-entries "aarch64-apple-ios-sim"))
                (some #{"lib/libemon.dylib"} (bundle-entries "x86_64-apple-darwin")) (some #{"lib/emon/adapters/libemon_ocr_tesseract.so"} (bundle-entries "aarch64-unknown-linux-gnu"))))
-      (t! "PP-OCR is not required in a bundle until bundle-ppocr? says so" (not-any? #(some (fn [e] (str/includes? e "ppocr")) (bundle-entries %)) triples-c))
+      (t! "all ten C bundles require the PP adapter and the dynamic runtime where used"
+          (every? (fn [triple]
+                    (let [names (set (bundle-entries triple))
+                          runtime (cond (str/includes? triple "apple-ios") []
+                                        (str/includes? triple "apple-darwin") ["libonnxruntime.1.22.0.dylib"]
+                                        (str/includes? triple "windows") ["onnxruntime.dll" "onnxruntime_providers_shared.dll"]
+                                        (str/includes? triple "android") ["libonnxruntime.so"]
+                                        :else ["libonnxruntime.so.1" "libonnxruntime_providers_shared.so"])
+                          dir "lib/emon/adapters/"]
+                      (and (contains? names (str dir (pp/adapter-name triple)))
+                           (= (set (map #(str dir %) runtime)) (set (filter #(str/includes? % "onnxruntime") names))))))
+                  triples-c))
+      (t! "a missing PP adapter or runtime is refused, and the verified C archives are in SHA256SUMS"
+          (every? (fn [triple]
+                    (let [v "0.1.0"
+                          archive (str "emon-c-" v "-" triple ".tar.gz")
+                          names (entries triple v)]
+                      (and (contains? (parse-sums (sums-text (zipmap (built-assets v) (repeat "hash")))) archive)
+                           (every? (fn [e]
+                                     (= [(str "the bundle of " triple " has no " e)]
+                                        (bundle-problems v triple (remove #(str/ends-with? % (str "/" e)) names))))
+                                   (pp/entries triple)))))
+                  triples-c))
+      (t! "a PP model in a C bundle is refused"
+          (let [t "aarch64-linux-android" v "0.1.0"
+                model "share/emon/packs/pp5-det-mobile/ch_PP-OCRv5_det_mobile.onnx"]
+            (= [(str "the bundle of " t " ships an on-demand ONNX model: " model)]
+               (bundle-problems v t (conj (vec (entries t v)) (str "emon-c-" v "-" t "/" model))))))
       (t! "a missing adapter is named"
           (= ["the bundle of aarch64-apple-darwin has no lib/emon/adapters/libemon_ocr_vision.dylib"]
              (bundle-problems "0.1.0" "aarch64-apple-darwin" (remove #(str/ends-with? % "libemon_ocr_vision.dylib") (entries "aarch64-apple-darwin" "0.1.0")))))

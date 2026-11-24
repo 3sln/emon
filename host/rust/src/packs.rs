@@ -441,10 +441,12 @@ impl Packs {
             let c = ke::eng_find(engine.as_bytes(), 0, engine.len() as i32);
             if c < 0 { 0 } else { c }
         };
+        // The bundled PP adapter uses the English Tesseract pack as its lexicon.
+        let lexicon = if engine == "ppocr" { pack_find("tess-fast-eng") } else { None };
         let mut want: HashMap<String, PathBuf> = HashMap::new();
         for p in 1..=pack_count() {
             let pe = ke::pk_pack_engine(p);
-            if pe != 0 && pe != eng {
+            if pe != 0 && pe != eng && lexicon != Some(p) {
                 continue;
             }
             if let Some(paths) = self.locate(p) {

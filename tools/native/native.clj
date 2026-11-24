@@ -26,7 +26,9 @@
          '[clojure.edn :as edn]
          '[clojure.java.io :as io]
          '[clojure.pprint]
-         '[clojure.string :as str])
+         '[clojure.string :as str]
+         '[ppocr.bundle :as pp]
+         '[ppocr.ort :as ort])
 (import '[java.security MessageDigest])
 
 (def pins-file "tools/native/native.edn")
@@ -457,15 +459,26 @@
         ad (str dir "/lib/emon/adapters/" (if android? "libemon_ocr_tesseract.so" "libemon_ocr_tesseract.dylib"))
         pd (str dir "/lib/" (if android? "libpdfium.so" "libpdfium.dylib"))
         vad (str dir "/lib/emon/adapters/libemon_ocr_vision.dylib") ; Apple Vision (K8, D901): iOS only
+        pp-name (pp/adapter-name t)
+        pp-ad (str dir "/" pp/adapter-dir "/" pp-name)
         exports (header-functions)]
     (cond
       (not (fs/exists? lib)) nil
       android?
       (let [machine ({"arm64" "AArch64" "arm" "ARM" "x86_64" "Advanced Micro Devices X86-64"} (:arch cfg))
             sys #{"libc.so" "libm.so" "libdl.so"}
-            wide? (not= "arm" (:arch cfg))]
+            wide? (not= "arm" (:arch cfg))
+            ort-name "libonnxruntime.so"
+            runtime (str dir "/" pp/adapter-dir "/" ort-name)
+            pin (first (:libs (ort/platform t)))]
         (concat (audit-android-lib lib {:machine machine :page 0x4000 :needed-ok sys :exports exports :soname "libemon.so"})
                 (when (fs/exists? ad) (audit-android-lib ad {:machine machine :page 0x4000 :needed-ok sys :exports #{"emon_ocr_adapter_v1"} :soname "libemon_ocr_tesseract.so"}))
+                (audit-android-lib pp-ad {:machine machine :page 0x4000 :needed-ok (conj sys ort-name) :exports #{"emon_ocr_adapter_v1"} :soname pp-name})
+                (when-not (str/includes? (run-out (llvm "llvm-readelf") "-d" pp-ad) (str "Shared library: [" ort-name "]"))
+                  [[:fail (str pp-name ": does not depend on " ort-name)]])
+                (if (and (fs/regular-file? runtime) (= (:bytes pin) (fs/size runtime)) (= (:sha256 pin) (ort/sha-file runtime)))
+                  (audit-android-lib runtime {:machine machine :page 0x4000 :needed-ok (conj sys "liblog.so") :soname ort-name})
+                  [[:fail (str ort-name ": missing or differs from the AAR pin")]])
                 ;; pdfium: upstream's own build; 16 KB for the 64-bit ABIs Google Play requires it of, loads only the system's
                 (when (fs/exists? pd) (audit-android-lib pd {:machine machine :page (if wide? 0x4000 0x1000) :needed-ok sys :soname "libpdfium.so"}))))
       :else
@@ -474,6 +487,9 @@
                 (when (fs/exists? ad) (audit-ios-lib ad {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon_ocr_tesseract.dylib" :exports #{"emon_ocr_adapter_v1"}}))
                 ;; the Vision adapter: the same rules (one arm64 slice, the platform, the deployment target, system libraries only, exactly the one export of emon_adapter.h)
                 (when (fs/exists? vad) (audit-ios-lib vad {:platform plat :minos-max (:ios-deployment cfg) :install-name "@rpath/libemon_ocr_vision.dylib" :exports #{"emon_ocr_adapter_v1"}}))
+                (if (fs/regular-file? pp-ad)
+                  (audit-ios-lib pp-ad {:platform plat :minos-max pp/ios-deployment :install-name (str "@rpath/" pp-name) :exports #{"emon_ocr_adapter_v1"}})
+                  [[:fail (str "missing " pp-name)]])
                 ;; pdfium: upstream's own build (iOS 17.0), install name rewritten by `bb pdfium-fetch`
                 (when (fs/exists? pd) (audit-ios-lib pd {:platform plat :minos-max "17.0" :install-name "@rpath/libpdfium.dylib"})))))))
 

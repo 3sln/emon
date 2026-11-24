@@ -2,7 +2,7 @@
 ;; Separate experimental release archive. No corpus access. All build output stays here.
 (require '[babashka.fs :as fs] '[babashka.process :refer [shell process]]
          '[babashka.http-client :as http] '[clojure.edn :as edn]
-         '[clojure.string :as str] '[clojure.java.io :as io])
+         '[clojure.string :as str] '[clojure.java.io :as io] '[ppocr.bundle :as pp])
 (import '[java.security MessageDigest] '[java.util.zip ZipEntry ZipOutputStream])
 (def options
   (loop [remaining *command-line-args* result {}]
@@ -77,17 +77,7 @@
     (fs/copy "host/rust/Cargo.lock" (str dir "/Cargo.lock") {:replace-existing true})
     (spit (str dir "/Cargo.toml") (str/replace (slurp "release/pkg/rust/Cargo.toml")
       "[lib]" "[lib]\ncrate-type = [\"cdylib\"]"))
-    ;; Only adapt ORT's platform pathname ABI; image/decoding policy stays byte-identical.
-    (let [call "p->api->CreateSession(p->env, path, options, &p->session)"
-          original (slurp "host/rust/src/ppocr_ort.c")
-          source (if win? (str/replace original call "emon_create_session(p->api, p->env, path, options, &p->session)") original)
-          helper (when win? (str "\n#include <windows.h>\nstatic OrtStatus *emon_create_session(const OrtApi *api, OrtEnv *env, const char *path, const OrtSessionOptions *opts, OrtSession **out) {\n"
-            "int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);\n"
-            "if (!n) return api->CreateStatus(ORT_INVALID_ARGUMENT, \"invalid UTF-8 path\");\n"
-            "wchar_t *w = malloc(n * sizeof(wchar_t)); if (!w) return api->CreateStatus(ORT_FAIL, \"allocation\");\n"
-            "MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, w, n);\n"
-            "OrtStatus *s = api->CreateSession(env, w, opts, out); free(w); return s; }\n"))]
-      (spit (str dir "/ppocr_ort.c") (str/replace source "typedef struct {" (str helper "\ntypedef struct {"))))
+    (spit (str dir "/ppocr_ort.c") (pp/ort-c-source win?))
     (if win?
       (do (run "cl" "/nologo" "/c" "/O2" "/MT" (str "/I" ort "/include") (str dir "/ppocr_ort.c") (str "/Fo" dir "/ppocr_ort.obj"))
           (run "lib" "/nologo" (str "/OUT:" root "/emon_ppocr.lib") (str dir "/ppocr_ort.obj")))

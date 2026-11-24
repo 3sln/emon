@@ -1,6 +1,6 @@
 /// PP-OCR for emon.
 ///
-/// PP-OCR runs on ONNX Runtime and needs the packs `pp5-det-mobile`, `pp5-cls-mobile` and `pp5-rec-en-mobile`. Its library is shipped only where a release has one for the target; where it has none, `isAvailable` is false and `ocrEngine: OcrEngine.ppocr` leaves pages unread (never blank).
+/// The adapter and ONNX Runtime ship in the C archive. The engine needs [ppocrPacks], which can be fetched on demand.
 ///
 /// ```dart
 /// final emon = await Emon.open(nativeAdapters: [ppocrAdapter()]);
@@ -12,7 +12,7 @@ import 'package:emon_core/emon_core.dart';
 import 'src/bindings.dart';
 
 /// The packs this engine reads with (ids of the catalogue): fetch them ahead of time with `emon.packs.ensure`.
-const List<String> ppocrPacks = ['pp5-det-mobile', 'pp5-cls-mobile', 'pp5-rec-en-mobile'];
+const List<String> ppocrPacks = ['pp5-det-mobile', 'pp5-cls-mobile', 'pp5-rec-en-mobile', 'tess-fast-eng'];
 
 /// The PP-OCR adapter, for [Emon.open]'s `nativeAdapters`.
 ///

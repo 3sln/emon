@@ -27,13 +27,16 @@ export 'src/native_assets.dart' show NativeArchive, NativeAssetTable;
 
 /// One library to bundle.
 class NativeLibrary {
-  const NativeLibrary({required this.assetName, required this.stem, this.directory, this.optional = false});
+  const NativeLibrary({required this.assetName, required this.stem, this.fileName, this.directory, this.optional = false});
 
   /// The code asset's name inside the package (`src/bindings.g.dart`): the asset id is `package:<package>/<assetName>`.
   final String assetName;
 
   /// The library without prefix or suffix: `emon`, `pdfium`, `emon_ocr_tesseract`.
   final String stem;
+
+  /// Override the platform filename for a dependency with a versioned loader name.
+  final String? fileName;
 
   /// Where it is inside the archive (`lib/emon/adapters`); null: `lib`.
   final String? directory;
@@ -100,7 +103,9 @@ Future<void> addNativeAssets(BuildInput input, BuildOutputBuilder output, List<N
   final root = await resolveNativeSource(input, output, triple);
   for (final lib in libraries) {
     final dirs = [lib.directory ?? 'lib', 'lib', 'bin', '.'];
-    final names = [_fileName(code.targetOS, lib.stem), if (code.targetOS == OS.windows) 'lib${lib.stem}.dll'];
+    final names = lib.fileName != null
+        ? [lib.fileName!]
+        : [_fileName(code.targetOS, lib.stem), if (code.targetOS == OS.windows) 'lib${lib.stem}.dll'];
     File? found;
     for (final d in dirs) {
       for (final n in names) {

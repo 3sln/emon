@@ -394,12 +394,13 @@
                   (when-not (and (get-in pins [:sources (:source pin)]) (seq (:libs pin))
                                  (every? #(and (pos-int? (:bytes %)) (re-matches #"[a-f0-9]{64}" (:sha256 %))) (:libs pin)))
                     (fail! "invalid PP runtime pin for " triple))))
-              (doseq [[id licence] [["native/onnxruntime@1.22.0" "MIT"] ["native/ppocr5-mobile-en" "Apache-2.0"]]
+              (doseq [[id licence artifacts] [["native/onnxruntime@1.22.0" "MIT" #{:c-library :ppocr-addon}]
+                                             ["native/ppocr5-mobile-en" "Apache-2.0" #{:ppocr-addon}]]
                       :let [component (by-id id)]]
-                (when-not (and (= licence (:licence component)) (= [:ppocr-addon] (:carried-by component))
+                (when-not (and (= licence (:licence component)) (= artifacts (set (:carried-by component)))
                                (seq (text-files component)))
-                  (fail! id " must carry its licence texts in the PP add-on only")))
-              (when (= b (n-before)) (ok! "ORT 1.22.0 pinned to Microsoft's NuGet, Maven Central and onnxruntime.ai packages, every library by SHA-256, five desktop and five mobile platforms; ORT MIT and Paddle/RapidOCR Apache-2.0 notices belong only to the add-on"))))
+                  (fail! id " must carry its licence texts in " (str/join ", " (sort (map name artifacts))))))
+              (when (= b (n-before)) (ok! "ORT 1.22.0 and its library hashes cover five desktop and five mobile platforms; the C bundles and PP add-on carry the ORT notices"))))
           ;; the browser demo's vendored files (P11.4c): every file `bb demo` vendors maps to a component the demo carries
           (let [b (n-before)
                 df (:demo-files inv)

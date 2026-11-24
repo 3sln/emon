@@ -5,7 +5,8 @@
 ;;   bb tools/ppocr/ort.clj [--fetch] [--triple T | --host | --desktop | --mobile | --all]   install (default: this host). Without --fetch a package that is not
 ;;                                                                                          in .cache/ppocr already is an error, nothing is downloaded.
 ;;   bb tools/ppocr/ort.clj --check                                                          the pin file alone is well formed (offline; run by `bb native --check`)
-(require '[babashka.fs :as fs] '[babashka.process :refer [shell]] '[clojure.edn :as edn] '[clojure.string :as str])
+(ns ppocr.ort
+  (:require [babashka.fs :as fs] [babashka.process :refer [shell]] [clojure.edn :as edn] [clojure.string :as str]))
 (import '[java.security MessageDigest] '[java.util.zip ZipFile])
 
 (def pins (edn/read-string (slurp "tools/ppocr/runtimes.edn")))
@@ -69,25 +70,28 @@
     dest))
 
 (defn install!
-  "Extract the pinned entries of TRIPLE's runtime from its (verified) package into .cache/ppocr/<directory>, each checked by size and SHA-256."
-  [triple fetch?]
-  (let [p (or (platform triple) (throw (ex-info (str "no ONNX Runtime pin for " triple) {})))
-        src (get-in pins [:sources (:source p)])
-        pkg (fetch-source! (:source p) fetch?)
-        dir (str root "/" (:directory p))]
-    (fs/delete-tree dir)
-    (with-open [zf (ZipFile. ^String pkg)]
-      (doseq [{:keys [entry to bytes sha256 links]} (concat (:include src) (:notices src) (:libs p))]
-        (let [e (or (.getEntry zf entry) (throw (ex-info (str "package has no entry " entry) {})))
-              b (with-open [in (.getInputStream zf e)] (.readAllBytes in))
-              dest (str dir "/" to)]
-          (when-not (and (= bytes (count b)) (= sha256 (sha-bytes b))) (throw (ex-info "entry size or sha256 mismatch" {:entry entry :triple triple})))
-          (fs/create-dirs (fs/parent dest))
-          (with-open [o (java.io.FileOutputStream. dest)] (.write o ^bytes b))
-          (doseq [l links]
-            (fs/create-sym-link (str dir "/" l) (fs/file-name to))))))
-    (println "ort:" triple "->" dir "(" (:file src) ")")
-    dir))
+  "Extract and verify TRIPLE's runtime from the pinned package. A packager owns its staging directory."
+  ([triple fetch?] (install! triple fetch? root))
+  ([triple fetch? out]
+   (let [p (or (platform triple) (throw (ex-info (str "no ONNX Runtime pin for " triple) {})))
+         src (get-in pins [:sources (:source p)])
+         _ (when (fs/sym-link? root) (throw (ex-info "ppocr cache must not be a symlink" {})))
+         _ (fs/create-dirs root)
+         pkg (fetch-source! (:source p) fetch?)
+         dir (str out "/" (:directory p))]
+     (fs/delete-tree dir)
+     (with-open [zf (ZipFile. ^String pkg)]
+       (doseq [{:keys [entry to bytes sha256 links]} (concat (:include src) (:notices src) (:libs p))]
+         (let [e (or (.getEntry zf entry) (throw (ex-info (str "package has no entry " entry) {})))
+               b (with-open [in (.getInputStream zf e)] (.readAllBytes in))
+               dest (str dir "/" to)]
+           (when-not (and (= bytes (count b)) (= sha256 (sha-bytes b))) (throw (ex-info "entry size or sha256 mismatch" {:entry entry :triple triple})))
+           (fs/create-dirs (fs/parent dest))
+           (with-open [o (java.io.FileOutputStream. dest)] (.write o ^bytes b))
+           (doseq [l links]
+             (fs/create-sym-link (str dir "/" l) (fs/file-name to))))))
+     (println "ort:" triple "->" dir "(" (:file src) ")")
+     dir)))
 
 (defn -main [args]
   (let [flag? (set args)
@@ -101,8 +105,6 @@
                       :else [(host-triple)])]
     (check-pins!)
     (when-not (flag? "--check")
-      (when (fs/sym-link? root) (throw (ex-info "ppocr cache must not be a symlink" {})))
-      (fs/create-dirs root)
       (doseq [t triples] (install! t fetch?)))))
 
 (when (= *file* (System/getProperty "babashka.file"))

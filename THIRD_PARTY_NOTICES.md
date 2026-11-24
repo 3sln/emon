@@ -298,7 +298,7 @@ Not carried by the Rust, Go, Java and C# library packages (they load pdfium and 
   Licence text: [32](#licence-text-32), [3](#licence-text-3).
 
 - **ONNX Runtime CPU** 1.22.0; Microsoft.ML.OnnxRuntime 1.22.0 NuGet package SHA-256 d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a - MIT - https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.22.0
-  carried by the separate experimental native PP-OCR archive. Pinned CPU runtime in the separate experimental PP add-on, from Microsoft's own channels (NuGet.org for the five desktop platforms; Maven Central onnxruntime-android and the onnxruntime-c CocoaPods archive on download.onnxruntime.ai for the mobile ones), every library pinned by SHA-256 in tools/ppocr/runtimes.edn (ORTPIN, D906; the GitHub release assets it used to name are gone). Its distribution's complete ThirdPartyNotices.txt is retained; the generated Markdown normalizes trailing whitespace. Only macOS arm64 is locally qualified (bb ppocr-hosts); the others require their CI smoke.
+  carried by the C library and emon.h (with pdfium and the English and orientation models, D552), the separate experimental native PP-OCR archive. D906 pins the ONNX Runtime libraries and their source archives in tools/ppocr/runtimes.edn. The C bundles carry the desktop NuGet runtime and the Android Maven AAR runtime beside the PP-OCR adapter. The adapter includes the static CocoaPods runtime on iOS. The desktop PP add-on carries the NuGet runtime. The NuGet distribution's complete ThirdPartyNotices.txt is retained and this generated document normalizes trailing whitespace.
   Licence text: [4](#licence-text-4), [15](#licence-text-15).
 
 - **pdfium** chromium/8076 (156.0.8076.0) - Apache-2.0 - https://pdfium.googlesource.com/pdfium/

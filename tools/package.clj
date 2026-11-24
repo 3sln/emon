@@ -20,7 +20,9 @@
 (require '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[clojure.edn :as edn]
-         '[clojure.string :as str])
+         '[clojure.string :as str]
+         '[ppocr.bundle :as pp]
+         '[ppocr.ort :as ort])
 (import '(java.security MessageDigest))
 
 (def root (str (fs/absolutize ".")))
@@ -625,6 +627,39 @@
   (let [r (run {:ok? false} "nm" "-g" (if (str/includes? (str f) ".dylib") "-U" "--defined-only") (str f))]
     (->> (str/split-lines (:out r)) (keep #(second (re-find #"\s[TtDdBbRrSs]\s+_?(\S+)$" %))) set)))
 
+(defn- build-ppocr-c! [triple prefix]
+  (let [dir (stage-dir :native-ppocr)
+        runtime (ort/install! triple true dir)
+        adapter (pp/adapter-name triple)
+        win? (str/ends-with? adapter ".dll")
+        mac? (str/ends-with? adapter ".dylib")
+        cargo (str/replace (slurp "release/pkg/rust/Cargo.toml")
+                           "[lib]\nname = \"emon\"\n"
+                           (str "[lib]\nname = \"" pp/stem "\"\ncrate-type = [\"cdylib\"]\n"))
+        files (merge (rust-src-files)
+                     (into {} (for [m pp/rust-modules] [(str "src/" m ".rs") (str "host/rust/src/" m ".rs")]))
+                     {"Cargo.toml" {:text cargo} "Cargo.lock" "host/rust/Cargo.lock"
+                      "src/ppocr_dictionary.txt" "tools/ppocr/en-dictionary.txt"}
+                     (into {} (for [[path source] (pp/rust-overrides triple)] [path {:text source}])))
+        env {"MACOSX_DEPLOYMENT_TARGET" (or (System/getenv "MACOSX_DEPLOYMENT_TARGET") "12.0")}]
+    (stage! dir files ["src"])
+    (let [shim (pp/build-shim! (fn [opts & args] (apply run (assoc opts :env env) args)) dir triple runtime ["cc"] "ar")
+          link (str/split (str/trim (slurp (str prefix "/link.rustflags"))) #"\s+")
+          flags (concat shim link ["-C" "strip=symbols"]
+                        (cond win? ["-C" "target-feature=+crt-static"]
+                              mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/" adapter)]
+                              :else ["-C" (str "link-arg=-Wl,-soname," adapter)]))
+          build (fn [opts extra] (apply run opts
+                                        (concat ["cargo" "rustc" "--release" "--lib" "--locked" "--features" "tesseract"]
+                                                extra ["--"] flags)))
+          opts {:dir dir :env env}
+          built (str dir "/target/release/" adapter)]
+      (when-not (zero? (:exit (build (assoc opts :ok? false) ["--offline"])))
+        (build opts []))
+      (when (and (not win?) (not= #{"emon_ocr_adapter_v1"} (exported-symbols built)))
+        (bad! "unexpected PP-OCR adapter exports for " triple))
+      (pp/artifacts triple runtime built))))
+
 (defn build-c! []
   (let [{:keys [dyn static adapter windows?]} (native-lib-names)
         rel (build-native!)
@@ -639,7 +674,8 @@
                                      (when static {(str "lib/" static) (str rel "/" static)})
                                      ;; Windows (K5): the import library of emon.dll and its static library, for a C program that links it
                                      (when windows? (into {} (for [f ["emon.dll.lib" "emon.lib"] :when (fs/exists? (str rel "/" f))] [(str "lib/" f) (str rel "/" f)])))
-                                     (native-extras-c)))
+                                     (native-extras-c)
+                                     (when @native-full (build-ppocr-c! triple (:prefix @native-full)))))
         names (tar-list tgz)]
     (when (some #(re-find #"test_hooks|emon_test" %) names) (bad! "the C archive carries a test header"))
     (when (str/includes? (slurp (str root "/host/c/include/emon.h")) "emon_test_panic") (bad! "emon.h declares emon_test_panic"))

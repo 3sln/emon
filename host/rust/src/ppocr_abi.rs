@@ -2,19 +2,22 @@
 //! registries move to the adapter ABI (K3), the four `emon_ppocr_*_v1` functions the Go, Java and C# wrappers and `tools/ppocr/hosts.*` call (host/native/include/emon_ppocr.h).
 //! Callers own input buffers for the call; returned cells belong to this library.
 use crate::adapter::{port_adapter, AdapterStatus, OcrAdapter, PortInfo};
+#[cfg(not(ppocr_bundle))]
+use crate::port::Bitmap;
 use crate::{
     plan::{Bitmaps, Request},
-    port::Bitmap,
     ppocr::PpOcr,
     Ocr,
 };
+#[cfg(not(ppocr_bundle))]
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::{
     ffi::{c_char, CStr},
-    panic::{catch_unwind, AssertUnwindSafe},
     path::Path,
     sync::Arc,
 };
 
+#[cfg(not(ppocr_bundle))]
 unsafe fn message(out: *mut c_char, cap: usize, value: &str) {
     if !out.is_null() && cap > 0 {
         let n = value.len().min(cap - 1);
@@ -22,6 +25,7 @@ unsafe fn message(out: *mut c_char, cap: usize, value: &str) {
         *out.add(n) = 0;
     }
 }
+#[cfg(not(ppocr_bundle))]
 #[no_mangle]
 pub unsafe extern "C" fn emon_ppocr_open_v1(
     dir: *const c_char,
@@ -49,12 +53,14 @@ pub unsafe extern "C" fn emon_ppocr_open_v1(
         }
     }
 }
+#[cfg(not(ppocr_bundle))]
 #[no_mangle]
 pub unsafe extern "C" fn emon_ppocr_close_v1(p: *mut PpOcr) {
     if !p.is_null() {
         drop(Box::from_raw(p));
     }
 }
+#[cfg(not(ppocr_bundle))]
 #[no_mangle]
 pub unsafe extern "C" fn emon_ppocr_read_v1(
     p: *const PpOcr,
@@ -135,12 +141,35 @@ pub unsafe extern "C" fn emon_ppocr_read_v1(
         }
     }
 }
+#[cfg(not(ppocr_bundle))]
 #[no_mangle]
 pub unsafe extern "C" fn emon_ppocr_free_v1(cells: *mut i32, count: usize) {
     if !cells.is_null() {
         drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
             cells, count,
         )));
+    }
+}
+
+#[cfg(ppocr_bundle)]
+struct BundledPpOcr {
+    dir: String,
+    port: std::sync::Mutex<Option<Arc<PpOcr>>>,
+}
+
+#[cfg(ppocr_bundle)]
+impl Ocr for BundledPpOcr {
+    fn fulfil(&self, req: &Request, bitmaps: &Bitmaps, keep_binary: bool) -> Result<crate::plan::Answer, crate::plan::PlanError> {
+        use crate::plan::PlanError;
+        let mut slot = self.port.lock().map_err(|_| PlanError::Fulfil("PP-OCR lock poisoned".into()))?;
+        if slot.is_none() {
+            // The registry has resolved packs and refreshed the view before calling us.
+            let port = PpOcr::new(Path::new(&self.dir)).map_err(PlanError::Fulfil)?;
+            *slot = Some(Arc::new(port));
+        }
+        let port = Arc::clone(slot.as_ref().unwrap());
+        drop(slot);
+        port.fulfil(req, bitmaps, keep_binary)
     }
 }
 
@@ -164,26 +193,36 @@ pub unsafe extern "C" fn emon_ocr_adapter_v1(_config: *const c_char, packs_dir: 
             Err(_) => return fail("pack-dir-missing", "the pack directory is not UTF-8"),
         }
     };
-    let opened = catch_unwind(AssertUnwindSafe(|| PpOcr::new(Path::new(&dir))));
-    let port = match opened {
-        Ok(Ok(p)) => p,
+    #[cfg(ppocr_bundle)]
+    let port: Arc<dyn Ocr> = Arc::new(BundledPpOcr { dir, port: std::sync::Mutex::new(None) });
+    #[cfg(not(ppocr_bundle))]
+    let port: Arc<dyn Ocr> = match catch_unwind(AssertUnwindSafe(|| PpOcr::new(Path::new(&dir)))) {
+        Ok(Ok(p)) => Arc::new(p),
         Ok(Err(e)) => return fail("pack-missing", &e),
         Err(_) => return fail("panic", "the PP-OCR adapter panicked while opening"),
     };
-    // only what is PP-OCR's own: the model's identity, the lexicon and the runtime (the incumbent's pairs are Tesseract adapter's to give)
-    let producer: Vec<(String, String)> = Ocr::producer(&port).into_iter().filter(|(k, _)| k == "ocr-model" || k == "pp-lexicon" || k == "onnxruntime").collect();
+    #[cfg(ppocr_bundle)]
+    let producer = vec![
+        ("ocr-model".to_string(), crate::emon::ocrengine::OE_IDENTITY.iter().map(|&cp| char::from_u32(cp as u32).unwrap()).collect::<String>()),
+        ("pp-lexicon".into(), "tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2".into()),
+        ("onnxruntime".into(), "1.22.0 CPU sequential intra=1 inter=1".into()),
+        ("pp-lexicon-pack".into(), "tess-fast-eng".into()),
+    ];
+    #[cfg(not(ppocr_bundle))]
+    let producer: Vec<(String, String)> = port.producer().into_iter().filter(|(k, _)| k == "ocr-model" || k == "pp-lexicon" || k == "onnxruntime").collect();
     let observed = producer.iter().find(|(k, _)| k == "ocr-model").map(|(_, v)| v.clone()).unwrap_or_default();
     let caps = (crate::emon::engines::pk_engine_caps(crate::emon::engines::eng_ppocr())) as u32;
+    use crate::emon::engines as ke;
     let info = PortInfo {
         name: "ppocr".to_string(),
         engine: crate::emon::oil::oen_ppocr() as u32,
         caps,
         measured: 32 | 256,
-        needs: (crate::emon::engines::pkind_detector() | crate::emon::engines::pkind_classifier() | crate::emon::engines::pkind_recognizer()) as u32,
+        needs: (ke::pkind_detector() | ke::pkind_classifier() | ke::pkind_recognizer()) as u32,
         flags: crate::adapter::ADAPTER_THREADSAFE,
         config: observed.clone(),
         observed,
         producer,
     };
-    port_adapter(info, Arc::new(port))
+    port_adapter(info, port)
 }

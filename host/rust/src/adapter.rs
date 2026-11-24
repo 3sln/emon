@@ -1062,6 +1062,15 @@ impl Router {
                 }
             }
         }
+        // The bundled PP adapter reads English dictionary entries from the Tesseract pack even when used alone.
+        if eng == ke::eng_ppocr() && entry.info.producer.iter().any(|(k, v)| k == "pp-lexicon-pack" && v == "tess-fast-eng") {
+            let pack = packs::pack_find("tess-fast-eng").ok_or("pack-missing:tess-fast-eng")?;
+            match packs.need(pack, "conversion", &engine_name) {
+                Need::Ready => arrived = true,
+                Need::Unread(why) => return Err(why),
+                Need::Substitute(other) => return Err(format!("pack-substitute-differs:{}", other)),
+            }
+        }
         if arrived || rows.iter().any(|r| r.state == ke::pstate_installed()) {
             // the adapter lists its pack directory for each request, so what it is given must hold what arrived (it was built when the adapter was registered)
             packs.view(&engine_name).map_err(|m| format!("pack-dir-missing: {}", m))?;
