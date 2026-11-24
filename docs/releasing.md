@@ -181,6 +181,8 @@ already exists. A push made with `GITHUB_TOKEN` starts no workflow, so:
    already has that version, else `dart pub publish --force` (`flutter pub publish --force` for `emon_ocr_mlkit` and `emon_flutter`), with a pause and two more attempts for the packages after the
    first (pub.dev may need a moment to serve the one before). Re-running failed jobs, or `only=pub`, finishes what a failed run left; nothing is published twice.
 
+**First publish (once).** After the release exists: `bb tools/release/pub_first.clj --version X.Y.Z[-pre]`. It downloads `emon-dart-<version>.tar.gz`, checks it against SHA256SUMS, dry-runs and then publishes the eight packages in order after confirmation, skipping any pub.dev already has.
+
 **The maintainer's settings, in order.**
 1. **pub.dev publisher.** Create the verified publisher `3sln.com` (pub.dev > *Create publisher*; verify the domain through Google Search Console, a DNS TXT record).
 2. **Public repository.** The build hooks download the C bundles from the GitHub release, so the repository and its releases must be public.
