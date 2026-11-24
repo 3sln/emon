@@ -23,22 +23,42 @@ void main() {
   setUpAll(() async => emon = await openEmon(packs: PackMode.never, packDirectory: storeWithPacks().path));
   tearDownAll(() => emon.close());
 
-  test('the platform adapters are registered, Tesseract is the default', () async {
+  test('the platform adapters are registered; Vision is the default on a Mac, Tesseract elsewhere', () async {
     final engines = await emon.engines();
     expect(engines.firstWhere((e) => e.name == 'tesseract').usable, isTrue);
     if (Platform.isMacOS) expect(engines.firstWhere((e) => e.name == 'apple-vision').usable, isTrue);
-    expect(emon.defaultEngine, OcrEngine.tesseract);
+    expect(emon.defaultEngine, Platform.isMacOS ? OcrEngine.appleVision : OcrEngine.tesseract);
     expect(emon.canRender, isTrue);
   });
 
   test('a scan through Tesseract is the samples golden', () async {
-    final html = await emon.convertToHtml(EmonInput.file(p.join(repo, 'samples/scan-plain.pdf')));
+    final html = await emon.convertToHtml(EmonInput.file(p.join(repo, 'samples/scan-plain.pdf')), const ConvertOptions(ocrEngine: OcrEngine.tesseract));
     expect(html, File(p.join(repo, 'samples/scan-plain.html')).readAsStringSync());
   });
 
-  test('Apple Vision, selected explicitly, reads it too', () async {
+  test('on a Mac a conversion that names no engine reads with Vision (the turnkey default)', () async {
+    if (!Platform.isMacOS) return;
+    final html = await emon.convertToHtml(EmonInput.file(p.join(repo, 'samples/scan-plain.pdf')));
+    expect(html, contains('Adaptive Sampling'));
+  }, timeout: const Timeout(Duration(minutes: 3)));
+
+  test('prepare() with no engine named is ready on a Mac: Vision is built in, Tesseract\'s packs are conditional', () async {
+    if (!Platform.isMacOS) return;
+    final prepared = await emon.prepare(const ConvertOptions());
+    expect(prepared.missingPackIds, isEmpty);
+    expect(prepared.verdict, PrepareVerdict.ready);
+  });
+
+  test('Apple Vision, selected explicitly, reads it too, with Tesseract registered as its fallback', () async {
     if (!Platform.isMacOS) return;
     final html = await emon.convertToHtml(EmonInput.file(p.join(repo, 'samples/scan-plain.pdf')), const ConvertOptions(ocrEngine: OcrEngine.appleVision));
     expect(html, contains('Adaptive Sampling'));
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  test('prepare() for Apple Vision calls Tesseract\'s packs conditional, not missing', () async {
+    if (!Platform.isMacOS) return;
+    final prepared = await emon.prepare(const ConvertOptions(ocrEngine: OcrEngine.appleVision));
+    expect(prepared.missingPackIds, isEmpty, reason: 'Vision needs no pack; the fallback\'s are conditional');
+    expect(prepared.verdict, PrepareVerdict.ready);
+  });
 }

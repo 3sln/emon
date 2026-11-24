@@ -24,6 +24,15 @@ pub(crate) fn unread(req: &Request) -> Answer {
     Answer { rec: (0..cells_len(&out)).map(|i| cells_at(&out, i)).collect(), bitmap: None }
 }
 
+/// The engine a request names (kin's `op-request-engine`: 0 when it names none, which is Tesseract's), for a port that is the only one there is: a request another engine owns (the Tesseract
+/// fallback of a platform reader's page, P13.21b) is answered unread, as an unregistered engine is by the registry, never failed.
+#[allow(dead_code)]
+pub(crate) fn names_other_engine(req: &Request, oen: i32) -> bool {
+    let mut r = cells_of(&req.rec);
+    let named = crate::emon::ocrport::op_request_engine(&mut r);
+    named != oen
+}
+
 /// The text of kin's configuration for an engine (`emon.ocrengine`'s `oe-config-*`): the text the request's trailer must carry.
 pub(crate) fn config_text(oen: i32) -> String {
     (0..crate::emon::ocrengine::oe_config_len(oen)).map(|i| char::from_u32(crate::emon::ocrengine::oe_config_value(oen, i) as u32).unwrap_or('?')).collect()
@@ -72,16 +81,6 @@ pub(crate) struct Langs {
     pub named: i32,
     /// the one language the request names, packed, when it names one (the answer's header language); 0 otherwise
     pub one: i32,
-}
-
-/// The engine's locale tags for the Latin script (kin's `ol-locales` of `Latn`): what an engine reads with when the request names no language (no language is assumed, D038).
-pub(crate) fn latin(oen: i32) -> Vec<String> {
-    let mut out = Cells::new();
-    if crate::emon::ocrloc::ol_locales(oen, crate::emon::ocrport::sc_latn(), &mut out) == 0 {
-        return Vec::new();
-    }
-    let list: String = (0..cells_len(&out)).map(|k| char::from_u32(cells_at(&out, k) as u32).unwrap_or('?')).collect();
-    list.split(',').map(|s| s.to_string()).collect()
 }
 
 impl Decoded {

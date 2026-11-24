@@ -76,13 +76,13 @@ runs:
         ln -s "$pylib" "$HOME/.cache/emon/pylib"
         echo "EMON_PYLIB=$pylib" >> "$GITHUB_ENV"
         echo "PYTHONPATH=$pylib" >> "$GITHUB_ENV"
-    - name: Resolve bb deps (retried, as Maven Central and GitHub are transient)
+    - name: Resolve babashka dependencies (retried, as Maven Central and GitHub are transient)
       shell: bash
       working-directory: emon
       run: |
         for i in 1 2 3 4; do
           bb -e nil && exit 0
-          echo "bb dependency resolution failed (attempt $i); retrying" >&2
+          echo "babashka dependency resolution failed (attempt $i); retrying" >&2
           sleep $((i * 10))
         done
         exit 1

@@ -192,9 +192,9 @@
 ;; ------------------------------------------------------------------ the platform engines (K8, D901)
 
 (deftest test-platform-engines-have-their-own-requested-configuration
-  (assert-eq (oe-config-len 3) 90 "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin")
+  (assert-eq (oe-config-len 3) 91 "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect")
   (assert-eq (oe-config-value 3 0) 97 "it begins with the engine's name")
-  (assert-eq (oe-config-value 3 89) 110 "and ends with the language policy (latin)")
+  (assert-eq (oe-config-value 3 90) 116 "and ends with the language policy (detect: Vision detects the language, then Latin pages are read in English first)")
   (assert-eq (oe-config-len 5) 60 "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed")
   (assert-eq (oe-config-value 5 0) 119 "it begins with the engine's name")
   (assert-eq (oe-config-len 2) 74 "PP-OCR's is its frozen policy hash")
@@ -213,7 +213,7 @@
     (assert-eq (cells-at r 11) -3100 "identity marker")
     (assert-eq (cells-at r 12) 2 "requested identity version")
     (assert-eq (cells-at r 13) 3 "Apple Vision's engine")
-    (assert-eq (cells-at r 14) 90 "its configuration's length")
+    (assert-eq (cells-at r 14) 91 "its configuration's length")
     (assert-eq (op-request-engine r) 3 "the request says which engine reads it")
     (assert-eq (op-lang-count r) 1 "the language is still the one language")
     (assert-eq (op-lang-at r 0) 1701734144 "English")
@@ -268,4 +268,4 @@
     (assert-eq (oe-register table runs lines words 4 scratch) 0 "registered")
     (assert-eq (cells-len table) 7 "one engine, one row")
     (assert-eq (oe-evidence out table scratch) 0 "written")
-    (assert-text out ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]" "the evidence's engine table")))
+    (assert-text out ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect\",\"observed\":[0,0]}]" "the evidence's engine table")))

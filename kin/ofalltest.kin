@@ -1,0 +1,319 @@
+;; Laws for `emon.ofall` (P13.21b, D907): which pages of Apple Vision's reading go to Tesseract, and that nothing else does. The page-level laws run `emon.pageunit`'s scanned page
+;; with the fallback's `fuse` bit (16) and answers made by hand; the request-level laws hold `emon.ocrengine`'s `oe-tag-fb` to which engine a page's requests name.
+(ns emon.ofalltest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq assert-that new-cells new-bitmap-set]]
+            [emon.port :refer [cells-at cells-len cells-drop cells-push cells-set]]
+            [emon.plan :refer [rec-id rec-kind rec-count rq-arg rq-ocr rq-ocr-lang rq-ocr-end pk-ocr an-decode an-render an-fail ps-unsupported us-requests us-done pu-id]]
+            [emon.oil :refer [oil-tess-begin oil-line oil-word oil-word-cp oil-end oil-find]]
+            [emon.evidence :refer [ol-new ow-new ow-count ol-count co-new]]
+            [emon.oilfixturetest :refer [ofx-lines]]
+            [emon.ocrengine :refer [oe-tag-fb oe-config-len]]
+            [emon.evidence :refer [ck-text-like]]
+            [emon.scriptcheck :refer [sk-min-conf]]
+            [emon.ocrport :refer [op-request-engine sc-latn sc-cyrl sc-arab sc-hani sc-hang sc-jpan sc-thai sc-latf]]
+            [emon.ofall :refer [fb-read-id fb-spec-id fb-slot-read fb-slot-spec fb-slot-is-fallback fb-spec-take fb-taken-id fb-doubt-chars fb-vision-reads fb-letters fb-route fb-ask-if fb-engine fb-form fb-form-rows fb-form-lines fb-noise fb-tess-reads fb-seal-hits fb-seal-conf fb-noise-letters fb-thin-chars]]
+                                    [kin.lang :refer [defn return let set while if do comment
+                              + - * < > <= >= == != and or quot]]))
+
+(defn ^I32 fb-words [^:mut ^Cells ans ^I32 id ^I32 n ^I32 cp ^I32 osd ^I32 script ^I32 sconf]
+  (comment "An answer of `n` words of three letters of the code point `cp`, one line each; `script` and `sconf` are what OSD said (0: nothing).")
+  (let [^I32 at (oil-tess-begin ans id 3 0 0 0 0 0 osd script sconf 0 0)
+        ^:mut ^I32 k 0]
+    (while (< k n)
+      (do (oil-line ans at 10 (+ 20 (* k 60)) 200 40 0 1 -1 0 10 (+ 55 (* k 60)) 210 (+ 55 (* k 60)) 14 14 6 0 0 0 0 0 0 0 0 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k n)
+      (let [^I32 w (oil-word ans at 10 (+ 20 (* k 60)) 200 40 k 760 0 0 -1 1)]
+        (oil-word-cp ans at w cp) (oil-word-cp ans at w cp) (oil-word-cp ans at w cp)
+        (set k (+ k 1))))
+    (oil-end ans at)
+    (return at)))
+
+(deftest test-the-fallback-ids-are-a-pages-own-and-recognised-by-their-slot
+  (assert-eq (fb-read-id 0) 283 "page 0's fallback first pass: 256 + 27")
+  (assert-eq (fb-read-id 2) 795 "page 2's: 3 * 256 + 27")
+  (assert-eq (fb-spec-id 0) 276 "the fallback's first pass beside a doubtful reading: 256 + 20")
+  (assert-eq (fb-slot-is-fallback 276) 1 "also Tesseract's")
+  (assert-eq (fb-slot-is-fallback 283) 1 "the fallback's first pass")
+  (assert-eq (fb-slot-is-fallback 272) 0 "the ordinary first pass is Vision's")
+  (assert-eq (fb-slot-is-fallback 795) 1 "any page's")
+  (assert-eq (fb-slot-is-fallback (+ 8388608 27)) 0 "an id of the asset unit is no page's")
+  (assert-eq (fb-engine) 3 "the reader whose pages fall back is Apple Vision"))
+
+(deftest test-vision-reads-the-scripts-its-locales-name-and-no-other
+    (assert-eq (fb-vision-reads (sc-latn)) 1 "Latin")
+    (assert-eq (fb-vision-reads (sc-latf)) 1 "Fraktur is Latin")
+    (assert-eq (fb-vision-reads (sc-cyrl)) 1 "Cyrillic (ru, uk)")
+    (assert-eq (fb-vision-reads (sc-hani)) 1 "Han (zh, yue)")
+    (assert-eq (fb-vision-reads (sc-jpan)) 1 "Japanese")
+    (assert-eq (fb-vision-reads (sc-hang)) 1 "Hangul")
+    (assert-eq (fb-vision-reads (sc-thai)) 1 "Thai")
+    (assert-eq (fb-vision-reads (sc-arab)) 0 "Arabic, which includes Persian and Urdu: no recogniser on the OS this was measured on")
+    (assert-eq (fb-vision-reads 1147500129) 0 "Devanagari (Hindi)")
+    (assert-eq (fb-vision-reads 1214603890) 0 "Hebrew")
+    (assert-eq (fb-vision-reads 1198679403) 0 "Greek")
+    (assert-eq (fb-vision-reads 0) 0 "no script"))
+
+(deftest test-letters-are-the-script-bearing-characters-of-the-words
+  (let [^Cells ans (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-words ans 272 10 97 0 0 0)
+        ^I32 ext (oil-find ans at)]
+    (assert-eq (fb-letters ans ext scr) 30 "ten words of three letters")
+    (assert-eq (fb-letters ans ext scr) 30 "and again: the scratch is cleared")))
+
+(deftest test-a-page-vision-refused-goes-to-tesseract-unless-tesseract-refused-it-too
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells) ^Cells scr (new-cells)]
+    (an-fail ans (pk-ocr) 272 (ps-unsupported))
+    (assert-eq (fb-route 0 ans 0 260 300 rq loc scr) -1 "Vision's refusal: asks Tesseract")
+    (assert-eq (rec-count rq) 1 "one request")
+    (assert-eq (rec-kind rq 0) (pk-ocr) "an OCR")
+    (assert-eq (rec-id rq 0) 283 "under the fallback's id")
+    (assert-eq (rq-arg rq 0 1) 3 "the ordinary first pass: automatic page segmentation")
+    (cells-drop rq 0)
+    (an-fail ans (pk-ocr) 283 (ps-unsupported))
+    (assert-eq (fb-route 0 ans 0 260 300 rq loc scr) 0 "Tesseract refused it too (or is not here): Vision's refusal stands, nothing is asked again")
+    (assert-eq (rec-count rq) 0 "no request")))
+
+(defn ^I32 noise-of [^Cells ans ^I32 at ^:mut ^Cells scr]
+  (let [^I32 ext (oil-find ans at)]
+    (return (fb-noise ans ext scr))))
+
+(defn ^I32 fb-mixed [^:mut ^Cells ans ^I32 id ^I32 n1 ^I32 cp1 ^I32 n2 ^I32 cp2]
+  (comment "An answer of `n1` words of three letters of `cp1` and then `n2` of three letters of `cp2`, one line each.")
+  (let [^I32 at (oil-tess-begin ans id 3 0 0 0 0 0 0 0 0 0 0)
+        ^:mut ^I32 k 0]
+    (while (< k (+ n1 n2))
+      (do (oil-line ans at 10 (+ 20 (* k 60)) 200 40 0 1 -1 0 10 (+ 55 (* k 60)) 210 (+ 55 (* k 60)) 14 14 6 0 0 0 0 0 0 0 0 0)
+          (set k (+ k 1))))
+    (set k 0)
+    (while (< k (+ n1 n2))
+      (let [^I32 w (oil-word ans at 10 (+ 20 (* k 60)) 200 40 k 760 0 0 -1 1)]
+        (if (< k n1)
+          (do (oil-word-cp ans at w cp1) (oil-word-cp ans at w cp1) (oil-word-cp ans at w cp1))
+          (do (oil-word-cp ans at w cp2) (oil-word-cp ans at w cp2) (oil-word-cp ans at w cp2)))
+        (set k (+ k 1))))
+    (oil-end ans at)
+    (return at)))
+
+(deftest test-a-page-vision-read-in-a-script-it-reads-stays-vision-s
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-words ans 272 30 97 0 0 0)]
+    (assert-eq (fb-route 0 ans at 260 300 rq loc scr) 0 "Latin: kept")
+    (assert-eq (rec-count rq) 0 "nothing asked")
+    (cells-drop ans 0)
+    (let [^I32 at3 (fb-words ans 272 30 1076 0 0 0)]
+      (assert-eq (fb-route 0 ans at3 260 300 rq loc scr) 0 "Cyrillic (Russian, Ukrainian): Vision reads it, and kept"))
+    (cells-drop ans 0)
+    (let [^I32 at4 (fb-words ans 272 30 20013 0 0 0)]
+      (assert-eq (fb-route 0 ans at4 260 300 rq loc scr) 0 "Han: kept"))))
+
+(deftest test-a-page-vision-read-in-a-script-it-cannot-read-goes-to-tesseract
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-words ans 272 30 2325 0 0 0)]
+    (assert-eq (fb-route 0 ans at 260 300 rq loc scr) -1 "Devanagari letters in Vision's reading: its census says a script it has no recogniser for")
+    (assert-eq (rec-id rq 0) 283 "the fallback's first pass")))
+
+(deftest test-a-reading-of-stray-marks-in-many-scripts-is-a-doubt
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-mixed ans 272 20 97 3 3604)]
+    (assert-eq (fb-noise-letters) 20 "twenty letters to judge by")
+    (assert-eq (noise-of ans at scr) 9 "sixty Latin letters and nine Thai: nine are noise (13 per cent)")
+    (assert-eq (fb-route 0 ans at 260 300 rq loc scr) -1 "Latin with Thai in it: the reading of a page of a script Vision may not have: doubted")
+    (assert-eq (rec-id rq 0) 276 "the fallback's first pass is asked beside it: its script decides")
+    (cells-drop rq 0)
+    (cells-drop ans 0)
+    (let [^I32 at2 (fb-mixed ans 272 40 97 1 3604)]
+      (assert-eq (noise-of ans at2 scr) 0 "three in a hundred and twenty three are not noise")
+      (assert-eq (fb-route 0 ans at2 260 300 rq loc scr) 0 "kept"))
+    (cells-drop ans 0)
+    (let [^I32 at3 (fb-mixed ans 272 20 97 2 949)]
+      (assert-eq (noise-of ans at3 scr) 0 "Greek letters are no noise: scientific text has them (mu, omega, pi)"))
+    (cells-drop ans 0)
+    (let [^I32 at4 (fb-mixed ans 272 20 19978 10 12354)]
+      (assert-eq (noise-of ans at4 scr) 0 "Han and kana are one family: a Japanese page is both"))
+    (cells-drop ans 0)
+    (let [^I32 at6 (fb-mixed ans 272 16 19978 4 97)]
+      (assert-eq (noise-of ans at6 scr) 0 "a Chinese page with its Latin words (TEL, e-mail) is not noise"))
+    (cells-drop ans 0)
+    (let [^I32 at5 (fb-mixed ans 272 2 97 2 3604)]
+      (assert-eq (noise-of ans at5 scr) 0 "twelve letters are too few to judge"))))
+
+(deftest test-a-thin-reading-goes-to-tesseract-and-a-short-one-is-doubted
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-words ans 272 4 97 0 0 0)]
+    (assert-eq (fb-thin-chars) 20 "fewer than twenty letters and digits: a page Vision could not read")
+    (assert-eq (fb-doubt-chars) 60 "fewer than sixty: a page it may not have read")
+    (assert-eq (fb-route 0 ans at 260 300 rq loc scr) -1 "twelve letters: Vision could not read the page")
+    (assert-eq (rec-id rq 0) 283 "the fallback's first pass, under its own id")
+    (cells-drop rq 0)
+    (cells-drop ans 0)
+    (let [^I32 at2 (fb-words ans 272 12 97 0 0 0)]
+      (assert-eq (fb-route 0 ans at2 260 300 rq loc scr) -1 "thirty-six letters: a short receipt has that many, a Hindi page may: doubted")
+      (assert-eq (rec-count rq) 1 "one request")
+      (assert-eq (rec-id rq 0) 276 "the fallback's first pass beside the reading, under its own id")
+      (cells-drop rq 0)
+      (an-fail ans (pk-ocr) 276 (ps-unsupported))
+      (assert-eq (fb-route 0 ans at2 260 300 rq loc scr) 0 "asked and refused (no Tesseract, or a pack declined): the reading stands, nothing is asked again")
+      (assert-eq (rec-count rq) 0 "no request"))
+    (cells-drop ans 0)
+    (let [^I32 at3 (fb-words ans 272 0 97 0 0 0)]
+      (assert-eq (fb-route 0 ans at3 260 300 rq loc scr) -1 "a blank reading: the page goes to Tesseract (a blank page costs it a reading)"))))
+
+(deftest test-a-doubtful-reading-is-taken-by-the-script-tesseract-names-and-by-nothing-else
+  (let [^Cells ans (new-cells)]
+    (assert-eq (fb-spec-take ans -1) 0 "nothing asked: nothing taken")
+    (ofx-lines ans 276 1 20 60 1 760 0 1098015074 376 500 0 0 0)
+    (assert-eq (fb-spec-take ans 0) 1 "Arabic at 37.6, a script Vision has no recogniser for: the page is Tesseract's")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1098015074 (sk-min-conf) 500 0 0 0)
+    (assert-eq (fb-spec-take ans 0) 1 "at the bound: taken")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1098015074 (- (sk-min-conf) 1) 500 0 0 0)
+    (assert-eq (fb-spec-take ans 0) 0 "under the bound: Tesseract's detection of a short Latin page is that weak (a Cyrillic of 6.7)")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1281455214 629 500 0 0 0)
+    (assert-eq (fb-spec-take ans 0) 0 "a Latin page: Vision reads it")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1132032620 629 500 0 0 0)
+    (assert-eq (fb-spec-take ans 0) 0 "Cyrillic: Vision reads it")
+    (cells-drop ans 0)
+    (an-fail ans (pk-ocr) 276 (ps-unsupported))
+    (assert-eq (fb-spec-take ans 0) 0 "Tesseract refused: nothing")))
+
+(deftest test-the-page-is-tesseracts-when-its-fallback-was-read-or-its-script-took-it
+  (let [^Cells ans (new-cells)]
+    (assert-eq (fb-taken-id ans 0) 0 "no answer: Vision's")
+    (ofx-lines ans 283 1 20 60 1 760 0 0 0 500 0 0 0)
+    (assert-eq (fb-taken-id ans 0) 283 "the fallback's first pass was read: Tesseract's")
+    (assert-eq (fb-taken-id ans 1) 0 "another page's is not this page's")
+    (cells-drop ans 0)
+    (an-fail ans (pk-ocr) 283 (ps-unsupported))
+    (assert-eq (fb-taken-id ans 0) 0 "refused: Vision's")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1098015074 376 500 0 0 0)
+    (assert-eq (fb-taken-id ans 0) 276 "the one beside a doubtful reading took the page by its script")
+    (cells-drop ans 0)
+    (ofx-lines ans 276 1 20 60 1 760 0 1281455214 629 500 0 0 0)
+    (assert-eq (fb-taken-id ans 0) 0 "it named Latin: Vision's, the reading beside it thrown away")))
+
+(deftest test-a-seal-sends-the-page-to-tesseract-once
+  (let [^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells loc (new-cells)]
+    (assert-eq (fb-ask-if 0 ans 0 260 300 rq loc) 0 "no seal: nothing")
+    (assert-eq (rec-count rq) 0 "no request")
+    (assert-eq (fb-ask-if 0 ans 2 260 300 rq loc) -1 "two candidates: asks the fallback's first pass")
+    (assert-eq (rec-id rq 0) 283 "under the fallback's id")
+    (cells-drop rq 0)
+    (an-fail ans (pk-ocr) 283 (ps-unsupported))
+    (assert-eq (fb-ask-if 0 ans 2 260 300 rq loc) 0 "asked already, and refused: not again")
+    (assert-eq (rec-count rq) 0 "no request")))
+
+;; ------------------------------------------------------------------------- the engine each request names
+
+(defn ^I32 one-request [^:mut ^Cells r ^I32 id]
+  (let [^I32 at (rq-ocr r id 7 3 1 0 0 0 0)]
+    (rq-ocr-lang r 101 110 103 0)
+    (rq-ocr-end r at)
+    (return at)))
+
+(defn ^I32 engine-after [^I32 id ^I32 routed]
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)]
+    (one-request r id)
+    (oe-tag-fb r scratch routed (fb-slot-read) (fb-slot-spec))
+    (return (op-request-engine r))))
+
+(deftest test-a-visions-pages-requests-name-vision-except-its-own-fallback-ones
+  (assert-eq (engine-after 272 0) 3 "the first pass is Vision's")
+  (assert-eq (engine-after 288 0) 3 "so is a cell, a strip, an upscale")
+  (assert-eq (engine-after 283 0) 1 "the fallback's first pass is Tesseract's")
+  (assert-eq (engine-after 276 0) 1 "so is the one beside a doubtful reading")
+  (assert-eq (engine-after 272 1) 1 "a page the fallback took: every request is Tesseract's")
+  (assert-eq (engine-after 283 1) 1 "including the fallback's own")
+  (assert-eq (engine-after 1024 0) 3 "another page's first pass")
+  (assert-eq (engine-after (+ 1024 27) 0) 1 "and another page's fallback"))
+
+(deftest test-tagging-for-the-fallback-is-idempotent-and-leaves-the-record-whole
+  (let [^Cells r (new-cells) ^Cells scratch (new-cells)]
+    (one-request r 272)
+    (oe-tag-fb r scratch 0 (fb-slot-read) (fb-slot-spec))
+    (oe-tag-fb r scratch 0 (fb-slot-read) (fb-slot-spec))
+    (assert-eq (cells-len r) (+ 15 (oe-config-len 3)) "exactly one Vision trailer")
+    (assert-eq (cells-at r 0) (cells-len r) "the record's length includes it")
+    (assert-eq (op-request-engine r) 3 "Vision")))
+
+;; ------------------------------------------------------------------------- the FORM rule
+
+(defn ^I32 ft-line [^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells text ^I32 x ^I32 y ^I32 numeric]
+  (comment "One OCR line of one word at (x, y), 40 wide and 20 high: `6.50` when `numeric` is 1, `abc` else.")
+  (let [^I32 tstart (cells-len text)
+        ^I32 w (ow-count owords)]
+    (if (== numeric 1)
+      (do (cells-push text 54) (cells-push text 46) (cells-push text 53) (cells-push text 48))
+      (do (cells-push text 97) (cells-push text 98) (cells-push text 99)))
+    (ow-new owords 1 x y (+ x 40) (+ y 20) x y (+ x 40) (+ y 20) 0 0 tstart (- (cells-len text) tstart) (ol-count olines) 800 0)
+    (ol-new olines 1 x y (+ x 40) (+ y 20) x y (+ x 40) (+ y 20) 0 0 w 1)
+    (return 0)))
+
+(defn ^I32 ft-rows [^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells text ^I32 rows ^I32 cols ^I32 numeric-cols ^I32 jitter]
+  (comment "`rows` rows of `cols` lines, the first `numeric-cols` numeric; the lines of a row are `jitter` points out of true by turns.")
+  (let [^:mut ^I32 r 0 ^:mut ^I32 c 0 ^:mut ^I32 num 0]
+    (while (< r rows)
+      (do (set c 0)
+          (while (< c cols)
+            (do (set num 0)
+                (if (< c numeric-cols) (set num 1))
+                (ft-line olines owords text (+ 50 (* c 100)) (+ (+ 100 (* r 40)) (* jitter (- (* 2 (- c (* 2 (quot c 2)))) 1))) num)
+                (set c (+ c 1))))
+          (set r (+ r 1))))
+    (return 0)))
+
+(defn ^I32 form-of [^I32 rows ^I32 cols ^I32 numeric-cols ^I32 jitter ^I32 receipt]
+  (let [^Cells olines (new-cells) ^Cells owords (new-cells) ^Cells text (new-cells) ^Cells scr (new-cells)]
+    (ft-rows olines owords text rows cols numeric-cols jitter)
+    (return (fb-form olines owords text 0 (* rows cols) receipt scr))))
+
+(deftest test-a-page-of-rows-of-numbers-is-a-form-and-a-receipt-or-prose-is-not
+  (assert-eq (fb-form-rows) 6 "six rows make a form")
+  (assert-eq (fb-form-lines) 12 "of at least a dozen lines")
+  (assert-eq (form-of 8 4 2 0 0) 8 "eight rows of four lines, two of them numbers: a statement")
+  (assert-eq (form-of 8 4 2 3 0) 8 "the lines of a row a few points out of true are still one row")
+  (assert-eq (form-of 6 3 3 0 0) 6 "exactly six rows of three numeric lines")
+  (assert-eq (form-of 5 4 2 0 0) 0 "five rows are not a form")
+  (assert-eq (form-of 8 4 2 0 1) 0 "a page kin took for a receipt is never a form, whatever its rows")
+  (assert-eq (form-of 8 4 1 0 0) 0 "rows with one number are not a table of numbers")
+  (assert-eq (form-of 8 4 0 0 0) 0 "columns of prose are not a form")
+  (assert-eq (form-of 8 2 2 0 0) 0 "rows of two lines are not tabular enough")
+  (assert-eq (form-of 3 3 3 0 0) 0 "nine lines are too few to say"))
+
+(deftest test-the-pixel-rules-leave-a-page-vision-reads-and-tesseract-does-not-to-vision
+  (let [^Cells ans (new-cells) ^Cells scr (new-cells)
+        ^I32 at (fb-words ans 272 30 97 0 0 0)]
+    (assert-eq (fb-tess-reads ans at scr) 1 "a Latin page: Tesseract reads it")
+    (cells-drop ans 0)
+    (let [^I32 at2 (fb-words ans 272 30 20013 0 0 0)]
+      (assert-eq (fb-tess-reads ans at2 scr) 0 "a Chinese page, which Tesseract without a language scores a fifth of Vision's characters on: Vision's"))
+    (cells-drop ans 0)
+    (let [^I32 at3 (fb-words ans 272 30 1076 0 0 0)]
+      (assert-eq (fb-tess-reads ans at3 scr) 0 "a Cyrillic page"))
+    (cells-drop ans 0)
+    (let [^I32 at4 (fb-words ans 272 1 97 0 0 0)]
+      (assert-eq (fb-tess-reads ans at4 scr) 1 "a reading too short to have a script: Tesseract may read it"))
+    (cells-drop ans 0)
+    (an-fail ans (pk-ocr) 272 (ps-unsupported))
+    (assert-eq (fb-tess-reads ans 0 scr) 0 "a page Vision refused is not this rule's")))
+
+(deftest test-only-the-candidates-the-tracer-is-sure-of-are-a-seal
+  (let [^Cells cand (new-cells)]
+    (assert-eq (fb-seal-conf) 700 "a candidate's primitive confidence of at least 700 per mille")
+    (assert-eq (fb-seal-hits cand) 0 "no candidate: no seal")
+    (let [^:mut ^I32 k 0]
+      (while (< k 16) (do (cells-push cand 0) (set k (+ k 1)))))
+    (cells-set cand 15 300)
+    (assert-eq (fb-seal-hits cand) 0 "a weak curve of a photographed receipt (300): not a seal")
+    (cells-set cand 15 928)
+    (assert-eq (fb-seal-hits cand) 1 "a ring of 928: a seal")
+    (let [^:mut ^I32 k2 0]
+      (while (< k2 16) (do (cells-push cand 0) (set k2 (+ k2 1)))))
+    (cells-set cand 31 856)
+    (assert-eq (fb-seal-hits cand) 2 "and a stamp outline of 856: two")))

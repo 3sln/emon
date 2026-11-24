@@ -8,6 +8,8 @@
 ;;
 ;; --engine=apple-vision (K8, D901; macOS): the same with Apple's Vision (`emon-rs --ocr-engine=apple-vision`), into test/ocr/vision/ID. The transcript says whose engine answered, in its
 ;; engine table and the observed identity (the OS build and the Vision revision); a replay needs `--ocr-engine=apple-vision` too, because a request names its engine.
+;; --fallback (with --engine=apple-vision; P13.21b, D907): Vision WITH its Tesseract fallback (`--ocr-engine=apple-vision --tesseract`; TESSDATA_PREFIX names Tesseract's models), into
+;; test/ocr/vision-fallback/ID: a page the fallback policy sends to Tesseract has both engines' answers in its transcript, and the replay (`--ocr-engine=apple-vision`) makes kin choose again.
 ;;
 ;; Each document goes through the Engine with the Tesseract `Ocr` port (`emon-rs --tesseract --record`), and the transcript the
 ;; run wrote is committed AS A REPLAY INPUT: `transcript.edn` (the decode and the OCR request and answer of every page, and the
@@ -26,27 +28,28 @@
 (def px? (some #{"--px"} args))
 (def keep? (or px? (some #{"--keep-bitmaps"} args)))
 (def vision? (some #{"--engine=apple-vision"} args))
+(def fallback? (and vision? (some #{"--fallback"} args)))
 (def ids (vec (remove #(str/starts-with? % "--") args)))
 (when (empty? ids)
   (println "usage: bb tools/ocr/record-scan.clj [--keep-bitmaps] ID...")
   (System/exit 2))
 
 (shell {:out :string :err :string} "kin/scripts/emit")
-(let [r (sh {:err :inherit :out :string :extra-env (if vision? {"EMON_RS_VISION" "1"} {"EMON_RS_LIVE" "1"})} "kin/scripts/emon-rs-build")]
+(let [r (sh {:err :inherit :out :string :extra-env (cond fallback? {"EMON_RS_VISION" "1" "EMON_RS_LIVE" "1"} vision? {"EMON_RS_VISION" "1"} :else {"EMON_RS_LIVE" "1"})} "kin/scripts/emon-rs-build")]
   (when-not (zero? (:exit r)) (System/exit (:exit r))))
-(def bin (if vision? ".cache/emon-rs-vision/target/release/emon-rs" ".cache/emon-rs-live/target/release/emon-rs"))
-(def engine-flag (if vision? "--ocr-engine=apple-vision" "--tesseract"))
+(def bin (cond fallback? ".cache/emon-rs-vision-tess/target/release/emon-rs" vision? ".cache/emon-rs-vision/target/release/emon-rs" :else ".cache/emon-rs-live/target/release/emon-rs"))
+(def engine-flag (cond fallback? "--ocr-engine=apple-vision --tesseract" vision? "--ocr-engine=apple-vision" :else "--tesseract"))
 
 (defn strip-bitmaps [edn] (str/replace edn #" :bitmap \"[^\"]*\"" ""))
 
 (doseq [spec ids]
   (let [[variant id] (if (str/includes? spec "/") (str/split spec #"/" 2) ["scan" spec])
         pdf (str "test/corpus/synth/" variant "/" id ".pdf")
-        out (str (cond vision? "test/ocr/vision/" px? "test/ocr/scan-px/" :else "test/ocr/scan/") (if (= variant "scan") id (str variant "--" id)))
+        out (str (cond fallback? "test/ocr/vision-fallback/" vision? "test/ocr/vision/" px? "test/ocr/scan-px/" :else "test/ocr/scan/") (if (= variant "scan") id (str variant "--" id)))
         t0 (System/currentTimeMillis)]
     (fs/delete-tree out)
     (fs/create-dirs out)
-    (let [r (sh {:err :inherit} bin engine-flag (str "--record=" out) pdf)]
+    (let [r (apply sh {:err :inherit} bin (concat (str/split engine-flag #" ") [(str "--record=" out) pdf]))]
       (when-not (zero? (:exit r))
         (println "FAIL" id "exited" (:exit r))
         (System/exit (:exit r)))

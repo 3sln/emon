@@ -6,11 +6,11 @@ package emon;
 
 public final class Ocrengine {
     public static final int[] OE_IDENTITY = {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 50, 98, 100, 55, 99, 98,
-        99, 51, 53, 102, 57, 51, 57, 52, 99, 100, 57, 100, 54, 52, 99, 100,
-        48, 101, 51, 98, 54, 101, 48, 55, 98, 49, 54, 50, 49, 53, 98, 56,
-        57, 51, 56, 54, 55, 55, 52, 56, 102, 97, 48, 57, 54, 101, 102, 51,
-        55, 101, 102, 53, 49, 53, 97, 100, 97, 48
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 55, 56, 97, 48, 98, 99,
+        54, 52, 55, 48, 97, 102, 102, 56, 97, 48, 49, 57, 98, 57, 100, 102,
+        48, 54, 50, 98, 48, 51, 56, 97, 49, 102, 54, 56, 49, 57, 50, 57,
+        52, 54, 55, 57, 50, 101, 51, 51, 49, 100, 97, 100, 54, 52, 54, 48,
+        97, 57, 48, 55, 57, 100, 102, 48, 97, 98
     };
     public static final int[] OE_VISION_CONFIG = {
         97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
@@ -18,7 +18,7 @@ public final class Ocrengine {
         101, 115, 116, 59, 114, 101, 118, 61, 108, 97, 116, 101, 115, 116, 59, 108,
         101, 118, 101, 108, 61, 97, 99, 99, 117, 114, 97, 116, 101, 59, 108, 99,
         61, 49, 59, 108, 97, 110, 103, 61, 114, 101, 113, 117, 101, 115, 116, 45,
-        101, 108, 115, 101, 45, 108, 97, 116, 105, 110
+        101, 108, 115, 101, 45, 100, 101, 116, 101, 99, 116
     };
     public static final int[] OE_WINOCR_CONFIG = {
         119, 105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99,
@@ -38,7 +38,7 @@ public final class Ocrengine {
             return 74;
         }
         if (engine == 3) {
-            return 90;
+            return 91;
         }
         if (engine == 4) {
             return 71;
@@ -183,6 +183,39 @@ public final class Ocrengine {
                 }
                 if (mode == 8) {
                     oeSelect(scratch, out, 4);
+                }
+            }
+            at += n;
+        }
+        emon.Port.cellsDrop(requests, 0);
+        i = 0;
+        while (i < emon.Port.cellsLen(scratch)) {
+            emon.Port.cellsPush(requests, emon.Port.cellsAt(scratch, i));
+            i += 1;
+        }
+        return 0;
+    }
+    public static int oeTagFb(emon.Port.Cells requests, emon.Port.Cells scratch, int routed, int slotA, int slotB) {
+        // `ocr-engine=apple-vision` with its Tesseract fallback (P13.21b, D907; `emon.ofall`): the page's OCR requests are Apple Vision's (engine 3) except the page's own fallback first pass
+        // (page-local ids `slot-a`, `slot-b`: the first pass the rules ask and the one asked beside a doubtful reading), which stay as they were built, Tesseract's, and every request of a page the fallback took (`routed` 1).
+        emon.Port.cellsDrop(scratch, 0);
+        int at = 0;
+        int i = 0;
+        int id = 0;
+        int k = 0;
+        while (at < emon.Port.cellsLen(requests)) {
+            int n = emon.Port.cellsAt(requests, at);
+            int out = emon.Port.cellsLen(scratch);
+            i = 0;
+            while (i < n) {
+                emon.Port.cellsPush(scratch, emon.Port.cellsAt(requests, at + i));
+                i += 1;
+            }
+            if (emon.Port.cellsAt(requests, at + 1) == Plan.pkOcr()) {
+                id = emon.Port.cellsAt(requests, at + 2);
+                k = id - ((id / 256) * 256);
+                if ((routed == 0) && ((k != slotA) && (k != slotB))) {
+                    oeSelect(scratch, out, 3);
                 }
             }
             at += n;

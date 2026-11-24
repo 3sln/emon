@@ -235,7 +235,7 @@ func TestPrepareSaysDownloadableWhenTheTurnkeyMayFetch(emonT *testing.T) {
 	var engs *port.Cells = port.NewCells()
 	var installed *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
-	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
+	port.AssertEq(emonT, adResolve(engines.PclsLinux(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverDownloadable(), "English is missing and auto may fetch it")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverBlocked(), "never may not")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchCache(), 0), adapters.PverBlocked(), "cache may not")
@@ -248,14 +248,44 @@ func TestPrepareSaysReadyWhenNothingIsMissing(emonT *testing.T) {
 	var installed *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
 	adCells1(installed, packdata.PkidTessFastEng())
-	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
+	port.AssertEq(emonT, adResolve(engines.PclsLinux(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverReady(), "ready, whatever the mode")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 1), adapters.PverReady(), "and offline")
-	port.AssertEq(emonT, adResolve(engines.PclsMacos(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "with OSD wanted")
+	port.AssertEq(emonT, adResolve(engines.PclsLinux(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "with OSD wanted")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverDownloadable(), "OSD is the missing pack")
 	port.CellsPush(installed, packdata.PkidTessOsd())
-	port.AssertEq(emonT, adResolve(engines.PclsMacos(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "with OSD installed")
+	port.AssertEq(emonT, adResolve(engines.PclsLinux(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "with OSD installed")
 	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverReady(), "ready")
+}
+
+func TestPrepareSaysReadyForAppleVisionWhateverIsInstalled(emonT *testing.T) {
+	// P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no
+	// locale for makes the fallback the reader, and its pack is then needed as ever.
+	var langs *port.Cells = port.NewCells()
+	var engs *port.Cells = port.NewCells()
+	var installed *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	adCells1(engs, engines.EngAppleVision())
+	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves with nothing installed")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverReady(), "ready: the conditional pack is fetched on demand (D896), not ahead of time")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 1), adapters.PverReady(), "and offline")
+	port.CellsPush(langs, 1751739904)
+	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "Hindi")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 0), adapters.PverBlocked(), "and may not come")
+}
+
+func TestPrepareSaysReadyForTheAppleDefaultWithNothingInstalled(emonT *testing.T) {
+	// P13.21b, D907 (maintainer 2026-11-23): Vision is the Apple default, built in; Tesseract's packs are a conditional, on-demand download for fallback pages only.
+	var langs *port.Cells = port.NewCells()
+	var engs *port.Cells = port.NewCells()
+	var installed *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	port.AssertEq(emonT, adResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "macOS resolves with no engine asked")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchAuto(), 0), adapters.PverReady(), "ready: nothing is missing before the conversion")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 1), adapters.PverReady(), "and offline")
+	port.AssertEq(emonT, adResolve(engines.PclsIos(), 0, langs, engs, installed, out), engines.PkerrOk(), "iOS resolves")
+	port.AssertEq(emonT, adapters.AdVerdict(out, engines.PfetchNever(), 1), adapters.PverReady(), "ready too")
 }
 
 func TestPrepareSaysPartialWhenALanguageHasNoPackForTheEngine(emonT *testing.T) {

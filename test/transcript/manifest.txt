@@ -93,6 +93,8 @@ ocr/scan-px/table-simple-ruled/transcript.edn
 ocr/scan/columns-two/transcript.edn
 ocr/scan/furn-title-pagenum/transcript.edn
 ocr/scan/h-plain/transcript.edn
+ocr/vision-fallback/script-arabic/transcript.edn
+ocr/vision-fallback/script-devanagari/transcript.edn
 ocr/vision/columns-two/transcript.edn
 ocr/vision/furn-title-pagenum/transcript.edn
 ocr/vision/h-plain/transcript.edn

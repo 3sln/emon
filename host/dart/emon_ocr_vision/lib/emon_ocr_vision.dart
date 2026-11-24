@@ -1,6 +1,6 @@
 /// Apple Vision for emon.
 ///
-/// iOS 13 and macOS 10.15 or newer. It reads with the OS's own recogniser and needs no model pack. Its confidences are quantized, it has no orientation detection and no blocks: select it explicitly with `ocrEngine: OcrEngine.appleVision`.
+/// iOS 13 and macOS 10.15 or newer. It reads with the OS's own recogniser and needs no model pack. Its confidences are quantized, it has no orientation detection and no blocks: it is the turnkey default on Apple platforms (Tesseract's pack is a conditional, on-demand download, used only for fallback pages) and can be selected explicitly with `ocrEngine: OcrEngine.appleVision`.
 ///
 /// ```dart
 /// final emon = await Emon.open(nativeAdapters: [visionAdapter()]);

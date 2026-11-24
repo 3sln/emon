@@ -107,13 +107,13 @@ jobs:
           path: ~/.m2
           key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
           restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve bb deps (retried, as Maven Central is transient)
+      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
         shell: bash
         working-directory: emon
         run: |
           for i in 1 2 3 4; do
             bb -e nil && exit 0
-            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
             sleep $((i * 10))
           done
           exit 1
@@ -269,13 +269,13 @@ jobs:
           path: ~/.m2
           key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
           restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve bb deps (retried, as Maven Central is transient)
+      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
         shell: bash
         working-directory: emon
         run: |
           for i in 1 2 3 4; do
             bb -e nil && exit 0
-            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
             sleep $((i * 10))
           done
           exit 1
@@ -358,13 +358,13 @@ jobs:
           path: ~/.m2
           key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
           restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve bb deps (retried, as Maven Central is transient)
+      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
         shell: bash
         working-directory: emon
         run: |
           for i in 1 2 3 4; do
             bb -e nil && exit 0
-            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
             sleep $((i * 10))
           done
           exit 1
@@ -416,13 +416,13 @@ jobs:
           path: ~/.m2
           key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
           restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve bb deps (retried, as Maven Central is transient)
+      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
         shell: bash
         working-directory: emon
         run: |
           for i in 1 2 3 4; do
             bb -e nil && exit 0
-            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
             sleep $((i * 10))
           done
           exit 1

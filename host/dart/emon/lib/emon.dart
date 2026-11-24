@@ -13,7 +13,7 @@
 /// | platform | default engine | selectable explicitly |
 /// |---|---|---|
 /// | Linux, Android | Tesseract (`emon_flutter` makes ML Kit the Android default) | PP-OCR (where its library ships) |
-/// | macOS, iOS | Tesseract | Apple Vision (`OcrEngine.appleVision`; the default after P13.21b) |
+/// | macOS, iOS | Tesseract | Apple Vision (`OcrEngine.appleVision`, with Tesseract as the fallback of the pages kin sends to it, P13.21b D907; the default once the maintainer accepts it) |
 /// | Windows | Windows.Media.Ocr (no download: the OS reads) | Tesseract, PP-OCR |
 ///
 /// Packs (the language models an engine reads with) are fetched when a conversion first needs them, over the platform's own HTTPS stack. App code decides: [Emon.engines], [Emon.prepare],
@@ -38,9 +38,13 @@ List<NativeAdapter> platformAdapters() => [
       if (ppocrAvailable) ppocrAdapter(),
     ];
 
-/// The OCR engine a turnkey uses on this platform when the app chooses none: kin's turnkey table (Windows.Media.Ocr on Windows, K5 D905; Tesseract elsewhere: Apple Vision waits for P13.21b, and
+/// The OCR engine a turnkey uses on this platform when the app chooses none: kin's turnkey table (Apple Vision on macOS and iOS with Tesseract as its page fallback, maintainer 2026-11-23, P13.21b D907; Windows.Media.Ocr on Windows, K5 D905; Tesseract elsewhere, and
 /// Android's default, ML Kit, is a Flutter plugin, so the pure-Dart `emon` keeps Tesseract there and `emon_flutter` chooses ML Kit).
-OcrEngine get defaultPlatformEngine => Platform.isWindows ? OcrEngine.windowsMediaOcr : OcrEngine.tesseract;
+OcrEngine get defaultPlatformEngine => Platform.isWindows
+    ? OcrEngine.windowsMediaOcr
+    : (Platform.isMacOS || Platform.isIOS)
+        ? OcrEngine.appleVision
+        : OcrEngine.tesseract;
 
 /// Open emon with the engines of this platform.
 ///

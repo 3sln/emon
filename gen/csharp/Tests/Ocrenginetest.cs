@@ -276,9 +276,9 @@ public static class Ocrenginetest {
     }
     [Xunit.Fact]
     public static void TestPlatformEnginesHaveTheirOwnRequestedConfiguration() {
-        emon.Testport.AssertEq(Ocrengine.OeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+        emon.Testport.AssertEq(Ocrengine.OeConfigLen(3), 91, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect");
         emon.Testport.AssertEq(Ocrengine.OeConfigValue(3, 0), 97, "it begins with the engine's name");
-        emon.Testport.AssertEq(Ocrengine.OeConfigValue(3, 89), 110, "and ends with the language policy (latin)");
+        emon.Testport.AssertEq(Ocrengine.OeConfigValue(3, 90), 116, "and ends with the language policy (detect: Vision detects the language, then Latin pages are read in English first)");
         emon.Testport.AssertEq(Ocrengine.OeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
         emon.Testport.AssertEq(Ocrengine.OeConfigValue(5, 0), 119, "it begins with the engine's name");
         emon.Testport.AssertEq(Ocrengine.OeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
@@ -299,7 +299,7 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 11), -3100, "identity marker");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 12), 2, "requested identity version");
         emon.Testport.AssertEq(emon.Port.CellsAt(r, 13), 3, "Apple Vision's engine");
-        emon.Testport.AssertEq(emon.Port.CellsAt(r, 14), 90, "its configuration's length");
+        emon.Testport.AssertEq(emon.Port.CellsAt(r, 14), 91, "its configuration's length");
         emon.Testport.AssertEq(Ocrport.OpRequestEngine(r), 3, "the request says which engine reads it");
         emon.Testport.AssertEq(Ocrport.OpLangCount(r), 1, "the language is still the one language");
         emon.Testport.AssertEq(Ocrport.OpLangAt(r, 0), 1701734144, "English");
@@ -365,6 +365,6 @@ public static class Ocrenginetest {
         emon.Testport.AssertEq(Ocrengine.OeRegister(table, runs, lines, words, 4, scratch), 0, "registered");
         emon.Testport.AssertEq(emon.Port.CellsLen(table), 7, "one engine, one row");
         emon.Testport.AssertEq(Ocrengine.OeEvidence(@out, table, scratch), 0, "written");
-        emon.Testport.AssertText(@out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+        emon.Testport.AssertText(@out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect\",\"observed\":[0,0]}]", "the evidence's engine table");
     }
 }

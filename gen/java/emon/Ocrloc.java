@@ -91,4 +91,15 @@ public final class Ocrloc {
         }
         return 0;
     }
+    public static int olHas(int engine, int lang) {
+        // 1 when the engine has a locale for the language (or the script) cell, else 0: `ol-locales` without the tags, for a caller that holds no scratch to spare.
+        int i = 0;
+        while (i < 40) {
+            if ((OL_ROWS[i * 4 + 0] == engine) && (OL_ROWS[i * 4 + 1] == lang)) {
+                return 1;
+            }
+            i += 1;
+        }
+        return 0;
+    }
 }

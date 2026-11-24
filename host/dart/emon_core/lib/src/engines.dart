@@ -133,10 +133,13 @@ enum PrepareVerdict {
 
 /// A pack a conversion needs.
 class NeededPack {
-  const NeededPack({required this.id, required this.installed, required this.engine, required this.kind, required this.bytes, required this.licence, required this.rev});
+  const NeededPack({required this.id, required this.installed, this.conditional = false, required this.engine, required this.kind, required this.bytes, required this.licence, required this.rev});
 
   final String id;
   final bool installed;
+
+  /// Needed only if a page of the conversion goes to the fallback engine (Tesseract behind Apple Vision, P13.21b): not missing, not fetched ahead of time, fetched when that page asks (D896).
+  final bool conditional;
   final String engine;
   final String kind;
   final int bytes;
@@ -158,6 +161,8 @@ class PrepareResult {
     required this.unsupported,
     required this.missing,
     required this.missingBytes,
+    this.conditional = 0,
+    this.conditionalBytes = 0,
   });
 
   final PrepareVerdict verdict;
@@ -172,8 +177,15 @@ class PrepareResult {
   final int missing;
   final int missingBytes;
 
-  /// The ids of the packs not installed.
-  List<String> get missingPackIds => [for (final p in packs) if (!p.installed) p.id];
+  /// How many packs, and how many bytes, are conditional (not installed, needed only if a page goes to the fallback engine).
+  final int conditional;
+  final int conditionalBytes;
+
+  /// The ids of the packs not installed that the conversion needs.
+  List<String> get missingPackIds => [for (final p in packs) if (!p.installed && !p.conditional) p.id];
+
+  /// The ids of the conditional packs not installed: [Packs.ensure] them to have the fallback ready, or leave them for the page that needs one.
+  List<String> get conditionalPackIds => [for (final p in packs) if (!p.installed && p.conditional) p.id];
 
   factory PrepareResult.fromJson(Map<String, Object?> j) => PrepareResult(
         verdict: PrepareVerdict.values.firstWhere((v) => v.name == j['verdict'], orElse: () => PrepareVerdict.blocked),
@@ -186,6 +198,7 @@ class PrepareResult {
             NeededPack(
               id: n['id'] as String,
               installed: n['state'] == 'installed',
+              conditional: n['state'] == 'conditional',
               engine: n['engine'] as String? ?? '',
               kind: n['kind'] as String? ?? '',
               bytes: (n['bytes'] as num?)?.toInt() ?? 0,
@@ -198,6 +211,8 @@ class PrepareResult {
         ],
         missing: (j['missing'] as num?)?.toInt() ?? 0,
         missingBytes: (j['missing_bytes'] as num?)?.toInt() ?? 0,
+        conditional: (j['conditional'] as num?)?.toInt() ?? 0,
+        conditionalBytes: (j['conditional_bytes'] as num?)?.toInt() ?? 0,
       );
 
   @override

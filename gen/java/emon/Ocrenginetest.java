@@ -258,9 +258,9 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ofuse.ofRule(1, 0, 0, 1, 1, 3, 1, -1, 100), 0, "votes cannot authorize uncalibrated replacement");
     }
     public static void testPlatformEnginesHaveTheirOwnRequestedConfiguration() {
-        emon.Testport.assertEq(Ocrengine.oeConfigLen(3), 90, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin");
+        emon.Testport.assertEq(Ocrengine.oeConfigLen(3), 91, "Apple Vision: apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect");
         emon.Testport.assertEq(Ocrengine.oeConfigValue(3, 0), 97, "it begins with the engine's name");
-        emon.Testport.assertEq(Ocrengine.oeConfigValue(3, 89), 110, "and ends with the language policy (latin)");
+        emon.Testport.assertEq(Ocrengine.oeConfigValue(3, 90), 116, "and ends with the language policy (detect: Vision detects the language, then Latin pages are read in English first)");
         emon.Testport.assertEq(Ocrengine.oeConfigLen(5), 60, "Windows.Media.Ocr: windows-media-ocr;Windows.Media.Ocr.OcrEngine;lang=installed");
         emon.Testport.assertEq(Ocrengine.oeConfigValue(5, 0), 119, "it begins with the engine's name");
         emon.Testport.assertEq(Ocrengine.oeConfigLen(2), 74, "PP-OCR's is its frozen policy hash");
@@ -280,7 +280,7 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(emon.Port.cellsAt(r, 11), -3100, "identity marker");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 12), 2, "requested identity version");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 13), 3, "Apple Vision's engine");
-        emon.Testport.assertEq(emon.Port.cellsAt(r, 14), 90, "its configuration's length");
+        emon.Testport.assertEq(emon.Port.cellsAt(r, 14), 91, "its configuration's length");
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "the request says which engine reads it");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "the language is still the one language");
         emon.Testport.assertEq(Ocrport.opLangAt(r, 0), 1701734144, "English");
@@ -342,6 +342,6 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrengine.oeRegister(table, runs, lines, words, 4, scratch), 0, "registered");
         emon.Testport.assertEq(emon.Port.cellsLen(table), 7, "one engine, one row");
         emon.Testport.assertEq(Ocrengine.oeEvidence(out, table, scratch), 0, "written");
-        emon.Testport.assertText(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-latin\",\"observed\":[0,0]}]", "the evidence's engine table");
+        emon.Testport.assertText(out, ",\"ocr-engines\":[{\"engine\":\"apple-vision\",\"config\":\"apple-vision;VNRecognizeTextRequest;rev=latest;level=accurate;lc=1;lang=request-else-detect\",\"observed\":[0,0]}]", "the evidence's engine table");
     }
 }

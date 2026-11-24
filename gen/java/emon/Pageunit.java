@@ -476,12 +476,33 @@ public final class Pageunit {
         int asked = 0;
         int ppasked = 0;
         int nsel = 0;
+        int fbn = 0;
+        int fbq = -1;
+        int fbh = 0;
         pxw = Plan.anArg(ans, ad, 0);
         pxh = Plan.anArg(ans, ad, 1);
+        // P13.21b (D907, `emon.ofall`): a page Apple Vision's policy sent to Tesseract (its fallback pass was asked and read) has Tesseract's reading as its first pass, from here on in every way
+        if ((fuse & 16) == 16) {
+            fbq = Ofall.fbTakenId(ans, i);
+            if (fbq > 0) {
+                oid = fbq;
+                roid = oid;
+                fbn = 1;
+            }
+        }
         ao = Plan.anFind(ans, oid);
         if (ao < 0) {
             Scan.scRequest(rq, oid, did, (dpi100 + 50) / 100, loc);
             return Plan.usRequests();
+        }
+        if (((fuse & 16) == 16) && (fbn == 0)) {
+            // Vision's reading of the page, kept or sent to Tesseract (UNREAD and SCRIPT rules)
+            if (puDry(fuse) == 1) {
+                return Plan.usDone();
+            }
+            if (Ofall.fbRoute(i, ans, ao, did, (dpi100 + 50) / 100, rq, loc, s6) == -1) {
+                return Plan.usRequests();
+            }
         }
         if (Plan.anOk(ans, ao) != 1) {
             return Plan.usDone();
@@ -548,6 +569,23 @@ public final class Pageunit {
         }
         nw = Evidence.owCount(owords) - w0;
         Pageink.pnFeatures(i + 1, bms, Pageink.pnKText(), emon.Port.bmsGet(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
+        // SEAL and FORM rules (`emon.ofall`): a seal or a stamp in the page's pixels (ruling 8, D907); a table of numbers that is not a receipt. Tesseract reads the page.
+        if (((fuse & 16) == 16) && (fbn == 0)) {
+            fbh = 0;
+            if (Ofall.fbTessReads(ans, ao, s2) == 1) {
+                if ((seals == 1) && (emon.Port.cellsAt(ws, 12906) == 0)) {
+                    Sealpx.sxFind(i + 1, views, vdec, prims, inks, pw, ph, s1);
+                    fbh = Ofall.fbSealHits(s1);
+                }
+                if (fbh == 0) {
+                    fbh = Ofall.fbForm(olines, owords, etext, l0, nl, emon.Port.cellsAt(ws, 12906), s1);
+                }
+            }
+            if (Ofall.fbAskIf(i, ans, fbh, did, (dpi100 + 50) / 100, rq, loc) == -1) {
+                Pageink.pnUndo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
+                return Plan.usRequests();
+            }
+        }
         if (((fuse & 8) == 8) && (Plan.anFind(ans, Plan.puId(i, Ocrengine.oeRequestSlot(2))) < 0)) {
             if (Ofuse.ofPpComplete(owords, etext, w0, nw, comps, i + 1) == 0) {
                 int requestAt = emon.Port.cellsLen(rq);

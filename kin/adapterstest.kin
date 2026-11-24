@@ -8,7 +8,7 @@
             [emon.oil :refer [oen-tesseract oen-ppocr oen-apple-vision]]
             [emon.packdata :refer [pkid-tess-fast-eng pkid-tess-osd pkid-pp5-det-mobile]]
             [emon.engines :refer [eng-tesseract eng-ppocr eng-apple-vision eimpl-builtin eimpl-native eimpl-plugin
-                                  ekind-ocr pcls-macos pcls-android pfetch-never pfetch-cache pfetch-auto
+                                  ekind-ocr pcls-linux pcls-macos pcls-ios pcls-android pfetch-never pfetch-cache pfetch-auto
                                   pkerr-ok pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-caps pk-engine-needs pk-resolve pk-rows pkf-osd]]
             [emon.adapters :refer [ad-abi adf-async adf-remote adf-threadsafe adf-known ads-ok ads-unsupported ads-failed
                                    adr-ok adr-abi adr-engine adr-caps adr-native adr-needs adr-flags adr-emit-name
@@ -223,7 +223,7 @@
 
 (deftest test-prepare-says-downloadable-when-the-turnkey-may-fetch
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
-    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (ad-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves")
     (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "English is missing and auto may fetch it")
     (assert-eq (ad-verdict out (pfetch-never) 0) (pver-blocked) "never may not")
     (assert-eq (ad-verdict out (pfetch-cache) 0) (pver-blocked) "cache may not")
@@ -232,14 +232,36 @@
 (deftest test-prepare-says-ready-when-nothing-is-missing
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
     (ad-cells1 installed (pkid-tess-fast-eng))
-    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (ad-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves")
     (assert-eq (ad-verdict out (pfetch-never) 0) (pver-ready) "ready, whatever the mode")
     (assert-eq (ad-verdict out (pfetch-auto) 1) (pver-ready) "and offline")
-    (assert-eq (ad-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD wanted")
+    (assert-eq (ad-resolve (pcls-linux) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD wanted")
     (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "OSD is the missing pack")
     (cells-push installed (pkid-tess-osd))
-    (assert-eq (ad-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD installed")
+    (assert-eq (ad-resolve (pcls-linux) (pkf-osd) langs engs installed out) (pkerr-ok) "with OSD installed")
     (assert-eq (ad-verdict out (pfetch-never) 0) (pver-ready) "ready")))
+
+(deftest test-prepare-says-ready-for-apple-vision-whatever-is-installed
+  (comment "P13.21b, D907: Apple Vision, selected, needs no pack, and Tesseract's (its fallback's) are conditional: nothing is missing before the conversion, so it is ready, offline too; a language Vision has no")
+  (comment "locale for makes the fallback the reader, and its pack is then needed as ever.")
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (ad-cells1 engs (eng-apple-vision))
+    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves with nothing installed")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-ready) "ready: the conditional pack is fetched on demand (D896), not ahead of time")
+    (assert-eq (ad-verdict out (pfetch-never) 1) (pver-ready) "and offline")
+    (cells-push langs 1751739904)
+    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "Hindi")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-downloadable) "Vision cannot read it: Tesseract's Hindi model is needed")
+    (assert-eq (ad-verdict out (pfetch-never) 0) (pver-blocked) "and may not come")))
+
+(deftest test-prepare-says-ready-for-the-apple-default-with-nothing-installed
+  (comment "P13.21b, D907 (maintainer 2026-11-23): Vision is the Apple default, built in; Tesseract's packs are a conditional, on-demand download for fallback pages only.")
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (ad-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "macOS resolves with no engine asked")
+    (assert-eq (ad-verdict out (pfetch-auto) 0) (pver-ready) "ready: nothing is missing before the conversion")
+    (assert-eq (ad-verdict out (pfetch-never) 1) (pver-ready) "and offline")
+    (assert-eq (ad-resolve (pcls-ios) 0 langs engs installed out) (pkerr-ok) "iOS resolves")
+    (assert-eq (ad-verdict out (pfetch-never) 1) (pver-ready) "ready too")))
 
 (deftest test-prepare-says-partial-when-a-language-has-no-pack-for-the-engine
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]

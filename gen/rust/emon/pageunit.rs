@@ -7,6 +7,7 @@ use crate::emon::oaline::*;
 use crate::emon::oapct::*;
 use crate::emon::oapp::*;
 use crate::emon::ocrengine::*;
+use crate::emon::ofall::*;
 use crate::emon::ofuse::*;
 use crate::emon::pageink::*;
 use crate::emon::pdfdoc::*;
@@ -469,7 +470,7 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     // slim) the page is what it always was: the first pass's lines. `maskv` is what the page's `mask` cell becomes (1 an image page, 2 a PDF's scanned page);
     // `seals` 1 looks for seals and signatures in the pixels (PDF pages and image frames); 0 skips those stages.
     // D564: a raster the first pass shows to be too small is read again enlarged (`pu-scan-pixels`) and that reading, when it reads as much, is the first pass.
-    let oid: i32 = pu_id(i, pi_ocr());
+    let mut oid: i32 = pu_id(i, pi_ocr());
     let uid: i32 = pu_id(i, ri_upscale());
     let uvid: i32 = pu_view_id(i, rv_upscaled());
     let mut rid: i32 = did;
@@ -493,12 +494,33 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     let mut asked: i32 = 0;
     let mut ppasked: i32 = 0;
     let mut nsel: i32 = 0;
+    let mut fbn: i32 = 0;
+    let mut fbq: i32 = -1;
+    let mut fbh: i32 = 0;
     pxw = an_arg(ans, ad, 0);
     pxh = an_arg(ans, ad, 1);
+    // P13.21b (D907, `emon.ofall`): a page Apple Vision's policy sent to Tesseract (its fallback pass was asked and read) has Tesseract's reading as its first pass, from here on in every way
+    if (fuse & 16) == 16 {
+        fbq = fb_taken_id(ans, i);
+        if fbq > 0 {
+            oid = fbq;
+            roid = oid;
+            fbn = 1;
+        }
+    }
     ao = an_find(ans, oid);
     if ao < 0 {
         sc_request(rq, oid, did, (dpi100 + 50) / 100, loc);
         return us_requests();
+    }
+    if ((fuse & 16) == 16) && (fbn == 0) {
+        // Vision's reading of the page, kept or sent to Tesseract (UNREAD and SCRIPT rules)
+        if pu_dry(fuse) == 1 {
+            return us_done();
+        }
+        if fb_route(i, ans, ao, did, (dpi100 + 50) / 100, rq, loc, s6) == -1 {
+            return us_requests();
+        }
     }
     if an_ok(ans, ao) != 1 {
         return us_done();
@@ -565,6 +587,23 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     nw = ow_count(owords) - w0;
     pn_features(i + 1, bms, pn_k_text(), crate::port::bms_get(bms, rid), roid, w0, nw, ws, comps, owords, feats, scr);
+    // SEAL and FORM rules (`emon.ofall`): a seal or a stamp in the page's pixels (ruling 8, D907); a table of numbers that is not a receipt. Tesseract reads the page.
+    if ((fuse & 16) == 16) && (fbn == 0) {
+        fbh = 0;
+        if fb_tess_reads(ans, ao, s2) == 1 {
+            if (seals == 1) && (crate::port::cells_at(ws, 12906) == 0) {
+                sx_find(i + 1, views, vdec, prims, inks, pw, ph, s1);
+                fbh = fb_seal_hits(s1);
+            }
+            if fbh == 0 {
+                fbh = fb_form(olines, owords, etext, l0, nl, crate::port::cells_at(ws, 12906), s1);
+            }
+        }
+        if fb_ask_if(i, ans, fbh, did, (dpi100 + 50) / 100, rq, loc) == -1 {
+            pn_undo(snap, epages, views, etext, feats, oruns, oblocks, olines, owords, osyms, oalts, inks, comps, rules, prims, tpts, tlines, refs, images, words, lines);
+            return us_requests();
+        }
+    }
     if ((fuse & 8) == 8) && (an_find(ans, pu_id(i, oe_request_slot(2))) < 0) {
         if of_pp_complete(owords, etext, w0, nw, comps, i + 1) == 0 {
             let request_at: i32 = crate::port::cells_len(rq);

@@ -96,3 +96,15 @@ func OlLocales(engine int32, lang int32, out *port.Cells) int32 {
 	}
 	return 0
 }
+
+func OlHas(engine int32, lang int32) int32 {
+	// 1 when the engine has a locale for the language (or the script) cell, else 0: `ol-locales` without the tags, for a caller that holds no scratch to spare.
+	var i int32 = 0
+	for i < 40 {
+		if (OlRows[i*4+0] == engine) && (OlRows[i*4+1] == lang) {
+			return 1
+		}
+		i += 1
+	}
+	return 0
+}

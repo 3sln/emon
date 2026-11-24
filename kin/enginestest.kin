@@ -8,18 +8,18 @@
             [emon.oil :refer [oil-tess-begin oil-get oh-caps oen-emit-name]]
             [emon.ocrengine :refer [oe-role]]
             [emon.packdata :refer [pack-file-count pack-lang-count pack-lang-at pkid-find pkid-emit-name plic-emit-name
-                                   pkid-tess-fast-eng pkid-tess-osd pkid-tess-fast-spa pkid-tess-fast-chs pkid-pp5-det-mobile pkid-pp5-cls-mobile pkid-pp5-rec-en-mobile]]
+                                   pkid-tess-fast-eng pkid-tess-osd pkid-tess-fast-spa pkid-tess-fast-fra pkid-tess-fast-hin pkid-tess-fast-chs pkid-pp5-det-mobile pkid-pp5-cls-mobile pkid-pp5-rec-en-mobile]]
             [emon.engines :refer [eng-tesseract eng-ppocr eng-ppocr-web eng-apple-vision eng-windows-media-ocr eng-mlkit-text eng-pdfium eng-find eng-emit-name
                                   ekind-ocr ekind-render eimpl-builtin eimpl-native eimpl-plugin
                                   pcls-macos pcls-ios pcls-linux pcls-windows pcls-android pcls-web
-                                  erole-incumbent erole-challenger erole-reader
+                                  erole-incumbent erole-challenger erole-reader erole-fallback
                                   pkind-recognizer pkind-osd pkind-detector pkind-classifier
-                                  pfetch-never pfetch-auto pstate-installed pstate-missing pstate-unsupported
+                                  pfetch-never pfetch-auto pstate-installed pstate-missing pstate-unsupported pstate-conditional
                                   pkerr-ok pkerr-unknown-engine pkerr-unknown-pack pkerr-unknown-class pkerr-not-ocr pkerr-engine-class pkerr-bad-language
                                   pkf-osd
                                   pk-engine-known pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-impl pk-engine-caps pk-engine-classes pk-engine-calibrated
                                   pk-engine-needs pk-class-known pk-engine-on pk-role-mask pk-role-default
-                                  pk-default-engine pk-platform-engine pk-pp-engine pk-default-fetch pk-default-render pk-bundled-count pk-bundled
+                                  pk-default-engine pk-platform-engine pk-pp-engine pk-fallback-engine pk-default-fetch pk-default-render pk-bundled-count pk-bundled
                                   pk-pack-count pk-pack-known pk-pack-rev pk-pack-engine pk-pack-kind pk-pack-licence pk-pack-file-count pk-pack-bytes pk-pack-file-bytes
                                   pk-pack-file-sha pk-pack-file-name pk-pack-covers pk-pack-for pk-lang-eng
                                   pk-parse-engines pk-parse-packs pk-explain pk-resolve pk-rows pk-missing pk-record-engines]]
@@ -171,7 +171,9 @@
   (assert-eq (oe-role (pk-engine-oen (eng-apple-vision))) 0 "the hybrid table gives a platform engine no insertion role")
   (assert-eq (oe-role (pk-engine-oen (eng-windows-media-ocr))) 0 "nor Windows OCR")
   (assert-eq (oe-role (pk-engine-oen (eng-mlkit-text))) 0 "nor ML Kit")
-  (assert-eq (pk-role-mask (eng-tesseract) (pcls-ios)) 5 "Tesseract is the incumbent or the sole reader")
+  (assert-eq (pk-role-mask (eng-tesseract) (pcls-ios)) 21 "Tesseract is the incumbent, the sole reader, or on Apple platforms the fallback of Vision's pages (P13.21b)")
+  (assert-eq (pk-role-mask (eng-tesseract) (pcls-linux)) 5 "elsewhere it has no fallback to be: incumbent or the sole reader")
+  (assert-eq (pk-role-default (eng-tesseract) (pcls-macos)) (erole-incumbent) "and selected on its own it is still the incumbent")
   (assert-eq (pk-role-mask (eng-apple-vision) (pcls-macos)) 12 "Vision reads or votes: it has a frozen word map (K8), but the maintainer has not accepted it as an incumbent, and Tesseract holds seal and stamp pages (ruling 8)")
   (assert-eq (pk-engine-calibrated (eng-apple-vision)) 1 "a frozen reliability map keyed by its identity (D883 ruling 3, K8)")
   (assert-eq (pk-engine-calibrated (eng-windows-media-ocr)) 0 "Windows.Media.Ocr has no confidence to calibrate, for good")
@@ -180,15 +182,14 @@
 
 ;; ------------------------------------------------------------------ the turnkey defaults
 
-(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp]
+(defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp ^I32 fallback]
   (let [^I32 eng (pk-default-engine pclass)]
-    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for P13.21b (D901)")
+    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
     (if (== eng (eng-tesseract))
       (do (assert-eq (pk-engine-calibrated eng) 1 "Tesseract is calibrated")
           (assert-eq (pk-role-default eng pclass) (erole-incumbent) "and the incumbent"))
-      (do (assert-eq (pk-engine-calibrated eng) 0 "an OS reader whose confidences cannot be calibrated (Windows.Media.Ocr has none, ML Kit's are not fitted) is flagged uncalibrated (D895)")
-          (assert-eq (pk-role-default eng pclass) (erole-reader) "and reads alone: a reader, never an incumbent or a challenger")))
+      (assert-eq (pk-role-default eng pclass) (erole-reader) "an OS reader reads alone (or, on Apple platforms, with its fallback): a reader, never an incumbent or a challenger"))
     (assert-eq (pk-platform-engine pclass) platform "the class's own engine")
     (if (!= platform 0)
       (do (assert-eq (pk-engine-on platform pclass) 1 "the platform engine runs on the class")
@@ -196,6 +197,10 @@
           (if (!= eng (eng-tesseract))
             (assert-eq platform eng "where the default is not Tesseract it is the class's own engine")
             (assert-that (!= platform eng) "and elsewhere never the automatic choice"))))
+    (assert-eq (pk-fallback-engine pclass) fallback "the engine that reads the pages Apple Vision hands over when it is selected: Tesseract on Apple platforms, none elsewhere")
+    (if (!= fallback 0)
+      (do (assert-eq (pk-engine-on fallback pclass) 1 "it runs on the class")
+          (assert-that (!= (bit-and (pk-role-mask fallback pclass) (erole-fallback)) 0) "and the role table lets it take the fallback role")))
     (assert-eq (pk-pp-engine pclass) pp "the PP-OCR runtime of the class")
     (assert-eq (pk-engine-on pp pclass) 1 "runs on it")
     (assert-eq (pk-default-fetch pclass) (pfetch-auto) "a turnkey fetches on demand (D885, D896)")
@@ -203,12 +208,12 @@
     (return 0)))
 
 (deftest test-the-turnkey-default-of-every-platform-class
-  (en-turnkey-class (test-t) (pcls-macos) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-ios) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-linux) (eng-tesseract) 0 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-windows-media-ocr) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-mlkit-text) 0 (eng-ppocr))
-  (en-turnkey-class (test-t) (pcls-web) (eng-tesseract) 0 0 (eng-ppocr-web))
+  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
+  (en-turnkey-class (test-t) (pcls-linux) (eng-tesseract) 0 0 (eng-ppocr) 0)
+  (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-windows-media-ocr) 0 (eng-ppocr) 0)
+  (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-mlkit-text) 0 (eng-ppocr) 0)
+  (en-turnkey-class (test-t) (pcls-web) (eng-tesseract) 0 0 (eng-ppocr-web) 0)
   (assert-eq (pk-default-engine 0) 0 "an unknown class has no default")
   (assert-eq (pk-default-engine 7) 0 "nor class 7")
   (assert-eq (pk-default-fetch 7) 0 "and no fetch policy")
@@ -290,17 +295,49 @@
 
 (deftest test-the-default-resolution-needs-english-and-says-whether-it-is-there
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves")
     (assert-eq (pk-rows out) 1 "one pack: English, for the turnkey default engine")
     (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is missing")
     (assert-eq (pk-missing out) 1 "one missing")
     (en-cells1 installed (pkid-tess-fast-eng))
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves with English installed")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves with English installed")
     (en-expect-row (test-t) out 0 (pstate-installed) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is installed")
     (assert-eq (pk-missing out) 0 "nothing is missing")
     (cells-push installed (pkid-tess-osd))
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
     (assert-eq (pk-rows out) 1 "still one row")))
+
+(deftest test-apple-vision-needs-tesseracts-packs-only-if-a-page-goes-to-it
+  (comment "P13.21b, D907: Apple Vision, selected, needs no pack; Tesseract is its fallback, so its packs are `conditional`: a pack no conversion has to fetch ahead of time,")
+  (comment "unless the languages asked for are ones Vision has no locale for, where the fallback is the reader and its pack is needed as ever.")
+  (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (en-cells1 engs (eng-apple-vision))
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 1 "one pack: Tesseract's English, for the fallback")
+    (en-expect-row (test-t) out 0 (pstate-conditional) (eng-tesseract) (pkid-tess-fast-eng) 0 "conditional: not fetched until a page needs it")
+    (assert-eq (pk-missing out) 0 "a conditional pack is not missing")
+    (en-cells1 installed (pkid-tess-fast-eng))
+    (assert-eq (en-resolve (pcls-ios) 0 langs engs installed out) (pkerr-ok) "iOS the same, with English installed")
+    (en-expect-row (test-t) out 0 (pstate-installed) (eng-tesseract) (pkid-tess-fast-eng) 0 "installed is installed")
+    (cells-drop installed 0)
+    (cells-push langs 1718771968) (cells-push langs 1751739904)
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "French and Hindi")
+    (assert-eq (pk-rows out) 2 "two packs")
+    (en-expect-row (test-t) out 0 (pstate-conditional) (eng-tesseract) (pkid-tess-fast-fra) 0 "Vision reads French: Tesseract's French model is only the fallback's")
+    (en-expect-row (test-t) out 1 (pstate-missing) (eng-tesseract) (pkid-tess-fast-hin) 0 "Vision has no recogniser for Hindi: Tesseract reads it, and its model is needed")
+    (assert-eq (pk-missing out) 1 "one missing")
+    (cells-drop langs 0)
+    (cells-push langs 1650814464)
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "Bengali")
+    (assert-eq (pk-rows out) 1 "no pack")
+    (en-expect-row (test-t) out 0 (pstate-unsupported) (eng-tesseract) 0 1650814464 "neither engine reads it: unread, never blank")
+    (cells-drop langs 0)
+    (assert-eq (en-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "with orientation and script detection")
+    (assert-eq (pk-rows out) 2 "English and OSD")
+    (en-expect-row (test-t) out 1 (pstate-conditional) (eng-tesseract) (pkid-tess-osd) 0 "the OSD pack too is conditional (the script probe of `emon.ofall`)")
+    (en-cells2 engs (eng-apple-vision) (eng-tesseract))
+    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "Tesseract asked for itself beside Vision")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "is needed, not conditional")))
 
 (deftest test-an-os-reader-as-the-turnkey-default-needs-no-pack
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
@@ -382,7 +419,8 @@
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
     (en-cells1 engs (eng-apple-vision))
     (assert-eq (en-resolve (pcls-macos) (pkf-osd) langs engs installed out) (pkerr-ok) "Vision on macOS")
-    (assert-eq (pk-rows out) 0 "needs nothing: the OS has the model")
+    (assert-eq (pk-missing out) 0 "needs nothing before the conversion: the OS has the model (Tesseract's English and OSD, its fallback's, are conditional)")
+    (assert-eq (pk-rows out) 2 "and say so")
     (en-cells1 engs (eng-windows-media-ocr))
     (assert-eq (en-resolve (pcls-windows) 0 langs engs installed out) (pkerr-ok) "Windows OCR")
     (assert-eq (pk-rows out) 0 "needs nothing")
