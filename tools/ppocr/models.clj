@@ -21,7 +21,7 @@
 (def rust ".cache/emon-rs-ppocr/target/release/emon-rs")
 (def hosts [["rust" rust] ["go" ".cache/emon-go-live/emon-go"] ["java" ".cache/emon-java/emon-java"]
             ["csharp" ".cache/emon-cs/emon-cs"] ["c" ".cache/emon-c-live/emon-c"] ["pod" ".cache/emon-pod/emon-pod"] ["rust-native" ".cache/emon-rs-live/target/release/emon-rs"]])
-(def qualification (get args "--qualification" (str (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "/ppocr-qual")))
+(def qualification (get args "--qualification" "corpus/_qual/ppocr-qual"))
 (def receipt-bitmap (qualification-path/bitmap-file qualification
                      (first (json/parse-string (slurp (str qualification "/bitmaps.json")) true))))
 (def files ["test/raster/receipt-photo.png" "test/raster/h-plain-72dpi.png" "test/raster/h-plain-rot180.png" "test/raster/receipt-empty.png" receipt-bitmap])

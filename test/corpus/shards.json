@@ -240,6 +240,9 @@
       "sroie2019",
       "derived-formats-degradations"
     ],
+    "ppocr-hosts": [
+      "ppocr-qualification"
+    ],
     "receipts": [
       "sroie2019",
       "cord-v2",
@@ -427,6 +430,21 @@
     ],
     "tools/pdfinfo.clj": [],
     "tools/perf/perf.clj": [],
+    "tools/ppocr/hosts.clj": [
+      "ppocr-qualification"
+    ],
+    "tools/ppocr/models.clj": [
+      "ppocr-qualification"
+    ],
+    "tools/ppocr/replays.clj": [
+      "ppocr-qualification"
+    ],
+    "tools/ppocr/web_qualify.clj": [
+      "ppocr-qualification"
+    ],
+    "tools/ppocr/web_receipts.clj": [
+      "ppocr-qualification"
+    ],
     "tools/receipts/receipts.py": [],
     "tools/samples.clj": [],
     "tools/seals/stamp_ghost.clj": [
@@ -1152,6 +1170,20 @@
       "digest": "a555c23ed38da372b37648f873afdef78903a6fba2b1979fe19153b416a666dc",
       "size": 19414988,
       "files": 396
+    },
+    {
+      "id": "ppocr-qualification",
+      "source": "ppocr-qualification",
+      "paths": [
+        "_qual/ppocr-qual"
+      ],
+      "fetch": [],
+      "keep": true,
+      "reason": "derived PP qualification artifact; regenerate with bb ppocr-hosts --record-qualification",
+      "regeneratable": false,
+      "digest": "7f718ffaf1cf54cf81fa2e1910a6e2b75c826b4bda2070d110274f7a3b66d0a1",
+      "size": 318429330,
+      "files": 236
     },
     {
       "id": "local-unregistered",

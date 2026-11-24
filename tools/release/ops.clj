@@ -68,8 +68,8 @@
 
 ;; ---------------------------------------------------------------------------------------------------- what a C bundle holds (K5)
 (def bundle-ppocr?
-  "Does the desktop C bundle carry the PP-OCR adapter (`lib/emon/adapters/libemon_ocr_ppocr.*`) and its runtime? Not yet: PP-OCR's ONNX Runtime pin is being replaced (`ortpin`), and until it lands the add-on
-   archives (`emon-ppocr-*`) are the only PP-OCR files. Flip this when tools/package.clj puts the adapter in the bundle: the collector then refuses a desktop bundle without it, and the Dart hook
+  "Does the desktop C bundle carry the PP-OCR adapter (`lib/emon/adapters/libemon_ocr_ppocr.*`) and its runtime? Not yet: the ONNX Runtime pin has landed (`ortpin`, D906: tools/ppocr/runtimes.edn) but tools/package.clj does not pack the adapter and its pinned runtime into the bundles, and until it does the add-on
+   archives (`emon-ppocr-*`) are the only PP-OCR files. Flip this when tools/package.clj puts the adapter and the pinned runtime in the bundle: the collector then refuses a desktop bundle without it, and the Dart hook
    of emon_ocr_ppocr (already `optional`) finds it."
   false)
 

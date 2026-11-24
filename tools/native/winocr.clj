@@ -52,7 +52,7 @@
                      {"Cargo.toml" {:text cargo} "Cargo.lock" (str root "/host/rust/Cargo.lock")})]
     (fs/create-dirs stage)
     (doseq [[rel src] files :let [dst (str stage "/" rel)]] (put-text! dst (stamp (if (map? src) (:text src) (slurp src)))))
-    (doseq [f (fs/glob (str stage "/src") "**") :when (and (fs/regular-file? f) (not (contains? files (str (fs/relativize stage f)))))] (fs/delete f))))
+    (doseq [f (fs/glob (str stage "/src") "**") :when (and (fs/regular-file? f) (not (contains? files (str/replace (str (fs/relativize stage f)) "\\" "/"))))] (fs/delete f))))
 
 (defn cargo! [& cmd-after]
   (let [go (fn [offline] (apply sh {:dir stage :env {"CARGO_TARGET_DIR" (str stage "/target")} :ok? false} (concat ["cargo"] (take 1 cmd-after) ["--locked"] offline (drop 1 cmd-after))))

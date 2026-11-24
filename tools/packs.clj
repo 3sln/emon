@@ -95,7 +95,6 @@
   [cat tess pp]
   (let [packs (:packs cat)
         by-file (into {} (for [p packs, f (:files p)] [[(:engine p) (:name f)] [p f]]))
-        runtimes (into {} (for [r (:runtimes cat), f (:files r)] [(:name f) [r f]]))
         tess-packs (filter #(= :tesseract (:engine %)) packs)
         pp-packs (filter #(= :ppocr (:engine %)) packs)]
     (vec
@@ -113,14 +112,26 @@
       (for [p tess-packs :when (not= (:revision tess) (get-in p [:upstream :revision]))]
         (str "pack " (pr-str (:id p)) ": upstream revision " (get-in p [:upstream :revision]) " is not models.edn's " (:revision tess)))
       (for [a (:assets pp)
-            :let [[p f] (or (by-file [:ppocr (:file a)]) (runtimes (:file a)))]]
-        (cond (nil? p) (str "tools/ppocr/assets.edn pins " (:file a) ", which the catalogue has neither as a pack nor as a runtime")
+            :let [[p f] (by-file [:ppocr (:file a)])]]
+        (cond (nil? p) (str "tools/ppocr/assets.edn pins " (:file a) ", which the catalogue has no pack for")
               (not= [(:sha256 a) (:bytes a) (:licence a)] [(:sha256 f) (:bytes f) (:licence p)])
               (str (:file a) ": assets.edn and the catalogue's " (pr-str (:id p)) " disagree on sha256, bytes or licence")))
       (for [p pp-packs, f (:files p) :when (not-any? #(= (:file %) (:name f)) (:assets pp))]
-        (str "pack " (pr-str (:id p)) " has " (:name f) ", which tools/ppocr/assets.edn does not pin"))
-      (for [[nm [r f]] runtimes :when (not-any? #(= (:file %) nm) (:assets pp))]
-        (str "runtime " (pr-str (:id r)) " has " nm ", which tools/ppocr/assets.edn does not pin")))))))
+        (str "pack " (pr-str (:id p)) " has " (:name f) ", which tools/ppocr/assets.edn does not pin")))))))
+
+(defn runtime-problems
+  "The catalogue's :runtimes section held to tools/ppocr/runtimes.edn (ORTPIN, D906), the authored pins of ONNX Runtime: every package of `ort` is in one runtime
+  entry with the same file name, sha256 and size, and every runtime file is a package of `ort`. Pure."
+  [cat ort]
+  (let [srcs (into {} (for [[_ s] (:sources ort)] [(:file s) s]))
+        files (into {} (for [r (:runtimes cat), f (:files r)] [(:name f) [r f]]))]
+    (vec (concat
+          (for [[nm [r f]] files
+                :let [s (srcs nm)]
+                :when (not= [(:sha256 s) (:bytes s)] [(:sha256 f) (:bytes f)])]
+            (str "runtime " (pr-str (:id r)) ": " nm " is not what tools/ppocr/runtimes.edn pins (sha256 or bytes differ, or it is not pinned there)"))
+          (for [[nm _] srcs :when (not (contains? files nm))]
+            (str "tools/ppocr/runtimes.edn pins " nm ", which the catalogue's :runtimes does not hold"))))))
 
 ;; ------------------------------------------------------------------------------------------------------ generating
 (defn pack-lang [s] (+ (bit-shift-left (int (nth s 0)) 24) (bit-shift-left (int (nth s 1)) 16) (bit-shift-left (int (nth s 2)) 8)))
@@ -194,7 +205,7 @@
                           "bytes" (reduce + (map :bytes (:files p)))
                           "files" (mapv #(array-map "name" (:name %) "sha256" (:sha256 %) "bytes" (:bytes %)) (:files p))))
         runtime (fn [r]
-                  (array-map "id" (:id r) "engine" (kw (:engine r)) "target" (:target r) "licence" (:licence r)
+                  (array-map "id" (:id r) "engine" (kw (:engine r)) "targets" (vec (:targets r)) "licence" (:licence r)
                              "upstream" (into (array-map) (for [k [:repo :revision :url] :when (get (:upstream r) k)] [(name k) (get (:upstream r) k)]))
                              "files" (mapv #(array-map "name" (:name %) "sha256" (:sha256 %) "bytes" (:bytes %)) (:files r))))]
     (str (json/generate-string (array-map "schema" (:schema cat) "packs" (vec (map-indexed pack (:packs cat))) "runtimes" (mapv runtime (:runtimes cat))) {:pretty true}) "\n")))
@@ -205,7 +216,8 @@
 
 (defn all-problems [cat]
   (concat (pack-problems cat (read-kin-names))
-          (legacy-problems cat (edn/read-string (slurp tess-pins)) (edn/read-string (slurp pp-pins)))))
+          (legacy-problems cat (edn/read-string (slurp tess-pins)) (edn/read-string (slurp pp-pins)))
+          (runtime-problems cat (edn/read-string (slurp "tools/ppocr/runtimes.edn")))))
 
 (defn report! [ps]
   (doseq [p (take 30 ps)] (println "  FAIL" p))
@@ -240,11 +252,13 @@
                (when-not (some #(re-find #"disagree|says sha256" %)
                                (legacy-problems ok {:revision "x" :models {"eng" {:sha256 (apply str (repeat 64 "b")) :bytes 5}}} {:assets []}))
                  ["a legacy pin that disagrees was not refused"])
+               (when-not (seq (runtime-problems {:runtimes [{:id "r" :files [{:name "x" :sha256 sha :bytes 5}]}]} {:sources {"s" {:file "x" :sha256 (apply str (repeat 64 "b")) :bytes 5}}}))
+                 ["a runtime that disagrees with runtimes.edn was not refused"])
                (when-not (some #(re-find #"has no pack|which the catalogue has no pack" %)
                                (legacy-problems ok {:revision "x" :models {"spa" {:sha256 sha :bytes 5}}} {:assets []}))
                  ["a legacy pin with no pack was not refused"]))]
     (report! fails)
-    (println "  ok   packs self-test:" (+ (count cases) 3) "planted failures refused")))
+    (println "  ok   packs self-test:" (+ (count cases) 4) "planted failures refused")))
 
 (let [args (set *command-line-args*)]
   (cond

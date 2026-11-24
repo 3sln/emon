@@ -505,6 +505,7 @@
 (defn check! []
   (let [bad (atom 0) f! (fn [& xs] (swap! bad inc) (println "  FAIL" (apply str xs)))
         pdf (edn/read-string (slurp "tools/pdfium/pdfium.edn"))
+        ort (edn/read-string (slurp "tools/ppocr/runtimes.edn"))
         wf (when (fs/exists? ".github/workflows/native.yml") (slurp ".github/workflows/native.yml"))]
     (doseq [s (:sources pins)]
       (when-not (re-matches #"[0-9a-f]{64}" (str (:sha256 s))) (f! (:id s) ": sha256 is not 64 hex digits"))
@@ -513,6 +514,10 @@
     (doseq [d (:data pins)] (when-not (re-matches #"[0-9a-f]{64}" (str (:sha256 d))) (f! (:id d) ": sha256 is not 64 hex digits")))
     (doseq [[t c] (:triples pins)]
       (when-not (get-in pdf [:platforms (:pdfium c)]) (f! t ": pdfium platform " (:pdfium c) " is not pinned in tools/pdfium/pdfium.edn"))
+      ;; ONNX Runtime for the optional PP adapter (ORTPIN, D906): every triple has its pinned runtime in tools/ppocr/runtimes.edn, on Microsoft's own channels
+      (let [o (or (get-in ort [:platforms t]) (get-in ort [:mobile-platforms t]))]
+        (when-not (and o (get-in ort [:sources (:source o)]) (seq (:libs o))) (f! t ": no ONNX Runtime pin in tools/ppocr/runtimes.edn"))
+        (when (and o (:abi c) (not= (:abi c) (:abi o))) (f! t ": the ONNX Runtime pin is for ABI " (:abi o) ", not " (:abi c))))
       (when-not wf (f! ".github/workflows/native.yml is missing"))
       (when wf
         (when-not (str/includes? wf t) (f! "native.yml does not name the triple " t))
@@ -530,7 +535,7 @@
     (doseq [{:keys [out]} (:texts (:pdfium-licences pins))] (when-not (fs/exists? (str "release/licenses/" out)) (f! "release/licenses/" out " is not vendored (bb native --licenses)")))
     (if (zero? @bad)
       (println "  ok   native.edn:" (count (:sources pins)) "sources and" (count (:data pins)) "data files pinned with sha256," (count (:triples pins))
-               "triples each with a runner in native.yml and a pdfium pin, wasm pinned, every licence text vendored")
+               "triples each with a runner in native.yml, a pdfium pin and an ONNX Runtime pin, wasm pinned, every licence text vendored")
       (System/exit 1))))
 
 ;; ------------------------------------------------------------------------------------------------ --self-test

@@ -11,7 +11,9 @@ same GitHub release as your CLI or library. Verify its entry in the release's
 `SHA256SUMS`, then extract it somewhere permanent. The five triples are
 `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`,
 `aarch64-unknown-linux-gnu` and `x86_64-pc-windows-msvc`.
-The add-on contains ORT 1.22.0 CPU, the versioned emon PP C ABI adapter,
+The add-on contains ORT 1.22.0 CPU (Microsoft's own NuGet package, pinned by
+SHA-256 in `tools/ppocr/runtimes.edn`; the GitHub release assets it was first pinned to are gone),
+the versioned emon PP C ABI adapter,
 three pinned ONNX graphs, English and orientation dictionaries, the pinned
 English lexicon, and licence texts. It is separate from every default archive.
 Nothing downloads automatically at conversion time.

@@ -381,16 +381,25 @@
                   triples (set (for [[t c] (:triples (edn/read-string (rd root "tools/native/native.edn"))) :when (not (#{:android :ios} (:os c)))] t))]
               (when-not (= triples (set (keys (:platforms pins)))) (fail! "PP runtime pins must cover all five native targets"))
               (when-not (= "1.22.0" (:version pins)) (fail! "PP runtime version differs from qualified ORT"))
-              (doseq [[triple pin] (:platforms pins)]
-                (when-not (and (pos-int? (:bytes pin)) (re-matches #"[a-f0-9]{64}" (:sha256 pin))
-                               (str/starts-with? (:url pin) "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/"))
-                  (fail! "invalid PP runtime pin for " triple)))
+              (when-not (= (set (for [[t c] (:triples (edn/read-string (rd root "tools/native/native.edn"))) :when (#{:android :ios} (:os c))] t)) (set (keys (:mobile-platforms pins))))
+                (fail! "PP runtime pins must cover every mobile triple of native.edn"))
+              ;; ORTPIN (D906): Microsoft's own channels only (NuGet.org, Maven Central, onnxruntime.ai); the GitHub release assets are gone. Every library is pinned by SHA-256 and size.
+              (let [official ["https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.22.0/"
+                              "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.22.0/"
+                              "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.22.0.zip"]]
+                (doseq [[id s] (:sources pins)]
+                  (when-not (and (pos-int? (:bytes s)) (re-matches #"[a-f0-9]{64}" (:sha256 s)) (some #(str/starts-with? (:url s) %) official))
+                    (fail! "invalid PP runtime source pin " id)))
+                (doseq [[triple pin] (concat (:platforms pins) (:mobile-platforms pins))]
+                  (when-not (and (get-in pins [:sources (:source pin)]) (seq (:libs pin))
+                                 (every? #(and (pos-int? (:bytes %)) (re-matches #"[a-f0-9]{64}" (:sha256 %))) (:libs pin)))
+                    (fail! "invalid PP runtime pin for " triple))))
               (doseq [[id licence] [["native/onnxruntime@1.22.0" "MIT"] ["native/ppocr5-mobile-en" "Apache-2.0"]]
                       :let [component (by-id id)]]
                 (when-not (and (= licence (:licence component)) (= [:ppocr-addon] (:carried-by component))
                                (seq (text-files component)))
                   (fail! id " must carry its licence texts in the PP add-on only")))
-              (when (= b (n-before)) (ok! "five pinned PP runtime archives; ORT MIT and Paddle/RapidOCR Apache-2.0 notices belong only to the add-on"))))
+              (when (= b (n-before)) (ok! "ORT 1.22.0 pinned to Microsoft's NuGet, Maven Central and onnxruntime.ai packages, every library by SHA-256, five desktop and five mobile platforms; ORT MIT and Paddle/RapidOCR Apache-2.0 notices belong only to the add-on"))))
           ;; the browser demo's vendored files (P11.4c): every file `bb demo` vendors maps to a component the demo carries
           (let [b (n-before)
                 df (:demo-files inv)

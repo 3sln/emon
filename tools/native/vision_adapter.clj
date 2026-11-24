@@ -58,7 +58,7 @@
     (fs/create-dirs stage)
     (doseq [[rel src] files :let [dst (str stage "/" rel)]]
       (put-text! dst (stamp (if (map? src) (:text src) (slurp src)))))
-    (doseq [f (fs/glob (str stage "/src") "**") :when (and (fs/regular-file? f) (not (contains? files (str (fs/relativize stage f)))))] (fs/delete f))))
+    (doseq [f (fs/glob (str stage "/src") "**") :when (and (fs/regular-file? f) (not (contains? files (str/replace (str (fs/relativize stage f)) "\\" "/"))))] (fs/delete f))))
 
 (defn build! []
   (let [shim-dir (str/trim (:out (sh {} "bb" "tools/native/vision.clj" "--triple" triple)))

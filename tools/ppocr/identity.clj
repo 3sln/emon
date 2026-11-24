@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; Policy identity is a hash of exact file names, NUL separators and bytes.
-(require '[babashka.fs :as fs] '[clojure.string :as str])
+(require '[babashka.fs :as fs] '[clojure.string :as str] '[ppocr.pins-canon :as canon])
 (import '[java.security MessageDigest])
 (def names ["host/rust/src/ppocr.rs" "host/rust/src/ppocr_runtime.rs" "tools/ppocr/assets.edn"
             "host/rust/src/ppocr_image.rs" "host/rust/src/ppocr_ctc.rs" "host/rust/src/ppocr_pipeline.rs"
@@ -15,7 +15,9 @@
                (.getBytes (-> (slurp name)
                               (str/replace-first #"(:data \[)[0-9\s]+(\])" "$1MODEL_IDENTITY$2")
                               (str/replace host-accessors "")) "UTF-8")
-               (fs/read-all-bytes name))))
+               (if (= name "tools/ppocr/assets.edn")
+                 (.getBytes (canon/canonical (slurp name)) "UTF-8") ; the ONNX Runtime pin moved to runtimes.edn (ORTPIN, D906); the identity is unchanged
+                 (fs/read-all-bytes name)))))
 (def identity (str "ppocr5-en-" (apply str (map #(format "%02x" (bit-and % 255)) (.digest h)))))
 (def file "kin/ocrengine.kin")
 (def content (slurp file))

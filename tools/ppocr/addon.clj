@@ -25,6 +25,7 @@
           (str/includes? os "Windows") "x86_64-pc-windows-msvc")))
 (def triple (host-triple))
 (def pins (edn/read-string (slurp "tools/ppocr/runtimes.edn")))
+;; ONNX Runtime: Microsoft's NuGet package, pinned by SHA-256 (tools/ppocr/runtimes.edn, ORTPIN, D906); installed by tools/ppocr/ort.clj
 (def runtime (get-in pins [:platforms triple]))
 (assert runtime "unsupported PP add-on host")
 (def root (str (fs/absolutize ".cache/ppocr")))
@@ -52,10 +53,8 @@
   (space!) (fs/create-dirs root)
   (let [assets (edn/read-string (slurp "tools/ppocr/assets.edn"))]
     (doseq [pin (:assets assets) :when (not (:target pin))] (fetch! pin))
-    (fetch! runtime)
-    (fs/delete-tree ort)
-    (if win? (fs/unzip (str root "/" (:file runtime)) root {:replace-existing true})
-        (run "tar" "-xzf" (str root "/" (:file runtime)) "-C" root))
+    ;; the package is verified whole and each extracted file again, against runtimes.edn; nothing unpinned is installed
+    (apply run "bb" "tools/ppocr/ort.clj" "--triple" triple (when (args "--fetch") ["--fetch"]))
     (doseq [pin [(:dictionary assets) (:orientation-dictionary assets)]]
       (assert (= (:sha256 pin) (sha (str "tools/ppocr/" (:file pin)))) "dictionary pin mismatch"))))
 (defn build! []

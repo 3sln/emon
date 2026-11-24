@@ -13,11 +13,17 @@ do not establish default-use acceptance or comprehensive source correctness.
 `EMON_CS_SHARED_COMPILATION=false bb ppocr-fetch` downloads only the assets in
 `assets.edn`, verifies SHA-256 and size, and caches them in `.cache/ppocr`.
 It is not part of any gate. Re-running it with verified cached files is offline.
-`bb ppocr-check` verifies the cached assets, extracts the checked runtime archive,
+`bb ppocr-fetch` also installs ONNX Runtime 1.22.0 for this host (`tools/ppocr/ort.clj`): Microsoft's
+`Microsoft.ML.OnnxRuntime` NuGet package, verified whole by SHA-256 and extracted entry by entry,
+each against its own pin in `runtimes.edn`, into `.cache/ppocr/onnxruntime-<platform>-1.22.0/`.
+`runtimes.edn` also pins the mobile runtimes: Maven Central's `onnxruntime-android` AAR and the
+`onnxruntime-c` CocoaPods archive on onnxruntime.ai (`bb mobile --triple T --ort --fetch`).
+The GitHub release assets ORT was first pinned to went away on 2026-11-17 (D906).
+`bb ppocr-check` verifies the cached assets, re-extracts the pinned runtime package,
 compiles the C ABI ownership shim, runs the Rust CTC/geometry/runtime smoke
 checks and builds the raw calibration probe. It never downloads. The current
 reference checker uses the macOS arm64 runtime. The release builder has separate
-five-platform pins in `runtimes.edn`; the other four platforms need their CI
+five-platform pins in `runtimes.edn`, all from the one NuGet package; the other four platforms need their CI
 build/smoke checks and are not quality-qualified here. Model files and runtime binaries are carried only by the separate experimental
 [release add-on](../../docs/ppocr.md), never the default artifacts.
 
@@ -45,7 +51,7 @@ nor ORT. Missing assets report `ppocr-models-missing`; missing native
 libraries report `ppocr-runtime-missing`.
 
 `bb ppocr-hosts` is a non-gate requiring the models and an OIL qualification
-artifact (by default `$EMON_SCRATCH/ppocr-qual`). It compares all complete integer answers on exactly 225 bitmaps
+artifact (by default `corpus/_qual/ppocr-qual`). It compares all complete integer answers on exactly 225 bitmaps
 through Rust, Go, Java, C# and both C/native transports; missing inputs fail
 explicitly. `--qualification DIR` selects the artifact,
 `--out DIR` the scratch output. `--limit N` is only a development smoke test
@@ -56,9 +62,11 @@ The only quality-qualified native runtime remains macOS arm64.
 To re-qualify after an answer-format change, use the restored OP1c selections:
 
 ```sh
-bb ppocr-hosts --qualification "$EMON_SCRATCH/op1c" \
-  --record-qualification "$EMON_SCRATCH/ppocr-qual"
+bb ppocr-hosts --qualification corpus/_qual/ppocr-qual \
+  --record-qualification "$EMON_SCRATCH/ppocr-qual-new"
 ```
+
+The artifact is the corpus shard `ppocr-qualification` (`corpus/_qual/ppocr-qual`; the default of `bb ppocr-hosts`). Never record into `/tmp`; copy the new directory into `corpus/_qual/`, re-register the shard digest in `test/corpus/shards.json` and push it with `bb corpus push`. ORTPIN (D906) re-recorded it on the NuGet ONNX Runtime 1.22.0 and its `reference.answers` equalled the frozen reference's byte for byte; after the merge with main (K8, K7 moved the policy identity to `ppocr5-en-2bd7cbc3...`) it was re-recorded (SHA-256 `1498d639...`): it differs from the frozen one only in the two policy-identity words of each answer (D906).
 
 This records a new Rust reference, requires exact transport and replay bytes,
 and scores the same 60+60 fixed receipts against D864's P/R tolerance of 0.002.
@@ -180,7 +188,7 @@ The optional [browser and Node adapter](../../docs/ppocr-web.md) uses ORT Web
 It requires caller-supplied pinned assets and remains experimental; its live
 answer qualification is separate from the native hosts. `web_qualify.clj`
 reads the new OIL `reference.answers` from `--qualification DIR` (default
-`$EMON_SCRATCH/ppocr-qual`), checks its provenance checksum and completed native
+`corpus/_qual/ppocr-qual`), checks its provenance checksum and completed native
 transport comparison. D891 compares ORT Web with native ORT using a scoped
 rule: text, geometry, indices, capabilities, headers and sidecars are identical,
 except the checked web observed-identity hash and raw word-confidence and
@@ -200,7 +208,7 @@ installing the locked JS dependencies and restoring the pinned model/runtime
 assets. The frozen wasm input is retained with the qualification artifact:
 
 ```sh
-EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="$EMON_SCRATCH/ppocr-qual/web/emon.wasm" bb -cp tools tools/ppocr/web_qualify.clj --candidate browser --out "$EMON_SCRATCH/oil-chrome" --qualification "$EMON_SCRATCH/ppocr-qual"
+EMON_CS_SHARED_COMPILATION=false EMON_PPOCR_WASM="corpus/_qual/ppocr-qual/web/emon.wasm" bb -cp tools tools/ppocr/web_qualify.clj --candidate browser --out "$EMON_SCRATCH/oil-chrome" --qualification "corpus/_qual/ppocr-qual"
 ```
 
 Expected output includes `"answers":225`, `"accepted":225`,

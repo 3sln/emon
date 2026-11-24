@@ -35,9 +35,9 @@
             ordinary (convert []) experimental (convert ["--ocr-engine=ppocr"])]
         (assert (and (zero? (:exit ordinary)) (zero? (:exit experimental))) "born-digital smoke conversion failed")
         (assert (= (:out ordinary) (:out experimental)) "PP changed born-digital HTML"))
-      (doseq [[extra error] [[{"EMON_PPOCR_LIB" (str scratch "/absent-library")} "ppocr-runtime-missing"]
-                             [{"EMON_PPOCR_MODELS" (str scratch "/absent-models")} "ppocr-models-missing"]]]
+      (doseq [[extra error] [[{"EMON_PPOCR_LIB" (str scratch "/absent-library")} ["adapter-runtime-missing" "ppocr-runtime-missing"]]
+                             [{"EMON_PPOCR_MODELS" (str scratch "/absent-models")} ["pack-missing" "ppocr-models-missing"]]]]
         (let [r (invoke extra)]
-          (assert (and (not (zero? (:exit r))) (str/includes? (:err r) error)) (str "missing named error: " error))))
+          (assert (and (not (zero? (:exit r))) (some #(str/includes? (:err r) %) error)) (str "missing named error: " error))))
       (println "PASS unpacked PP add-on + CLI receipt reference, born-digital equality and missing-input errors:" triple))
     (finally (fs/delete-tree scratch))))
