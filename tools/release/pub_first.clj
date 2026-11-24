@@ -15,7 +15,7 @@
 (def flag? (set *command-line-args*))
 (def version (or (arg "--version") (die "--version is required, e.g. --version 0.3.0-preview.1")))
 (def repo (or (arg "--repo") "3sln/emon"))
-(def dir (str (fs/expand-home (or (arg "--dir") (str "~/emon-dart-" version)))))
+(def out-dir (str (fs/expand-home (or (arg "--dir") (str "~/emon-dart-" version)))))
 (def packages ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon_ocr_mlkit" "emon" "emon_flutter"])
 (def flutter-pkgs #{"emon_ocr_mlkit" "emon_flutter"})
 
@@ -40,10 +40,10 @@
   (println "  verified sha256" (subs got 0 16) "..."))
 
 ;; 2. unpack
-(when (and (fs/exists? dir) (seq (fs/list-dir dir))) (die dir " exists and is not empty; pass --dir"))
-(fs/create-dirs dir)
-(sh {} "tar" "-xzf" (str dl "/" asset) "-C" dir)
-(def root (let [ds (filter fs/directory? (fs/list-dir dir))] (if (and (= 1 (count ds)) (not (fs/exists? (fs/path dir "emon_core")))) (str (first ds)) dir)))
+(when (and (fs/exists? out-dir) (seq (fs/list-dir out-dir))) (die out-dir " exists and is not empty; pass --dir"))
+(fs/create-dirs out-dir)
+(sh {} "tar" "-xzf" (str dl "/" asset) "-C" out-dir)
+(def root (let [ds (filter fs/directory? (fs/list-dir out-dir))] (if (and (= 1 (count ds)) (not (fs/exists? (fs/path out-dir "emon_core")))) (str (first ds)) out-dir)))
 (doseq [pkg packages] (when-not (fs/exists? (fs/path root pkg "pubspec.yaml")) (die "the tree has no " pkg "/pubspec.yaml under " root)))
 (println "  unpacked to" root)
 
@@ -58,7 +58,9 @@
     (println "==" pkg version "is already on pub.dev; skipped")
     (do (println "==" pkg "(" (tool pkg) "pub publish )")
         (when-not (zero? (:exit (sh {:dir (str (fs/path root pkg))} (tool pkg) "pub" "publish" "--dry-run")))
-          (die pkg ": the dry run failed; fix it and re-run (published packages are skipped)"))
+          (if (and (flag? "--dry-run") (not= pkg (first packages)))
+            (println "  (a dependent package cannot be dry-run until the packages before it are on pub.dev; the real run checks each one just before publishing it)")
+            (die pkg ": the dry run failed; fix it and re-run (published packages are skipped)")))
         (cond (flag? "--dry-run") (println "  dry run only")
               (ask (str "Publish " pkg " " version " to pub.dev?"))
               (when-not (zero? (:exit (sh {:dir (str (fs/path root pkg))} (tool pkg) "pub" "publish" "--force")))
@@ -69,4 +71,4 @@
 (println "Done. Next (docs/releasing.md, \"The maintainer's settings\"): on pub.dev, for each package, Admin > Automated publishing:")
 (println "  GitHub Actions, repository" repo ", tag pattern emon-dart-v{{version}}, no environment; transfer to the 3sln.com publisher if needed;")
 (println "  then add the deploy key secret PUB_DEPLOY_KEY and set the variable EMON_PUB_ENABLED=true.")
-(println "You can delete" dir "now.")
+(println "You can delete" out-dir "now.")
