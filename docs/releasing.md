@@ -108,6 +108,8 @@ repository secrets: `verify.yml` needs them without any approval.
 | `MAVEN_GPG_PRIVATE_KEY` | `gpg --armor --export-secret-keys KEYID` (the whole `-----BEGIN PGP PRIVATE KEY BLOCK-----` text; a base64 of it is accepted too). **Publish the public half** so Central can verify: `gpg --keyserver keyserver.ubuntu.com --send-keys KEYID` and upload to <https://keys.openpgp.org> (and confirm the email). |
 | `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase. |
 
+**Lost or new signing key.** Run `bb tools/release/gpg_key.clj --name "3sln emon release signing" --email YOU`. It generates an RSA-4096 signing key, exports the private key, public key and revocation certificate to `~/emon-release-key` (private key mode 600), publishes the public key to keyserver.ubuntu.com and keys.openpgp.org, and sets `MAVEN_GPG_PRIVATE_KEY` and `MAVEN_GPG_PASSPHRASE` with `gh`. It asks before each network step, and prints nothing secret. Keep the three files and the passphrase in a password manager, then delete the directory.
+
 **npm: Trusted Publishing, no secret.** On npmjs.com, for each package (`@3sln/emon`, `@3sln/pdfium-wasm`, `@3sln/emon-ppocr`): the package's
 *Settings* > *Trusted Publisher* > *GitHub Actions*, with organization/user `3sln`, repository `emon`, workflow `release.yml`, environment left **blank**.
 The `npm` job grants `id-token: write` and runs npm 11.21.2 on Node 24; it publishes with provenance and no stored token. A Trusted Publisher can only be
@@ -178,6 +180,8 @@ already exists. A push made with `GITHUB_TOKEN` starts no workflow, so:
 3. `pub.yml`, started by that tag (and also gated on `EMON_PUB_ENABLED`), downloads the asset, checks it against SHA256SUMS and runs `bb publish pub`: for each package in order, skip when pub.dev
    already has that version, else `dart pub publish --force` (`flutter pub publish --force` for `emon_ocr_mlkit` and `emon_flutter`), with a pause and two more attempts for the packages after the
    first (pub.dev may need a moment to serve the one before). Re-running failed jobs, or `only=pub`, finishes what a failed run left; nothing is published twice.
+
+**First publish (once).** After the release exists: `bb tools/release/pub_first.clj --version X.Y.Z[-pre]`. It downloads `emon-dart-<version>.tar.gz`, checks it against SHA256SUMS, dry-runs and then publishes the eight packages in order after confirmation, skipping any pub.dev already has.
 
 **The maintainer's settings, in order.**
 1. **pub.dev publisher.** Create the verified publisher `3sln.com` (pub.dev > *Create publisher*; verify the domain through Google Search Console, a DNS TXT record).
