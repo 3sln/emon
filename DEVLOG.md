@@ -14849,3 +14849,13 @@ macOS arm64 converted a synthetic receipt through the unpacked C bundle with bot
 Both arm64 iOS C bundles built from NuGet and passed the native audit and release inventory check. The PP adapter is 22,463,108 bytes on device and 22,556,064 bytes on the simulator, including statically linked ORT. The simulator smoke linked and staged the three verified PP model packs. CoreSimulatorService refused the connection while listing runtimes, so the receipt conversions remain unverified on iOS.
 
 - [ ] **Signed off** (maintainer)
+
+### D909 — Prime workflow dependencies before fan-out and make release archives reproducible
+
+The first Babashka job in each workflow populates one cache keyed by `deps.edn` and `bb.edn`. Subsequent jobs restore it. The cache uses workspace-relative paths for portability, then places the Maven and Git dependency trees in the runner's home. A miss resolves the pinned dependencies with exponential backoff and jitter.
+
+Linux desktop builds localize symbols from static archives and use Rust's cdylib version script for the public ABI. The audit reads the ELF dynamic symbol table, which survives stripping, and names missing and unexpected exports. The desktop audit holds the core to `emon.h` and the two OCR adapters to their entry point.
+
+Release tools create tarballs and ZIPs in Babashka with fixed timestamps, sorted entry names and recorded POSIX modes. Tarballs retain symlinks and long paths. Tools that read tar archives pass the archive on stdin, so the reader can handle Windows drive paths without platform-specific flags.
+
+- [ ] **Signed off** (maintainer)

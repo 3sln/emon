@@ -9,6 +9,7 @@
 ;;   bb native --check                              native.edn is well formed, every triple is in native.yml and has a pdfium pin
 ;;   bb native --audit [--triple T] [--lib-dir D]   (mobile triples, K6/D897: also the shipped library of `bb mobile`, .cache/mobile/<triple>/: Android .so 16 KB
 ;;                                                  aligned, soname, only libc/libm/libdl needed, exports = emon.h; iOS dylib: platform, minos, install name, deps)
+;;   bb native --audit [--lib-dir D]             on macOS/Linux also audit exports of a staged C bundle, or the unpacked bundle at D
 ;;   bb native --self-test                          plants each violation in a temporary prefix and requires the audit to name it
 ;;   bb native --fetch                              only download and verify the sources
 ;;
@@ -20,13 +21,15 @@
 ;;   .cache/native/dl/              the verified tarballs            .cache/native/src/<name>-<ver>/   the extracted sources
 ;;   .cache/native/build/<triple>/  one CMake build tree and one log per component
 ;;   .cache/native/<triple>/        the install prefix: include/ lib/*.a share/tessdata/ manifest.edn link.rustflags .built
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.java.io :as io]
          '[clojure.pprint]
          '[clojure.string :as str]
+         '[native.exports :as exports]
          '[ppocr.bundle :as pp]
          '[ppocr.ort :as ort])
 (import '[java.security MessageDigest])
@@ -105,10 +108,7 @@
     (when-not (and (fs/exists? mark) (= (:sha256 s) (str/trim (slurp mark))))
       (fs/delete-tree dir)
       (fs/create-dirs (str cache "/src"))
-      ;; GNU tar (Git for Windows) reads `D:\...` as host:file; --force-local says it is a file
-      ;; and the backslashes of its paths are escapes to it: forward slashes only
-      (let [win? (= :windows (:os (triple-cfg (host-triple)))) fwd #(str/replace (str %) "\\" "/")]
-        (apply p/shell "tar" (concat (when win? ["--force-local"]) ["-xf" (fwd tgz) "-C" (fwd (abs (str cache "/src")))])))
+      (archives/untar! tgz (abs (str cache "/src")))
       (when-not (fs/exists? dir) (die (:archive s) " did not extract to " (:dir s)))
       (spit mark (str (:sha256 s) "\n")))
     dir))
@@ -352,12 +352,6 @@
 ;;                 libstdc++ symbol; the exported (dynamic, defined) symbols are the functions of emon.h exactly; no excluded (jbig2dec, JBIG-KIT, OpenJPEG ...) symbol
 ;;   iOS .dylib    one arm64 slice; platform IOS or IOSSIMULATOR as the triple says; minos at most the deployment target; install name @rpath/libemon.dylib; it loads
 ;;                 only /usr/lib and /System/Library; exports = emon.h exactly; no excluded symbol
-(defn header-functions
-  "The function names emon.h declares (comments cut out): the C ABI's export list."
-  []
-  (let [h (str/replace (slurp "host/c/include/emon.h") #"(?s)/\*.*?\*/" " ")]
-    (into (sorted-set) (map second) (re-seq #"\b(emon_[a-z0-9_]+)\s*\(" h))))
-
 (defn- llvm [tool] (str (ndk-bin) "/" tool))
 (defn- run-out [& cmd] (let [r (apply p/shell {:out :string :err :string :continue true} (map str cmd))] (str (:out r) (:err r))))
 (defn- hex [x] (Long/parseLong (str/replace (str x) #"^0x" "") 16))
@@ -413,7 +407,7 @@
           (when exports
             (let [missing (remove d exports) extra (remove exports d) b (count (filter (comp #{:fail} first) @out))]
               (when (seq missing) (fail! name ": emon.h declares what the library does not export: " (str/join " " (take 8 missing))))
-              (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (take 8 extra)) (when (> (count extra) 8) (str " ... " (count extra) " in all"))))
+              (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (sort extra))))
               (when (= b (count (filter (comp #{:fail} first) @out))) (ok! (str name ": exports exactly the " (count exports) " functions of emon.h")))))))
       )
     @out))
@@ -446,7 +440,7 @@
       (when exports
         (let [missing (remove d exports) extra (remove exports d)]
           (when (seq missing) (fail! name ": emon.h declares what the library does not export: " (str/join " " (take 8 missing))))
-          (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (take 8 extra)) (when (> (count extra) 8) (str " ... " (count extra) " in all"))))))
+          (when (seq extra) (fail! name ": exports what emon.h does not declare: " (str/join " " (sort extra))))))
       (when (= b (nfail)) (ok! (str name ": " (if exports (str "exports exactly the " (count exports) " functions of emon.h") (str (count d) " exported symbols")) ", no excluded symbol"))))
     @out))
 
@@ -461,7 +455,7 @@
         vad (str dir "/lib/emon/adapters/libemon_ocr_vision.dylib") ; Apple Vision (K8, D901): iOS only
         pp-name (pp/adapter-name t)
         pp-ad (str dir "/" pp/adapter-dir "/" pp-name)
-        exports (header-functions)]
+        exports (exports/header-functions)]
     (cond
       (not (fs/exists? lib)) nil
       android?
@@ -706,6 +700,21 @@
             (die "the audit failed; " prefix " is not to be used"))
           (spit (str prefix "/.built") (str (pin-hash) "\n")))))))
 
+(defn- audit-desktop-exports [triple dir]
+  (let [ext (case (:os (triple-cfg triple))
+              :mac ".dylib"
+              :linux ".so"
+              (die "desktop export audit needs a macOS or Linux C bundle"))]
+    (mapcat (fn [[file expected required?]]
+              (let [path (str dir "/lib/" file ext)]
+                (when (or required? (fs/exists? path))
+                  (let [problems (exports/problems path expected)]
+                    (if (seq problems) (map #(vector :fail %) problems)
+                        [[:ok (str (fs/file-name path) ": exports exactly its ABI")]])))))
+            [["libemon" (exports/header-functions) true]
+             ["emon/adapters/libemon_ocr_tesseract" exports/adapter-abi false]
+             ["emon/adapters/libemon_ocr_ppocr" exports/adapter-abi false]])))
+
 (cond
   (flag? "--self-test") (self-test!)
   (flag? "--licenses") (licences! (flag? "--check"))
@@ -716,10 +725,19 @@
   (flag? "--audit") (let [t triple]
                       (println "audit" t (prefix-of t))
                       (let [ok1 (report! (audit t (prefix-of t) (build-root t)))
-                            lib-dir (or (opt "--lib-dir") (abs (str ".cache/mobile/" t)))
-                            lib (when (mobile? (triple-cfg t)) (audit-mobile-lib t lib-dir))
-                            _ (when (mobile? (triple-cfg t))
-                                (if lib (println "audit the library of" t lib-dir) (println "  note" lib-dir "has no library (bb mobile --triple" t "): only the static dependencies were audited")))
+                            mobile (mobile? (triple-cfg t))
+                            version (:version (edn/read-string (slurp "version.edn")))
+                            staged (str "dist/stage/c/archive/emon-c-" version "-" t)
+                            lib-dir (or (opt "--lib-dir")
+                                        (if mobile
+                                          (abs (str ".cache/mobile/" t))
+                                          (when (and (#{:linux :mac} (:os (triple-cfg t))) (fs/directory? staged))
+                                            staged)))
+                            lib (if mobile
+                                  (audit-mobile-lib t lib-dir)
+                                  (when lib-dir (audit-desktop-exports t lib-dir)))
+                            _ (cond lib (println "audit the C bundle of" t lib-dir)
+                                    mobile (println "  note" lib-dir "has no library (bb mobile --triple" t "): only the static dependencies were audited"))
                             ok2 (if lib (report! lib) true)]
                         (when-not (and ok1 ok2) (System/exit 1))))
   :else (build!))

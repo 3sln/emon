@@ -37,9 +37,9 @@ jobs:
         with:
           path: emon
           fetch-depth: 0
-      - uses: DeLaGuardo/setup-clojure@13.4
+      - uses: ./emon/.github/actions/babashka
         with:
-          bb: 1.3.190
+          prime: 'true'
       - name: Plan (fails on a changed path that ci/gate-map.edn does not map)
         id: plan
         env:
@@ -51,6 +51,7 @@ jobs:
 
   # ---- the fast core: every pull request, whatever the change -------------------------------------------------------------------------------------------
   core:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

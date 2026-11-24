@@ -76,7 +76,21 @@ env:
   CI: "true"
 
 jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 3sln/emon
+          ref: ${{ inputs.ref || 'main' }}
+          path: emon
+      - uses: ./emon/.github/actions/babashka
+        with:
+          prime: 'true'
+
   native:
+    needs: dependencies
     name: native (${{ matrix.triple }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
@@ -99,24 +113,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.ref || 'main' }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@13.4
-        with:
-          bb: 1.3.190
-      - uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
-          restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
-        shell: bash
-        working-directory: emon
-        run: |
-          for i in 1 2 3 4; do
-            bb -e nil && exit 0
-            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
-            sleep $((i * 10))
-          done
-          exit 1
+      - uses: ./emon/.github/actions/babashka
       # for the CLI steps at the end (P11.4b); the version is the one every gate uses
       - uses: dtolnay/rust-toolchain@master
         if: inputs.cli != false
@@ -242,6 +239,7 @@ jobs:
   # THE MOBILE TRIPLES (K6, P13.19, D897): cross-compiled from the same pins, one runner per triple. Android uses NDK r28c (16 KB pages by default; `bb native` refuses an older one),
   # API 24; iOS the Xcode of the runner (iPhoneOS and iPhoneSimulator SDKs), minimum iOS 13.0. The runner's own NDK is not relied on: r28c is installed by name.
   mobile:
+    needs: dependencies
     name: mobile (${{ matrix.triple }})
     if: inputs.mobile != false
     runs-on: ${{ matrix.runner }}
@@ -261,24 +259,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.ref || 'main' }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@13.4
-        with:
-          bb: 1.3.190
-      - uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
-          restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
-        shell: bash
-        working-directory: emon
-        run: |
-          for i in 1 2 3 4; do
-            bb -e nil && exit 0
-            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
-            sleep $((i * 10))
-          done
-          exit 1
+      - uses: ./emon/.github/actions/babashka
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0
@@ -334,6 +315,7 @@ jobs:
   # Apple's text model may not run in it: if the conversion does not, the step says so and does not fail the job (the library was built and audited, which is what this job is for);
   # the maintainer's Mac, and the iOS simulator in the `mobile` job, are where it runs.
   vision:
+    needs: dependencies
     name: vision (${{ matrix.triple }})
     if: inputs.platform != false
     runs-on: ${{ matrix.runner }}
@@ -350,24 +332,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.ref || 'main' }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@13.4
-        with:
-          bb: 1.3.190
-      - uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
-          restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
-        shell: bash
-        working-directory: emon
-        run: |
-          for i in 1 2 3 4; do
-            bb -e nil && exit 0
-            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
-            sleep $((i * 10))
-          done
-          exit 1
+      - uses: ./emon/.github/actions/babashka
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0
@@ -395,6 +360,7 @@ jobs:
   # (`EMON_RS_WINOCR=1 kin/scripts/emon-rs-build`), requiring the heading in the HTML. Windows.Media.Ocr reads with an installed OCR language pack: the step before adds English's
   # (a Windows capability); a runner without it fails the smoke with a sentence that says so, which is what the smoke is for.
   winocr:
+    needs: dependencies
     name: winocr (windows-latest)
     if: inputs.platform != false
     runs-on: windows-latest
@@ -408,24 +374,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.ref || 'main' }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@13.4
-        with:
-          bb: 1.3.190
-      - uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
-          restore-keys: emon-m2-${{ runner.os }}-
-      - name: Resolve babashka dependencies (retried, as Maven Central is transient)
-        shell: bash
-        working-directory: emon
-        run: |
-          for i in 1 2 3 4; do
-            bb -e nil && exit 0
-            echo "babashka dependency resolution failed (attempt $i); retrying" >&2
-            sleep $((i * 10))
-          done
-          exit 1
+      - uses: ./emon/.github/actions/babashka
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0

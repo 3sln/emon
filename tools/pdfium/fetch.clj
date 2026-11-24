@@ -12,7 +12,8 @@
 ;; dylib's install name is `./libpdfium.dylib`, which a linked binary would look for in its working
 ;; directory; it is rewritten to `@rpath/libpdfium.dylib` and ad-hoc re-signed (arm64 refuses a modified,
 ;; unsigned image). That changes the dylib, not the archive: the recorded hash is of the download.
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[babashka.process :refer [shell]]
          '[clojure.edn :as edn]
          '[clojure.string :as str])
@@ -48,7 +49,7 @@
           (System/exit 1)))
       (fs/delete-tree dir)
       (fs/create-dirs dir)
-      (shell "tar" "-xzf" tgz "-C" dir)
+      (archives/untar! tgz dir)
       (when (or (str/starts-with? plat "mac-") (str/starts-with? plat "ios-"))
         (let [lib (str dir "/lib/libpdfium.dylib")]
           (shell "install_name_tool" "-id" "@rpath/libpdfium.dylib" lib)

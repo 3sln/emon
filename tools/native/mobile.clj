@@ -26,7 +26,8 @@
 ;;
 ;; Needs: cargo of the rustup toolchain with the target installed (`rustup target add`), `bb native --triple T` done, `bb pdfium-fetch --platform <pdfium of T>`;
 ;; Android: ANDROID_NDK_HOME (r28+); iOS: Xcode. Nothing here touches the network.
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
@@ -248,7 +249,7 @@
       (fs/copy (if (re-find #"^(lib|include|share)/" rel) (str target-dir "/" rel) src)
                (str d "/" rel) {:replace-existing true :copy-attributes true}))
     (fs/create-dirs (fs/parent archive))
-    (sh {:dir tmp} "tar" "-czf" archive archive-name)
+    (archives/tar-gz! archive tmp archive-name)
     (fs/delete-tree tmp)
     archive))
 

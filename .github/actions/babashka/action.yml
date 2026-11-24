@@ -1,0 +1,52 @@
+name: Babashka and pinned dependencies
+description: Restore the shared Maven and git dependency cache, and resolve it on a miss.
+inputs:
+  prime:
+    description: Save the populated cache before dependent jobs start.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+      with:
+        bb: 1.3.190
+    # The cache archive needs workspace-relative paths to be portable across runner OSes.
+    - uses: actions/cache/restore@v4
+      id: deps
+      with:
+        path: .emon-babashka-cache
+        key: emon-babashka-v1-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+        enableCrossOsArchive: true
+    - name: Install restored Maven and git dependencies
+      if: steps.deps.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        for dir in .m2 .gitlibs; do
+          mkdir -p "$HOME/$dir"
+          cp -R ".emon-babashka-cache/$dir/." "$HOME/$dir/"
+        done
+    - name: Resolve pinned dependencies on a cache miss
+      if: steps.deps.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: emon
+      run: |
+        for delay in 15 30 60 120; do
+          bb -e nil && exit 0
+          echo "Dependency resolution failed. Retrying in about ${delay}s" >&2
+          sleep $((delay + RANDOM % 10))
+        done
+        bb -e nil
+    - name: Stage dependencies for the shared cache
+      if: inputs.prime == 'true' && steps.deps.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        mkdir -p .emon-babashka-cache
+        cp -R "$HOME/.m2" "$HOME/.gitlibs" .emon-babashka-cache/
+    - uses: actions/cache/save@v4
+      if: inputs.prime == 'true' && steps.deps.outputs.cache-hit != 'true'
+      with:
+        path: .emon-babashka-cache
+        key: ${{ steps.deps.outputs.cache-primary-key }}
+        enableCrossOsArchive: true

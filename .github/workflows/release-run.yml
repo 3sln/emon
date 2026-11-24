@@ -58,9 +58,9 @@ jobs:
           ref: ${{ inputs.sha }}
           path: emon
           fetch-depth: 0
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
+      - uses: ./emon/.github/actions/babashka
         with:
-          bb: 1.3.190
+          prime: 'true'
       - name: Download and validate verified archives before creating anything public
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,9 +94,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - name: Rust 1.92.0 (the version of every gate)
         run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
       - name: bb package --host rust (cargo package --locked, verified build included)
@@ -121,9 +119,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - name: Rust 1.92.0 and the pinned nightly for emon.wasm (the unwinding std)
         run: |
           rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
@@ -190,9 +186,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 10.0.x
@@ -229,9 +223,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
@@ -260,9 +252,7 @@ jobs:
           ref: ${{ inputs.sha }}
           path: emon
           fetch-depth: 0
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: 1.21.13
@@ -293,9 +283,7 @@ jobs:
           path: emon
           fetch-depth: 0
           ssh-key: ${{ secrets.PUB_DEPLOY_KEY }} # also the checkout's push credential: `git push` below is made with the deploy key, not GITHUB_TOKEN
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - id: tag
         name: Push emon-dart-v<version> (the tag that starts pub.yml)
         env:
@@ -315,9 +303,7 @@ jobs:
           repository: 3sln/emon
           ref: ${{ inputs.sha }}
           path: emon
-      - uses: DeLaGuardo/setup-clojure@3fe9b3ae632c6758d0b7757b0838606ef4287b08 # 13.4
-        with:
-          bb: 1.3.190
+      - uses: ./emon/.github/actions/babashka
       - name: The report (fails if any registry did not succeed)
         env:
           RESULTS: >-

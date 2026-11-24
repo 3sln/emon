@@ -1,6 +1,7 @@
 ;; D886: prepare validates the selected main commit/version; release reuses or creates a published release after verification.
 ;; All public mutations support --dry-run; archive/verdict/fetch-archives/summary support verification and reporting.
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
          '[clojure.string :as str]
@@ -216,13 +217,14 @@
           [(str (fs/file-name f)) (str f)])))
 
 (defn- bundle-problems-in
-  "The problems of every C bundle (`emon-c-*`) among `files` (name -> path): each is listed with `tar -tzf` and held to `bundle-problems`."
+  "The problems of every C bundle (`emon-c-*`) among `files` (name -> path): each is listed and held to `bundle-problems`."
   [version files]
   (vec (mapcat (fn [t]
                  (let [n (str "emon-c-" version "-" t ".tar.gz")]
                    (when-let [f (get files n)]
-                     (let [r (rl/run "tar" "-tzf" f)]
-                       (if (zero? (:exit r)) (bundle-problems version t (str/split-lines (:out r))) [(str "cannot list " n ": " (str/trim (:err r)))])))))
+                     (try
+                       (bundle-problems version t (archives/tar-list f))
+                       (catch Exception e [(str "cannot list " n ": " (ex-message e))])))))
                triples-c)))
 
 (defn archive! [{:keys [dirs out version]}]
@@ -264,7 +266,7 @@
     (let [tmp (str (fs/create-temp-dir {:prefix "emon-dart-"}))]
       (try
         (rl/run! "bb" "tools/dart.clj" "--stamp" (str tmp "/" top) "--publishable" "--sums" sums-path)
-        (rl/run! "tar" "-czf" (str dir "/" asset) "-C" tmp top)
+        (archives/tar-gz! (str dir "/" asset) tmp top)
         (finally (fs/delete-tree tmp))))
     (let [hashes (into {} (for [n (expected-assets v)] [n (sha256-hex (str dir "/" n))]))]
       (spit sums-path (sums-text hashes))
@@ -591,7 +593,7 @@
                          (fs/delete-tree d)
                          (doseq [e (concat (remove #{drop-entry} (bundle-entries t)) ["share/emon/packs/tess-fast-eng/eng.traineddata"])]
                            (fs/create-dirs (fs/parent (str d "/" e))) (spit (str d "/" e) (str t " " e)))
-                         (rl/run! "tar" "-czf" (str in "/" top ".tar.gz") "-C" (str tmp "/src") top)))]
+                         (archives/tar-gz! (str in "/" top ".tar.gz") (str tmp "/src") top)))]
       (try
         (fs/create-dirs in)
         (doseq [t triples-c] (mk-bundle! t nil))
@@ -601,9 +603,9 @@
         (dart! {:dir out :version v})
         (let [sums (parse-sums (slurp (str out "/SHA256SUMS")))
               tree (str "emon-dart-" v)
-              table (:out (rl/run! "tar" "-xzOf" (str out "/" (dart-asset v)) (str tree "/emon_core/lib/src/native_assets.g.dart")))
-              pubspec (:out (rl/run! "tar" "-xzOf" (str out "/" (dart-asset v)) (str tree "/emon/pubspec.yaml")))
-              names (str/split-lines (:out (rl/run! "tar" "-tzf" (str out "/" (dart-asset v)))))]
+              table (archives/tar-read (str out "/" (dart-asset v)) "-xzOf" (str tree "/emon_core/lib/src/native_assets.g.dart"))
+              pubspec (archives/tar-read (str out "/" (dart-asset v)) "-xzOf" (str tree "/emon/pubspec.yaml"))
+              names (archives/tar-list (str out "/" (dart-asset v)))]
           (t! "dart: the tree is a release asset and SHA256SUMS lists it (and its hash is right)"
               (and (= 25 (count sums)) (= (get sums (dart-asset v)) (sha256-hex (str out "/" (dart-asset v)))) (= [] (check-dir out v))))
           (t! "dart: the hook table has the SHA-256 of every C bundle (desktop, Windows and mobile) as SHA256SUMS lists them"
@@ -611,8 +613,34 @@
           (t! "dart: stamped with the version and publishable (a hosted dependency, no publish_to: none)"
               (and (str/includes? pubspec (str "version: " v)) (str/includes? pubspec (str "emon_core: ^" v)) (not (str/includes? pubspec "publish_to: none")) (not (str/includes? pubspec "path: ../"))))
           (t! "dart: every package of pub.yml is in the tree" (every? (fn [pkg] (some #{(str tree "/" pkg "/pubspec.yaml")} names)) ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon_ocr_mlkit" "emon" "emon_flutter"])))
-        (dart! {:dir out :version v})
-        (t! "dart: a rerun over its own output is the same set" (= [] (check-dir out v)))
+        (let [sums (slurp (str out "/SHA256SUMS"))]
+          (dart! {:dir out :version v})
+          (t! "dart: a rerun is byte-identical"
+              (and (= sums (slurp (str out "/SHA256SUMS"))) (= [] (check-dir out v)))))
+        (let [fixture (str tmp "/archive-fixture")
+              entry (str "fixture/" (apply str (repeat 105 "a")))
+              file (str fixture "/" entry)
+              tar (str tmp "/fixture.tar.gz")
+              zip (str tmp "/fixture.zip")
+              unpacked (str tmp "/unpacked")
+              posix? (not (str/starts-with? (System/getProperty "os.name") "Windows"))]
+          (fs/create-dirs (fs/parent file))
+          (spit file "executable")
+          (when posix? (fs/set-posix-file-permissions file "rwxr-x--x"))
+          (archives/tar-gz! tar fixture "fixture")
+          (archives/zip! zip fixture "fixture")
+          (let [hashes (mapv sha256-hex [tar zip])]
+            (fs/set-last-modified-time file (java.nio.file.attribute.FileTime/fromMillis 123456789))
+            (archives/tar-gz! tar fixture "fixture")
+            (archives/zip! zip fixture "fixture")
+            (t! "archive writers ignore filesystem timestamps" (= hashes (mapv sha256-hex [tar zip]))))
+          (fs/create-dirs unpacked)
+          (archives/untar! tar unpacked)
+          (t! "tar handles long names and preserves executable mode"
+              (and (= "executable" (slurp (str unpacked "/" entry)))
+                   (or (not posix?) (= (fs/posix-file-permissions file)
+                                        (fs/posix-file-permissions (str unpacked "/" entry))))))
+          (t! "zip uses portable entry names" (= [entry] (archives/zip-list zip))))
         ;; a bundle without its adapter is refused by the collector
         (mk-bundle! "aarch64-apple-darwin" "lib/emon/adapters/libemon_ocr_vision.dylib")
         (t! "archive: a bundle that lacks an adapter library is named and refused"

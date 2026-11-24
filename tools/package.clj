@@ -17,10 +17,12 @@
 ;; Source assembly excludes laws, probes and test support.
 ;;
 ;; NOTHING IS UPLOADED. This task never runs `cargo publish`, `npm publish`, `dotnet nuget push` or `mvn deploy`.
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[babashka.process :as p]
          '[clojure.edn :as edn]
          '[clojure.string :as str]
+         '[native.exports :as exports]
          '[ppocr.bundle :as pp]
          '[ppocr.ort :as ort])
 (import '(java.security MessageDigest))
@@ -111,8 +113,8 @@
   (let [r (run {} "rustc" "-vV")]
     (second (re-find #"(?m)^host: (\S+)" (:out r)))))
 
-(defn- zip-list [f] (str/split-lines (:out (run {} "unzip" "-Z1" f))))
-(defn- tar-list [f] (str/split-lines (:out (run {} "tar" "-tzf" f))))
+(defn- zip-list [f] (archives/zip-list f))
+(defn- tar-list [f] (archives/tar-list f))
 
 (def common-files
   {"LICENSE" "LICENSE"
@@ -208,7 +210,7 @@
     (fs/create-dirs out)
     (let [zip (str out "/emon-go-" tag ".zip")]
       (fs/delete-if-exists zip)
-      (run {:dir (str (stage-dir :go) "/zip")} "zip" "-X" "-D" "-q" "-r" zip (str go-module "@" tag))
+      (archives/zip! zip (str (stage-dir :go) "/zip") (str go-module "@" tag))
       (let [names (zip-list zip)]
         (when (some #(re-find #"testhooks\.go$|_test\.go$|testport\.go$|/cmd/" %) names) (bad! "the Go module zip carries test support"))
         (when-not (some #(re-find #"/internal/model/" %) names) (bad! "the Go module zip has no internal/model: the generated packages are not under internal/"))
@@ -313,7 +315,7 @@
       (let [bundle (str (out-dir :java) "/" art "-bundle.zip")
             mroot (str (out-dir :java) "/maven")]
         (fs/delete-if-exists bundle)
-        (run {:dir mroot} "zip" "-X" "-D" "-q" "-r" bundle "com")
+        (archives/zip! bundle mroot "com")
         [bundle jar pom src doc]))))
 
 ;; ------------------------------------------------------------------------------------------------------ the NuGet package
@@ -348,7 +350,7 @@
       (let [names (zip-list nupkg)]
         (when-not (some #(re-find #"^lib/net8\.0/Emon\.dll$" %) names) (bad! "the nupkg has no lib/net8.0/Emon.dll: " (str/join " " names)))
         (when-not (some #{"LICENSE" "README.md"} names) (bad! "the nupkg has no LICENSE or README.md")))
-      (let [nuspec (:out (run {} "unzip" "-p" nupkg "Emon.nuspec"))]
+      (let [nuspec (archives/zip-text nupkg "Emon.nuspec")]
         (when-not (re-find #"<license type=\"expression\">MIT</license>" nuspec) (bad! "the nuspec has no MIT licence expression")))
       (vec (filter fs/exists? [nupkg (str out "/Emon." version ".snupkg")])))))
 
@@ -543,9 +545,10 @@
                 ;; a shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
                 ;; works where it was built and nowhere else; @rpath/ (macOS) and a soname (Linux) make `-Wl,-rpath,DIR` the way it is found
                 win? (str/includes? (host-triple) "windows-msvc")
+                elf (when-not (or mac? win?) exports/elf-link-flags)
                 ident (fn [n] (cond win? [] mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/lib" n ".dylib")] :else ["-C" (str "link-arg=-Wl,-soname,lib" n ".so")]))
                 ;; the core library: pdfium at run time, the pack fetch, no Tesseract
-                lib (attempt dir env ["rustc" "--release" "--lib" "--features" "packs-fetch"] (concat (ident "emon") cfgs crt))
+                lib (attempt dir env ["rustc" "--release" "--lib" "--features" "packs-fetch"] (concat (ident "emon") cfgs crt elf))
                 pod (when (and (zero? (:exit lib)) (not win?)) ; no pod ships for Windows (K5)
                       (attempt dir (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
                                (concat ["build" "--release" "--bin" "emon-pod"] (when full? ["--features" "tesseract"])) []))
@@ -557,7 +560,7 @@
                                 afiles (-> (rust-src-files)
                                            (assoc "Cargo.toml" {:text acargo} "Cargo.lock" "host/rust/Cargo.lock"))]
                             (stage! adir afiles ["src"])
-                            (attempt adir env ["rustc" "--release" "--lib" "--features" "tesseract-adapter"] (concat (ident "emon_ocr_tesseract") crt flags))))]
+                            (attempt adir env ["rustc" "--release" "--lib" "--features" "tesseract-adapter"] (concat (ident "emon_ocr_tesseract") crt flags elf))))]
             (when-not (zero? (:exit r)) (bad! "cargo build of the C library failed\n" (tail (str (:out r) "\n" (:err r)) 40)))
             (when (and adapter (not (zero? (:exit adapter)))) (bad! "cargo build of the Tesseract adapter library failed\n" (tail (str (:out adapter) "\n" (:err adapter)) 40)))
             (reset! native-adapter-dir (when adapter (str adir "/target/release")))
@@ -597,8 +600,7 @@
       (fs/create-dirs (fs/parent (str d "/" rel)))
       (fs/copy src (str d "/" rel) {:replace-existing true :copy-attributes true}))
     (fs/create-dirs (out-dir host))
-    ;; GNU tar (Git's, first on a Windows runner's bash PATH) reads `C:\...` as host:path; --force-local says it is a file
-    (apply run {:dir tmp} (concat ["tar"] (when (and (str/includes? (str/lower-case (System/getProperty "os.name")) "windows") (str/includes? (:out (run {:ok? false} "tar" "--version")) "GNU")) ["--force-local"]) ["-czf" tgz name]))
+    (archives/tar-gz! tgz tmp name)
     tgz))
 
 (def packs-catalogue (delay (edn/read-string (slurp (str root "/release/packs/packs.edn")))))
@@ -621,12 +623,6 @@
              (when @native-winocr-lib {"lib/emon/adapters/emon_ocr_winocr.dll" @native-winocr-lib})
              (into {} (for [{:keys [file src]} data] [(str "share/emon/packs/" (pack-dir-of file) "/" file) src]))))))
 
-(defn- exported-symbols
-  "The names a shared library defines and exports (nm -g), without the leading underscore of macOS."
-  [f]
-  (let [r (run {:ok? false} "nm" "-g" (if (str/includes? (str f) ".dylib") "-U" "--defined-only") (str f))]
-    (->> (str/split-lines (:out r)) (keep #(second (re-find #"\s[TtDdBbRrSs]\s+_?(\S+)$" %))) set)))
-
 (defn- build-ppocr-c! [triple prefix]
   (let [dir (stage-dir :native-ppocr)
         runtime (ort/install! triple true dir)
@@ -646,6 +642,7 @@
     (let [shim (pp/build-shim! (fn [opts & args] (apply run (assoc opts :env env) args)) dir triple runtime ["cc"] "ar")
           link (str/split (str/trim (slurp (str prefix "/link.rustflags"))) #"\s+")
           flags (concat shim link ["-C" "strip=symbols"]
+                        (when-not (or mac? win?) exports/elf-link-flags)
                         (cond win? ["-C" "target-feature=+crt-static"]
                               mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/" adapter)]
                               :else ["-C" (str "link-arg=-Wl,-soname," adapter)]))
@@ -656,8 +653,9 @@
           built (str dir "/target/release/" adapter)]
       (when-not (zero? (:exit (build (assoc opts :ok? false) ["--offline"])))
         (build opts []))
-      (when (and (not win?) (not= #{"emon_ocr_adapter_v1"} (exported-symbols built)))
-        (bad! "unexpected PP-OCR adapter exports for " triple))
+      (when-not win?
+        (when-let [problems (seq (exports/problems built exports/adapter-abi))]
+          (bad! (str/join "\n" problems))))
       (pp/artifacts triple runtime built))))
 
 (defn build-c! []
@@ -682,8 +680,8 @@
     ;; The symbol audits below use nm, otool and objdump, which a Windows runner does not have: its library is audited by `bb native --audit` (the static libraries) and the
     ;; winocr audit (dumpbin); what the bundle holds is checked by `bb release-ops archive` (tools/release/ops.clj, `bundle-problems`) when the archives are collected.
     (when-not windows?
-      (let [nm (run {:ok? false} "nm" "-g" (str rel "/" dyn))]
-        (when (str/includes? (:out nm) "emon_test_panic") (bad! "libemon exports emon_test_panic")))
+      (when-let [problems (seq (exports/problems (str rel "/" dyn) (exports/header-functions)))]
+        (bad! (str/join "\n" problems)))
       ;; the library is found by @rpath/ (macOS) or its soname (Linux), never by the absolute path it was linked at (this was the case before D552)
       (let [mac? (= "libemon.dylib" dyn)
             r (if mac? (run {:ok? false} "otool" "-D" (str rel "/" dyn)) (run {:ok? false} "sh" "-c" (str "objdump -p " rel "/" dyn " | grep SONAME")))]
@@ -695,8 +693,8 @@
         (let [nm (run {:ok? false} "nm" (str rel "/" f))]
           (when (re-find #"(?m)\b_?(TessBaseAPI[A-Za-z0-9_]*|pixRead[A-Za-z0-9_]*|pixCreate[A-Za-z0-9_]*)\b" (:out nm)) (bad! f " carries Tesseract or Leptonica: the core library has none (K2)"))))
       (when @native-adapter-dir
-        (let [exports (exported-symbols (str @native-adapter-dir "/" adapter))]
-          (when-not (= #{"emon_ocr_adapter_v1"} exports) (bad! adapter " exports " (pr-str (sort exports)) ", not exactly emon_ocr_adapter_v1")))
+        (when-let [problems (seq (exports/problems (str @native-adapter-dir "/" adapter) exports/adapter-abi))]
+          (bad! (str/join "\n" problems)))
         (let [nm (run {:ok? false} "nm" (str @native-adapter-dir "/" adapter))]
           (when (re-find #"(?m)\b_?(jbig2_[a-z_]+|jbg_[a-z_]+|opj_[a-z_]+|jbig2dec_[a-z_]+)\b" (:out nm)) (bad! adapter " has a jbig2dec, JBIG-KIT or OpenJPEG symbol"))))
       ;; bb native --audit's rule, held to the product (D540): no jbig2dec, JBIG-KIT or OpenJPEG symbol in either library, and no pdfium linked
@@ -768,7 +766,7 @@
     (vec (for [pkg dart-packages
                :let [src (str stage "/" pkg) f (str out "/" pkg "-" version ".tar.gz")]
                :when (fs/directory? src)]
-           (do (run {} "tar" "--exclude=.dart_tool" "--exclude=build" "--exclude=pubspec.lock" "--exclude=.gradle" "--exclude=Pods" "--exclude=local.properties" "-czf" f "-C" stage pkg)
+           (do (archives/tar-gz! f stage pkg #{".dart_tool" "build" "pubspec.lock" ".gradle" "Pods" "local.properties"})
                f)))))
 
 (def builders {:dart build-dart! :ppocr build-ppocr! :js-ppocr build-js-ppocr! :rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})
@@ -834,7 +832,7 @@
 
 (defn- consume-rust [{:keys [files]} tmp]
   (let [crate (first files)
-        _ (run {} "tar" "-xzf" crate "-C" tmp)
+        _ (archives/untar! crate tmp)
         src (str tmp "/emon-" version)
         app (str tmp "/app")]
     (fs/create-dirs (str app "/src"))
@@ -928,7 +926,7 @@
         repo (str tmp "/m2")
         app (str tmp "/app")]
     (fs/create-dirs repo)
-    (run {} "unzip" "-q" bundle "-d" repo)
+    (fs/unzip bundle repo)
     (let [jar (str repo "/com/3sln/emon/" version "/emon-" version ".jar")]
       (when-not (fs/exists? jar) (bad! "the bundle has no com/3sln/emon/" version "/emon-" version ".jar"))
       (put-sample! app)
@@ -1066,7 +1064,7 @@
           (say "  NOTE js: @3sln/pdfium-wasm or tesseract.js is not installed here, so the native snippet was not run"))))
     (report-html app)))
 
-(defn- unpack [tgz tmp] (run {} "tar" "-xzf" tgz "-C" tmp) (let [d (first (fs/list-dir tmp))] (str d)))
+(defn- unpack [tgz tmp] (archives/untar! tgz tmp) (let [d (first (fs/list-dir tmp))] (str d)))
 
 (defn- consume-c [{:keys [files]} tmp]
   (let [dir (unpack (first files) tmp)
@@ -1134,7 +1132,7 @@
         pure ["emon_core" "emon_ocr_tesseract" "emon_ocr_ppocr" "emon_ocr_vision" "emon_ocr_winocr" "emon"]]
     (fs/create-dirs pk)
     (doseq [f files :let [n (str/replace (str (fs/file-name f)) (str "-" version ".tar.gz") "")] :when (some #{n} pure)]
-      (run {} "tar" "-xzf" f "-C" pk))
+      (archives/untar! f pk))
     (put-sample! app)
     (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
     (fs/create-dirs (str app "/bin"))
@@ -1165,7 +1163,8 @@
     (spit (str app "/tour.clj") (slurp (snippet-file "pod/tour.clj")))
     ;; the other way in, which the quickstart does not use: the bytes, base64 in an EDN map
     (spit script
-          (str "(require '[babashka.pods :as pods] '[babashka.fs :as fs])\n"
+          (str "(require '[babashka.pods :as pods] '[archives :as archives]
+         '[babashka.fs :as fs])\n"
                "(import '(java.util Base64))\n"
                "(pods/load-pod [\"" dir "/emon-pod\"])\n"
                "(assert (= \"" version "\" (:version (emon/capabilities))))\n"

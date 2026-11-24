@@ -1,6 +1,6 @@
 #!/usr/bin/env bb
 ;; Test the actual unpacked release payload from a fresh directory, outside the repo cwd.
-(require '[babashka.fs :as fs] '[babashka.process :refer [process shell]]
+(require '[archives :as archives] '[babashka.fs :as fs] '[babashka.process :refer [process]]
          '[clojure.string :as str])
 (let [[archive] *command-line-args*
       _ (assert (= 1 (count *command-line-args*)) "usage: addon_smoke.clj ARCHIVE")
@@ -15,7 +15,7 @@
       cli-archive (str root "/.cache/cli/emon-" version "-" triple (if win? ".zip" ".tar.gz"))
       unpack (fn [a d] (fs/create-dirs d)
                (if win? (fs/unzip a d)
-                 (shell {:shutdown nil} "tar" "-xzf" a "-C" d)))]
+                 (archives/untar! a d)))]
   (assert (fs/regular-file? cli-archive) "build bb cli --check before the add-on smoke")
   (try
     (unpack (str (fs/absolutize archive)) pp-dir) (unpack cli-archive cli-dir)

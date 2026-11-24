@@ -23,7 +23,8 @@
 ;;           (`flutter pub publish --force` for the two Flutter plugins); a package whose version pub.dev already has is skipped, so a rerun finishes what a failed run left
 ;;   go      (no registry) GITHUB_TOKEN or a pushing checkout: commit dist/stage/go/tree/go as go/ on a TAG-ONLY commit on top of HEAD and push the tag go/vV
 ;;           (D542); the Go proxy learns of it on first request, and this asks it once
-(require '[babashka.fs :as fs]
+(require '[archives :as archives]
+         '[babashka.fs :as fs]
          '[babashka.http-client :as http]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
@@ -275,7 +276,7 @@
     (fs/delete-tree home)
     (let [bundle (str (fs/absolutize (str "dist/java/" art "-bundle-signed.zip")))]
       (fs/delete-if-exists bundle)
-      (rl/run! {:dir mroot} "zip" "-X" "-D" "-q" "-r" bundle "com")
+      (archives/zip! bundle mroot "com")
       bundle)))
 
 (defn- central-upload! [bundle v]
@@ -328,7 +329,7 @@
       (when-not listed (rl/die 1 (str "bb publish pub: SHA256SUMS of " rel " does not list " asset)))
       (when-not (= listed got) (rl/die 1 (str "bb publish pub: " asset " is " got ", not the " listed " SHA256SUMS lists: refusing to publish it")))
       (say "  " asset " matches SHA256SUMS (" (subs got 0 16) "...)"))
-    (rl/run! "tar" "-xzf" (str dir "/" asset) "-C" dir)
+    (archives/untar! (str dir "/" asset) dir)
     (let [tree (str dir "/emon-dart-" v)
           results (doall
                    (for [{:keys [name flutter?]} pub-packages]

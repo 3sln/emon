@@ -1,9 +1,11 @@
 #!/usr/bin/env bb
 ;; Separate experimental release archive. No corpus access. All build output stays here.
-(require '[babashka.fs :as fs] '[babashka.process :refer [shell process]]
+(require '[archives :as archives]
+         '[babashka.fs :as fs] '[babashka.process :refer [shell process]]
          '[babashka.http-client :as http] '[clojure.edn :as edn]
-         '[clojure.string :as str] '[clojure.java.io :as io] '[ppocr.bundle :as pp])
-(import '[java.security MessageDigest] '[java.util.zip ZipEntry ZipOutputStream])
+         '[clojure.string :as str] '[clojure.java.io :as io]
+         '[native.exports :as exports] '[ppocr.bundle :as pp])
+(import '[java.security MessageDigest])
 (def options
   (loop [remaining *command-line-args* result {}]
     (if-let [arg (first remaining)]
@@ -86,6 +88,7 @@
     (let [link (str/split (str/trim (slurp (str prefix "/link.rustflags"))) #"\s+")
           flags (concat ["-A" "warnings" "--cfg" "ppocr" "-L" (str "native=" root) "-L" (str "native=" ort "/lib")]
                     link (when win? ["-C" "target-feature=+crt-static"])
+                    (when-not (or win? mac?) exports/elf-link-flags)
                     (when-not win? ["-C" (str "link-arg=-Wl,-rpath," (if mac? "@loader_path" "$ORIGIN"))]))]
       (apply shell {:dir dir :shutdown nil :extra-env {"MACOSX_DEPLOYMENT_TARGET" "12.0" "EMON_CS_SHARED_COMPILATION" "false"}}
         (concat ["cargo" "rustc" "--locked" "--release" "--lib" "--features" "tesseract" "--"] flags)))
@@ -118,11 +121,7 @@
       (fs/copy src (str stage "/" dst)))
     (spit (str stage "/SHA256SUMS") (apply str (for [f (sort (fs/glob stage "**")) :when (fs/regular-file? f)]
       (str (sha f) "  " (fs/relativize stage f) "\n"))))
-    (if win? (with-open [zos (ZipOutputStream. (io/output-stream archive))]
-       (doseq [f (sort (fs/glob stage "**")) :when (fs/regular-file? f)]
-         (.putNextEntry zos (ZipEntry. (str/replace (str (fs/relativize out f)) "\\" "/")))
-         (io/copy (io/file (str f)) zos) (.closeEntry zos)))
-      (shell {:dir out :shutdown nil :extra-env {"COPYFILE_DISABLE" "1"}} "tar" "-czf" archive name))
+    (if win? (archives/zip! archive out name) (archives/tar-gz! archive out name))
     (println "PP add-on:" archive "bytes" (fs/size archive) "sha256" (sha archive))
     (when (args "--check") (run "bb" "tools/ppocr/addon_smoke.clj" archive))
     archive))
