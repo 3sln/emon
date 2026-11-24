@@ -163,7 +163,7 @@ public final class Enginestest {
     }
     public static int enTurnkeyClass(int emonT, int pclass, int dflt, int platform, int platformCalibrated, int pp, int fallback) {
         int eng = Engines.pkDefaultEngine(pclass);
-        emon.Testport.assertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for the maintainer's acceptance (P13.21b, D907)");
+        emon.Testport.assertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)");
         emon.Testport.assertEq(Engines.pkEngineOn(eng, pclass), 1, "the default runs on the class");
         if (eng == Engines.engTesseract()) {
             emon.Testport.assertEq(Engines.pkEngineCalibrated(eng), 1, "Tesseract is calibrated");
@@ -193,8 +193,8 @@ public final class Enginestest {
         return 0;
     }
     public static void testTheTurnkeyDefaultOfEveryPlatformClass() {
-        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engTesseract(), Engines.engAppleVision(), 1, Engines.engPpocr(), Engines.engTesseract());
-        enTurnkeyClass(0, Engines.pclsIos(), Engines.engTesseract(), Engines.engAppleVision(), 1, Engines.engPpocr(), Engines.engTesseract());
+        enTurnkeyClass(0, Engines.pclsMacos(), Engines.engAppleVision(), Engines.engAppleVision(), 1, Engines.engPpocr(), Engines.engTesseract());
+        enTurnkeyClass(0, Engines.pclsIos(), Engines.engAppleVision(), Engines.engAppleVision(), 1, Engines.engPpocr(), Engines.engTesseract());
         enTurnkeyClass(0, Engines.pclsLinux(), Engines.engTesseract(), 0, 0, Engines.engPpocr(), 0);
         enTurnkeyClass(0, Engines.pclsWindows(), Engines.engWindowsMediaOcr(), Engines.engWindowsMediaOcr(), 0, Engines.engPpocr(), 0);
         enTurnkeyClass(0, Engines.pclsAndroid(), Engines.engMlkitText(), Engines.engMlkitText(), 0, Engines.engPpocr(), 0);
@@ -294,16 +294,16 @@ public final class Enginestest {
         emon.Port.Cells engs = emon.Port.newCells();
         emon.Port.Cells installed = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
-        emon.Testport.assertEq(enResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
+        emon.Testport.assertEq(enResolve(Engines.pclsLinux(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
         emon.Testport.assertEq(Engines.pkRows(out), 1, "one pack: English, for the turnkey default engine");
         enExpectRow(0, out, 0, Engines.pstateMissing(), Engines.engTesseract(), Packdata.pkidTessFastEng(), 0, "English is missing");
         emon.Testport.assertEq(Engines.pkMissing(out), 1, "one missing");
         enCells1(installed, Packdata.pkidTessFastEng());
-        emon.Testport.assertEq(enResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves with English installed");
+        emon.Testport.assertEq(enResolve(Engines.pclsLinux(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves with English installed");
         enExpectRow(0, out, 0, Engines.pstateInstalled(), Engines.engTesseract(), Packdata.pkidTessFastEng(), 0, "English is installed");
         emon.Testport.assertEq(Engines.pkMissing(out), 0, "nothing is missing");
         emon.Port.cellsPush(installed, Packdata.pkidTessOsd());
-        emon.Testport.assertEq(enResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "an installed pack nobody needs is not a row");
+        emon.Testport.assertEq(enResolve(Engines.pclsLinux(), 0, langs, engs, installed, out), Engines.pkerrOk(), "an installed pack nobody needs is not a row");
         emon.Testport.assertEq(Engines.pkRows(out), 1, "still one row");
     }
     public static void testAppleVisionNeedsTesseractsPacksOnlyIfAPageGoesToIt() {

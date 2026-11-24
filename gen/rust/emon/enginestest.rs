@@ -171,7 +171,7 @@ fn test_the_role_table_agrees_with_the_hybrid_roles_of_ocrengine() {
 }
 pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, dflt: i32, platform: i32, platform_calibrated: i32, pp: i32, fallback: i32) -> i32 {
     let eng: i32 = pk_default_engine(pclass);
-    crate::testport::assert_eq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for the maintainer's acceptance (P13.21b, D907)");
+    crate::testport::assert_eq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)");
     crate::testport::assert_eq(pk_engine_on(eng, pclass), 1, "the default runs on the class");
     if eng == eng_tesseract() {
         crate::testport::assert_eq(pk_engine_calibrated(eng), 1, "Tesseract is calibrated");
@@ -202,8 +202,8 @@ pub(crate) fn en_turnkey_class(emon_t: i32, pclass: i32, dflt: i32, platform: i3
 }
 #[test]
 fn test_the_turnkey_default_of_every_platform_class() {
-    en_turnkey_class(0, pcls_macos(), eng_tesseract(), eng_apple_vision(), 1, eng_ppocr(), eng_tesseract());
-    en_turnkey_class(0, pcls_ios(), eng_tesseract(), eng_apple_vision(), 1, eng_ppocr(), eng_tesseract());
+    en_turnkey_class(0, pcls_macos(), eng_apple_vision(), eng_apple_vision(), 1, eng_ppocr(), eng_tesseract());
+    en_turnkey_class(0, pcls_ios(), eng_apple_vision(), eng_apple_vision(), 1, eng_ppocr(), eng_tesseract());
     en_turnkey_class(0, pcls_linux(), eng_tesseract(), 0, 0, eng_ppocr(), 0);
     en_turnkey_class(0, pcls_windows(), eng_windows_media_ocr(), eng_windows_media_ocr(), 0, eng_ppocr(), 0);
     en_turnkey_class(0, pcls_android(), eng_mlkit_text(), eng_mlkit_text(), 0, eng_ppocr(), 0);
@@ -306,16 +306,16 @@ fn test_the_default_resolution_needs_english_and_says_whether_it_is_there() {
     let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::testport::assert_eq(en_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
+    crate::testport::assert_eq(en_resolve(pcls_linux(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
     crate::testport::assert_eq(pk_rows(out), 1, "one pack: English, for the turnkey default engine");
     en_expect_row(0, out, 0, pstate_missing(), eng_tesseract(), pkid_tess_fast_eng(), 0, "English is missing");
     crate::testport::assert_eq(pk_missing(out), 1, "one missing");
     en_cells1(installed, pkid_tess_fast_eng());
-    crate::testport::assert_eq(en_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "resolves with English installed");
+    crate::testport::assert_eq(en_resolve(pcls_linux(), 0, langs, engs, installed, out), pkerr_ok(), "resolves with English installed");
     en_expect_row(0, out, 0, pstate_installed(), eng_tesseract(), pkid_tess_fast_eng(), 0, "English is installed");
     crate::testport::assert_eq(pk_missing(out), 0, "nothing is missing");
     crate::port::cells_push(installed, pkid_tess_osd());
-    crate::testport::assert_eq(en_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "an installed pack nobody needs is not a row");
+    crate::testport::assert_eq(en_resolve(pcls_linux(), 0, langs, engs, installed, out), pkerr_ok(), "an installed pack nobody needs is not a row");
     crate::testport::assert_eq(pk_rows(out), 1, "still one row");
 }
 #[test]

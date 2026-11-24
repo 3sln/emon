@@ -2,7 +2,7 @@
 
 Apple Vision text recognition for emon on iOS and macOS: the adapter library (libemon_ocr_vision, 13 KB of Objective-C over the OS) and nothing to download.
 
-iOS 13 and macOS 10.15 or newer. It reads with the OS's own recogniser and needs no model pack. Its confidences are quantized, it has no orientation detection and no blocks: select it explicitly with `ocrEngine: OcrEngine.appleVision`.
+iOS 13 and macOS 10.15 or newer. It reads with the OS's own recogniser and needs no model pack. Its confidences are quantized, it has no orientation detection and no blocks: it is the turnkey default on Apple platforms (with Tesseract as its page fallback; Tesseract's pack is a conditional, on-demand download, used only for fallback pages) and can be selected explicitly with `ocrEngine: OcrEngine.appleVision`.
 
 Part of [emon](https://github.com/3sln/emon). Depends only on `emon_core`; most apps use the turnkey `emon` (or `emon_flutter`), which chooses adapters for the platform.
 

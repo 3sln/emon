@@ -199,7 +199,7 @@ public final class Adapterstest {
         emon.Port.Cells engs = emon.Port.newCells();
         emon.Port.Cells installed = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
-        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
+        emon.Testport.assertEq(adResolve(Engines.pclsLinux(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverDownloadable(), "English is missing and auto may fetch it");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverBlocked(), "never may not");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchCache(), 0), Adapters.pverBlocked(), "cache may not");
@@ -211,13 +211,13 @@ public final class Adapterstest {
         emon.Port.Cells installed = emon.Port.newCells();
         emon.Port.Cells out = emon.Port.newCells();
         adCells1(installed, Packdata.pkidTessFastEng());
-        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
+        emon.Testport.assertEq(adResolve(Engines.pclsLinux(), 0, langs, engs, installed, out), Engines.pkerrOk(), "resolves");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverReady(), "ready, whatever the mode");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 1), Adapters.pverReady(), "and offline");
-        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "with OSD wanted");
+        emon.Testport.assertEq(adResolve(Engines.pclsLinux(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "with OSD wanted");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverDownloadable(), "OSD is the missing pack");
         emon.Port.cellsPush(installed, Packdata.pkidTessOsd());
-        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "with OSD installed");
+        emon.Testport.assertEq(adResolve(Engines.pclsLinux(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "with OSD installed");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverReady(), "ready");
     }
     public static void testPrepareSaysReadyForAppleVisionWhateverIsInstalled() {
@@ -235,6 +235,18 @@ public final class Adapterstest {
         emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "Hindi");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
         emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 0), Adapters.pverBlocked(), "and may not come");
+    }
+    public static void testPrepareSaysReadyForTheAppleDefaultWithNothingInstalled() {
+        // P13.21b, D907 (maintainer 2026-11-23): Vision is the Apple default, built in; Tesseract's packs are a conditional, on-demand download for fallback pages only.
+        emon.Port.Cells langs = emon.Port.newCells();
+        emon.Port.Cells engs = emon.Port.newCells();
+        emon.Port.Cells installed = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Testport.assertEq(adResolve(Engines.pclsMacos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "macOS resolves with no engine asked");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchAuto(), 0), Adapters.pverReady(), "ready: nothing is missing before the conversion");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 1), Adapters.pverReady(), "and offline");
+        emon.Testport.assertEq(adResolve(Engines.pclsIos(), 0, langs, engs, installed, out), Engines.pkerrOk(), "iOS resolves");
+        emon.Testport.assertEq(Adapters.adVerdict(out, Engines.pfetchNever(), 1), Adapters.pverReady(), "ready too");
     }
     public static void testPrepareSaysPartialWhenALanguageHasNoPackForTheEngine() {
         emon.Port.Cells langs = emon.Port.newCells();

@@ -957,8 +957,8 @@ public static class Engines {
         6, 5, 12, 4
     };
     public static readonly int[] EnTurnkey = new int[] {
-        1, 1, 4, 2, 3, 7, 1,
-        2, 1, 4, 2, 3, 7, 1,
+        1, 4, 4, 2, 3, 7, 1,
+        2, 4, 4, 2, 3, 7, 1,
         3, 1, 0, 2, 3, 7, 0,
         4, 5, 5, 2, 3, 7, 0,
         5, 6, 6, 2, 3, 7, 0,

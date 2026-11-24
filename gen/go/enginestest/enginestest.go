@@ -185,7 +185,7 @@ func TestTheRoleTableAgreesWithTheHybridRolesOfOcrengine(emonT *testing.T) {
 
 func enTurnkeyClass(emonT *testing.T, pclass int32, dflt int32, platform int32, platformCalibrated int32, pp int32, fallback int32) int32 {
 	var eng int32 = engines.PkDefaultEngine(pclass)
-	port.AssertEq(emonT, eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for the maintainer's acceptance (P13.21b, D907)")
+	port.AssertEq(emonT, eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)")
 	port.AssertEq(emonT, engines.PkEngineOn(eng, pclass), 1, "the default runs on the class")
 	if eng == engines.EngTesseract() {
 		port.AssertEq(emonT, engines.PkEngineCalibrated(eng), 1, "Tesseract is calibrated")
@@ -216,8 +216,8 @@ func enTurnkeyClass(emonT *testing.T, pclass int32, dflt int32, platform int32, 
 }
 
 func TestTheTurnkeyDefaultOfEveryPlatformClass(emonT *testing.T) {
-	enTurnkeyClass(emonT, engines.PclsMacos(), engines.EngTesseract(), engines.EngAppleVision(), 1, engines.EngPpocr(), engines.EngTesseract())
-	enTurnkeyClass(emonT, engines.PclsIos(), engines.EngTesseract(), engines.EngAppleVision(), 1, engines.EngPpocr(), engines.EngTesseract())
+	enTurnkeyClass(emonT, engines.PclsMacos(), engines.EngAppleVision(), engines.EngAppleVision(), 1, engines.EngPpocr(), engines.EngTesseract())
+	enTurnkeyClass(emonT, engines.PclsIos(), engines.EngAppleVision(), engines.EngAppleVision(), 1, engines.EngPpocr(), engines.EngTesseract())
 	enTurnkeyClass(emonT, engines.PclsLinux(), engines.EngTesseract(), 0, 0, engines.EngPpocr(), 0)
 	enTurnkeyClass(emonT, engines.PclsWindows(), engines.EngWindowsMediaOcr(), engines.EngWindowsMediaOcr(), 0, engines.EngPpocr(), 0)
 	enTurnkeyClass(emonT, engines.PclsAndroid(), engines.EngMlkitText(), engines.EngMlkitText(), 0, engines.EngPpocr(), 0)
@@ -321,16 +321,16 @@ func TestTheDefaultResolutionNeedsEnglishAndSaysWhetherItIsThere(emonT *testing.
 	var engs *port.Cells = port.NewCells()
 	var installed *port.Cells = port.NewCells()
 	var out *port.Cells = port.NewCells()
-	port.AssertEq(emonT, enResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
+	port.AssertEq(emonT, enResolve(engines.PclsLinux(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves")
 	port.AssertEq(emonT, engines.PkRows(out), 1, "one pack: English, for the turnkey default engine")
 	enExpectRow(emonT, out, 0, engines.PstateMissing(), engines.EngTesseract(), packdata.PkidTessFastEng(), 0, "English is missing")
 	port.AssertEq(emonT, engines.PkMissing(out), 1, "one missing")
 	enCells1(installed, packdata.PkidTessFastEng())
-	port.AssertEq(emonT, enResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves with English installed")
+	port.AssertEq(emonT, enResolve(engines.PclsLinux(), 0, langs, engs, installed, out), engines.PkerrOk(), "resolves with English installed")
 	enExpectRow(emonT, out, 0, engines.PstateInstalled(), engines.EngTesseract(), packdata.PkidTessFastEng(), 0, "English is installed")
 	port.AssertEq(emonT, engines.PkMissing(out), 0, "nothing is missing")
 	port.CellsPush(installed, packdata.PkidTessOsd())
-	port.AssertEq(emonT, enResolve(engines.PclsMacos(), 0, langs, engs, installed, out), engines.PkerrOk(), "an installed pack nobody needs is not a row")
+	port.AssertEq(emonT, enResolve(engines.PclsLinux(), 0, langs, engs, installed, out), engines.PkerrOk(), "an installed pack nobody needs is not a row")
 	port.AssertEq(emonT, engines.PkRows(out), 1, "still one row")
 }
 

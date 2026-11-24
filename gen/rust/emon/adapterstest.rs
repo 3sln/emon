@@ -225,7 +225,7 @@ fn test_prepare_says_downloadable_when_the_turnkey_may_fetch() {
     let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
+    crate::testport::assert_eq(ad_resolve(pcls_linux(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
     crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_downloadable(), "English is missing and auto may fetch it");
     crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_blocked(), "never may not");
     crate::testport::assert_eq(ad_verdict(out, pfetch_cache(), 0), pver_blocked(), "cache may not");
@@ -238,13 +238,13 @@ fn test_prepare_says_ready_when_nothing_is_missing() {
     let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
     ad_cells1(installed, pkid_tess_fast_eng());
-    crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
+    crate::testport::assert_eq(ad_resolve(pcls_linux(), 0, langs, engs, installed, out), pkerr_ok(), "resolves");
     crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_ready(), "ready, whatever the mode");
     crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 1), pver_ready(), "and offline");
-    crate::testport::assert_eq(ad_resolve(pcls_macos(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "with OSD wanted");
+    crate::testport::assert_eq(ad_resolve(pcls_linux(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "with OSD wanted");
     crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_downloadable(), "OSD is the missing pack");
     crate::port::cells_push(installed, pkid_tess_osd());
-    crate::testport::assert_eq(ad_resolve(pcls_macos(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "with OSD installed");
+    crate::testport::assert_eq(ad_resolve(pcls_linux(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "with OSD installed");
     crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_ready(), "ready");
 }
 #[test]
@@ -263,6 +263,19 @@ fn test_prepare_says_ready_for_apple_vision_whatever_is_installed() {
     crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "Hindi");
     crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_downloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
     crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 0), pver_blocked(), "and may not come");
+}
+#[test]
+fn test_prepare_says_ready_for_the_apple_default_with_nothing_installed() {
+    // P13.21b, D907 (maintainer 2026-11-23): Vision is the Apple default, built in; Tesseract's packs are a conditional, on-demand download for fallback pages only.
+    let langs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(ad_resolve(pcls_macos(), 0, langs, engs, installed, out), pkerr_ok(), "macOS resolves with no engine asked");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_auto(), 0), pver_ready(), "ready: nothing is missing before the conversion");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 1), pver_ready(), "and offline");
+    crate::testport::assert_eq(ad_resolve(pcls_ios(), 0, langs, engs, installed, out), pkerr_ok(), "iOS resolves");
+    crate::testport::assert_eq(ad_verdict(out, pfetch_never(), 1), pver_ready(), "ready too");
 }
 #[test]
 fn test_prepare_says_partial_when_a_language_has_no_pack_for_the_engine() {

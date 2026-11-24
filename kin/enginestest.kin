@@ -184,7 +184,7 @@
 
 (defn ^I32 en-turnkey-class [^TestT emon-t ^I32 pclass ^I32 dflt ^I32 platform ^I32 platform-calibrated ^I32 pp ^I32 fallback]
   (let [^I32 eng (pk-default-engine pclass)]
-    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for the maintainer's acceptance (P13.21b, D907)")
+    (assert-eq eng dflt "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)")
     (assert-eq (pk-engine-on eng pclass) 1 "the default runs on the class")
     (if (== eng (eng-tesseract))
       (do (assert-eq (pk-engine-calibrated eng) 1 "Tesseract is calibrated")
@@ -208,8 +208,8 @@
     (return 0)))
 
 (deftest test-the-turnkey-default-of-every-platform-class
-  (en-turnkey-class (test-t) (pcls-macos) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
-  (en-turnkey-class (test-t) (pcls-ios) (eng-tesseract) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
+  (en-turnkey-class (test-t) (pcls-macos) (eng-apple-vision) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
+  (en-turnkey-class (test-t) (pcls-ios) (eng-apple-vision) (eng-apple-vision) 1 (eng-ppocr) (eng-tesseract))
   (en-turnkey-class (test-t) (pcls-linux) (eng-tesseract) 0 0 (eng-ppocr) 0)
   (en-turnkey-class (test-t) (pcls-windows) (eng-windows-media-ocr) (eng-windows-media-ocr) 0 (eng-ppocr) 0)
   (en-turnkey-class (test-t) (pcls-android) (eng-mlkit-text) (eng-mlkit-text) 0 (eng-ppocr) 0)
@@ -295,16 +295,16 @@
 
 (deftest test-the-default-resolution-needs-english-and-says-whether-it-is-there
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves")
     (assert-eq (pk-rows out) 1 "one pack: English, for the turnkey default engine")
     (en-expect-row (test-t) out 0 (pstate-missing) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is missing")
     (assert-eq (pk-missing out) 1 "one missing")
     (en-cells1 installed (pkid-tess-fast-eng))
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "resolves with English installed")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "resolves with English installed")
     (en-expect-row (test-t) out 0 (pstate-installed) (eng-tesseract) (pkid-tess-fast-eng) 0 "English is installed")
     (assert-eq (pk-missing out) 0 "nothing is missing")
     (cells-push installed (pkid-tess-osd))
-    (assert-eq (en-resolve (pcls-macos) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
+    (assert-eq (en-resolve (pcls-linux) 0 langs engs installed out) (pkerr-ok) "an installed pack nobody needs is not a row")
     (assert-eq (pk-rows out) 1 "still one row")))
 
 (deftest test-apple-vision-needs-tesseracts-packs-only-if-a-page-goes-to-it

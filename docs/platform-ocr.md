@@ -2,8 +2,8 @@
 
 An app can read scans with the recogniser the operating system already has, so there is no model to download and nothing to add to the
 app's size. Both are **explicit engines** in every SDK and the CLI: `ocr-engine=` is how an app, or you on the command line, asks for one (DEVLOG D895, D901). Only a turnkey package chooses for an app that
-chooses nothing, by kin's turnkey table: Windows.Media.Ocr on Windows and ML Kit on Android (`emon_flutter`; the pure-Dart `emon` keeps Tesseract on Android), Tesseract on Apple platforms and Linux: Apple Vision is built,
-calibrated and has its Tesseract fallback (below), and becomes the default on Apple platforms when the maintainer accepts it (P13.21b, DEVLOG D907).
+chooses nothing, by kin's turnkey table: Apple Vision on Apple platforms (with Tesseract as its page fallback, below; maintainer decision of 2026-11-23, P13.21b, DEVLOG D907), Windows.Media.Ocr on Windows and ML Kit on Android
+(`emon_flutter`; the pure-Dart `emon` keeps Tesseract on Android), Tesseract on Linux. On Apple platforms Vision is built in: nothing is downloaded for it. Tesseract's pack is a conditional, on-demand download, used only for the pages that fall back to it.
 
 | `ocr-engine` | Runs on | What reads | Adapter library |
 |---|---|---|---|
@@ -27,7 +27,7 @@ of what Vision answered and of the page's pixels, so a replay makes the same cho
 
 A page of Chinese, Japanese, Korean, Russian, Ukrainian or Thai text stays Vision's: Tesseract without a language read a quarter of the characters. The page is then read by Tesseract as it always was, passes and cells
 included; if Tesseract cannot read it either (no adapter, a pack the app declined) the page keeps its Vision reading, so a host with Vision alone behaves as before. `prepare()` reports Tesseract's packs
-as `conditional` (not missing, and not fetched ahead of time: the page that needs one asks for it, D896), except for a language Vision has no locale for, whose model is needed as ever.
+as `conditional` (on Apple platforms by default, as Vision is the turnkey default there; not missing, and not fetched ahead of time: the page that needs one asks for it, D896), except for a language Vision has no locale for, whose model is needed as ever.
 
 ## What they say, and what they do not
 

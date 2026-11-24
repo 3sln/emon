@@ -223,7 +223,7 @@ public static class Adapterstest {
         emon.Port.Cells engs = emon.Port.NewCells();
         emon.Port.Cells installed = emon.Port.NewCells();
         emon.Port.Cells @out = emon.Port.NewCells();
-        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
+        emon.Testport.AssertEq(AdResolve(Engines.PclsLinux(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverDownloadable(), "English is missing and auto may fetch it");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverBlocked(), "never may not");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchCache(), 0), Adapters.PverBlocked(), "cache may not");
@@ -236,13 +236,13 @@ public static class Adapterstest {
         emon.Port.Cells installed = emon.Port.NewCells();
         emon.Port.Cells @out = emon.Port.NewCells();
         AdCells1(installed, Packdata.PkidTessFastEng());
-        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
+        emon.Testport.AssertEq(AdResolve(Engines.PclsLinux(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverReady(), "ready, whatever the mode");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 1), Adapters.PverReady(), "and offline");
-        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "with OSD wanted");
+        emon.Testport.AssertEq(AdResolve(Engines.PclsLinux(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "with OSD wanted");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverDownloadable(), "OSD is the missing pack");
         emon.Port.CellsPush(installed, Packdata.PkidTessOsd());
-        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "with OSD installed");
+        emon.Testport.AssertEq(AdResolve(Engines.PclsLinux(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "with OSD installed");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverReady(), "ready");
     }
     [Xunit.Fact]
@@ -261,6 +261,19 @@ public static class Adapterstest {
         emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "Hindi");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverDownloadable(), "Vision cannot read it: Tesseract's Hindi model is needed");
         emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 0), Adapters.PverBlocked(), "and may not come");
+    }
+    [Xunit.Fact]
+    public static void TestPrepareSaysReadyForTheAppleDefaultWithNothingInstalled() {
+        // P13.21b, D907 (maintainer 2026-11-23): Vision is the Apple default, built in; Tesseract's packs are a conditional, on-demand download for fallback pages only.
+        emon.Port.Cells langs = emon.Port.NewCells();
+        emon.Port.Cells engs = emon.Port.NewCells();
+        emon.Port.Cells installed = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Testport.AssertEq(AdResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "macOS resolves with no engine asked");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchAuto(), 0), Adapters.PverReady(), "ready: nothing is missing before the conversion");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 1), Adapters.PverReady(), "and offline");
+        emon.Testport.AssertEq(AdResolve(Engines.PclsIos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "iOS resolves");
+        emon.Testport.AssertEq(Adapters.AdVerdict(@out, Engines.PfetchNever(), 1), Adapters.PverReady(), "ready too");
     }
     [Xunit.Fact]
     public static void TestPrepareSaysPartialWhenALanguageHasNoPackForTheEngine() {

@@ -169,7 +169,7 @@ public static class Enginestest {
     }
     internal static int EnTurnkeyClass(int emonT, int pclass, int dflt, int platform, int platformCalibrated, int pp, int fallback) {
         int eng = Engines.PkDefaultEngine(pclass);
-        emon.Testport.AssertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision waits for the maintainer's acceptance (P13.21b, D907)");
+        emon.Testport.AssertEq(eng, dflt, "the class's turnkey default: Tesseract, but the OS's own reader on Windows and Android (K5, D905); Apple Vision on Apple platforms, with Tesseract as its page fallback (P13.21b, D907, maintainer 2026-11-23)");
         emon.Testport.AssertEq(Engines.PkEngineOn(eng, pclass), 1, "the default runs on the class");
         if (eng == Engines.EngTesseract()) {
             emon.Testport.AssertEq(Engines.PkEngineCalibrated(eng), 1, "Tesseract is calibrated");
@@ -200,8 +200,8 @@ public static class Enginestest {
     }
     [Xunit.Fact]
     public static void TestTheTurnkeyDefaultOfEveryPlatformClass() {
-        EnTurnkeyClass(0, Engines.PclsMacos(), Engines.EngTesseract(), Engines.EngAppleVision(), 1, Engines.EngPpocr(), Engines.EngTesseract());
-        EnTurnkeyClass(0, Engines.PclsIos(), Engines.EngTesseract(), Engines.EngAppleVision(), 1, Engines.EngPpocr(), Engines.EngTesseract());
+        EnTurnkeyClass(0, Engines.PclsMacos(), Engines.EngAppleVision(), Engines.EngAppleVision(), 1, Engines.EngPpocr(), Engines.EngTesseract());
+        EnTurnkeyClass(0, Engines.PclsIos(), Engines.EngAppleVision(), Engines.EngAppleVision(), 1, Engines.EngPpocr(), Engines.EngTesseract());
         EnTurnkeyClass(0, Engines.PclsLinux(), Engines.EngTesseract(), 0, 0, Engines.EngPpocr(), 0);
         EnTurnkeyClass(0, Engines.PclsWindows(), Engines.EngWindowsMediaOcr(), Engines.EngWindowsMediaOcr(), 0, Engines.EngPpocr(), 0);
         EnTurnkeyClass(0, Engines.PclsAndroid(), Engines.EngMlkitText(), Engines.EngMlkitText(), 0, Engines.EngPpocr(), 0);
@@ -304,16 +304,16 @@ public static class Enginestest {
         emon.Port.Cells engs = emon.Port.NewCells();
         emon.Port.Cells installed = emon.Port.NewCells();
         emon.Port.Cells @out = emon.Port.NewCells();
-        emon.Testport.AssertEq(EnResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
+        emon.Testport.AssertEq(EnResolve(Engines.PclsLinux(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
         emon.Testport.AssertEq(Engines.PkRows(@out), 1, "one pack: English, for the turnkey default engine");
         EnExpectRow(0, @out, 0, Engines.PstateMissing(), Engines.EngTesseract(), Packdata.PkidTessFastEng(), 0, "English is missing");
         emon.Testport.AssertEq(Engines.PkMissing(@out), 1, "one missing");
         EnCells1(installed, Packdata.PkidTessFastEng());
-        emon.Testport.AssertEq(EnResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves with English installed");
+        emon.Testport.AssertEq(EnResolve(Engines.PclsLinux(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "resolves with English installed");
         EnExpectRow(0, @out, 0, Engines.PstateInstalled(), Engines.EngTesseract(), Packdata.PkidTessFastEng(), 0, "English is installed");
         emon.Testport.AssertEq(Engines.PkMissing(@out), 0, "nothing is missing");
         emon.Port.CellsPush(installed, Packdata.PkidTessOsd());
-        emon.Testport.AssertEq(EnResolve(Engines.PclsMacos(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "an installed pack nobody needs is not a row");
+        emon.Testport.AssertEq(EnResolve(Engines.PclsLinux(), 0, langs, engs, installed, @out), Engines.PkerrOk(), "an installed pack nobody needs is not a row");
         emon.Testport.AssertEq(Engines.PkRows(@out), 1, "still one row");
     }
     [Xunit.Fact]

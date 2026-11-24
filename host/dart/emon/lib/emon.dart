@@ -38,9 +38,13 @@ List<NativeAdapter> platformAdapters() => [
       if (ppocrAvailable) ppocrAdapter(),
     ];
 
-/// The OCR engine a turnkey uses on this platform when the app chooses none: kin's turnkey table (Windows.Media.Ocr on Windows, K5 D905; Tesseract elsewhere: Apple Vision waits for the maintainer's acceptance (P13.21b, D907), and
+/// The OCR engine a turnkey uses on this platform when the app chooses none: kin's turnkey table (Apple Vision on macOS and iOS with Tesseract as its page fallback, maintainer 2026-11-23, P13.21b D907; Windows.Media.Ocr on Windows, K5 D905; Tesseract elsewhere, and
 /// Android's default, ML Kit, is a Flutter plugin, so the pure-Dart `emon` keeps Tesseract there and `emon_flutter` chooses ML Kit).
-OcrEngine get defaultPlatformEngine => Platform.isWindows ? OcrEngine.windowsMediaOcr : OcrEngine.tesseract;
+OcrEngine get defaultPlatformEngine => Platform.isWindows
+    ? OcrEngine.windowsMediaOcr
+    : (Platform.isMacOS || Platform.isIOS)
+        ? OcrEngine.appleVision
+        : OcrEngine.tesseract;
 
 /// Open emon with the engines of this platform.
 ///
