@@ -49,7 +49,7 @@
          [:port "host/rust/src/tess.rs" "ocr ocrport ocrtess oil plan"]
          [:port "host/rust/src/adapter.rs" "plan"]
          [:test "host/rust/tests/adapters.rs" "engines ocrengine oil"]
-         [:port    "host/rust/src/ppocr_abi.rs" "engines oil ocrport plan"]
+         [:port    "host/rust/src/ppocr_abi.rs" "engines ocrengine oil ocrport plan"]
          [:port    "host/go/ppocr.go" "ocrengine ocrport plan"]
          [:port    "host/java/emon/ffi/PpOcr.java" "ocrengine ocrport plan"]
          [:port    "host/csharp/Emon/Ffi/PpOcr.cs" "ocrengine ocrport plan"]
