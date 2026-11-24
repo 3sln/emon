@@ -40,7 +40,11 @@
   (println "  verified sha256" (subs got 0 16) "..."))
 
 ;; 2. unpack
-(when (and (fs/exists? out-dir) (seq (fs/list-dir out-dir))) (die out-dir " exists and is not empty; pass --dir"))
+;; a re-run (after an interrupted or rate-limited publish) replaces the tree this script unpacked before; any other non-empty directory is refused
+(when (and (fs/exists? out-dir) (seq (fs/list-dir out-dir)))
+  (if (seq (fs/glob out-dir "**/emon_core/pubspec.yaml"))
+    (do (println "  replacing the previous unpack in" out-dir) (fs/delete-tree out-dir))
+    (die out-dir " exists, is not empty and is not an earlier unpack; pass --dir")))
 (fs/create-dirs out-dir)
 (sh {} "tar" "-xzf" (str dl "/" asset) "-C" out-dir)
 (def root (let [ds (filter fs/directory? (fs/list-dir out-dir))] (if (and (= 1 (count ds)) (not (fs/exists? (fs/path out-dir "emon_core")))) (str (first ds)) out-dir)))
@@ -63,7 +67,15 @@
             (die pkg ": the dry run failed; fix it and re-run (published packages are skipped)")))
         (cond (flag? "--dry-run") (println "  dry run only")
               (ask (str "Publish " pkg " " version " to pub.dev?"))
-              (when-not (zero? (:exit (sh {:dir (str (fs/path root pkg))} (tool pkg) "pub" "publish" "--force")))
+              (when-not (loop [attempt 1]
+                          (let [r (p/shell {:continue true :dir (str (fs/path root pkg)) :out :string :err :string} (tool pkg) "pub" "publish" "--force")
+                                text (str (:out r) (:err r))]
+                            (print text) (flush)
+                            (cond (zero? (:exit r)) true
+                                  (and (re-find #"rate limit has been reached" text) (< attempt 6))
+                                  (do (println "  pub.dev rate limit (new packages): waiting 10 minutes, then retrying" pkg (str "(" attempt "/5)"))
+                                      (Thread/sleep (* 10 60 1000)) (if (on-pub? pkg) true (recur (inc attempt))))
+                                  :else false)))
                 (die pkg ": publish failed; re-run to continue (published packages are skipped)"))
               :else (die "stopped before " pkg "; re-run to continue")))))
 
