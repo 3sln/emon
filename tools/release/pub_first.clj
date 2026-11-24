@@ -49,6 +49,14 @@
 (sh {} "tar" "-xzf" (str dl "/" asset) "-C" out-dir)
 (def root (let [ds (filter fs/directory? (fs/list-dir out-dir))] (if (and (= 1 (count ds)) (not (fs/exists? (fs/path out-dir "emon_core")))) (str (first ds)) out-dir)))
 (doseq [pkg packages] (when-not (fs/exists? (fs/path root pkg "pubspec.yaml")) (die "the tree has no " pkg "/pubspec.yaml under " root)))
+;; README.md and CHANGELOG.md are not in the hooks' SHA-256 table: a release tree that lacks one (0.3.0-preview.1's emon_ocr_mlkit) takes it
+;; from this checkout's host/dart, its placeholder version stamped, so pub.dev gets a described package
+(let [repo-root (str (fs/parent (fs/parent (fs/parent (fs/absolutize *file*)))))]
+  (doseq [pkg packages f ["README.md" "CHANGELOG.md"]
+          :let [dst (fs/path root pkg f) src (fs/path repo-root "host/dart" pkg f)]
+          :when (and (not (fs/exists? dst)) (fs/exists? src))]
+    (spit (str dst) (str/replace (slurp (str src)) "0.0.0-dev" version))
+    (println "  added" (str pkg "/" f) "from the checkout")))
 (println "  unpacked to" root)
 
 ;; 3. publish in order

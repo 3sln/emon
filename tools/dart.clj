@@ -178,6 +178,9 @@
   (flag? "--analyze") (analyze!)
   (flag? "--test") (test!)
   (flag? "--check") (do (bindings! true)
+                        ;; pub.dev warns (and a dry run fails) on a package without README.md or CHANGELOG.md
+                        (doseq [p (map :dir packages) f ["README.md" "CHANGELOG.md" "LICENSE"] :when (not (fs/exists? (fs/path dart-root p f)))]
+                          (die "host/dart/" p " has no " f " (pub.dev needs it)"))
                         (write-or-check! (str dart-root "/emon_core/lib/src/packs.g.dart") (packs-dart) true)
                         (analyze!))
   :else (die "usage: bb dart --bindings | --packs | --sha-table FILE | --stamp DIR [--publishable] [--sums FILE] | --analyze | --test | --check   (see the header of tools/dart.clj)"))
