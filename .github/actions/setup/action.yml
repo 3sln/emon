@@ -39,6 +39,12 @@ runs:
       with:
         path: ~/.gitlibs
         key: emon-gitlibs-${{ hashFiles('emon/deps.edn') }}
+    - name: Maven artifacts (~/.m2), beside ~/.gitlibs
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+        restore-keys: emon-m2-${{ runner.os }}-
     - name: System tools (poppler, ImageMagick 7, python3)
       shell: bash
       run: |
@@ -70,6 +76,16 @@ runs:
         ln -s "$pylib" "$HOME/.cache/emon/pylib"
         echo "EMON_PYLIB=$pylib" >> "$GITHUB_ENV"
         echo "PYTHONPATH=$pylib" >> "$GITHUB_ENV"
+    - name: Resolve bb deps (retried, as Maven Central and GitHub are transient)
+      shell: bash
+      working-directory: emon
+      run: |
+        for i in 1 2 3 4; do
+          bb -e nil && exit 0
+          echo "bb dependency resolution failed (attempt $i); retrying" >&2
+          sleep $((i * 10))
+        done
+        exit 1
     - name: Versions
       shell: bash
       run: |
