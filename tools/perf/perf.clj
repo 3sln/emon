@@ -54,8 +54,8 @@
 
 (defn build! []
   (println "== build (cargo, release, offline, locked; pinned deps in tools/perf/Cargo.toml)")
-  (let [env (merge (into {} (System/getenv)) (when checked? {"CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS" "true"}))
-        r (p/shell {:env env :continue true :out :string :err :string}
+  (let [env (when checked? {"CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS" "true"})
+        r (p/shell {:extra-env env :continue true :out :string :err :string}
                    "nice" "-n" "10" "cargo" "build" "--release" "--offline" "--locked"
                    "--manifest-path" (str perf-dir "/Cargo.toml") "--target-dir" (str perf-dir "/" target-dir))]
     (when-not (zero? (:exit r)) (println (:err r)) (System/exit 3))))

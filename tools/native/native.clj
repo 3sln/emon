@@ -31,7 +31,8 @@
          '[clojure.string :as str]
          '[native.exports :as exports]
          '[ppocr.bundle :as pp]
-         '[ppocr.ort :as ort])
+         '[ppocr.ort :as ort]
+         '[process-env :as process-env])
 (import '[java.security MessageDigest])
 
 (def pins-file "tools/native/native.edn")
@@ -154,7 +155,7 @@
 
 (defn run-logged! [t what log env & cmd]
   (let [t0 (System/currentTimeMillis)
-        r (apply p/shell {:out (io/file log) :err :out :continue true :extra-env env} cmd)]
+        r (apply p/shell (merge {:out (io/file log) :err :out :continue true} (process-env/options env)) cmd)]
     (when-not (zero? (:exit r))
       (println (str/join "\n" (take-last 40 (str/split-lines (slurp log)))))
       (die what " failed (" (str/join " " (take 3 cmd)) "...); log " log))

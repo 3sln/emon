@@ -12,7 +12,8 @@
 ;;
 ;; The adapter is Rust over the `windows` crate (host/rust/src/winocr.rs, winocr_adapter.rs): the system's own WinRT API, no model, no pack, no network. It cannot run anywhere but Windows
 ;; 10 or later, and its answers can only be recorded there: a recording is replayed on every host (`bb ocr`), so the engine is needed once, not by every conversion.
-(require '[babashka.fs :as fs] '[babashka.process :as p] '[clojure.edn :as edn] '[clojure.string :as str])
+(require '[babashka.fs :as fs] '[babashka.process :as p] '[clojure.edn :as edn] '[clojure.string :as str]
+         '[process-env :as process-env])
 
 (def root (str (fs/canonicalize ".")))
 (def args (vec *command-line-args*))
@@ -28,7 +29,9 @@
 (def lib-name "emon_ocr_winocr.dll")
 
 (defn sh [{:keys [dir env ok?] :or {ok? true}} & cmd]
-  (let [r (apply p/shell (cond-> {:out :string :err :string :continue true} dir (assoc :dir (str dir)) env (assoc :extra-env env)) (map str cmd))]
+  (let [r (apply p/shell (cond-> (merge {:out :string :err :string :continue true} (process-env/options env))
+                           dir (assoc :dir (str dir)))
+                 (map str cmd))]
     (when (and ok? (not (zero? (:exit r)))) (die (str/join " " (take 4 cmd)) " failed (exit " (:exit r) ")\n" (str/join "\n" (take-last 40 (str/split-lines (str (:out r) "\n" (:err r)))))))
     {:exit (:exit r) :out (str (:out r)) :err (str (:err r))}))
 

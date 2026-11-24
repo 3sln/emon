@@ -2,7 +2,8 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [process-env :as process-env])
   (:import [java.io BufferedOutputStream RandomAccessFile]
            [java.nio.file Files]
            [java.time LocalDateTime]
@@ -141,7 +142,8 @@
   "Run a read operation with the archive on stdin so tar never parses drive letters."
   [file option & args]
   (with-open [in (io/input-stream (str file))]
-    (:out (apply p/shell {:in in :out :string :shutdown nil} "tar" option "-" (map str args)))))
+    (:out (apply p/shell (merge {:in in :out :string :shutdown nil} (process-env/options nil))
+                 "tar" option "-" (map str args)))))
 
 (defn tar-list [file]
   (str/split-lines (tar-read file "-tzf")))

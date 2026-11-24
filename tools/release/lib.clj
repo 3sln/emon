@@ -3,7 +3,8 @@
 (ns release.lib
   (:require [babashka.process :as p]
             [cheshire.core :as json]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [process-env :as process-env]))
 
 (def default-repo "3sln/emon")
 ;; D550: verify.yml posts these two on a commit of main. `emon/verified` says the gates passed (a description starting `verified:`, the target the run);
@@ -33,10 +34,13 @@
   (System/exit code))
 
 (defn run
-  "Run a command, capture it. Never throws: {:exit :out :err}. Options (first arg, a map): :dir, :in, :env (merged over the process env)."
+  "Run a command and capture {:exit :out :err}. Options: :dir, :in, :extra-env (overrides the inherited environment)."
   [opts & cmd]
   (let [[opts cmd] (if (map? opts) [opts cmd] [{} (cons opts cmd)])
-        r (apply p/shell (merge {:out :string :err :string :continue true} (select-keys opts [:dir :in :extra-env])) (map str cmd))]
+        r (apply p/shell (merge {:out :string :err :string :continue true}
+                               (select-keys opts [:dir :in])
+                               (process-env/options (:extra-env opts)))
+                 (map str cmd))]
     (select-keys r [:exit :out :err])))
 
 (defn run! "Like run, but a non-zero exit dies with the command's output." [opts & cmd]

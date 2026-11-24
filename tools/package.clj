@@ -24,7 +24,8 @@
          '[clojure.string :as str]
          '[native.exports :as exports]
          '[ppocr.bundle :as pp]
-         '[ppocr.ort :as ort])
+         '[ppocr.ort :as ort]
+         '[process-env :as process-env])
 (import '(java.security MessageDigest))
 
 (def root (str (fs/absolutize ".")))
@@ -45,9 +46,9 @@
   "Run a command (a seq of args after the options). Returns {:exit :out :err}; throws with the tail of the output unless :ok? false."
   [{:keys [dir env ok?] :or {ok? true}} & cmd]
   (let [cmd (map str cmd)
-        r (apply p/shell (cond-> {:out :string :err :string :continue true}
-                           dir (assoc :dir (str dir))
-                           env (assoc :extra-env env))
+        r (apply p/shell (cond-> (merge {:out :string :err :string :continue true}
+                                       (process-env/options env))
+                           dir (assoc :dir (str dir)))
                  cmd)
         r {:exit (:exit r) :out (str (:out r)) :err (str (:err r))}]
     (when (and ok? (not (zero? (:exit r))))
@@ -109,9 +110,13 @@
 
 (defn- human [n] (cond (< n 10240) (str n " B") (< n (* 10 1024 1024)) (format "%.0f KiB" (/ n 1024.0)) :else (format "%.1f MiB" (/ n 1048576.0))))
 
-(defn- host-triple []
-  (let [r (run {} "rustc" "-vV")]
-    (second (re-find #"(?m)^host: (\S+)" (:out r)))))
+(def ^:private rust-host-triple
+  (delay
+    (let [r (run {} "rustc" "-vV")]
+      (or (second (re-find #"(?m)^host: (\S+)" (:out r)))
+          (bad! "rustc -vV did not report a host triple")))))
+
+(defn- host-triple [] @rust-host-triple)
 
 (defn- zip-list [f] (archives/zip-list f))
 (defn- tar-list [f] (archives/tar-list f))

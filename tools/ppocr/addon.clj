@@ -4,7 +4,7 @@
          '[babashka.fs :as fs] '[babashka.process :refer [shell process]]
          '[babashka.http-client :as http] '[clojure.edn :as edn]
          '[clojure.string :as str] '[clojure.java.io :as io]
-         '[native.exports :as exports] '[ppocr.bundle :as pp])
+         '[native.exports :as exports] '[ppocr.bundle :as pp] '[process-env :as process-env])
 (import '[java.security MessageDigest])
 (def options
   (loop [remaining *command-line-args* result {}]
@@ -19,7 +19,8 @@
   (let [md (MessageDigest/getInstance "SHA-256") buf (byte-array 1048576)]
     (loop [] (let [n (.read in buf)] (when (pos? n) (.update md buf 0 n) (recur))))
     (apply str (map #(format "%02x" (bit-and % 255)) (.digest md))))))
-(defn run [& cmd] (apply shell {:shutdown nil :extra-env {"EMON_CS_SHARED_COMPILATION" "false"}} cmd))
+(defn run [& cmd]
+  (apply shell (merge {:shutdown nil} (process-env/options {"EMON_CS_SHARED_COMPILATION" "false"})) cmd))
 (defn host-triple []
   (let [os (System/getProperty "os.name") arm (#{"aarch64" "arm64"} (System/getProperty "os.arch"))]
     (cond (str/includes? os "Mac") (if arm "aarch64-apple-darwin" "x86_64-apple-darwin")
@@ -90,7 +91,8 @@
                     link (when win? ["-C" "target-feature=+crt-static"])
                     (when-not (or win? mac?) exports/elf-link-flags)
                     (when-not win? ["-C" (str "link-arg=-Wl,-rpath," (if mac? "@loader_path" "$ORIGIN"))]))]
-      (apply shell {:dir dir :shutdown nil :extra-env {"MACOSX_DEPLOYMENT_TARGET" "12.0" "EMON_CS_SHARED_COMPILATION" "false"}}
+      (apply shell (merge {:dir dir :shutdown nil}
+                          (process-env/options {"MACOSX_DEPLOYMENT_TARGET" "12.0" "EMON_CS_SHARED_COMPILATION" "false"}))
         (concat ["cargo" "rustc" "--locked" "--release" "--lib" "--features" "tesseract" "--"] flags)))
     (let [src (str dir "/target/release/" (if win? "emon.dll" (str "libemon." ext))) dest adapter-file]
       (fs/copy src dest {:replace-existing true})

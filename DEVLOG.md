@@ -14859,3 +14859,11 @@ Linux desktop builds localize symbols from static archives and use Rust's cdylib
 Release tools create tarballs and ZIPs in Babashka with fixed timestamps, sorted entry names and recorded POSIX modes. Tarballs retain symlinks and long paths. Tools that read tar archives pass the archive on stdin, so the reader can handle Windows drive paths without platform-specific flags.
 
 - [ ] **Signed off** (maintainer)
+
+### D910 — Preserve the Windows environment in release subprocesses
+
+Windows C packaging reached the native build with a working Rust host probe, then a later `rustc -vV` exited with `STATUS_DLL_INIT_FAILED`. CI did not record the failing child's environment. Package, native build, PP-OCR add-on, archive reader and release helpers now pass the complete parent environment on Windows, with case-insensitive overrides so `PATH` and `Path` refer to the same entry. On other hosts they use Babashka's `:extra-env`. Package smoke tests still clear their specific Emon and Tesseract settings through overrides.
+
+Packaging uses one lazy Rust host-triple lookup per invocation. Run `bb -m process-env-test` to check Windows key retention and override behavior with a synthetic environment and inheritance in a real child on the current host.
+
+- [ ] **Signed off** (maintainer)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 ;; Test the actual unpacked release payload from a fresh directory, outside the repo cwd.
 (require '[archives :as archives] '[babashka.fs :as fs] '[babashka.process :refer [process]]
-         '[clojure.string :as str])
+         '[clojure.string :as str] '[process-env :as process-env])
 (let [[archive] *command-line-args*
       _ (assert (= 1 (count *command-line-args*)) "usage: addon_smoke.clj ARCHIVE")
       root (str (fs/absolutize "."))
@@ -24,14 +24,15 @@
           env {"EMON_CS_SHARED_COMPILATION" "false" "EMON_PPOCR_LIB" lib
                "EMON_PPOCR_MODELS" (str pp "/models") "TESSDATA_PREFIX" (str pp "/models")
                "EMON_PDFIUM_LIB" "" "EMON_TESSDATA" ""}
+          opts {:dir scratch :out :string :err :string :shutdown nil}
           exe (str cli "/bin/emon" (when win? ".exe"))
           invoke (fn [extra] @(process [exe "convert" "--ocr-engine=ppocr" (str root "/test/raster/receipt-photo.png")]
-                              {:dir scratch :extra-env (merge env extra) :out :string :err :string :shutdown nil}))
+                              (merge opts (process-env/options (merge env extra)))))
           r (invoke {}) expected (slurp "tools/ppocr/release-smoke.html")]
       (assert (zero? (:exit r)) (str "unpacked PP conversion failed: " (:err r)))
       (assert (= expected (:out r)) "unpacked PP result differs from committed reference")
       (let [convert (fn [flags] @(process (into [exe "convert" (str root "/samples/invoice.pdf")] flags)
-                                  {:dir scratch :extra-env env :out :string :err :string :shutdown nil}))
+                                  (merge opts (process-env/options env))))
             ordinary (convert []) experimental (convert ["--ocr-engine=ppocr"])]
         (assert (and (zero? (:exit ordinary)) (zero? (:exit experimental))) "born-digital smoke conversion failed")
         (assert (= (:out ordinary) (:out experimental)) "PP changed born-digital HTML"))
