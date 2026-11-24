@@ -102,6 +102,21 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+          restore-keys: emon-m2-${{ runner.os }}-
+      - name: Resolve bb deps (retried, as Maven Central is transient)
+        shell: bash
+        working-directory: emon
+        run: |
+          for i in 1 2 3 4; do
+            bb -e nil && exit 0
+            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            sleep $((i * 10))
+          done
+          exit 1
       # for the CLI steps at the end (P11.4b); the version is the one every gate uses
       - uses: dtolnay/rust-toolchain@master
         if: inputs.cli != false
@@ -249,6 +264,21 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+          restore-keys: emon-m2-${{ runner.os }}-
+      - name: Resolve bb deps (retried, as Maven Central is transient)
+        shell: bash
+        working-directory: emon
+        run: |
+          for i in 1 2 3 4; do
+            bb -e nil && exit 0
+            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            sleep $((i * 10))
+          done
+          exit 1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0
@@ -323,6 +353,21 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+          restore-keys: emon-m2-${{ runner.os }}-
+      - name: Resolve bb deps (retried, as Maven Central is transient)
+        shell: bash
+        working-directory: emon
+        run: |
+          for i in 1 2 3 4; do
+            bb -e nil && exit 0
+            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            sleep $((i * 10))
+          done
+          exit 1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0
@@ -366,6 +411,21 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.4
         with:
           bb: 1.3.190
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: emon-m2-${{ runner.os }}-${{ hashFiles('emon/deps.edn', 'emon/bb.edn') }}
+          restore-keys: emon-m2-${{ runner.os }}-
+      - name: Resolve bb deps (retried, as Maven Central is transient)
+        shell: bash
+        working-directory: emon
+        run: |
+          for i in 1 2 3 4; do
+            bb -e nil && exit 0
+            echo "bb dependency resolution failed (attempt $i); retrying" >&2
+            sleep $((i * 10))
+          done
+          exit 1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.92.0

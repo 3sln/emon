@@ -80,7 +80,7 @@
           f (fs/glob d "**" {:follow-links false})
           :let [f (str f)]
           :when (fs/regular-file? f)
-          :when (not (contains? files (str (fs/relativize dir f))))]
+          :when (not (contains? files (str/replace (str (fs/relativize dir f)) "\\" "/")))]
     (fs/delete f)))
 
 (defn- listing
@@ -530,7 +530,14 @@
                 attempt (fn [dir env pre post]
                           (let [go (fn [offline] (apply run {:dir dir :ok? false :env env} (concat ["cargo"] pre ["--locked"] offline (when (seq post) (cons "--" post)))))
                                 r (go ["--offline"])]
-                            (if (zero? (:exit r)) r (go []))))
+                            (if (zero? (:exit r))
+                              r
+                              ;; keep the offline attempt's tail too: when both fail, the first error is often the real one
+                              (let [r2 (go [])]
+                                (if (zero? (:exit r2))
+                                  r2
+                                  (assoc r2 :err (str "--- cargo --offline (exit " (:exit r) "), tail:\n" (tail (str (:out r) "\n" (:err r)) 25)
+                                                      "\n--- cargo with the registry (exit " (:exit r2) "), tail:\n" (:err r2))))))))
                 ;; a shared library's own name is where it is found by: rustc's default is the ABSOLUTE path it was linked at (.../deps/libemon.dylib), which
                 ;; works where it was built and nowhere else; @rpath/ (macOS) and a soname (Linux) make `-Wl,-rpath,DIR` the way it is found
                 win? (str/includes? (host-triple) "windows-msvc")

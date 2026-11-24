@@ -80,6 +80,8 @@ for g in $run; do
   fastlines=$(grep '^  FAST ' "$log" || true)
   if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ]; then
     echo "  FAIL gate $g${fast:+ (--fast)}: exit $rc, $failed FAIL line(s)"
+    # name the failing checks: every FAIL line in full, then the tail (a gate's last line is a count, not a name)
+    grep -n 'FAIL' "$log" | head -40 | sed 's/^/    FAILED> /'
     tail -15 "$log" | sed 's/^/    /'
     fails=$((fails+1))
   elif [ "$scores" -eq 0 ]; then

@@ -138,7 +138,7 @@
           (if (re-find #"\.(rs|toml|lock)$" rel) (put-text! dst (stamp (slurp (:file src)))) (put-file! dst (:file src)))))
     ;; the sources of the stage are exactly these (a removed module must not linger)
     (doseq [f (fs/glob (str dir "/src") "**") :when (fs/regular-file? f)
-            :when (not (contains? files (str (fs/relativize dir f))))]
+            :when (not (contains? files (str/replace (str (fs/relativize dir f)) "\\" "/")))]
       (fs/delete f))))
 
 ;; ------------------------------------------------------------------------------------------------ the library
