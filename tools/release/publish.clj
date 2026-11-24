@@ -44,7 +44,7 @@
    "npm" []
    ;; NUGET_API_KEY is a short-lived key (about an hour) that NuGet/login mints from nuget.org Trusted Publishing (OIDC) in the publish job; it is not a stored secret.
    "nuget" ["NUGET_API_KEY"]
-   ;; MAVEN_GPG_PASSPHRASE is optional: the maintainer's signing key has no passphrase (2026-10-14).
+   ;; MAVEN_GPG_PASSPHRASE is optional (set it when the key has one; tools/release/gpg_key.clj sets or deletes it).
    "maven" ["MAVEN_CENTRAL_USERNAME" "MAVEN_CENTRAL_PASSWORD" "MAVEN_GPG_PRIVATE_KEY"]
    "go" []})
 

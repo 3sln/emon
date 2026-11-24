@@ -108,6 +108,8 @@ repository secrets: `verify.yml` needs them without any approval.
 | `MAVEN_GPG_PRIVATE_KEY` | `gpg --armor --export-secret-keys KEYID` (the whole `-----BEGIN PGP PRIVATE KEY BLOCK-----` text; a base64 of it is accepted too). **Publish the public half** so Central can verify: `gpg --keyserver keyserver.ubuntu.com --send-keys KEYID` and upload to <https://keys.openpgp.org> (and confirm the email). |
 | `MAVEN_GPG_PASSPHRASE` | optional: the key's passphrase. |
 
+**Lost or new signing key.** Run `bb tools/release/gpg_key.clj --name "3sln emon release signing" --email YOU`. It generates an RSA-4096 signing key, exports the private key, public key and revocation certificate to `~/emon-release-key` (private key mode 600), publishes the public key to keyserver.ubuntu.com and keys.openpgp.org, and sets `MAVEN_GPG_PRIVATE_KEY` and `MAVEN_GPG_PASSPHRASE` with `gh`. It asks before each network step, and prints nothing secret. Keep the three files and the passphrase in a password manager, then delete the directory.
+
 **npm: Trusted Publishing, no secret.** On npmjs.com, for each package (`@3sln/emon`, `@3sln/pdfium-wasm`, `@3sln/emon-ppocr`): the package's
 *Settings* > *Trusted Publisher* > *GitHub Actions*, with organization/user `3sln`, repository `emon`, workflow `release.yml`, environment left **blank**.
 The `npm` job grants `id-token: write` and runs npm 11.21.2 on Node 24; it publishes with provenance and no stored token. A Trusted Publisher can only be
