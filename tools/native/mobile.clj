@@ -177,10 +177,7 @@
     (let [dir (crate-dir kind)
           deployment (if (= kind :ppocr) pp/ios-deployment (:ios-deployment cfg))
           env (cond-> {"CARGO_TARGET_DIR" (str dir "/target")}
-                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++")
-                                ;; the C of `ring` (the pack fetch's TLS, feature `packs-fetch`) is built by cc-rs, which looks for `<triple>-clang` and finds none on the PATH: name the NDK's
-                                (str "CC_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/" (ndk-clang-triple) "-clang")
-                                (str "AR_" (str/replace (:rust cfg) "-" "_")) (str (ndk-bin) "/llvm-ar"))
+                android? (assoc (str "CARGO_TARGET_" (cargo-env-name (:rust cfg)) "_LINKER") (str (ndk-bin) "/" (ndk-clang-triple) "-clang++"))
                 (not android?) (assoc "IPHONEOS_DEPLOYMENT_TARGET" deployment))
           have (str/split-lines (:out (sh {} "rustup" "target" "list" "--installed")))]
       (when-not (some #{(:rust cfg)} (map str/trim have)) (die "the Rust target " (:rust cfg) " is not installed in the active toolchain: rustup target add " (:rust cfg)))
@@ -192,9 +189,9 @@
                          ar (if android? (str (ndk-bin) "/llvm-ar") (xcrun "--sdk" ios-sdk "--find" "ar"))]
                      (pp/build-shim! sh dir triple runtime cc ar)))
             flags (concat (rustc-flags kind) shim)
-            features (case kind :core "packs-fetch" :adapter "tesseract-adapter" :ppocr "tesseract")
+            features (case kind :core [] :adapter ["--features" "tesseract-adapter"] :ppocr ["--features" "tesseract"])
             _ (say "cargo rustc " (name kind) " --target " (:rust cfg) " (" (count flags) " rustc arguments)")
-            cmd (fn [offline] (concat ["cargo" "rustc" "--release" "--lib" "--locked" "--target" (:rust cfg) "--features" features] offline ["--"] flags))
+            cmd (fn [offline] (concat ["cargo" "rustc" "--release" "--lib" "--locked" "--target" (:rust cfg)] features offline ["--"] flags))
             r (let [r (apply sh {:dir dir :env env :ok? false} (cmd ["--offline"]))] (if (zero? (:exit r)) r (apply sh {:dir dir :env env} (cmd []))))]
         (when-not (zero? (:exit r)) (die "cargo rustc failed")))
       (let [built (str dir "/target/" (:rust cfg) "/release/lib" (crate-name kind) (if android? ".so" ".dylib"))]

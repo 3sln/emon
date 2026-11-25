@@ -2,7 +2,7 @@
 //
 // WHAT IS KIN'S. Which packs exist, what each is for, their SHA-256 and sizes (`emon.packdata`, generated from release/packs/packs.edn), which packs a conversion needs and which
 // are missing (`emon.engines`' `pk-resolve`), and what to do about one that is missing (`emon.adapters`' `ad-pack-action`: never and offline win over every hook; a turnkey with no
-// hook fetches; a hook fetches, provides, declines or substitutes). This file is the MECHANICS: directories, files, hashes, the network, the app's callbacks.
+// hook requests a fetch; a hook requests a fetch, provides, declines or substitutes). This file handles directories, files, hashes and the app's callbacks.
 //
 // EVERY PACK IS VERIFIED against the catalogue's SHA-256 (and size) before it is used, wherever it came from: the store, a directory the app named, bytes or a path the app
 // provided, a download. A file that does not match is never used. One in the store (the cache) is deleted and the pack is missing again (`pack-hash-mismatch:<id>`); one in a
@@ -12,8 +12,7 @@
 // `<store>/.views/<engine>/<file>`: a flat directory of links to the verified files of the packs that engine reads, which is what the adapter is given (`packs_dir`,
 // emon_adapter.h). Other directories (the archive's `share/emon/packs`, `EMON_MODELS`, the app's own) are searched read-only, as `<dir>/<id>/<file>` or `<dir>/<file>`.
 //
-// OFFLINE. `EMON_OFFLINE=1` wins over a mode and a hook alike. The fetch itself is behind the feature `packs-fetch` (an HTTPS client): a build without it answers `fetch` as
-// `pack-fetch-unavailable`, and everything else (finding, verifying, `provide`, `decline`) works.
+// OFFLINE. `EMON_OFFLINE=1` wins over a mode and a hook alike. A fetch decision delegates to the host's fetcher, if configured. Without one it returns `pack-fetch-unavailable`.
 use crate::emon::{adapters as ka, engines as ke, packdata as kp};
 use crate::port::{cells_at, cells_len, cells_push, Cells, Sha256};
 use std::collections::HashMap;
@@ -49,6 +48,17 @@ pub struct PackFile {
     pub name: String,
     pub bytes: u64,
     pub sha: [u8; 32],
+}
+
+impl PackFile {
+    pub fn matches(&self, bytes: &[u8]) -> bool {
+        if bytes.len() as u64 != self.bytes {
+            return false;
+        }
+        let mut hash = Sha256::new();
+        hash.update(bytes);
+        hash.finish() == self.sha
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +158,8 @@ pub struct PackEvent {
 
 pub type PackNeededFn = unsafe extern "C" fn(ctx: *mut c_void, req: *const PackRequest, out: *mut PackDecision) -> c_int;
 pub type PackEventFn = unsafe extern "C" fn(ctx: *mut c_void, ev: *const PackEvent) -> c_int;
+// A turnkey host supplies the transport. Report bytes received and stop if the progress callback returns true.
+pub type PackFetcher = dyn Fn(&PackInfo, &PackFile, &mut dyn FnMut(u64) -> bool) -> Result<Vec<u8>, String> + Send + Sync;
 
 #[derive(Clone, Copy)]
 struct Hook {
@@ -200,6 +212,7 @@ struct Inner {
     // files that were hashed and matched: (length, modified time) at that moment
     good: Mutex<HashMap<PathBuf, (u64, u128)>>,
     notes: Mutex<Vec<String>>,
+    fetcher: Mutex<Option<Arc<PackFetcher>>>,
     // one fetch at a time: a second conversion needing the same pack waits for the first and finds it
     fetch: Mutex<()>,
     class: i32,
@@ -303,6 +316,7 @@ impl Packs {
             cancel: AtomicBool::new(false),
             good: Mutex::new(HashMap::new()),
             notes: Mutex::new(Vec::new()),
+            fetcher: Mutex::new(None),
             fetch: Mutex::new(()),
             class: crate::plan::platform_class(),
         }))
@@ -342,6 +356,14 @@ impl Packs {
         *self.0.hook.lock().unwrap_or_else(|e| e.into_inner()) = f.map(|f| Hook { f, ctx: ctx as usize });
     }
 
+    pub fn set_fetcher(&self, fetcher: Arc<PackFetcher>) {
+        *self.0.fetcher.lock().unwrap_or_else(|e| e.into_inner()) = Some(fetcher);
+    }
+
+    pub fn has_fetcher(&self) -> bool {
+        self.0.fetcher.lock().unwrap_or_else(|e| e.into_inner()).is_some()
+    }
+
     pub fn set_events(&self, f: Option<PackEventFn>, ctx: *mut c_void) {
         *self.0.events.lock().unwrap_or_else(|e| e.into_inner()) = f.map(|f| Events { f, ctx: ctx as usize });
     }
@@ -357,6 +379,12 @@ impl Packs {
 
     fn note(&self, s: String) {
         self.0.notes.lock().unwrap_or_else(|e| e.into_inner()).push(s);
+    }
+
+    fn fetch_unavailable(&self, info: &PackInfo) -> String {
+        let error = format!("pack-fetch-unavailable:{}", info.id);
+        self.note(error.clone());
+        error
     }
 
     // What happened to packs since the last call: mismatches, failed fetches (for the app's log and for the tests).
@@ -566,6 +594,8 @@ impl Packs {
             }
         } else if action == ka::pact_substitute() {
             Need::Substitute(decision.engine.unwrap_or_default())
+        } else if asks && decision.action == PACK_FETCH && !self.has_fetcher() {
+            Need::Unread(self.fetch_unavailable(&info))
         } else {
             // unread: never, offline, cache, a decline, an answer nobody defined
             Need::Unread(format!("pack-missing:{}", id))
@@ -588,21 +618,24 @@ impl Packs {
             } else {
                 return Err(format!("pack-provide-failed:{}", id));
             };
-            let mut h = Sha256::new();
-            h.update(&bytes);
-            if bytes.len() as u64 != f.bytes || h.finish() != f.sha {
+            if !f.matches(&bytes) {
                 self.note(format!("pack-hash-mismatch:{}", id));
                 return Err(format!("pack-hash-mismatch:{}", id));
             }
             staged.push((f, bytes));
         }
+        self.keep(info, staged).map_err(|_| format!("pack-provide-failed:{}", id))
+    }
+
+    fn keep(&self, info: &PackInfo, staged: Vec<(&PackFile, Vec<u8>)>) -> Result<(), String> {
+        let dir = self.store().join(&info.id);
         for (f, bytes) in staged {
-            write_atomic(&self.store().join(id).join(&f.name), &bytes).map_err(|_| format!("pack-provide-failed:{}", id))?;
+            write_atomic(&dir.join(&f.name), &bytes).map_err(|e| e.to_string())?;
         }
         if self.locate(info.code).is_some() {
             Ok(())
         } else {
-            Err(format!("pack-provide-failed:{}", id))
+            Err("installed files could not be verified".to_string())
         }
     }
 
@@ -623,107 +656,62 @@ impl Packs {
         Ok(())
     }
 
-    #[cfg(not(feature = "packs-fetch"))]
-    fn fetch(&self, info: &PackInfo, app: bool) -> Result<(), String> {
-        let _ = app;
-        self.note(format!("pack-fetch-unavailable:{}", info.id));
-        Err(format!("pack-fetch-unavailable:{}", info.id))
-    }
-
-    // Where a file may be downloaded from: `$EMON_PACKS_URL` (a comma list of bases, each `<base>/sha256/<hex>`, or of templates with {sha} {id} {rev} {file}), else the
-    // mirror, then the data release (pkg1 3.3).
-    #[cfg(feature = "packs-fetch")]
-    fn urls(&self, info: &PackInfo, f: &PackFile) -> Vec<String> {
-        let fill = |t: &str| t.replace("{sha}", &hex(&f.sha)).replace("{id}", &info.id).replace("{rev}", &info.rev.to_string()).replace("{file}", &f.name);
-        let bases: Vec<String> = match env("EMON_PACKS_URL") {
-            Some(v) => v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
-            None => vec!["https://emon-packs.3sln.com".to_string(), "https://github.com/3sln/emon/releases/download/packs/{id}@{rev}-{file}".to_string()],
-        };
-        bases.iter().map(|b| if b.contains('{') { fill(b) } else { format!("{}/sha256/{}", b.trim_end_matches('/'), hex(&f.sha)) }).collect()
-    }
-
-    #[cfg(feature = "packs-fetch")]
-    fn download(&self, url: &str, expect: u64, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<Vec<u8>, String> {
-        let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(std::time::Duration::from_secs(600))).build().into();
-        let mut resp = agent.get(url).call().map_err(|e| format!("{}: {}", url, e))?;
-        let total = resp.body().content_length().unwrap_or(expect);
-        let mut reader = resp.body_mut().with_config().limit(expect.saturating_mul(2).max(1 << 20)).reader();
-        let mut out = Vec::with_capacity(expect.min(1 << 28) as usize);
-        let mut buf = vec![0u8; 64 * 1024];
-        loop {
-            let n = reader.read(&mut buf).map_err(|e| format!("{}: {}", url, e))?;
-            if n == 0 {
-                break;
-            }
-            out.extend_from_slice(&buf[..n]);
-            if progress(out.len() as u64, total) {
-                return Err("cancelled".to_string());
-            }
-        }
-        Ok(out)
-    }
-
-    // Fetch every file of the pack, verify each against the catalogue (a mismatch is never written), install into the store.
-    #[cfg(feature = "packs-fetch")]
+    // Ask the host for the files. Verify all of them before installing any of them.
     fn fetch(&self, info: &PackInfo, app: bool) -> Result<(), String> {
         let _one = self.0.fetch.lock().unwrap_or_else(|e| e.into_inner());
         if self.locate(info.code).is_some() {
             return Ok(());
         }
-        let id = info.id.clone();
-        // a cancel asks to stop the fetch that is running: one asked for while nothing was fetching is not held against this one
+        let id = &info.id;
+        let fetcher = self.0.fetcher.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let Some(fetcher) = fetcher else {
+            return Err(self.fetch_unavailable(info));
+        };
         self.0.cancel.store(false, Ordering::SeqCst);
         self.emit(PACK_EVENT_START, info, 0, info.bytes, app, "");
         let mut base = 0u64;
+        let mut staged = Vec::new();
         for f in &info.files {
-            let mut got: Option<Vec<u8>> = None;
-            let mut last = String::new();
-            for url in self.urls(info, f) {
-                let mut cancelled = false;
-                let r = self.download(&url, f.bytes, &mut |done, _| {
-                    cancelled = self.emit(PACK_EVENT_PROGRESS, info, base + done, info.bytes, app, "");
-                    cancelled
-                });
-                match r {
-                    Ok(bytes) => {
-                        let mut h = Sha256::new();
-                        h.update(&bytes);
-                        if bytes.len() as u64 == f.bytes && h.finish() == f.sha {
-                            got = Some(bytes);
-                            break;
-                        }
-                        // the bytes are not the catalogue's: discarded, never written
-                        self.note(format!("pack-hash-mismatch:{}", id));
-                        last = format!("pack-hash-mismatch:{}", id);
-                    }
-                    Err(e) if cancelled || e == "cancelled" => {
-                        self.emit(PACK_EVENT_CANCELLED, info, base, info.bytes, app, "");
-                        self.note(format!("pack-fetch-cancelled:{}", id));
-                        self.0.cancel.store(false, Ordering::SeqCst);
-                        return Err(format!("pack-fetch-cancelled:{}", id));
-                    }
-                    Err(e) => {
-                        self.note(format!("pack-fetch-failed:{}: {}", id, e));
-                        last = format!("pack-fetch-failed:{}", id);
-                    }
+            let mut cancelled = self.0.cancel.load(Ordering::SeqCst);
+            let mut received = 0;
+            let result = fetcher(info, f, &mut |done| {
+                let done = done.min(f.bytes);
+                if done > received {
+                    received = done;
+                    cancelled |= self.emit(PACK_EVENT_PROGRESS, info, base + done, info.bytes, app, "");
                 }
+                cancelled |= self.0.cancel.load(Ordering::SeqCst);
+                cancelled
+            });
+            if cancelled || self.0.cancel.load(Ordering::SeqCst) {
+                self.emit(PACK_EVENT_CANCELLED, info, base, info.bytes, app, "");
+                let error = format!("pack-fetch-cancelled:{}", id);
+                self.note(error.clone());
+                return Err(error);
             }
-            let Some(bytes) = got else {
-                self.emit(PACK_EVENT_FAILED, info, base, info.bytes, app, &last);
-                return Err(last);
-            };
-            write_atomic(&self.store().join(&id).join(&f.name), &bytes).map_err(|e| {
-                self.emit(PACK_EVENT_FAILED, info, base, info.bytes, app, &e.to_string());
-                format!("pack-fetch-failed:{}", id)
+            let bytes = result.map_err(|e| {
+                let error = format!("pack-fetch-failed:{}: {}", id, e);
+                self.note(error.clone());
+                self.emit(PACK_EVENT_FAILED, info, base, info.bytes, app, &error);
+                error
             })?;
+            if !f.matches(&bytes) {
+                let error = format!("pack-hash-mismatch:{}", id);
+                self.note(error.clone());
+                self.emit(PACK_EVENT_FAILED, info, base, info.bytes, app, &error);
+                return Err(error);
+            }
+            staged.push((f, bytes));
             base += f.bytes;
         }
+        self.keep(info, staged).map_err(|e| {
+            let error = format!("pack-fetch-failed:{}: {}", id, e);
+            self.note(error.clone());
+            self.emit(PACK_EVENT_FAILED, info, base, info.bytes, app, &error);
+            error
+        })?;
         self.emit(PACK_EVENT_DONE, info, info.bytes, info.bytes, app, "");
-        if self.locate(info.code).is_some() {
-            Ok(())
-        } else {
-            Err(format!("pack-fetch-failed:{}", id))
-        }
+        Ok(())
     }
 }
 

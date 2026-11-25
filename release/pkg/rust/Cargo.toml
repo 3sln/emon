@@ -34,8 +34,6 @@ vision-adapter = ["vision"]
 # Windows.Media.Ocr (host/rust/src/winocr.rs) as an `Ocr` port and as the native adapter library libemon_ocr_winocr (winocr-adapter). Windows only: the `windows` crate is a target dependency.
 winocr = ["dep:windows"]
 winocr-adapter = ["winocr"]
-# fetch the model packs adapters read with (host/rust/src/packs.rs): an HTTPS client. Off by default: a core crate never fetches (D885); every pack is verified against the catalogue's SHA-256.
-packs-fetch = ["dep:ureq"]
 
 [dependencies]
 # the ImageDecode port's codecs: PNG and JPEG pixels, CCITT, and the TIFF Deflate stream. Pinned.
@@ -44,9 +42,6 @@ miniz_oxide = "=0.8.9"
 # the `decode-img` request's DCT decoder: the very library `image` already uses for JPEG, used directly for the Adobe CMYK and YCCK samples
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
-# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): native only, including when the feature is enabled for wasm.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
 [target.'cfg(windows)'.dependencies]

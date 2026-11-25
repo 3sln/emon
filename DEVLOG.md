@@ -14887,3 +14887,13 @@ The Pages budget and static site checks passed. Chromium in Docker passed the de
 A manual registry-only dispatch can use the workflows from a later commit on `main` and publish from the existing version tag. Both commits must carry the same version in `version.edn`, and the tagged commit must have a successful `emon/verified` status. The retry skips full verification and still requires validated archives and a published GitHub release before the registry jobs run. The release tag stays at its original commit.
 
 - [ ] **Signed off** (maintainer)
+
+### D913 — Move model pack downloads out of the native library
+
+P13.17b implements D903. The Rust and C library builds, the adapter builds and the pod drop the HTTP and TLS dependency graph. The core resolves, verifies and caches packs and handles the D896 hook decisions. In the absence of a host fetcher, a fetch decision reports `pack-fetch-unavailable:<id>`. An OCR request that needs the pack stays unread. The C defaults look for local packs and accept app-provided bytes or paths through the hook.
+
+The CLI supplies a fetcher that runs system curl with HTTPS-only transfers and redirects. It stages each download in a temporary file, then the core verifies the catalogue size and SHA-256 before caching it. The CLI checks `EMON_MODELS` and its pack cache first and explains how to pre-place files when curl is unavailable.
+
+Dart already uses `HttpClient` and provides verified packs through the native hook. The JS PP-OCR adapter uses `fetch` for caller-supplied model URLs and checks the pins. The JS Tesseract adapter uses the app's Tesseract.js worker. Go, Java and C# use local model files. Their D896 registry and platform pack fetching remain part of K3.
+
+- [ ] **Signed off** (maintainer)

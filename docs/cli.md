@@ -88,6 +88,12 @@ Use `bb tessdata-fetch --langs eng,osd,spa,fra` for a subset. Each download is S
 Pass the fetched directory with `--tessdata .cache/tessdata` and choose models with `--lang spa+eng`.
 The default release bundle keeps `eng` and `osd` only.
 
+For a missing catalogue model, the CLI checks its pack cache and `EMON_MODELS` before using system curl
+over HTTPS. The core checks the catalogue size and SHA-256 before installing downloaded files. Set
+`EMON_PACKS_URL` to use another HTTPS mirror. For offline use, place the catalogue's model files in
+the directory named by `EMON_MODELS` and set `EMON_OFFLINE=1`. An explicit `--tessdata` or
+`EMON_TESSDATA` selects a local model directory directly.
+
 Tesseract models are `<code>.traineddata` files (ISO 639-3: `deu`, `fra`, `chi_sim`...), from
 [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) (small), or `tessdata_best`. Either put
 them in `share/emon/tessdata/` beside the bundled two, or make a directory with the models you want
