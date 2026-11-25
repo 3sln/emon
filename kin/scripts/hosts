@@ -63,7 +63,7 @@
          [:test "host/rust/tests/engine.rs" "ocrengine ocrport oil plan"]
          [:test "test/driver/rust/main.rs" "oil"]      ; `--fake-ports` (P10.2): the answers of a stand-in Ocr, built with the forms a real engine's adapter uses
          [:test "test/driver/go/main.go" "oil"]
-         [:driver  "host/go/engine.go"                  "config enctx engine html model plan planloop"]
+         [:driver  "host/go/engine.go"                  "config enctx engine engines html model plan planloop"]
          [:machine "host/go/planrun/planrun.go"         "plan planctx planloop"]
          [:machine "host/go/planrun/transcript.go"      "planloop transcript transcriptctx"]
          [:port    "host/go/imgdec.go"                  "ccitt imgcheck pngcheck tiffcheck"]
@@ -73,7 +73,7 @@
          [:port "host/go/tess.go" "ocr ocrport ocrtess oil plan"]
          [:api     "host/go/model.go"                   "html json model"]
          [:test "host/go/engine_test.go" "oil plan"]
-         [:driver  "host/java/emon/api/Engine.java"     "enctx model plan planloop"]
+         [:driver  "host/java/emon/api/Engine.java"     "enctx engines model plan planloop"]
          [:driver  "host/java/emon/api/Units.java"      "enctx engine planloop"]
          [:machine "host/java/emon/Planrun.java"        "plan planctx planloop pngcheck pngread transcript transcriptctx"]
          [:port    "host/java/emon/api/ChunkCache.java" "planloop"]
