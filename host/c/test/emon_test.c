@@ -512,11 +512,13 @@ static void test_packs(const uint8_t *scan, size_t sn) {
     emon_engines_notes(e, &notes, &err);
     check(has(&notes, "pack-substitute-differs:ppocr") && s.reads == 0, "substitute: another OIL engine leaves the request unread");
     emon_free_buf(&notes);
-    /* fetch: the mode is cache, so a fetch answer is a refusal (never the network) */
+    /* A FETCH answer leaves the page unread and names the missing transport. */
     pack_action = EMON_PACK_FETCH;
     emon_convert_json(&in, "ocr=always\n", e, 0, &b, &err);
     emon_free_buf(&b);
-    check(s.reads == 0, "fetch under `cache`: nothing is fetched");
+    emon_engines_notes(e, &notes, &err);
+    check(s.reads == 0 && has(&notes, "pack-fetch-unavailable:tess-fast-eng"), "fetch without a host fetcher: unread with pack-fetch-unavailable");
+    emon_free_buf(&notes);
     /* never wins over the hook */
     emon_engines_free(e);
     emon_engines_new(&e, &err);

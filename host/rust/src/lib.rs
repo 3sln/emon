@@ -26,7 +26,7 @@ pub mod pdfium;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod par;
 // the native OCR adapters (host/c/include/emon_adapter.h) and the engine registry (K2, D899): loading, routing, answering later; and the model packs they read
-// with: found, verified against the catalogue's SHA-256, fetched (feature `packs-fetch`). The browser fulfils requests through the JS SDK.
+// with: found, verified against the catalogue's SHA-256 and cached. Hosts supply any downloads. The browser fulfils requests through the JS SDK.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod adapter;
 #[cfg(not(target_arch = "wasm32"))]

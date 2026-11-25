@@ -52,10 +52,9 @@ match is never used; one in the pack directory is deleted and the pack is missin
 `emon_engines_notes`). Each adapter is given a flat directory of the verified files of the packs it reads. A request that needs a
 pack that is not there is answered `unsupported` with `pack-missing:<id>`: unread, never blank.
 
-**How packs come** (`emon_engines_packs(engines, dir, mode, &err)`): `EMON_PACKS_NEVER` fetches nothing and asks no hook;
-`EMON_PACKS_CACHE` uses what is cached and never the network; `EMON_PACKS_AUTO` fetches on demand, when this library was built with
-the `packs-fetch` feature. A new registry is `NEVER` (core and bare adapters never fetch); `emon_engines_defaults` is `AUTO`
-(or `$EMON_PACKS_FETCH`). `EMON_OFFLINE=1` is `NEVER` whatever you say, and wins over a hook.
+Set the pack directory and mode with `emon_engines_packs(engines, dir, mode, &err)`. `EMON_PACKS_NEVER` uses installed packs and skips the hook.
+`EMON_PACKS_CACHE` and `EMON_PACKS_AUTO` let the hook supply missing packs. A new registry starts in `NEVER`.
+`emon_engines_defaults` uses `CACHE` unless `EMON_PACKS_FETCH` overrides it. `EMON_OFFLINE=1` takes precedence over the mode and hook.
 
 **The platform's own OCR** (DEVLOG D901). The macOS and iOS archives carry a second adapter library, `lib/emon/adapters/libemon_ocr_vision.dylib` (Apple Vision: no pack, no model), which
 `emon_engines_defaults` registers with Tesseract's. It is explicit: a conversion reads with it only when its options say `ocr-engine=apple-vision`, and then the pages kin sends to Tesseract (a script Vision cannot read, a seal or a stamp, a table of numbers, D907) are read by the Tesseract adapter beside it (a registry with no Tesseract keeps Vision's reading); the Windows adapter is `emon_ocr_winocr.dll`
@@ -67,14 +66,11 @@ the `packs-fetch` feature. A new registry is `NEVER` (core and bare adapters nev
   `downloadable` (with `download_bytes`) or `unavailable` (with `reason`), and the packs it needs with their size and licence.
 - `emon_prepare(engines, options, &json, &err)` is `prepare(options)`: the packs a conversion with those options needs and which
   are missing, with a `verdict` (`ready`, `partial`, `downloadable`, `blocked`). Fetches nothing.
-- `emon_on_pack_needed` is the hook for a pack a request needs and is not here. It answers one of four: `EMON_PACK_FETCH` (the
-  library downloads it), `EMON_PACK_PROVIDE` (your bytes, or a path: from your own CDN or assets; verified like any other),
-  `EMON_PACK_DECLINE` (the page is unread) or `EMON_PACK_SUBSTITUTE` (another implementation of the same OIL engine; an engine that
-  would answer under another name leaves the request unread, because kin chose the engine when it planned the conversion). With no
-  hook, `AUTO` fetches.
-- `emon_packs_ensure` fetches packs ahead of time; `emon_on_pack_event` is one stream of START, PROGRESS, DONE, FAILED and CANCELLED for
-  the downloads the library starts and the ones you ask for, and a callback that answers non-zero to PROGRESS (or `emon_packs_cancel`,
-  from any thread) cancels the download.
+- `emon_on_pack_needed` is the hook for a missing pack. Use `EMON_PACK_PROVIDE` with bytes or a path from your platform HTTP client or assets.
+  `EMON_PACK_DECLINE` leaves the page unread. `EMON_PACK_SUBSTITUTE` selects another implementation of the OIL engine the conversion planned.
+  `EMON_PACK_FETCH`, including the `AUTO` default without a hook, leaves the page unread with `pack-fetch-unavailable:<id>`.
+- Apps handle progress and cancellation for their own downloads. In `AUTO` and online, `emon_packs_ensure` verifies installed packs and
+  returns `pack-fetch-unavailable` for the first missing pack.
 
 <!-- snippet: docs/snippets/c/engines.c -->
 ```c

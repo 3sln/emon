@@ -10,6 +10,10 @@
 //     emon help
 //
 // Exit: 0 ok; 2 usage; 3 a bundled file is missing (pdfium, the models); 4 a named emon error (`error: NAME` on stderr); 1 anything else.
+mod pack_fetch;
+
+use emon::adapter::Engines;
+use emon::packs::{pack_count, pack_info, Packs};
 use emon::{Engine, HtmlAssets, HtmlOptions, Input, JsonOptions, OcrPolicy, Output};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -98,9 +102,12 @@ fn has_models(d: &Path) -> bool {
     std::fs::read_dir(d).map(|r| r.filter_map(|e| e.ok()).any(|e| e.file_name().to_string_lossy().ends_with(".traineddata"))).unwrap_or(false)
 }
 
+fn explicit_tessdata(flag: Option<&str>) -> Option<String> {
+    flag.map(str::to_owned).or_else(|| std::env::var("EMON_TESSDATA").ok().filter(|s| !s.is_empty()))
+}
+
 fn find_tessdata(flag: Option<&str>) -> Found {
-    let explicit = flag.map(|s| s.to_string()).or_else(|| std::env::var("EMON_TESSDATA").ok().filter(|s| !s.is_empty()));
-    if let Some(e) = explicit {
+    if let Some(e) = explicit_tessdata(flag) {
         let p = PathBuf::from(e);
         return if has_models(&p) { Found::Path(p) } else { Found::Missing(vec![p]) };
     }
@@ -113,6 +120,40 @@ fn find_tessdata(flag: Option<&str>) -> Found {
         tried.push(c);
     }
     Found::Missing(tried)
+}
+
+fn pack_engines() -> Engines {
+    let engines = Engines::new();
+    engines.packs().set_fetcher(Arc::new(pack_fetch::fetch));
+    let mode = engines.turnkey_mode().unwrap_or_else(|e| usage(&e));
+    engines.packs().set_mode(mode);
+    engines
+}
+
+fn tessdata_from_packs(packs: &Packs, bundled: Option<&Path>, models: &[String]) -> Result<PathBuf, String> {
+    if let Some(dir) = bundled {
+        packs.add_dir(dir);
+    }
+    let engine = emon::adapter::tesseract_engine_id();
+    let catalogue: Vec<_> = (1..=pack_count()).map(pack_info).filter(|p| p.engine == engine).collect();
+    let requested = models
+        .iter()
+        .map(|model| {
+            let file = format!("{}.traineddata", model);
+            let pack = catalogue.iter().find(|p| p.files.iter().any(|f| f.name == file)).ok_or_else(|| {
+                format!("no {} in the pack catalogue. Pass --tessdata DIR with that model.", file)
+            })?;
+            Ok((pack, file))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    for (pack, file) in requested {
+        if packs.locate(pack.code).is_none() {
+            packs.ensure(&[pack.code]).map_err(|error| {
+                format!("{}\nPlace {} in an EMON_MODELS directory or pass --tessdata DIR.", error, file)
+            })?;
+        }
+    }
+    packs.view("tesseract")
 }
 
 fn list(v: &[PathBuf]) -> String {
@@ -241,6 +282,8 @@ fn convert(args: Vec<String>) {
     // the models are looked for as for Tesseract, and with none Vision reads alone.
     let apple = opts.ocr_engine == emon::OcrEngine::AppleVision;
     let platform_engine = opts.ocr_engine == emon::OcrEngine::WindowsMediaOcr;
+    let mut registry = None;
+    let mut tess_dir = None;
     if platform_engine && !never {
         #[cfg(all(feature = "winocr", windows))]
         {
@@ -252,10 +295,30 @@ fn convert(args: Vec<String>) {
     }
     // Tesseract's models, unless the pages are never read
     if !never && !platform_engine {
-        let found = find_tessdata(tessdata.as_deref());
+        let mut found = find_tessdata(tessdata.as_deref());
         if apple && matches!(found, Found::Missing(_)) {
             // Apple Vision alone: no fallback, and nothing to say about it (the fallback is best effort)
         } else {
+            let langs = lang.as_deref().map(|l| {
+                let langs: Vec<String> = l.split('+').filter(|s| !s.is_empty()).map(str::to_owned).collect();
+                if langs.is_empty() {
+                    usage("--lang wants models joined by +, e.g. eng+deu");
+                }
+                langs
+            });
+            if !apple && explicit_tessdata(tessdata.as_deref()).is_none() {
+                let bundled = match &found {
+                    Found::Path(dir) => Some(dir.as_path()),
+                    Found::Missing(_) => None,
+                };
+                let default = ["eng".to_string()];
+                let wanted = langs.as_deref().unwrap_or(&default);
+                if bundled.is_none_or(|dir| langs.is_some() && wanted.iter().any(|l| !dir.join(format!("{}.traineddata", l)).is_file())) {
+                    let engines = registry.get_or_insert_with(pack_engines);
+                    let dir = tessdata_from_packs(engines.packs(), bundled, wanted).unwrap_or_else(|e| die(3, &e));
+                    found = Found::Path(dir);
+                }
+            }
             let dir = match found {
                 Found::Path(p) => p,
                 Found::Missing(tried) => die(
@@ -270,16 +333,13 @@ fn convert(args: Vec<String>) {
                 eprintln!("emon: note: {} has no osd.traineddata: page orientation cannot be detected", dir.display());
             }
             let d = dir.to_string_lossy().to_string();
-            let t = match &lang {
-                Some(l) => {
-                    let langs: Vec<String> = l.split('+').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
-                    if langs.is_empty() {
-                        usage("--lang wants models joined by +, e.g. eng+deu");
-                    }
-                    emon::tess::TessOcr::with_languages(&d, &langs).unwrap_or_else(|e| die(3, &format!("{} (--lang {}); add the .traineddata file to that directory or pass --tessdata", e, l)))
+            let t = match langs {
+                Some(langs) => {
+                    emon::tess::TessOcr::with_languages(&d, &langs).unwrap_or_else(|e| die(3, &format!("{} (--lang {}); add the .traineddata file to that directory or pass --tessdata", e, langs.join("+"))))
                 }
                 None => emon::tess::TessOcr::new(Some(&d)).unwrap_or_else(|e| die(3, &e)),
             };
+            tess_dir = Some(dir);
             cfg.ocr = Some(emon::OcrPort(Arc::new(t)));
         }
     } else if lang.is_some() && never {
@@ -298,7 +358,14 @@ fn convert(args: Vec<String>) {
 
     if opts.ocr_engine.uses_pp() && !never {
         // PP-OCR (the hybrid, or alone: kin routes by the engine each request names): Tesseract (linked here) registered as an adapter beside the PP adapter library, a router over the two (K2, D899)
-        cfg.ocr = Some(emon::adapter::ppocr_hybrid(cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
+        let engines = registry.get_or_insert_with(|| {
+            let engines = pack_engines();
+            if let Some(dir) = &tess_dir {
+                engines.packs().add_dir(dir);
+            }
+            engines
+        });
+        cfg.ocr = Some(emon::adapter::ppocr_hybrid_with_engines(engines, cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
     }
 
     // the document
@@ -326,6 +393,11 @@ fn convert(args: Vec<String>) {
             })
         }
     };
+    if let Some(registry) = registry {
+        for note in registry.take_notes() {
+            eprintln!("emon: note: {}", note);
+        }
+    }
 
     // the assets, as files, and the HTML that names them
     let mut html = HtmlOptions::default();

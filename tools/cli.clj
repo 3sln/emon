@@ -238,7 +238,30 @@
               r (run root exe "convert" (sample "figures-charts" "pdf") "-o" o "--assets" "dir" "--ocr" "never")]
           (if (and (zero? (:exit r)) (fs/exists? o) (seq (fs/glob (str tmp "/figs.assets") "*.png")))
             (ok! "figures-charts.pdf -o FILE --assets dir wrote the HTML and " (count (fs/glob (str tmp "/figs.assets") "*.png")) " PNG(s) beside it")
-            (fail! "--assets dir: exit " (:exit r) " " (:err r)))))
+            (fail! "--assets dir: exit " (:exit r) " " (:err r))))
+        (let [models (fs/path tmp "local-models")]
+          (fs/move (fs/path root "share/emon/tessdata") models)
+          (let [env (merge clean-env {"EMON_PACK_CACHE" (str (fs/path tmp "packs"))
+                                      "EMON_PACKS_FETCH" "auto"
+                                      "EMON_MODELS" (str models)
+                                      "EMON_OFFLINE" "1"})
+                from-local (shell {:dir root :out :string :err :string :continue true :extra-env env}
+                                  exe "convert" (sample "scan-plain" "pdf") "--ocr" "always")
+                from-file-url (shell {:dir root :out :string :err :string :continue true
+                                      :extra-env (assoc env "EMON_MODELS" "" "EMON_OFFLINE" ""
+                                                        "EMON_PACKS_URL" (str (.toUri models) "{file}"))}
+                                     exe "convert" (sample "scan-plain" "pdf") "--ocr" "always")]
+            (if (and (zero? (:exit from-local)) (str/includes? (:out from-local) "Adaptive Sampling"))
+              (ok! "the CLI uses verified local EMON_MODELS files while offline")
+              (fail! "local model directory: exit " (:exit from-local) " " (:err from-local)))
+            (let [err (:err from-file-url)]
+              (cond
+                (and (= 3 (:exit from-file-url)) (str/includes? err "pack-fetch-failed:tess-fast-eng") (str/includes? err "curl exited"))
+                (ok! "the CLI refuses a file URL as a download mirror")
+                (and (= 3 (:exit from-file-url)) (str/includes? err "system curl was not found") (str/includes? err "EMON_MODELS"))
+                (ok! "the CLI explains how to pre-place models when curl is missing")
+                :else
+                (fail! "file URL as a pack mirror: exit " (:exit from-file-url) " " err))))))
       (finally (fs/delete-tree tmp)))))
 
 ;; ---- main ----------------------------------------------------------------------------------------------------------------------------------

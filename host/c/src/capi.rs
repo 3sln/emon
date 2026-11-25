@@ -1245,8 +1245,8 @@ pub unsafe extern "C" fn emon_engines_packs(e: *mut emon_engines, dir: *const c_
     })
 }
 
-// The turnkey registry (D885, D895): what is next to the library. Packs: `share/emon/packs` (read-only) and `$EMON_MODELS`, fetched on demand (EMON_PACKS_AUTO) when this build can
-// fetch and `$EMON_PACKS_FETCH` (never, cache, auto) does not say otherwise; the adapters in `lib/emon/adapters/` (and `$EMON_ADAPTER_DIR`), or, in an app, by name from the loader
+// The turnkey registry (D885, D895): what is next to the library. Packs: `share/emon/packs` (read-only) and `$EMON_MODELS`, mode CACHE unless overridden by
+// `$EMON_PACKS_FETCH`; the adapters in `lib/emon/adapters/` (and `$EMON_ADAPTER_DIR`), or, in an app, by name from the loader
 // (libemon_ocr_tesseract.so, @rpath/libemon_ocr_tesseract.dylib); pdfium, as `emon_engines_pdfium(NULL)` finds it, when it is there. Nothing found is not an error: the engines
 // are the ones that were. An adapter that is found and cannot be opened is.
 #[no_mangle]
@@ -1324,8 +1324,8 @@ pub unsafe extern "C" fn emon_prepare(e: *const emon_engines, options: *const c_
 
 // The app's `onPackNeeded` (D896): called, on the thread that is converting, for a pack a request needs that is not here (and that `never` and `EMON_OFFLINE=1` have not already
 // refused). It fills `out->action`: EMON_PACK_FETCH, PROVIDE (with `data`/`len`, or `path`: a file, or a directory of the pack's files), DECLINE (the page is unread with
-// `pack-missing:<id>`) or SUBSTITUTE (`engine`: another implementation of the same OIL engine). Answer 0, or non-zero for DECLINE. NULL removes it. With none, a turnkey
-// (EMON_PACKS_AUTO) fetches.
+// `pack-missing:<id>`) or SUBSTITUTE (`engine`: another implementation of the same OIL engine). Answer 0, or non-zero for DECLINE. NULL removes it.
+// Supply downloads from the platform with PROVIDE. FETCH reports `pack-fetch-unavailable:<id>`.
 #[no_mangle]
 pub unsafe extern "C" fn emon_on_pack_needed(e: *mut emon_engines, f: Option<packs::PackNeededFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
     guarded_n(err, || {
@@ -1341,8 +1341,7 @@ pub unsafe extern "C" fn emon_on_pack_needed(e: *mut emon_engines, f: Option<pac
     })
 }
 
-// Progress and cancel (D896): one stream for the fetches the library starts and the ones the app asks for (`emon_packs_ensure`): START, PROGRESS (bytes done of total), DONE, FAILED,
-// CANCELLED. A PROGRESS callback that answers non-zero cancels the fetch (the pack stays missing). NULL removes it.
+// Progress callback (D896), retained in the ABI. Platform SDKs report progress for their own downloads. NULL removes it.
 #[no_mangle]
 pub unsafe extern "C" fn emon_on_pack_event(e: *mut emon_engines, f: Option<packs::PackEventFn>, ctx: *mut c_void, err: *mut emon_error) -> c_int {
     guarded_n(err, || {
@@ -1357,8 +1356,7 @@ pub unsafe extern "C" fn emon_on_pack_event(e: *mut emon_engines, f: Option<pack
     })
 }
 
-// Fetch packs ahead of time (`packs.ensure`): `ids` is a comma list of pack ids (`tess-fast-eng,tess-osd`; see emon_prepare). Blocks, reports through `emon_on_pack_event`, stops at
-// the first failure. Only in EMON_PACKS_AUTO and not offline; every file is verified against the catalogue's SHA-256 before it is kept.
+// Check packs ahead of time: `ids` is a comma list of pack ids (`tess-fast-eng,tess-osd`; see emon_prepare). In AUTO and online, a missing pack is `pack-fetch-unavailable`.
 #[no_mangle]
 pub unsafe extern "C" fn emon_packs_ensure(e: *mut emon_engines, ids: *const c_char, err: *mut emon_error) -> c_int {
     guarded_n(err, || {

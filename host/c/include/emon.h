@@ -292,13 +292,12 @@ int emon_finish_intake(emon_session *s, emon_buf *out, emon_error *err);
  * a download.  A file that does not match is never used; one in the pack directory is deleted.  Each adapter is given a flat directory of the verified files of the packs it reads.
  * A request that needs a pack that is not there is answered `unsupported`: the page is UNREAD (`pack-missing:<id>`), never blank.
  *
- * THE MODE (emon_engines_packs): EMON_PACKS_NEVER fetches nothing and asks no hook; EMON_PACKS_CACHE uses what is cached, never the network; EMON_PACKS_AUTO fetches on demand
- * (when this library was built with `packs-fetch`).  A new emon_engines is NEVER: core and bare adapters never fetch; the turnkey emon_engines_defaults is AUTO.  EMON_OFFLINE=1 in
- * the environment is NEVER whatever you set, and wins over a hook.
+ * THE MODE (emon_engines_packs): EMON_PACKS_NEVER uses installed packs and skips the hook. CACHE and AUTO allow apps to supply missing packs through the hook.
+ * A new emon_engines is NEVER. emon_engines_defaults is CACHE unless overridden by EMON_PACKS_FETCH. EMON_OFFLINE=1 takes precedence over the mode and hook.
  *
- * THE HOOK (emon_on_pack_needed) is asked, on the thread that is converting, for each missing pack a request needs, and answers one of four things: FETCH (the library downloads
- * it, with progress), PROVIDE (your bytes, or a path: from your own CDN or assets), DECLINE (the page is unread) or SUBSTITUTE (another implementation of the same OIL engine; an
- * engine that would answer under another name leaves the request unread, because kin chose the engine when it planned the conversion).  With no hook, AUTO fetches.
+ * THE HOOK (emon_on_pack_needed) is asked on the conversion's calling thread. Answer PROVIDE with bytes or a path, DECLINE to leave the page unread, or SUBSTITUTE to select
+ * another implementation of the same OIL engine. FETCH, including AUTO's default decision without a hook, leaves the page unread with `pack-fetch-unavailable:<id>`.
+ * Apps can download packs with their platform HTTP client and return PROVIDE.
  */
 #define EMON_PACKS_NEVER 1
 #define EMON_PACKS_CACHE 2
@@ -376,8 +375,7 @@ typedef struct emon_pack_decision {
 typedef int (*emon_pack_needed_fn)(void *ctx, const emon_pack_request *req, emon_pack_decision *out);
 int emon_on_pack_needed(emon_engines *e, emon_pack_needed_fn fn, void *ctx, emon_error *err);   /* fn NULL removes it */
 
-/* PROGRESS AND CANCEL: one stream for the downloads the library starts and the ones you ask for (emon_packs_ensure).  A callback that answers non-zero to a PROGRESS event
- * cancels the download: the pack stays missing.  Called on the thread that is downloading. */
+/* Progress and cancellation declarations are retained in the ABI. Apps report progress and handle cancellation for downloads they perform. */
 #define EMON_PACK_EVENT_START     1
 #define EMON_PACK_EVENT_PROGRESS  2
 #define EMON_PACK_EVENT_DONE      3
@@ -396,10 +394,9 @@ typedef struct emon_pack_event {
 } emon_pack_event;
 typedef int (*emon_pack_event_fn)(void *ctx, const emon_pack_event *ev);
 int emon_on_pack_event(emon_engines *e, emon_pack_event_fn fn, void *ctx, emon_error *err);     /* fn NULL removes it */
-/* Fetch packs ahead of time: `ids` is a comma list of pack ids.  Blocks, reports through emon_on_pack_event, stops at the first failure (`pack-fetch-failed:<id>`,
- * `pack-hash-mismatch:<id>`, `pack-fetch-cancelled:<id>`, `pack-fetch-unavailable:<id>`).  Only in EMON_PACKS_AUTO and not offline. */
+/* Check packs ahead of time: `ids` is a comma list of pack ids. In AUTO and online, the first missing pack is reported as `pack-fetch-unavailable:<id>`. */
 int emon_packs_ensure(emon_engines *e, const char *ids, emon_error *err);
-/* Stop the download that is running (any thread). */
+/* Retained in the ABI for compatibility. */
 void emon_packs_cancel(emon_engines *e);
 
 #ifdef __cplusplus

@@ -22,8 +22,6 @@ tesseract = []
 vision = []
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8), Windows only: the CLI of a Windows machine registers the port beside Tesseract's
 winocr = ["dep:windows"]
-# the pack fetch of the adapters (host/rust/src/packs.rs): an HTTPS client. The CLI links Tesseract itself and reads `share/emon/tessdata`; it does not enable it.
-packs-fetch = ["dep:ureq"]
 
 [dependencies]
 # the same pins as the Rust host (kin/scripts/emon-rs-build); the lock file is host/rust/Cargo.lock
@@ -31,8 +29,6 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 miniz_oxide = "=0.8.9"
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
-# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
-ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
 [target.'cfg(windows)'.dependencies]

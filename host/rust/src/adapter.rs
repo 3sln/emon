@@ -596,7 +596,7 @@ impl Engines {
         self.set_packs_dir(std::path::Path::new(dir))
     }
 
-    // The pack mode a TURNKEY registry starts in: `$EMON_PACKS_FETCH` (never, cache, auto), else the platform class's default (kin's `pk-default-fetch`) when this build can fetch, else
+    // The pack mode a turnkey registry starts in: `$EMON_PACKS_FETCH` (never, cache, auto), else the platform default when a host fetcher is configured, else
     // `cache`. Err names a value that is none of the three.
     pub fn turnkey_mode(&self) -> Result<i32, String> {
         match std::env::var("EMON_PACKS_FETCH").ok().as_deref() {
@@ -604,7 +604,7 @@ impl Engines {
             Some("cache") => Ok(ke::pfetch_cache()),
             Some("auto") => Ok(ke::pfetch_auto()),
             Some(other) if !other.is_empty() => Err(format!("EMON_PACKS_FETCH is never, cache or auto, not {:?}", other)),
-            _ => Ok(if cfg!(feature = "packs-fetch") { ke::pk_default_fetch(self.inner.packs.class()) } else { ke::pfetch_cache() }),
+            _ => Ok(if self.inner.packs.has_fetcher() { ke::pk_default_fetch(self.inner.packs.class()) } else { ke::pfetch_cache() }),
         }
     }
 
@@ -1461,7 +1461,10 @@ pub fn platform_fallback(primary: PortInfo, platform: Arc<dyn Ocr>, fallback: Op
 // `.cache/ppocr/libemon_ppocr_adapter.<ext>`, as the shared adapter was always found) with the models in `$EMON_PPOCR_MODELS` (else `.cache/ppocr`), and the router of the two is
 // the port. Needs the adapter library (a PP archive, `bb ppocr-addon`).
 pub fn ppocr_hybrid(incumbent: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
-    let e = Engines::new();
+    ppocr_hybrid_with_engines(&Engines::new(), incumbent)
+}
+
+pub fn ppocr_hybrid_with_engines(e: &Engines, incumbent: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
     let models = std::env::var("EMON_PPOCR_MODELS").unwrap_or_else(|_| ".cache/ppocr".to_string());
     e.packs().add_dir(std::path::Path::new(&models));
     if let Some(t) = incumbent {
@@ -1475,4 +1478,9 @@ pub fn ppocr_hybrid(incumbent: Option<crate::engine::OcrPort>) -> Result<crate::
     e.load(&lib, None).map_err(|r| format!("{}: {}", r.name, r.message))?;
     let router = e.router().ok_or_else(|| "no adapter".to_string())?;
     Ok(crate::engine::OcrPort(Arc::new(router)))
+}
+
+/// kin's engine id of Tesseract, for hosts outside the library (the CLI) that filter the pack catalogue by engine.
+pub fn tesseract_engine_id() -> i32 {
+    ke::eng_tesseract()
 }

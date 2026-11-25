@@ -14888,6 +14888,16 @@ A manual registry-only dispatch can use the workflows from a later commit on `ma
 
 - [ ] **Signed off** (maintainer)
 
+### D913 — Move model pack downloads out of the native library
+
+P13.17b implements D903. The Rust and C library builds, the adapter builds and the pod drop the HTTP and TLS dependency graph. The core resolves, verifies and caches packs and handles the D896 hook decisions. In the absence of a host fetcher, a fetch decision reports `pack-fetch-unavailable:<id>`. An OCR request that needs the pack stays unread. The C defaults look for local packs and accept app-provided bytes or paths through the hook.
+
+The CLI supplies a fetcher that runs system curl with HTTPS-only transfers and redirects. It stages each download in a temporary file, then the core verifies the catalogue size and SHA-256 before caching it. The CLI checks `EMON_MODELS` and its pack cache first and explains how to pre-place files when curl is unavailable.
+
+Dart already uses `HttpClient` and provides verified packs through the native hook. The JS PP-OCR adapter uses `fetch` for caller-supplied model URLs and checks the pins. The JS Tesseract adapter uses the app's Tesseract.js worker. Go, Java and C# use local model files. Their D896 registry and platform pack fetching remain part of K3.
+
+- [ ] **Signed off** (maintainer)
+
 ### D914 — Qualify the K2 PP-OCR dependency refusals (P13.18c)
 
 The integrated check exercises Go, Java and C# through the legacy PP-OCR binding and C, pod and native Rust through K2. A missing model directory must name `ppocr-models-missing` or K2's `pack-missing` for the respective binding. A missing adapter and physical removal of the pinned ONNX Runtime library must each name `ppocr-runtime-missing` or K2's `adapter-runtime-missing`. Each refusal must exit nonzero with empty stdout. The check isolates the pack cache, disables fetching, and explicitly registers the PP-OCR and Tesseract adapters in the C driver. It restores the ORT file in a `finally` block, verifies its SHA-256, and compares the restored live Models, bundles and recordings against the direct Rust reference.

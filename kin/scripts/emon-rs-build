@@ -91,6 +91,7 @@ for f in lib port plan source engine imgdec tess render pdfium pdfimg pdfcodecs 
 if [ -n "$cli_mode" ]; then
   bb tools/ppocr/activate_cli.clj "$crate/src/lib.rs"
   put host/cli/src/main.rs "$crate/src/main.rs"
+  put host/cli/src/pack_fetch.rs "$crate/src/pack_fetch.rs"
   put THIRD_PARTY_NOTICES.md "$crate/src/THIRD_PARTY_NOTICES.md"
 else
   put test/driver/rust/main.rs "$crate/src/driver.rs"
@@ -114,8 +115,6 @@ path = "src/driver.rs"
 
 [features]
 tesseract = []
-# the pack fetch of the adapters (host/rust/src/packs.rs, K2): an HTTPS client, off unless asked
-packs-fetch = ["dep:ureq"]
 # libemon_ocr_tesseract: Tesseract as a native adapter library (host/rust/src/tess_adapter.rs), built by `bb package`
 tesseract-adapter = ["tesseract"]
 # Apple Vision (host/rust/src/vision.rs, K8): the port and its adapter library; link flags from tools/native/vision.clj
@@ -136,8 +135,6 @@ miniz_oxide = "=0.8.9"
 # CMYK and YCCK samples `image` does not give; both are already in the lock file
 zune-jpeg = "=0.5.15"
 zune-core = "=0.5.3"
-# the pack fetch (feature `packs-fetch`, host/rust/src/packs.rs): an HTTPS client with rustls. Optional: a build without the feature has none of it.
-ureq = { version = "=3.4.2", optional = true, default-features = false, features = ["rustls"] }
 
 # Windows.Media.Ocr (host/rust/src/winocr.rs, K8): the system's own WinRT API through the `windows` crate, on Windows only and only with the feature
 [target.'cfg(windows)'.dependencies]

@@ -471,7 +471,7 @@
 (defonce native-winocr-lib (atom nil)) ; the path of emon_ocr_winocr.dll (K8, D901; K5), built on a Windows host: tools/native/winocr.clj builds and audits it
 
 ;; THE FULL PIPELINE (D552; D541's recipe for the CLI; K2, D899). The CORE library `libemon` (cdylib + staticlib) has NO Tesseract or Leptonica in it: it is the Rust host behind emon.h, with pdfium LOADED AT RUN TIME
-;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`) and the pack fetch (feature `packs-fetch`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
+;; (`--cfg pdfium --cfg pdfium_dl`, `pdfium::load`). Tesseract is the adapter library `libemon_ocr_tesseract` (host/rust/src/tess_adapter.rs),
 ;; built from the same sources with the static Tesseract and Leptonica of `bb native` (EMON_NATIVE, .cache/native/<triple>/link.rustflags) and exporting only `emon_ocr_adapter_v1`
 ;; (emon_adapter.h). The pod, a binary, still links Tesseract itself (the `tesseract` feature). The archives carry the pinned pdfium (lib/), the adapter (lib/emon/adapters/) and the
 ;; English and orientation packs (share/emon/packs/<id>/<file>), where the library looks for them. Without .cache/native or the pinned pdfium the core library is built as it is
@@ -552,8 +552,8 @@
                 win? (str/includes? (host-triple) "windows-msvc")
                 elf (when-not (or mac? win?) exports/elf-link-flags)
                 ident (fn [n] (cond win? [] mac? ["-C" (str "link-arg=-Wl,-install_name,@rpath/lib" n ".dylib")] :else ["-C" (str "link-arg=-Wl,-soname,lib" n ".so")]))
-                ;; the core library: pdfium at run time, the pack fetch, no Tesseract
-                lib (attempt dir env ["rustc" "--release" "--lib" "--features" "packs-fetch"] (concat (ident "emon") cfgs crt elf))
+                ;; The core library loads pdfium at run time. The OCR adapter links Tesseract.
+                lib (attempt dir env ["rustc" "--release" "--lib"] (concat (ident "emon") cfgs crt elf))
                 pod (when (and (zero? (:exit lib)) (not win?)) ; no pod ships for Windows (K5)
                       (attempt dir (cond-> (assoc env "CARGO_TARGET_DIR" (str dir "/target-pod")) full? (assoc "RUSTFLAGS" (str/join " " flags)))
                                (concat ["build" "--release" "--bin" "emon-pod"] (when full? ["--features" "tesseract"])) []))
