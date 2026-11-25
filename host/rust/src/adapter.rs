@@ -987,20 +987,24 @@ impl Router {
         req.kind() == KIND_OCR && self.route(req).is_some()
     }
 
-    // The transcript's `:producer` of whatever answers: the first adapter's pairs, the others' after them, and `ocr-engine` naming all of them (`tesseract+ppocr`).
+    // The transcript's `:producer` is a map: the first adapter's pairs, the combined engine name, then additional keys from the other adapters.
     pub fn producer_pairs(&self) -> Vec<(String, String)> {
         let v = self.inner.entries.read().unwrap_or_else(|e| e.into_inner());
+        let combined = (v.len() > 1).then(|| {
+            v.iter().map(|e| Engines::eng_name(ka::ad_oen_eng(e.oen()))).collect::<Vec<_>>().join("+")
+        });
         let mut out: Vec<(String, String)> = Vec::new();
-        for e in v.iter() {
+        for (i, e) in v.iter().enumerate() {
             for (k, val) in &e.info.producer {
-                if !out.iter().any(|(k2, v2)| k2 == k && v2 == val) {
+                if !(combined.is_some() && k == "ocr-engine") && !out.iter().any(|(k2, _)| k2 == k) {
                     out.push((k.clone(), val.clone()));
                 }
             }
-        }
-        if v.len() > 1 {
-            let names: Vec<String> = v.iter().map(|e| e.name.clone()).collect();
-            out.push(("ocr-engine".to_string(), names.join("+")));
+            if i == 0 {
+                if let Some(name) = &combined {
+                    out.push(("ocr-engine".to_string(), name.clone()));
+                }
+            }
         }
         out
     }
@@ -1462,7 +1466,9 @@ pub fn ppocr_hybrid(incumbent: Option<crate::engine::OcrPort>) -> Result<crate::
     e.packs().add_dir(std::path::Path::new(&models));
     if let Some(t) = incumbent {
         let producer = t.0.producer();
-        e.add_port(PortInfo::tesseract(producer), t.0).map_err(|r| format!("{}: {}", r.name, r.message))?;
+        let mut info = PortInfo::tesseract(producer);
+        info.needs = 0; // This in-process port already reads from its own tessdata directory.
+        e.add_port(info, t.0).map_err(|r| format!("{}: {}", r.name, r.message))?;
     }
     let ext = if cfg!(target_os = "macos") { "dylib" } else if cfg!(windows) { "dll" } else { "so" };
     let lib = std::env::var("EMON_PPOCR_LIB").unwrap_or_else(|_| format!(".cache/ppocr/{}emon_ppocr_adapter.{}", if cfg!(windows) { "" } else { "lib" }, ext));

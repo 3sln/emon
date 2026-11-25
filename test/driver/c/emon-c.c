@@ -51,10 +51,11 @@ static void *xmalloc(size_t n) {
     return p;
 }
 
-/* an emon error: a usage error is the driver's exit 2; the rest is `error: NAME` and the sentence, exit 4 (1 for a bug) */
+/* Keep the usage exit code and print the name of a registration refusal. */
 static void fail(emon_error *e) {
-    if (e->code == EMON_ERR_USAGE) usage(e->message);
+    if (e->code == EMON_ERR_USAGE && strcmp(e->name, "usage") == 0) usage(e->message);
     fprintf(stderr, "error: %s\n%s\n", e->name, e->message);
+    if (e->code == EMON_ERR_USAGE) exit(2);
     exit(e->code == EMON_ERR_INTERNAL ? 1 : 4);
 }
 

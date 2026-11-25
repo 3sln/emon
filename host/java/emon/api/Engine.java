@@ -17,14 +17,17 @@
 
 package emon.api;
 
+import emon.Engines;
 import emon.Plan;
 import emon.Planloop;
 import emon.Planrun;
 import emon.Port;
 import emon.RenderPort;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class Engine {
@@ -36,6 +39,40 @@ public final class Engine {
         if (cfg.chunkSize < 1) {
             cfg.chunkSize = 1;
         }
+    }
+
+    // Kin derives the recording's engine table from the names reported by the OCR port (D898).
+    private static List<int[]> recordedEngines(List<String[]> producer) {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        int platform = Engines.pclsLinux();
+        if (os.startsWith("mac")) {
+            platform = Engines.pclsMacos();
+        } else if (os.equals("ios")) {
+            platform = Engines.pclsIos();
+        } else if (os.startsWith("windows")) {
+            platform = Engines.pclsWindows();
+        } else if (os.startsWith("android") || System.getProperty("java.runtime.name", "").equals("Android Runtime")) {
+            platform = Engines.pclsAndroid();
+        }
+        Port.Cells available = Port.newCells();
+        for (String[] pair : producer) {
+            if (!pair[0].equals("engine") && !pair[0].equals("ocr-engine")) {
+                continue;
+            }
+            for (String name : pair[1].split("\\+")) {
+                byte[] bytes = name.getBytes(StandardCharsets.UTF_8);
+                int id = Engines.engFind(bytes, 0, bytes.length);
+                if (id >= 0) Port.cellsPush(available, id);
+            }
+        }
+        Port.Cells rows = Port.newCells();
+        List<int[]> result = new ArrayList<>();
+        if (Engines.pkRecordEngines(rows, platform, available) == 0) {
+            for (int i = 0; i + 2 < Port.cellsLen(rows); i += 3) {
+                result.add(new int[] {Port.cellsAt(rows, i), Port.cellsAt(rows, i + 1), Port.cellsAt(rows, i + 2)});
+            }
+        }
+        return result;
     }
 
     /** The result of a conversion: the Model, what the loop did, and (when recording) the transcript. */
@@ -205,6 +242,7 @@ public final class Engine {
             rec.inputs = thisInput;
             if (cfg.ocr != null) {
                 rec.producer = cfg.ocr.producer();
+                rec.engines = recordedEngines(rec.producer);
             }
         }
         if (replay != null) {

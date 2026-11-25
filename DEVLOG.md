@@ -14887,3 +14887,19 @@ The Pages budget and static site checks passed. Chromium in Docker passed the de
 A manual registry-only dispatch can use the workflows from a later commit on `main` and publish from the existing version tag. Both commits must carry the same version in `version.edn`, and the tagged commit must have a successful `emon/verified` status. The retry skips full verification and still requires validated archives and a published GitHub release before the registry jobs run. The release tag stays at its original commit.
 
 - [ ] **Signed off** (maintainer)
+
+### D914 — Qualify the K2 PP-OCR dependency refusals (P13.18c)
+
+The integrated check exercises Go, Java and C# through the legacy PP-OCR binding and C, pod and native Rust through K2. A missing model directory must name `ppocr-models-missing` or K2's `pack-missing` for the respective binding. A missing adapter and physical removal of the pinned ONNX Runtime library must each name `ppocr-runtime-missing` or K2's `adapter-runtime-missing`. Each refusal must exit nonzero with empty stdout. The check isolates the pack cache, disables fetching, and explicitly registers the PP-OCR and Tesseract adapters in the C driver. It restores the ORT file in a `finally` block, verifies its SHA-256, and compares the restored live Models, bundles and recordings against the direct Rust reference.
+
+A K2 hybrid records one value per producer key, retaining the primary engine's provenance and the combined engine name in the same order as the direct binding. The statically linked Tesseract port already has its own tessdata, so the hybrid uses that directory directly. Successful PP-OCR answer cells prove the replay-mismatch test exercised the challenger.
+
+The C test driver discarded names from registration errors because the C ABI classifies them as usage errors. It now prints the refusal name and message and retains usage exit code 2.
+
+The first live Go bundle matched Rust, but its transcript omitted the D898 engine table. Go, Java and C# now derive that table from the OCR producer through kin's `pk-record-engines`, as Rust does. The recording comparison still checks every byte apart from the host provenance value.
+
+The default shard has the 225 pinned bitmap inputs and an older policy reference. Its 198-recording replay payload is missing. The historical manifest survives in the ORTPIN scratch inputs, but 18 control documents it names are missing from the mounted corpus, including seven RVL-CDIP documents from a shard marked keep. Re-recording starts from the historical inputs and requires them to be restored before provenance can be marked complete.
+
+Local macOS checks verified the pinned assets and all 18 named refusals across the six dynamically bound drivers, including physical ORT absence and SHA-256 equality after restoration. All five fixtures matched the direct Rust reference across seven drivers, with 35 live Models and 30 replay bundles. The focused runs used Rust optimization level 1 and reused the verified receipt outputs for the remaining fixture run. The historical replay check stopped at the missing manifest. The full `bb ppocr-hosts` run was interrupted during its build once the missing corpus inputs were confirmed, and the shard still records `:complete false`.
+
+- [ ] **Signed off** (maintainer)

@@ -20,7 +20,9 @@
 
 namespace emon.Api;
 
+using System;
 using System.Collections.Generic;
+using System.Text;
 
 public sealed class Engine {
     private readonly Options.Config cfg;
@@ -31,6 +33,41 @@ public sealed class Engine {
         if (cfg.ChunkSize < 1) {
             cfg.ChunkSize = 1;
         }
+    }
+
+    // Kin derives the recording's engine table from the names reported by the OCR port (D898).
+    private static List<int[]> RecordedEngines(List<string[]> producer) {
+        int platform = Engines.PclsLinux();
+        if (OperatingSystem.IsMacOS()) {
+            platform = Engines.PclsMacos();
+        } else if (OperatingSystem.IsIOS()) {
+            platform = Engines.PclsIos();
+        } else if (OperatingSystem.IsWindows()) {
+            platform = Engines.PclsWindows();
+        } else if (OperatingSystem.IsAndroid()) {
+            platform = Engines.PclsAndroid();
+        } else if (OperatingSystem.IsBrowser()) {
+            platform = Engines.PclsWeb();
+        }
+        Port.Cells available = Port.NewCells();
+        foreach (string[] pair in producer) {
+            if (pair[0] != "engine" && pair[0] != "ocr-engine") {
+                continue;
+            }
+            foreach (string name in pair[1].Split('+')) {
+                byte[] bytes = Encoding.UTF8.GetBytes(name);
+                int id = Engines.EngFind(bytes, 0, bytes.Length);
+                if (id >= 0) Port.CellsPush(available, id);
+            }
+        }
+        Port.Cells rows = Port.NewCells();
+        var result = new List<int[]>();
+        if (Engines.PkRecordEngines(rows, platform, available) == 0) {
+            for (int i = 0; i + 2 < Port.CellsLen(rows); i += 3) {
+                result.Add(new int[] {Port.CellsAt(rows, i), Port.CellsAt(rows, i + 1), Port.CellsAt(rows, i + 2)});
+            }
+        }
+        return result;
     }
 
     /// <summary>The result of a conversion: the Model, what the loop did, and (when recording) the transcript.</summary>
@@ -229,6 +266,7 @@ public sealed class Engine {
             rec.Inputs = thisInput;
             if (cfg.Ocr != null) {
                 rec.Producer = cfg.Ocr.Producer();
+                rec.Engines = RecordedEngines(rec.Producer);
             }
         }
         if (replay != null) {

@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +38,7 @@ import (
 	"emon/config"
 	"emon/enctx"
 	"emon/engine"
+	"emon/engines"
 	"emon/html"
 	"emon/model"
 	"emon/plan"
@@ -1294,6 +1296,43 @@ func cloneBuf(b *port.Buf) *port.Buf {
 
 func cellsVec(c *port.Cells) []int32 { return append([]int32(nil), c.V...) }
 
+// Kin derives the recording's engine table from the names reported by the OCR port (D898).
+func recordedEngines(producer [][2]string) [][3]int32 {
+	platform := engines.PclsLinux()
+	switch {
+	case runtime.GOARCH == "wasm":
+		platform = engines.PclsWeb()
+	case runtime.GOOS == "darwin":
+		platform = engines.PclsMacos()
+	case runtime.GOOS == "ios":
+		platform = engines.PclsIos()
+	case runtime.GOOS == "windows":
+		platform = engines.PclsWindows()
+	case runtime.GOOS == "android":
+		platform = engines.PclsAndroid()
+	}
+	available := port.NewCells()
+	for _, pair := range producer {
+		if pair[0] != "engine" && pair[0] != "ocr-engine" {
+			continue
+		}
+		for _, name := range strings.Split(pair[1], "+") {
+			if id := engines.EngFind([]byte(name), 0, int32(len(name))); id >= 0 {
+				port.CellsPush(available, id)
+			}
+		}
+	}
+	rows := port.NewCells()
+	if engines.PkRecordEngines(rows, platform, available) != 0 {
+		return nil
+	}
+	var result [][3]int32
+	for i := int32(0); i+2 < port.CellsLen(rows); i += 3 {
+		result = append(result, [3]int32{port.CellsAt(rows, i), port.CellsAt(rows, i+1), port.CellsAt(rows, i+2)})
+	}
+	return result
+}
+
 func textOf(c *port.Cells, start, n int32) string {
 	var sb strings.Builder
 	for i := start; i < start+n; i++ {
@@ -1459,6 +1498,7 @@ func (e *Engine) runInputBounded(idx int, in Input, opts Options, intakeOnly boo
 		rec.Inputs = thisInput
 		if e.cfg.Ocr != nil {
 			rec.Producer = e.cfg.Ocr.Producer()
+			rec.Engines = recordedEngines(rec.Producer)
 		}
 	}
 	if replay != nil {
