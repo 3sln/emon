@@ -134,7 +134,7 @@ fn tessdata_from_packs(packs: &Packs, bundled: Option<&Path>, models: &[String])
     if let Some(dir) = bundled {
         packs.add_dir(dir);
     }
-    let engine = emon::emon::engines::eng_tesseract();
+    let engine = emon::adapter::tesseract_engine_id();
     let catalogue: Vec<_> = (1..=pack_count()).map(pack_info).filter(|p| p.engine == engine).collect();
     let requested = models
         .iter()

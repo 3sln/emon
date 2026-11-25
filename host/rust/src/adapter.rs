@@ -1473,3 +1473,8 @@ pub fn ppocr_hybrid_with_engines(e: &Engines, incumbent: Option<crate::engine::O
     let router = e.router().ok_or_else(|| "no adapter".to_string())?;
     Ok(crate::engine::OcrPort(Arc::new(router)))
 }
+
+/// kin's engine id of Tesseract, for hosts outside the library (the CLI) that filter the pack catalogue by engine.
+pub fn tesseract_engine_id() -> i32 {
+    ke::eng_tesseract()
+}
