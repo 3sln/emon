@@ -14913,3 +14913,13 @@ The default shard has the 225 pinned bitmap inputs and an older policy reference
 Local macOS checks verified the pinned assets and all 18 named refusals across the six dynamically bound drivers, including physical ORT absence and SHA-256 equality after restoration. All five fixtures matched the direct Rust reference across seven drivers, with 35 live Models and 30 replay bundles. The focused runs used Rust optimization level 1 and reused the verified receipt outputs for the remaining fixture run. The historical replay check stopped at the missing manifest. The full `bb ppocr-hosts` run was interrupted during its build once the missing corpus inputs were confirmed, and the shard still records `:complete false`.
 
 - [ ] **Signed off** (maintainer)
+
+### D916 — Re-record the `emon-live-vision` scoreboard entry for the turnkey it now measures (vdrift)
+
+`bb accuracy --predictor emon-live-vision --variants scan` on main reported 194 regressions, 4 vanished metrics and 212 improvements (`scan/all :bow-f1` .933734 to .912924, `conf-brier-cell` .203 to .465). The drift is deterministic and is not a code regression: the entry was recorded by K8 (0a0cb73f, 2026-11-18) when `emon-live-vision` was Apple's Vision ALONE with its old language configuration. P13.21b (D907, b3bd9c65, 2026-11-19) changed what the same predictor name runs (Vision with the page-level Tesseract fallback and the detect-then-all-supported locale strategy) and measured it on scratch scoreboards ("the committed one is not touched"), so the entry was never moved.
+
+Evidence: at e6555a7a (the parent of D907) the predictor gives `1181 metrics, none regressed beyond 0.002 (0 improved)` against the committed entry, exactly; on main it gives the 194-regression result, the same count on every run, with and without an unrelated kin branch. D908 to D914 (lib.rs/session.rs cfg, packs, adapter errors) did not move it. No page failed through Vision errors in a way that changes the numbers: the results are identical across runs.
+
+Ruling (ratchet authority, stale baseline, a directed change by D907): the entry is deleted and re-recorded with `--update` against current main, as the baseline of the fallback turnkey. Vision alone remains measurable as `emon-live-vision-alone` (no entry). This is not used to hide a regression: the old and new numbers are different predictors, and D907's report holds the pre-registered comparison.
+
+- [ ] **Signed off** (maintainer)
