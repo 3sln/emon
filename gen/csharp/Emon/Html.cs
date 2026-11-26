@@ -1119,6 +1119,9 @@ public static class Html {
             HAlignAttr(t, o, nodes, attrs, n);
             HCommon(t, o, nodes, regions, pages, layout, n);
             emon.Port.TextAscii(t, ">");
+            if ((Model.NodeFlags(nodes, n) & Model.FlSeamGap()) != 0) {
+                emon.Port.TextAscii(t, "<span data-emon-seam-gap=\"true\">[unread]</span>");
+            }
             hb = HBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
             if (hb > 0) {
                 HNl(t, o, d);

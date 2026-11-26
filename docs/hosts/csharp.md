@@ -130,7 +130,7 @@ ships to fill it.
   it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the csharp host: 372 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the csharp host: 373 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -225,6 +225,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Input` | `sealed class` |
 | `emon.Api.Input#Bytes(System.ReadOnlyMemory<byte>)` | `static Input` |
 | `emon.Api.Input#Bytes(byte[])` | `static Input` |
+| `emon.Api.Input#Images(Input[])` | `static Input` |
 | `emon.Api.Input#Of(IByteSource)` | `static Input` |
 | `emon.Api.Input#Seekable(System.IO.Stream)` | `static Input` |
 | `emon.Api.Input#Spooled(System.IO.Stream,long)` | `static Input` |

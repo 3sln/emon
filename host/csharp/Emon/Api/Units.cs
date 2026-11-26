@@ -29,11 +29,13 @@ internal static class Units {
         internal readonly emon.Port.Cells Cand;
         internal readonly emon.Port.Buf Cbytes;
         internal readonly int Rfrom;
+        internal readonly emon.Port.Cells Spans;
 
-        internal Pending(emon.Port.Cells cand, emon.Port.Buf cbytes, int rfrom) {
+        internal Pending(emon.Port.Cells cand, emon.Port.Buf cbytes, int rfrom, emon.Port.Cells spans) {
             this.Cand = cand;
             this.Cbytes = cbytes;
             this.Rfrom = rfrom;
+            this.Spans = spans;
         }
     }
 
@@ -178,7 +180,7 @@ internal static class Units {
                     b.Evidence = doc.Evidence.ToString();
                 }
                 if (r == 1) {
-                    b.Pending = new Pending(doc.Cand, doc.Cbytes, doc.Rfrom);
+                    b.Pending = new Pending(doc.Cand, doc.Cbytes, doc.Rfrom, doc.Spans);
                 }
                 o.Built = b;
                 return o;
@@ -213,6 +215,8 @@ internal static class Units {
             format = "png";
         } else if (doc.Ifmt == emon.Engine.EnFmtJpeg()) {
             format = "jpeg";
+        } else if (doc.Ifmt == emon.Engine.EnFmtImages()) {
+            format = "images";
         }
         return new Intake(format, doc.Imajor, doc.Iminor, System.Math.Max(doc.Ipages, 0), doc.Ienc == 1, n);
     }
@@ -293,6 +297,6 @@ internal static class Units {
     /// loop answers and runs it again).
     /// </summary>
     internal static void AssetStageFigures(emon.Enctx.Arenas m, Pending p, Options opts, int input, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
-        emon.Engine.EnAssetFigures(CfgOf(opts), m, p.Cand, p.Cbytes, p.Rfrom, new emon.Enctx.Pass(), input, nbytes, ans, rq, bms);
+        emon.Engine.EnAssetFigures(CfgOf(opts), m, p.Cand, p.Cbytes, p.Rfrom, p.Spans, new emon.Enctx.Pass(), input, nbytes, ans, rq, bms);
     }
 }

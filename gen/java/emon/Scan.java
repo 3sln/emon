@@ -2709,6 +2709,35 @@ public final class Scan {
         }
         return 0;
     }
+    public static int scMarkClipped(emon.Port.Cells olines, emon.Port.Cells owords, int line) {
+        int w = Evidence.olGet(olines, line, Evidence.lhFirst());
+        int end = w + Evidence.olGet(olines, line, Evidence.lhCount());
+        Evidence.olSet(olines, line, Evidence.olfConf(), Evidence.evClippedConf());
+        while ((w >= 0) && (w < end)) {
+            scFlag(owords, w, Evidence.oeClipped());
+            w += 1;
+        }
+        return 0;
+    }
+    public static int scSetAsideCutInk(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, int n, emon.Port.Cells cuts) {
+        if (emon.Port.cellsLen(cuts) != n) {
+            return n;
+        }
+        int i = 0;
+        int kept = 0;
+        int line = 0;
+        while (i < n) {
+            line = emon.Port.cellsAt(scr, scSelBase() + i);
+            if (emon.Port.cellsAt(cuts, i) == 1) {
+                scMarkClipped(olines, owords, line);
+            } else {
+                scSelSet(scr, kept, line);
+                kept += 1;
+            }
+            i += 1;
+        }
+        return kept;
+    }
     public static int scSetAsideClips(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr, int n, int x0, int y0, int x1, int y1, int fourpx, int photos) {
         // Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
         // leave only complete lines in the selection consumed by structure and table recovery.
@@ -2757,12 +2786,7 @@ public final class Scan {
                 scSelSet(scr, kept, line);
                 kept += 1;
             } else {
-                Evidence.olSet(olines, line, Evidence.olfConf(), Evidence.evClippedConf());
-                w = first;
-                while (w < end) {
-                    scFlag(owords, w, Evidence.oeClipped());
-                    w += 1;
-                }
+                scMarkClipped(olines, owords, line);
             }
             i += 1;
         }

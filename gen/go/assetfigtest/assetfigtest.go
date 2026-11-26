@@ -191,7 +191,7 @@ func afRaster(res *port.Cells, stage int32) int32 {
 		plan.AnDecode(ans, plan.AuId(plan.AuDecode()), 306, 396, 3, 3600, 0, 1)
 		afFill(port.BmsPut(bms, plan.AuId(plan.AuDecode()), 306, 396, 3), 306, 396, 3)
 	}
-	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, model.AfmPng(), ans, rq, bms, ws, z, rows, tmp, rec, box)
+	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, model.AfmPng(), port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box)
 	port.CellsDrop(res, 0)
 	port.CellsPush(res, port.CellsLen(rq))
 	port.CellsPush(res, plan.RecCount(rq))
@@ -339,7 +339,7 @@ func afPdf(res *port.Cells, stage int32, dpi int32, maxpix int32, body int32) in
 	if stage == 2 {
 		plan.AnFail(ans, plan.PkCrop(), plan.AuId(n), plan.PsUnsupported())
 	}
-	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box)
+	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box)
 	port.CellsDrop(res, 0)
 	port.CellsPush(res, plan.RecCount(rq))
 	if port.CellsLen(rq) > 0 {
@@ -516,7 +516,7 @@ func afSource(res *port.Cells, which int32) int32 {
 	}
 	model.NodeSetAttrInt(nodes, attrs, n, model.FkImage(), 0)
 	afBoxcells(box)
-	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box)
+	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box)
 	port.CellsDrop(res, 0)
 	port.CellsPush(res, plan.RecCount(rq))
 	port.CellsPush(res, model.NodeAttrIntOr(nodes, attrs, n, model.FkNoasset(), -1))
@@ -584,7 +584,7 @@ func afCaptionOnly(res *port.Cells) int32 {
 	f2 = afNode(nodes, regions, 0, model.NkFigure(), model.FgUnknown(), 1, 7200, 10000, 30000, 30000)
 	afNode(nodes, regions, f2, model.NkCaption(), 0, 1, 7200, 32000, 20000, 34000)
 	afBoxcells(box)
-	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box)
+	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box)
 	port.CellsDrop(res, 0)
 	port.CellsPush(res, plan.RecCount(rq))
 	port.CellsPush(res, plan.RecId(rq, 0))
@@ -640,7 +640,7 @@ func afReuse(res *port.Cells) int32 {
 	afFill(port.BmsPut(bms, plan.AuId(b), 105, 105, 3), 105, 105, 3)
 	plan.AnRender(ans, plan.AuId(d), 110, 110, 3, 150)
 	afFill(port.BmsPut(bms, plan.AuId(d), 110, 110, 3), 110, 110, 3)
-	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box)
+	asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box)
 	port.CellsDrop(res, 0)
 	port.CellsPush(res, port.CellsLen(rq))
 	port.CellsPush(res, model.AssetCount(assets))

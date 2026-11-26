@@ -20,7 +20,7 @@
 ;; `seal-sig` (a signature) or `seal-init` (initials): `emon.sealmark`'s `sm-raster` makes its `sl` row, flags the OCR-only groups inside it `in-seal` (their words never reach the body:
 ;; rules 401, 402) and finds the typed name; on a scan `sp-drop-lines` takes the lines the first pass made of the strokes out of the chosen ones.
 (ns emon.sigpx
-  (:require [emon.lang :refer [I32 Cells Bitmap]]
+  (:require [emon.lang :refer [I32 I64 Cells Bitmap i64]]
             [emon.port :refer [cells-len cells-at cells-set cells-push cells-drop bitmap-w bitmap-h bitmap-channels bitmap-u8]]
             [emon.evidence :refer [ow-confidence rl-count rl-get rlf-page rlf-x0 rlf-y0 rlf-x1 rlf-y1 rlf-thick
                                    ow-count ow-get hd-page hd-x0 hd-y0 hd-x1 hd-y1 hd-tstart hd-tlen hd-conf
@@ -386,7 +386,7 @@
         ^:mut ^I32 kind 0
         ^:mut ^I32 conf 0
         ^:mut ^I32 rgb 0
-        ^:mut ^I32 ln 0
+        ^:mut ^I64 ln (i64 0)
         ^:mut ^I32 r 0
         ^:mut ^I32 g 0
         ^:mut ^I32 b 0]
@@ -402,10 +402,13 @@
     (if (< sw 1) (set sw 1))
     (set swc (quot (* sw w) wpx))
     (if (> swc (sp-pen)) (return 0))
-    (if (> (* ink 100) (* (* wpx hpx) (sp-cover))) (return 0))
+    (if (> (* (i64 ink) 100) (* (* (i64 wpx) (i64 hpx)) (i64 (sp-cover)))) (return 0))
     (if (== (sp-ruled-ink mask zw zh wpx ink) 1) (return 0))
-    (set ln (quot ink sw))
-    (if (< (* (quot (* ln ln) 4) 100) (* (quot (+ (* wpx wpx) (* hpx hpx)) 4) (sg-tort))) (return 0))
+    (set ln (i64 (quot ink sw)))
+    (if (< (* (quot (* ln ln) 4) 100)
+           (* (quot (+ (* (i64 wpx) (i64 wpx)) (* (i64 hpx) (i64 hpx))) 4)
+              (i64 (sg-tort))))
+      (return 0))
     (if (and (<= w (sg-ini-w)) (<= h (sg-ini-h))) (set kind 4))
     (if (and (== kind 0) (and (>= w (sg-sig-min-w)) (>= (* w 2) (* h 3)))) (set kind 3))
     (if (== kind 0) (return 0))

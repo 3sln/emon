@@ -703,6 +703,25 @@ pub unsafe extern "C" fn emon_convert(input: *const emon_input, options: *const 
     })
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn emon_convert_images(inputs: *const emon_input, count: usize, options: *const c_char, engines: *const emon_engines, out: *mut *mut emon_model, err: *mut emon_error) -> c_int {
+    guarded(err, || {
+        if inputs.is_null() || out.is_null() || count == 0 || count > isize::MAX as usize / std::mem::size_of::<emon_input>() {
+            return Err(Fail::Usage("expected a nonempty array of image inputs and a Model output pointer".to_string()));
+        }
+        let p = parse_options(&text(options)?).map_err(Fail::Usage)?;
+        let mut images = Vec::with_capacity(count);
+        for input in std::slice::from_raw_parts(inputs, count) {
+            images.push(make_input(input)?);
+        }
+        let grouped = Input::images(images).map_err(|e| Fail::Usage(e.to_string()))?;
+        let (engine, opts) = one_shot_setup(&p, engines)?;
+        let (m, stats) = on_worker(|| engine.convert_stats(grouped, &opts))?;
+        *out = model_ptr(m, stats);
+        Ok(0)
+    })
+}
+
 // ONE-SHOT, the common case in one call: bytes in, the canonical JSON out.
 #[no_mangle]
 pub unsafe extern "C" fn emon_convert_json(input: *const emon_input, options: *const c_char, engines: *const emon_engines, pretty: c_int, out: *mut emon_buf, err: *mut emon_error) -> c_int {

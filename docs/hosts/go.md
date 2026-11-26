@@ -192,7 +192,7 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 366 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 367 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -316,6 +316,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.HTMLOptions.Ledger` | `field bool` |
 | `emon.HTMLOptions.Milestones` | `field bool` |
 | `emon.HTMLOptions.Pretty` | `field bool` |
+| `emon.ImagesInput` | `(images ...Input) (Input, error)` |
 | `emon.Input` | `struct +unexported` |
 | `emon.Input.Password` | `field []byte` |
 | `emon.Input.Source` | `field ByteSource` |

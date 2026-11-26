@@ -2010,6 +2010,26 @@
       (do (if (<= left right) (return 3)) (return 4)))
     (return 0)))
 
+(defn ^I32 sc-mark-clipped [^:mut ^Cells olines ^:mut ^Cells owords ^I32 line]
+  (let [^:mut ^I32 w (ol-get olines line (lh-first))
+        ^I32 end (+ w (ol-get olines line (lh-count)))]
+    (ol-set olines line (olf-conf) (ev-clipped-conf))
+    (while (and (>= w 0) (< w end))
+      (do (sc-flag owords w (oe-clipped))
+          (set w (+ w 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-set-aside-cut-ink [^:mut ^Cells olines ^:mut ^Cells owords ^:mut ^Cells scr ^I32 n ^Cells cuts]
+  (if (!= (cells-len cuts) n) (return n))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 kept 0 ^:mut ^I32 line 0]
+    (while (< i n)
+      (do (set line (cells-at scr (+ (sc-sel-base) i)))
+          (if (== (cells-at cuts i) 1)
+            (sc-mark-clipped olines owords line)
+            (do (sc-sel-set scr kept line) (set kept (+ kept 1))))
+          (set i (+ i 1))))
+    (return kept)))
+
 (defn ^:pub ^I32 sc-set-aside-clips [^:mut ^Cells olines ^:mut ^Cells owords ^Cells etext ^:mut ^Cells scr
                                      ^I32 n ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 fourpx ^I32 photos]
   (comment "Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and")
@@ -2043,11 +2063,7 @@
                                         (sc-clip-confidence olines owords line) conf odd chars fourpx photos))))
           (if (== edge 0)
             (do (sc-sel-set scr kept line) (set kept (+ kept 1)))
-            (do (ol-set olines line (olf-conf) (ev-clipped-conf))
-                (set w first)
-                (while (< w end)
-                  (do (sc-flag owords w (oe-clipped))
-                      (set w (+ w 1))))))
+            (sc-mark-clipped olines owords line))
           (set i (+ i 1))))
     (return kept)))
 

@@ -279,6 +279,10 @@ pub fn js_bits_flags(mut t: &mut String, pr: i32, bits: i32) -> i32 {
         }
         b += 1;
     }
+    if (bits & fl_seam_gap()) != 0 {
+        js_fsep(t, pr, k);
+        crate::port::text_ascii(t, "\"seam-gap\"");
+    }
     crate::port::text_ascii(t, "]");
     return 0;
 }

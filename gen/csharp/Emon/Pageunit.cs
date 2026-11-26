@@ -674,6 +674,10 @@ public static class Pageunit {
             }
         } else {
             nsel = Scan.ScSetAsideClips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos);
+            if (emon.Port.BmsHas(bms, did) == 1) {
+                Seams.MsLineCuts(emon.Port.BmsGet(bms, did), olines, scr, Scan.ScSelBase(), nsel, bx0, by0, bx1, by1, 2880000 / dpi100, s6);
+                nsel = Scan.ScSetAsideCutInk(olines, owords, scr, nsel, s6);
+            }
         }
         Scan.ScEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         if ((emon.Port.CellsAt(rtp, Retarget.RtpPrimary()) != run) && (emon.Port.CellsAt(rtp, Retarget.RtpQ()) != 0)) {

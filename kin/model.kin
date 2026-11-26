@@ -219,7 +219,8 @@
    [fl-tag-span-conflict 256 "tag-span-conflict"]
    [fl-in-table-image 512 "in-table-image"]
    [fl-script-unread 1024 "script-unread"]
-   [fl-uncalibrated-engine 2048 "uncalibrated-engine"]])
+   [fl-uncalibrated-engine 2048 "uncalibrated-engine"]
+   [fl-seam-gap 4096 "seam-gap"]])
 
 ;; A span's `style` bits, stored in its `sub`.
 (defenum ^:pub sy

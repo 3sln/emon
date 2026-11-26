@@ -94,7 +94,7 @@
         ^Cells tb (new-cells) ^Cells tc (new-cells) ^Cells tw (new-cells) ^Cells tq (new-cells) ^Cells ledger (new-cells)]
     (comment "The lines' copy, and no initials in it: these laws read hand-made evidence and the heading analysis has run on `ln`.")
     (lc-copy ln lt)
-    (return (pa-build wd et npages pages layout nodes attrs regions text ord raw tmp fr gp
+    (return (pa-build wd et npages (new-cells) pages layout nodes attrs regions text ord raw tmp fr gp
                       lt ls sd it io rw gu ac tm cf lo pr dbg hc tb tc tw tq ledger ii al (new-cells)))))
 
 (defn ^I32 ht-model [^Cells wd ^Cells ln ^Cells et ^I32 npages

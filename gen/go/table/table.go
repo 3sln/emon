@@ -26,6 +26,8 @@ const tbLedgerSplit int32 = 32
 
 const tbWidgetPage int32 = 16
 
+const tbSeamGap int32 = 64
+
 const rls int32 = 8
 
 const rws int32 = 10
@@ -1927,6 +1929,45 @@ func tbEmitGap(tb *port.Cells, f int32, row int32, x int32, y0 int32, y1 int32, 
 	return 0
 }
 
+func TbSeamGaps(tb *port.Cells, seams *port.Cells) int32 {
+	var table int32 = 0
+	var next int32 = 0
+	var i int32 = 0
+	if port.CellsLen(seams) == 0 {
+		return 0
+	}
+	for table < port.CellsLen(tb) {
+		next = port.CellsAt(tb, table+19)
+		if next > 0 {
+			i = 0
+			for i < port.CellsLen(seams) {
+				if (port.CellsAt(seams, i+2) == 3) && (port.CellsAt(seams, i) == port.CellsAt(tb, table)) && (port.CellsAt(seams, i+1) == port.CellsAt(tb, (next-1)*tagtable.Tbs)) {
+					port.CellsSet(tb, table+31, port.CellsAt(tb, table+31)|tbSeamGap)
+				}
+				i += 5
+			}
+		}
+		table += tagtable.Tbs
+	}
+	return 0
+}
+
+func tbUnreadRow(tb *port.Cells, f int32, group int32, nodes *port.Cells) int32 {
+	var row int32 = model.NodeNew(nodes, model.NkRow(), group)
+	var count int32 = port.CellsAt(tb, (f*tagtable.Tbs)+8)
+	var i int32 = 0
+	var cell int32 = 0
+	model.NodeAddSrc(nodes, row, model.SrInfer())
+	model.NodeAddFlag(nodes, row, model.FlSeamGap())
+	for i < count {
+		cell = model.NodeNew(nodes, model.NkCell(), row)
+		model.NodeAddSrc(nodes, cell, model.SrInfer())
+		model.NodeAddFlag(nodes, cell, model.FlSeamGap())
+		i += 1
+	}
+	return 0
+}
+
 func TbEmit(tb *port.Cells, k int32, parent int32, wd *port.Cells, et *port.Cells, ln *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, raw *port.Cells, tmp *port.Cells, ledger *port.Cells) int32 {
 	// Append table k to the Model under `parent` (the root, or the open section, D178): the table node, its caption, its row groups, rows
 	// and cells, in document order; the fragments that follow it on later pages (`tb-link`) are its rows too, and
@@ -2034,6 +2075,15 @@ func TbEmit(tb *port.Cells, k int32, parent int32, wd *port.Cells, et *port.Cell
 				}
 			}
 			r += 1
+		}
+		if (port.CellsAt(tb, fb+31) & tbSeamGap) != 0 {
+			if role != model.RlBody() {
+				g = model.NodeNew(nodes, model.NkRowgroup(), t)
+				model.NodeSetSub(nodes, g, model.RlBody())
+				model.NodeAddSrc(nodes, g, model.SrInfer())
+				role = model.RlBody()
+			}
+			tbUnreadRow(tb, f, g, nodes)
 		}
 		f = nxt - 1
 	}
@@ -6777,7 +6827,48 @@ func tbLinkBalance(tb *port.Cells, tc *port.Cells, tw *port.Cells, tbk *port.Cel
 	return ((last - debit) + credit) == balance
 }
 
-func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *port.Cells, wd *port.Cells, et *port.Cells, ln *port.Cells, pages *port.Cells, tbk *port.Cells, decisions *port.Cells, keya *port.Cells, keyb *port.Cells) int32 {
+func tbLinkOrder(tb *port.Cells, photoOrder *port.Cells, order *port.Cells, ranks *port.Cells) int32 {
+	port.CellsDrop(order, 0)
+	port.CellsDrop(ranks, 0)
+	var i int32 = 0
+	var t int32 = 0
+	var page int32 = 0
+	var n int32 = tbRowsOf(tb, tagtable.Tbs)
+	var pages int32 = port.CellsLen(photoOrder)
+	for i < pages {
+		port.CellsPush(ranks, 0)
+		i += 1
+	}
+	i = 0
+	for i < pages {
+		page = port.CellsAt(photoOrder, i)
+		port.CellsSet(ranks, page-1, i+1)
+		t = TbSkip(tb, 0, page)
+		for (t < n) && (port.CellsAt(tb, t*tagtable.Tbs) == page) {
+			port.CellsPush(order, t)
+			t += 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+func tbLinkAt(order *port.Cells, i int32) int32 {
+	if port.CellsLen(order) == 0 {
+		return i
+	}
+	return port.CellsAt(order, i)
+}
+
+func tbLinkRank(tb *port.Cells, ranks *port.Cells, table int32) int32 {
+	var page int32 = port.CellsAt(tb, table*tagtable.Tbs)
+	if port.CellsLen(ranks) == 0 {
+		return page
+	}
+	return port.CellsAt(ranks, page-1)
+}
+
+func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *port.Cells, wd *port.Cells, et *port.Cells, ln *port.Cells, pages *port.Cells, tbk *port.Cells, decisions *port.Cells, keya *port.Cells, keyb *port.Cells, order *port.Cells, ranks *port.Cells) int32 {
 	// Link the fragments of tables that go on across a page break (see the head of this section).
 	var n int32 = tbRowsOf(tb, tagtable.Tbs)
 	var fit int32 = 0
@@ -6788,7 +6879,9 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 	var score int32 = 0
 	var unexplained int32 = 0
 	var reasons int32 = 0
-	var j int32 = 1
+	var at int32 = 1
+	var before int32 = 0
+	var j int32 = 0
 	var a int32 = 0
 	var head int32 = 0
 	var h int32 = 0
@@ -6797,10 +6890,12 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 	var span int32 = 0
 	var r int32 = 0
 	port.CellsDrop(decisions, 0)
-	for j < n {
-		a = 0
-		for a < (j - 1) {
-			if port.CellsAt(tb, a*tagtable.Tbs) == (port.CellsAt(tb, j*tagtable.Tbs) - 1) {
+	for at < n {
+		j = tbLinkAt(order, at)
+		before = 0
+		for before < (at - 1) {
+			a = tbLinkAt(order, before)
+			if tbLinkRank(tb, ranks, a) == (tbLinkRank(tb, ranks, j) - 1) {
 				reasons = 8
 				tbContextKey(ln, wd, et, port.CellsAt(tb, (a*tagtable.Tbs)+30), keya)
 				tbContextKey(ln, wd, et, port.CellsAt(tb, (j*tagtable.Tbs)+30), keyb)
@@ -6816,18 +6911,19 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 				port.CellsPush(decisions, 0)
 				port.CellsPush(decisions, 0)
 			}
-			a += 1
+			before += 1
 		}
-		j += 1
+		at += 1
 	}
-	j = 1
-	for j < n {
-		a = j - 1
+	at = 1
+	for at < n {
+		j = tbLinkAt(order, at)
+		a = tbLinkAt(order, at-1)
 		head = a
 		if port.CellsAt(tb, (a*tagtable.Tbs)+21) != 0 {
 			head = port.CellsAt(tb, (a*tagtable.Tbs)+21) - 1
 		}
-		if (port.CellsAt(tb, (a*tagtable.Tbs)+0) == (port.CellsAt(tb, j*tagtable.Tbs) - 1)) && (port.CellsAt(tb, (a*tagtable.Tbs)+19) == 0) {
+		if (tbLinkRank(tb, ranks, a) == (tbLinkRank(tb, ranks, j) - 1)) && (port.CellsAt(tb, (a*tagtable.Tbs)+19) == 0) {
 			ok = 1
 			score = 0
 			reasons = 0
@@ -6940,12 +7036,12 @@ func tbLink(tb *port.Cells, tc *port.Cells, tw *port.Cells, tx *port.Cells, tq *
 				port.CellsSet(tb, (a*tagtable.Tbs)+19, j+1)
 				port.CellsSet(tb, (j*tagtable.Tbs)+20, skip)
 				port.CellsSet(tb, (j*tagtable.Tbs)+21, head+1)
-				span = (port.CellsAt(tb, j*tagtable.Tbs) - port.CellsAt(tb, head*tagtable.Tbs)) + 1
+				span = (tbLinkRank(tb, ranks, j) - tbLinkRank(tb, ranks, head)) + 1
 				port.CellsSet(tb, (head*tagtable.Tbs)+18, span)
 				tbUnfoot(tb, a, tc)
 			}
 		}
-		j += 1
+		at += 1
 	}
 	return 0
 }
@@ -10183,7 +10279,7 @@ func teRecord(tb *port.Cells, tc *port.Cells, tw *port.Cells, tbk *port.Cells, w
 	return 0
 }
 
-func tbBuildMode(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells, scored int32) int32 {
+func tbBuildMode(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, photoOrder *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells, scored int32) int32 {
 	// Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
 	// scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
 	// rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -10326,7 +10422,8 @@ func tbBuildMode(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells
 		ui = uj
 		p += 1
 	}
-	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2)
+	tbLinkOrder(tb, photoOrder, s3, s4)
+	tbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2, s3, s4)
 	k = 0
 	for k < tbRowsOf(tb, tagtable.Tbs) {
 		if tbHeadAmounts(tb, k, wd, et, tc, tw, tx, tbk, s10, s7, s3) > 0 {
@@ -10353,10 +10450,10 @@ func tbBuildMode(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells
 	return tbRowsOf(tb, tagtable.Tbs)
 }
 
-func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
-	return tbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0)
+func TbBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, photoOrder *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
+	return tbBuildMode(wd, ln, et, grl, gfl, np, photoOrder, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0)
 }
 
-func TbScored(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
-	return tbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1)
+func TbScored(wd *port.Cells, ln *port.Cells, et *port.Cells, grl *port.Cells, gfl *port.Cells, np int32, photoOrder *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, tx *port.Cells, tbk *port.Cells, tbo *port.Cells, s0 *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, s7 *port.Cells, s8 *port.Cells, s9 *port.Cells, s10 *port.Cells, s11 *port.Cells, s12 *port.Cells, s13 *port.Cells, s14 *port.Cells, s15 *port.Cells, s16 *port.Cells, s17 *port.Cells, s18 *port.Cells, pages *port.Cells, gl *port.Cells, mk *port.Cells, se *port.Cells, sc *port.Cells, ss *port.Cells, grg *port.Cells, g0 *port.Cells, g1 *port.Cells, g2 *port.Cells, g3 *port.Cells, g4 *port.Cells, g5 *port.Cells, tv *port.Cells, an *port.Cells) int32 {
+	return tbBuildMode(wd, ln, et, grl, gfl, np, photoOrder, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1)
 }

@@ -22,7 +22,7 @@ func msRuleCp(cp int32) int32 {
 	return 0
 }
 
-func msIndex(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, codepoints *port.Cells) int32 {
+func msIndex(fl *port.Cells, fw *port.Cells, et *port.Cells, np int32, keys *port.Cells, codepoints *port.Cells) int32 {
 	// Each flow line has a normalized text span and a kind: blank 0, separator 1, or content 2.
 	var line int32 = 0
 	var word int32 = 0
@@ -32,6 +32,7 @@ func msIndex(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, c
 	var end int32 = 0
 	var cp int32 = 0
 	var kind int32 = 0
+	var at int32 = 0
 	for line < evidence.LnCount(fl) {
 		start = port.CellsLen(codepoints)
 		kind = 0
@@ -66,6 +67,20 @@ func msIndex(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, c
 		port.CellsPush(keys, kind)
 		line += 1
 	}
+	for at < np {
+		port.CellsPush(keys, line)
+		port.CellsPush(keys, 0)
+		at += 1
+	}
+	line = 0
+	for line < evidence.LnCount(fl) {
+		at = (evidence.LnCount(fl) * 3) + ((evidence.LnGet(fl, line, evidence.HdPage()) - 1) * 2)
+		if port.CellsAt(keys, at+1) == 0 {
+			port.CellsSet(keys, at, line)
+		}
+		port.CellsSet(keys, at+1, line+1)
+		line += 1
+	}
 	return line
 }
 
@@ -98,6 +113,122 @@ func msEqual(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
 	return 1
 }
 
+func msOneEdit(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
+	// Allow one OCR edit on a substantial line.
+	var na int32 = msKey(keys, a, 1)
+	var nb int32 = msKey(keys, b, 1)
+	var sa int32 = msKey(keys, a, 0)
+	var sb int32 = msKey(keys, b, 0)
+	var i int32 = 0
+	var j int32 = 0
+	var edits int32 = 0
+	if (na < 8) || (nb < 8) || (na > (nb + 1)) || (nb > (na + 1)) {
+		return 0
+	}
+	for (i < na) && (j < nb) {
+		if port.CellsAt(codepoints, sa+i) == port.CellsAt(codepoints, sb+j) {
+			i += 1
+			j += 1
+		} else {
+			if edits > 0 {
+				return 0
+			}
+			edits = 1
+			if na >= nb {
+				i += 1
+			}
+			if nb >= na {
+				j += 1
+			}
+		}
+	}
+	if (edits + (na - i) + (nb - j)) > 1 {
+		return 0
+	}
+	return 1
+}
+
+func msNextTokenChar(text *port.Cells, at int32, end int32) int32 {
+	var i int32 = at
+	var cp int32 = 0
+	for i < end {
+		cp = port.CellsAt(text, i)
+		if (cp == 32) || ((cp >= 48) && (cp <= 57)) || ((cp >= 97) && (cp <= 122)) || (cp >= 128) {
+			return i
+		}
+		i += 1
+	}
+	return i
+}
+
+func msTokenBand(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
+	// A substantially identical word band may have punctuation variants or one extra final token.
+	var i int32 = msKey(keys, a, 0)
+	var j int32 = msKey(keys, b, 0)
+	var ea int32 = i + msKey(keys, a, 1)
+	var eb int32 = j + msKey(keys, b, 1)
+	var words int32 = 0
+	var chars int32 = 0
+	i = msNextTokenChar(codepoints, i, ea)
+	j = msNextTokenChar(codepoints, j, eb)
+	for (i < ea) && (j < eb) && (port.CellsAt(codepoints, i) == port.CellsAt(codepoints, j)) {
+		if port.CellsAt(codepoints, i) == 32 {
+			if chars > 0 {
+				words += 1
+			}
+			chars = 0
+		} else {
+			chars += 1
+		}
+		i = msNextTokenChar(codepoints, i+1, ea)
+		j = msNextTokenChar(codepoints, j+1, eb)
+	}
+	if (i < ea) && (j < eb) {
+		return 0
+	}
+	if chars > 0 {
+		words += 1
+	}
+	if words < 3 {
+		return 0
+	}
+	if i < ea {
+		if port.CellsAt(codepoints, i) != 32 {
+			return 0
+		}
+		i += 1
+		for i < ea {
+			if port.CellsAt(codepoints, i) == 32 {
+				return 0
+			}
+			i += 1
+		}
+	}
+	if j < eb {
+		if port.CellsAt(codepoints, j) != 32 {
+			return 0
+		}
+		j += 1
+		for j < eb {
+			if port.CellsAt(codepoints, j) == 32 {
+				return 0
+			}
+			j += 1
+		}
+	}
+	return 1
+}
+
+func msVariant(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
+	if (msKey(keys, a, 2) != 2) || (msKey(keys, b, 2) != 2) {
+		return 0
+	}
+	if msOneEdit(keys, codepoints, a, b) == 1 {
+		return 1
+	}
+	return msTokenBand(keys, codepoints, a, b)
+}
+
 func msY(fl *port.Cells, line int32) int32 {
 	return evidence.LnGet(fl, line, evidence.LhY0()) + evidence.LnGet(fl, line, evidence.LhY1())
 }
@@ -113,6 +244,105 @@ func msPixel(coordinate int32, pixels int32, extent int32) int32 {
 	return p
 }
 
+func msGrey(bitmap *port.Bitmap, x int32, y int32, channels int32) int32 {
+	var red int32 = port.BitmapU8(bitmap, x, y, 0)
+	if channels < 3 {
+		return red
+	}
+	return ((77 * red) + (150 * port.BitmapU8(bitmap, x, y, 1)) + (29 * port.BitmapU8(bitmap, x, y, 2))) / 256
+}
+
+func msDarkEdge(bitmap *port.Bitmap, x int32, y int32, channels int32) int32 {
+	var grey int32 = msGrey(bitmap, x, y, channels)
+	if ((msGrey(bitmap, x-5, y, channels) - grey) >= 24) && ((msGrey(bitmap, x+5, y, channels) - grey) >= 24) {
+		return 1
+	}
+	return 0
+}
+
+func msCutInk(bitmap *port.Bitmap, y int32, inward int32, left int32, right int32) int32 {
+	// Narrow dark strokes crossing the outermost rows corroborate a physical cut, even when OCR omits
+	// the fragment. Require several separate strokes to reject page borders and isolated noise.
+	var w int32 = port.BitmapW(bitmap)
+	var channels int32 = port.BitmapChannels(bitmap)
+	var x int32 = left
+	var last int32 = -2
+	var strokes int32 = 0
+	var inside int32 = 0
+	var lastInside int32 = -2
+	if x < 5 {
+		x = 5
+	}
+	for (x < (w - 5)) && (x < right) {
+		if msDarkEdge(bitmap, x, y+inward, channels) == 1 {
+			if (x - lastInside) > 1 {
+				inside += 1
+			}
+			lastInside = x
+			if msDarkEdge(bitmap, x, y, channels) == 1 {
+				if (x - last) > 1 {
+					strokes += 1
+				}
+				last = x
+			}
+		}
+		if (strokes >= 2) && (inside >= 3) {
+			return 1
+		}
+		x += 1
+	}
+	return 0
+}
+
+func MsSampleCut(bitmap *port.Bitmap, page int32, cuts *port.Cells) int32 {
+	var h int32 = port.BitmapH(bitmap)
+	var w int32 = port.BitmapW(bitmap)
+	for port.CellsLen(cuts) < (page * 2) {
+		port.CellsPush(cuts, 0)
+	}
+	if h < 3 {
+		return 0
+	}
+	port.CellsSet(cuts, (page*2)-2, msCutInk(bitmap, 0, 1, 0, w))
+	port.CellsSet(cuts, (page*2)-1, msCutInk(bitmap, h-1, -1, 0, w))
+	return 0
+}
+
+func MsLineCuts(bitmap *port.Bitmap, lines *port.Cells, selection *port.Cells, start int32, count int32, x0 int32, y0 int32, x1 int32, y1 int32, fourpx int32, cuts *port.Cells) int32 {
+	// Corroborate an OCR box only with strokes in the same horizontal span of its own bitmap edge.
+	port.CellsDrop(cuts, 0)
+	var w int32 = port.BitmapW(bitmap)
+	var h int32 = port.BitmapH(bitmap)
+	var i int32 = 0
+	var line int32 = 0
+	var top int32 = 0
+	var bottom int32 = 0
+	var left int32 = 0
+	var right int32 = 0
+	var cut int32 = 0
+	if (h < 3) || (x1 <= x0) {
+		return 0
+	}
+	for i < count {
+		line = port.CellsAt(selection, start+i)
+		top = evidence.OlGet(lines, line, evidence.LhY0()) - y0
+		bottom = y1 - evidence.OlGet(lines, line, evidence.LhY1())
+		cut = 0
+		if ((top <= fourpx) && (top >= (0 - fourpx))) || ((bottom <= fourpx) && (bottom >= (0 - fourpx))) {
+			left = msPixel(evidence.OlGet(lines, line, evidence.LhX0())-x0, w, x1-x0)
+			right = msPixel(evidence.OlGet(lines, line, evidence.LhX1())-x0, w, x1-x0)
+			if top <= bottom {
+				cut = msCutInk(bitmap, 0, 1, left, right)
+			} else {
+				cut = msCutInk(bitmap, h-1, -1, left, right)
+			}
+		}
+		port.CellsPush(cuts, cut)
+		i += 1
+	}
+	return count
+}
+
 func msPatch(bitmap *port.Bitmap, lines *port.Cells, line int32, width int32, height int32, pixels *port.Cells) int32 {
 	var w int32 = port.BitmapW(bitmap)
 	var h int32 = port.BitmapH(bitmap)
@@ -125,17 +355,12 @@ func msPatch(bitmap *port.Bitmap, lines *port.Cells, line int32, width int32, he
 	var v int32 = 0
 	var x int32 = 0
 	var y int32 = 0
-	var grey int32 = 0
 	for v < 12 {
 		y = msPixel(y0+(((v-2)*dy)/8), h, height)
 		u = 0
 		for u < 32 {
 			x = msPixel(x0+((((u*2)+1)*dx)/64), w, width)
-			grey = port.BitmapU8(bitmap, x, y, 0)
-			if channels >= 3 {
-				grey = (((77 * grey) + (150 * port.BitmapU8(bitmap, x, y, 1))) + (29 * port.BitmapU8(bitmap, x, y, 2))) / 256
-			}
-			port.CellsPush(pixels, grey)
+			port.CellsPush(pixels, msGrey(bitmap, x, y, channels))
 			u += 1
 		}
 		v += 1
@@ -279,10 +504,12 @@ func msRunScore(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 	var deltaB int32 = 0
 	var ha int32 = 0
 	var hb int32 = 0
+	var exact int32 = 0
 	for i < n {
 		la = port.CellsAt(a, (n-1)-i)
 		lb = port.CellsAt(b, i)
-		if msEqual(keys, codepoints, la, lb) == 0 {
+		exact = msEqual(keys, codepoints, la, lb)
+		if (exact == 0) && (msVariant(keys, codepoints, la, lb) == 0) {
 			return 0
 		}
 		if prevA >= 0 {
@@ -298,7 +525,11 @@ func msRunScore(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 		}
 		if msKey(keys, la, 2) == 2 {
 			if (prevA < 0) || (msEqual(keys, codepoints, la, prevA) == 0) {
-				votes += 1
+				if exact == 1 {
+					votes += 32
+				} else {
+					votes += 1
+				}
 			}
 		}
 		prevA = la
@@ -308,19 +539,26 @@ func msRunScore(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 	return votes
 }
 
-func msGap(ol *port.Cells, pages *port.Cells, page int32) int32 {
+func msGap(ol *port.Cells, pages *port.Cells, cuts *port.Cells, left int32, right int32) int32 {
+	if ((((left * 2) - 1) < port.CellsLen(cuts)) && (port.CellsAt(cuts, (left*2)-1) == 1)) || ((((right * 2) - 2) < port.CellsLen(cuts)) && (port.CellsAt(cuts, (right*2)-2) == 1)) {
+		return 1
+	}
 	var i int32 = 0
-	var height int32 = 0
 	var edge int32 = 0
+	var page int32 = 0
+	var height int32 = 0
+	var pixels int32 = 0
 	for i < evidence.OlCount(ol) {
-		if (evidence.OlGet(ol, i, evidence.OlfConf()) >= 0) && ((evidence.OlGet(ol, i, evidence.HdPage()) == page) || (evidence.OlGet(ol, i, evidence.HdPage()) == (page + 1))) {
-			height = evidence.OlGet(ol, i, evidence.LhY1()) - evidence.OlGet(ol, i, evidence.LhY0())
-			if evidence.OlGet(ol, i, evidence.HdPage()) == page {
-				edge = model.PageH(pages, page-1) - evidence.OlGet(ol, i, evidence.LhY1())
+		page = evidence.OlGet(ol, i, evidence.HdPage())
+		if (evidence.OlGet(ol, i, evidence.OlfConf()) >= 0) && ((page == left) || (page == right)) {
+			height = model.PageH(pages, page-1)
+			pixels = model.PagePxH(pages, page-1)
+			if page == left {
+				edge = height - evidence.OlGet(ol, i, evidence.LhY1())
 			} else {
 				edge = evidence.OlGet(ol, i, evidence.LhY0())
 			}
-			if (edge <= 150) || ((edge * 2) <= height) {
+			if (edge >= 0) && ((edge == 0) || ((pixels > 0) && ((int64(edge) * int64(pixels)) <= int64(height)))) {
 				return 1
 			}
 		}
@@ -377,123 +615,305 @@ func msRebuild(fl *port.Cells, fw *port.Cells, dropped *port.Cells, newLines *po
 	return 0
 }
 
-func msRasterPair(mask *port.Cells, page int32) int32 {
-	if ((port.CellsAt(mask, page-1) % 4) > 0) && ((port.CellsAt(mask, page) % 4) > 0) {
+func msRaster(mask *port.Cells, page int32) int32 {
+	return port.CellsAt(mask, page-1) % 4
+}
+
+func msPageEdge(fl *port.Cells, keys *port.Cells, page int32, bottom int32, band *port.Cells) int32 {
+	var at int32 = (evidence.LnCount(fl) * 3) + ((page - 1) * 2)
+	var end int32 = port.CellsAt(keys, at+1)
+	var i int32 = port.CellsAt(keys, at)
+	port.CellsDrop(band, 0)
+	for i < end {
+		if (evidence.LnGet(fl, i, evidence.HdPage()) == page) && (msKey(keys, i, 2) > 0) {
+			msEdgeAdd(fl, band, i, bottom)
+		}
+		i += 1
+	}
+	return 0
+}
+
+func msPair(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells) int32 {
+	msPageEdge(fl, keys, left, 1, a)
+	msPageEdge(fl, keys, right, 0, b)
+	var n int32 = 1
+	var score int32 = 0
+	var best int32 = 0
+	for (n <= port.CellsLen(a)) && (n <= port.CellsLen(b)) {
+		score = msRunScore(fl, a, b, keys, codepoints, n)
+		if (score > 0) && (((score * 32) + n) > best) {
+			best = (score * 32) + n
+		}
+		n += 1
+	}
+	return best
+}
+
+func msAccepted(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, offsets *port.Cells, pixels *port.Cells, match int32) int32 {
+	var score int32 = match / 32
+	var n int32 = match % 32
+	var exact int32 = score / 32
+	var variant int32 = score % 32
+	if (exact >= 4) || ((exact >= 3) && (variant > 0) && (exact >= variant)) || (((exact + variant) >= 2) && (msPixelVotes(fl, a, b, keys, offsets, pixels, n) >= 2)) {
 		return 1
 	}
 	return 0
 }
 
-func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, offsets *port.Cells, pixels *port.Cells, ledger *port.Cells, modelText *port.Cells, seams *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, dropped *port.Cells, newLines *port.Cells, newWords *port.Cells) int32 {
+func msOrder(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, first int32, end int32, order *port.Cells, incoming *port.Cells, outgoing *port.Cells, a *port.Cells, b *port.Cells) int32 {
+	// Recover a unique complete chain of corroborated, directional joins. Preserve upload order if
+	// the evidence leaves a missing link, branching chain, or cycle. Limit all-pairs work per run.
+	if ((end - first) < 2) || ((end - first) > 16) {
+		return 0
+	}
+	port.CellsDrop(incoming, 0)
+	port.CellsDrop(outgoing, 0)
+	var left int32 = first
+	var right int32 = first
+	var match int32 = 0
+	var start int32 = 0
+	var cur int32 = 0
+	var i int32 = first
+	for i < end {
+		port.CellsPush(incoming, 0)
+		port.CellsPush(outgoing, 0)
+		i += 1
+	}
+	for left < end {
+		right = first
+		for right < end {
+			if left != right {
+				match = msPair(fl, keys, codepoints, left, right, a, b)
+				if msAccepted(fl, a, b, keys, offsets, pixels, match) == 1 {
+					if port.CellsAt(outgoing, left-first) != 0 {
+						return 0
+					}
+					if port.CellsAt(incoming, right-first) != 0 {
+						return 0
+					}
+					port.CellsSet(outgoing, left-first, right)
+					port.CellsSet(incoming, right-first, left)
+				}
+			}
+			right += 1
+		}
+		left += 1
+	}
+	i = first
+	for i < end {
+		if port.CellsAt(incoming, i-first) == 0 {
+			if start > 0 {
+				return 0
+			}
+			start = i
+		}
+		i += 1
+	}
+	cur = start
+	i = first
+	for (cur > 0) && (i < end) {
+		cur = port.CellsAt(outgoing, cur-first)
+		i += 1
+	}
+	if (i < end) || (cur > 0) {
+		return 0
+	}
+	cur = start
+	i = first
+	for i < end {
+		port.CellsSet(order, i-1, cur)
+		cur = port.CellsAt(outgoing, cur-first)
+		i += 1
+	}
+	return 1
+}
+
+func msMark(seams *port.Cells, left int32, right int32, kind int32, match int32) int32 {
+	port.CellsPush(seams, left)
+	port.CellsPush(seams, right)
+	port.CellsPush(seams, kind)
+	port.CellsPush(seams, match%32)
+	port.CellsPush(seams, (match/1024)+((match/32)%32))
+	return 0
+}
+
+func msAmbiguousSkips(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, first int32, end int32, a *port.Cells, b *port.Cells, seams *port.Cells) int32 {
+	// Report nonadjacent candidates when multiple photos were uploaded but no full order is supported.
+	if (end - first) > 16 {
+		return 0
+	}
+	var left int32 = first
+	var right int32 = 0
+	var match int32 = 0
+	for (left + 2) < end {
+		right = left + 2
+		for right < end {
+			match = msPair(fl, keys, codepoints, left, right, a, b)
+			if match > 0 {
+				msMark(seams, left, right, 2, match)
+			}
+			match = msPair(fl, keys, codepoints, right, left, a, b)
+			if match > 0 {
+				msMark(seams, right, left, 2, match)
+			}
+			right += 1
+		}
+		left += 1
+	}
+	return 0
+}
+
+func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, offsets *port.Cells, pixels *port.Cells, cuts *port.Cells, ledger *port.Cells, modelText *port.Cells, seams *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, dropped *port.Cells, newLines *port.Cells, newWords *port.Cells, order *port.Cells, incoming *port.Cells, outgoing *port.Cells) int32 {
 	port.CellsDrop(seams, 0)
 	port.CellsDrop(keys, 0)
 	port.CellsDrop(codepoints, 0)
 	port.CellsDrop(dropped, 0)
+	port.CellsDrop(order, 0)
 	if (np < 2) || (capture == 1) {
 		return 0
 	}
-	var pairCheck int32 = 1
-	for (pairCheck < np) && (msRasterPair(mask, pairCheck) == 0) {
-		pairCheck += 1
+	var firstPair int32 = 1
+	for (firstPair < np) && ((msRaster(mask, firstPair) == 0) || (msRaster(mask, firstPair+1) == 0)) {
+		firstPair += 1
 	}
-	if pairCheck >= np {
+	if firstPair >= np {
 		return 0
 	}
-	msIndex(fl, fw, et, keys, codepoints)
+	msIndex(fl, fw, et, np, keys, codepoints)
 	var page int32 = 1
+	var end int32 = 1
 	var i int32 = 0
-	var n int32 = 0
-	var length int32 = 0
-	var score int32 = 0
-	var best int32 = 0
-	var bestN int32 = 0
-	var gap int32 = 0
+	var line int32 = 0
 	var changes int32 = 0
+	var left int32 = 0
+	var right int32 = 0
+	var forward int32 = 0
+	var reverse int32 = 0
 	var accepted int32 = 0
+	var reverseAccepted int32 = 0
+	var ordered int32 = 0
+	for page <= np {
+		port.CellsPush(order, page)
+		page += 1
+	}
 	for i < evidence.LnCount(fl) {
 		port.CellsPush(dropped, 0)
 		i += 1
 	}
-	for page < np {
-		if msRasterPair(mask, page) == 1 {
-			port.CellsDrop(a, 0)
-			port.CellsDrop(b, 0)
-			i = 0
-			for i < evidence.LnCount(fl) {
-				if msKey(keys, i, 2) > 0 {
-					if evidence.LnGet(fl, i, evidence.HdPage()) == page {
-						msEdgeAdd(fl, a, i, 1)
-					}
-					if evidence.LnGet(fl, i, evidence.HdPage()) == (page + 1) {
-						msEdgeAdd(fl, b, i, 0)
-					}
-				}
-				i += 1
+	page = 1
+	for page <= np {
+		end = page + 1
+		if msRaster(mask, page) > 0 {
+			for (end <= np) && (msRaster(mask, end) > 0) {
+				end += 1
 			}
-			best = 0
-			bestN = 0
-			n = 1
-			for (n <= port.CellsLen(a)) && (n <= port.CellsLen(b)) {
-				score = msRunScore(fl, a, b, keys, codepoints, n)
-				if score > best {
-					best = score
-					bestN = n
-				}
-				n += 1
-			}
-			gap = msGap(ol, pages, page)
-			length = bestN
-			accepted = 0
-			if (best >= 4) || ((best >= 2) && (msPixelVotes(fl, a, b, keys, offsets, pixels, length) >= 2)) {
-				accepted = 1
-			}
-			if accepted == 1 {
+		}
+		ordered = msOrder(fl, keys, codepoints, offsets, pixels, page, end, order, incoming, outgoing, a, b)
+		if ordered == 0 {
+			msAmbiguousSkips(fl, keys, codepoints, page, end, a, b, seams)
+		}
+		for (page + 1) < end {
+			left = port.CellsAt(order, page-1)
+			right = port.CellsAt(order, page)
+			reverse = msPair(fl, keys, codepoints, right, left, a, b)
+			reverseAccepted = msAccepted(fl, a, b, keys, offsets, pixels, reverse)
+			forward = msPair(fl, keys, codepoints, left, right, a, b)
+			accepted = msAccepted(fl, a, b, keys, offsets, pixels, forward)
+			if (accepted == 1) && (reverseAccepted == 0) {
 				i = 0
-				for i < length {
-					n = port.CellsAt(b, i)
-					if port.CellsAt(dropped, n) == 0 {
-						msDropLine(fl, fw, et, n, ledger, modelText)
-						port.CellsSet(dropped, n, 1)
+				for i < (forward % 32) {
+					line = port.CellsAt(b, i)
+					if port.CellsAt(dropped, line) == 0 {
+						msDropLine(fl, fw, et, line, ledger, modelText)
+						port.CellsSet(dropped, line, 1)
 						changes += 1
 					}
 					i += 1
 				}
-			}
-			if best > 0 {
-				port.CellsPush(seams, page)
-				port.CellsPush(seams, page+1)
-				if accepted == 1 {
-					port.CellsPush(seams, 1)
-				} else {
-					port.CellsPush(seams, 2)
+				msMark(seams, left, right, 1, forward)
+			} else {
+				if forward > 0 {
+					msMark(seams, left, right, 2, forward)
 				}
-				port.CellsPush(seams, length)
-				port.CellsPush(seams, best)
+				if (ordered == 0) && (reverse > 0) {
+					msMark(seams, right, left, 2, reverse)
+				}
+				if (forward == 0) && (msGap(ol, pages, cuts, left, right) == 1) {
+					msMark(seams, left, right, 3, 0)
+				}
 			}
-			if (best == 0) && (gap > 0) {
-				port.CellsPush(seams, page)
-				port.CellsPush(seams, page+1)
-				port.CellsPush(seams, 3)
-				port.CellsPush(seams, 0)
-				port.CellsPush(seams, 0)
-			}
+			page += 1
 		}
-		page += 1
+		page = end
 	}
 	if changes > 0 {
 		port.CellsDrop(newLines, 0)
 		port.CellsDrop(newWords, 0)
 		msRebuild(fl, fw, dropped, newLines, newWords)
 	}
+	i = 0
+	for (i < np) && (port.CellsAt(order, i) == (i + 1)) {
+		i += 1
+	}
+	if i == np {
+		port.CellsDrop(order, 0)
+	}
 	return changes
 }
 
-func MsEvidence(out *strings.Builder, seams *port.Cells) int32 {
+func msPhotoPage(seams *port.Cells, cuts *port.Cells, page int32) int32 {
+	// A bitmap edge with cut text or a corroborated overlap classifies this raster page as a partial photo.
+	// The overlap can supply that evidence even when the photo has clean margins.
+	if ((page * 2) <= port.CellsLen(cuts)) && ((port.CellsAt(cuts, (page*2)-2) + port.CellsAt(cuts, (page*2)-1)) > 0) {
+		return 1
+	}
+	var i int32 = 0
+	for i < port.CellsLen(seams) {
+		if (port.CellsAt(seams, i+2) == 1) && ((port.CellsAt(seams, i) == page) || (port.CellsAt(seams, i+1) == page)) {
+			return 1
+		}
+		i += 5
+	}
+	return 0
+}
+
+func MsEvidence(out *strings.Builder, seams *port.Cells, order *port.Cells, mask *port.Cells, cuts *port.Cells, capture int32) int32 {
+	var page int32 = 1
+	var count int32 = 0
+	if (capture != 1) && (port.CellsLen(mask) > 1) {
+		for page <= port.CellsLen(mask) {
+			if (msRaster(mask, page) > 0) && ((capture == 2) || (msPhotoPage(seams, cuts, page) == 1)) {
+				if count == 0 {
+					port.TextAscii(out, ",\"photoPages\":[")
+				} else {
+					port.TextAscii(out, ",")
+				}
+				port.TextI32(out, page)
+				count += 1
+			}
+			page += 1
+		}
+	}
+	if count > 0 {
+		port.TextAscii(out, "]")
+	}
 	var i int32 = 0
 	var kind int32 = 0
+	if port.CellsLen(order) > 0 {
+		port.TextAscii(out, ",\"photoOrder\":[")
+		for i < port.CellsLen(order) {
+			if i > 0 {
+				port.TextAscii(out, ",")
+			}
+			port.TextI32(out, port.CellsAt(order, i))
+			i += 1
+		}
+		port.TextAscii(out, "]")
+	}
 	if port.CellsLen(seams) == 0 {
 		return 0
 	}
+	i = 0
 	port.TextAscii(out, ",\"seams\":[")
 	for i < port.CellsLen(seams) {
 		if i > 0 {

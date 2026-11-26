@@ -5,7 +5,7 @@
 (def names ["host/rust/src/ppocr.rs" "host/rust/src/ppocr_runtime.rs" "tools/ppocr/assets.edn"
             "host/rust/src/ppocr_image.rs" "host/rust/src/ppocr_ctc.rs" "host/rust/src/ppocr_pipeline.rs"
             "host/rust/src/ppocr_ort.c" "kin/oil.kin" "kin/oilsrc.kin" "kin/evidence.kin" "kin/ocrscript.kin" "kin/ocalib.kin" "kin/ocalibdata.kin" "kin/ocrport.kin" "kin/ocrengine.kin"
-            "kin/scan.kin" "kin/pageunit.kin" "kin/ofuse.kin" "kin/oapp.kin" "kin/oarb.kin"])
+            "kin/scan.kin" "kin/pageunit.kin" "kin/seams.kin" "kin/ofuse.kin" "kin/oapp.kin" "kin/oarb.kin"])
 (def host-accessors
   ";; Host adapters cannot call flat-array accessors directly: kin may inline them.\n(defn ^:pub ^I32 oe-id-len []\n  (return (oe-id-count 0)))\n\n(defn ^:pub ^I32 oe-id-value [^I32 i]\n  (return (oe-id-at 0 i)))\n")
 (def h (MessageDigest/getInstance "SHA-256"))

@@ -32,11 +32,13 @@ final class Units {
         final Port.Cells cand;
         final Port.Buf cbytes;
         final int rfrom;
+        final Port.Cells spans;
 
-        Pending(Port.Cells cand, Port.Buf cbytes, int rfrom) {
+        Pending(Port.Cells cand, Port.Buf cbytes, int rfrom, Port.Cells spans) {
             this.cand = cand;
             this.cbytes = cbytes;
             this.rfrom = rfrom;
+            this.spans = spans;
         }
     }
 
@@ -176,7 +178,7 @@ final class Units {
                     b.evidence = doc.evidence.toString();
                 }
                 if (r == 1) {
-                    b.pending = new Pending(doc.cand, doc.cbytes, doc.rfrom);
+                    b.pending = new Pending(doc.cand, doc.cbytes, doc.rfrom, doc.spans);
                 }
                 o.built = b;
                 return o;
@@ -211,6 +213,8 @@ final class Units {
             format = "png";
         } else if (doc.ifmt == Engine.enFmtJpeg()) {
             format = "jpeg";
+        } else if (doc.ifmt == Engine.enFmtImages()) {
+            format = "images";
         }
         return new Intake(format, doc.imajor, doc.iminor, Math.max(doc.ipages, 0), doc.ienc == 1, n);
     }
@@ -291,6 +295,6 @@ final class Units {
      * loop answers and runs it again).
      */
     static void assetStageFigures(Enctx.Arenas m, Pending p, Options opts, int input, int nbytes, Port.Cells ans, Port.Cells rq, Port.BitmapSet bms) {
-        Engine.enAssetFigures(cfgOf(opts), m, p.cand, p.cbytes, p.rfrom, new Enctx.Pass(), input, nbytes, ans, rq, bms);
+        Engine.enAssetFigures(cfgOf(opts), m, p.cand, p.cbytes, p.rfrom, p.spans, new Enctx.Pass(), input, nbytes, ans, rq, bms);
     }
 }

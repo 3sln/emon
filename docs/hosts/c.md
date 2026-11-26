@@ -362,7 +362,7 @@ header and have no example here.
   the step API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the c host: 254 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the c host: 255 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -474,6 +474,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_const` | `int (unsigned i)` |
 | `emon_convert` | `int (const emon_input *input, const char *options, const emon_engines *engines, emon_model **out, emon_error *err)` |
 | `emon_convert_html` | `int (const emon_input *input, const char *options, const emon_engines *engines, const char *html_options, emon_buf *out, emon_error *err)` |
+| `emon_convert_images` | `int (const emon_input *inputs, size_t count, const char *options, const emon_engines *engines, emon_model **out, emon_error *err)` |
 | `emon_convert_json` | `int (const emon_input *input, const char *options, const emon_engines *engines, int pretty, emon_buf *out, emon_error *err)` |
 | `emon_engines` | `opaque struct` |
 | `emon_engines_add_ocr` | `int (emon_engines *e, const emon_ocr_adapter *a, emon_error *err)` |

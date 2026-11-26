@@ -305,6 +305,10 @@ func JsBitsFlags(t *strings.Builder, pr int32, bits int32) int32 {
 		}
 		b += 1
 	}
+	if (bits & model.FlSeamGap()) != 0 {
+		JsFsep(t, pr, k)
+		port.TextAscii(t, "\"seam-gap\"")
+	}
 	port.TextAscii(t, "]")
 	return 0
 }

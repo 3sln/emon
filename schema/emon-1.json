@@ -248,7 +248,8 @@
           "tag-span-conflict",
           "in-table-image",
           "script-unread",
-          "uncalibrated-engine"
+          "uncalibrated-engine",
+          "seam-gap"
         ]
       }
     },

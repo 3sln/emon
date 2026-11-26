@@ -17,6 +17,9 @@ public static class Rasterin {
     public static int RsTiff() {
         return 3;
     }
+    public static int RsImages() {
+        return 4;
+    }
     public static int RsUndecodable() {
         return 21;
     }
@@ -52,7 +55,59 @@ public static class Rasterin {
         if ((a == 77) && ((b == 77) && ((c == 0) && (d == 42)))) {
             return RsTiff();
         }
+        if ((n >= 8) && (a == 69) && (b == 77) && (c == 79) && (d == 78) && (Pdfsrc.PsU8(src, 4) == 73) && (Pdfsrc.PsU8(src, 5) == 77) && (Pdfsrc.PsU8(src, 6) == 71) && (Pdfsrc.PsU8(src, 7) == 49)) {
+            return RsImages();
+        }
         return RsNone();
+    }
+    internal static int RsU31(emon.Port.Src src, int at) {
+        int hi = Pdfsrc.PsU8(src, at + 3);
+        if (hi > 127) {
+            return -1;
+        }
+        return Pdfsrc.PsU8(src, at) + (256 * Pdfsrc.PsU8(src, at + 1)) + (65536 * Pdfsrc.PsU8(src, at + 2)) + (16777216 * hi);
+    }
+    internal static int RsImagePlan(emon.Port.Src src, emon.Port.Cells spans) {
+        // An image list is a header, a little-endian frame count and lengths, then original encoded images.
+        int nbytes = Pdfsrc.PsLen(src);
+        int count = 0;
+        int offset = 0;
+        int i = 0;
+        int length = 0;
+        int format = 0;
+        if (nbytes < 16) {
+            return 0;
+        }
+        count = RsU31(src, 8);
+        if ((count < 1) || (count > ((nbytes - 12) / 4))) {
+            return 0;
+        }
+        if (count > emon.Port.LimitOf(8)) {
+            emon.Port.LimitBreach(8, count);
+        }
+        offset = 12 + (count * 4);
+        while (i < count) {
+            length = RsU31(src, 12 + (i * 4));
+            if ((length < 4) || (length > (nbytes - offset))) {
+                return 0;
+            }
+            format = Model.AfmTiff();
+            if (Pdfsrc.PsU8(src, offset) == 137) {
+                format = Model.AfmPng();
+            }
+            if (Pdfsrc.PsU8(src, offset) == 255) {
+                format = Model.AfmJpeg();
+            }
+            emon.Port.CellsPush(spans, offset);
+            emon.Port.CellsPush(spans, length);
+            emon.Port.CellsPush(spans, format);
+            offset += length;
+            i += 1;
+        }
+        if (offset != nbytes) {
+            return 0;
+        }
+        return count;
     }
     internal static int RsFrameArg(int info, int f) {
         // The `frame` field of the request for frame `f`: itself, or `-f - 1` for a header-only request.
@@ -103,6 +158,14 @@ public static class Rasterin {
             Model.TextAppendCp(text, 102);
             Model.TextAppendCp(text, 102);
         }
+        if (fmt == RsImages()) {
+            Model.TextAppendCp(text, 105);
+            Model.TextAppendCp(text, 109);
+            Model.TextAppendCp(text, 97);
+            Model.TextAppendCp(text, 103);
+            Model.TextAppendCp(text, 101);
+            Model.TextAppendCp(text, 115);
+        }
         Model.NodeSetAttrText(nodes, attrs, 0, Model.FkFormat(), start, emon.Port.CellsLen(text) - start);
         return 0;
     }
@@ -127,7 +190,15 @@ public static class Rasterin {
         }
         return 1;
     }
-    public static int RsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask) {
+    internal static int RsDecode(emon.Port.Cells rq, int id, int input, int nbytes, emon.Port.Cells spans, int f, int header) {
+        if (emon.Port.CellsLen(spans) > 0) {
+            Plan.RqDecode(rq, id, input, emon.Port.CellsAt(spans, f * 3), emon.Port.CellsAt(spans, (f * 3) + 1), Plan.FltNone(), RsFrameArg(header, 0));
+        } else {
+            Plan.RqDecode(rq, id, input, 0, nbytes, Plan.FltNone(), RsFrameArg(header, f));
+        }
+        return 0;
+    }
+    public static int RsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask, emon.Port.Cells spans) {
         // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
         // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
         // in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
@@ -135,8 +206,16 @@ public static class Rasterin {
         // status, or 0.
         int nbytes = Pdfsrc.PsLen(src);
         int a0 = Plan.AnFind(ans, 1);
+        int grouped = 0;
+        emon.Port.CellsDrop(spans, 0);
+        if (fmt == RsImages()) {
+            grouped = RsImagePlan(src, spans);
+            if (grouped == 0) {
+                return RsUndecodable();
+            }
+        }
         if (a0 < 0) {
-            Plan.RqDecode(rq, 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(1, 0));
+            RsDecode(rq, 1, input, nbytes, spans, 0, 1);
             return Plan.UsRequests();
         }
         if (Plan.AnStatus(ans, a0) != Plan.PsOk()) {
@@ -145,6 +224,9 @@ public static class Rasterin {
         int frames = Plan.AnArg(ans, a0, 5);
         int f = 1;
         int asked = 0;
+        if (grouped > 0) {
+            frames = grouped;
+        }
         if (frames < 1) {
             return RsUndecodable();
         }
@@ -153,7 +235,7 @@ public static class Rasterin {
         }
         while (f < frames) {
             if (Plan.AnFind(ans, f + 1) < 0) {
-                Plan.RqDecode(rq, f + 1, input, 0, nbytes, Plan.FltNone(), RsFrameArg(1, f));
+                RsDecode(rq, f + 1, input, nbytes, spans, f, 1);
                 asked = 1;
             }
             f += 1;
@@ -169,6 +251,9 @@ public static class Rasterin {
             int a = Plan.AnFind(ans, f + 1);
             if (Plan.AnStatus(ans, a) != Plan.PsOk()) {
                 return RsFail(ans, a);
+            }
+            if ((grouped > 0) && (Plan.AnArg(ans, a, 5) != 1)) {
+                return RsUnsupported();
             }
             int w = Plan.AnArg(ans, a, 0);
             int h = Plan.AnArg(ans, a, 1);
@@ -191,7 +276,7 @@ public static class Rasterin {
         }
         return 0;
     }
-    public static int RsPage(int f, int input, int nbytes, int policy, int fuse, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells ofz, emon.Port.Cells oaz) {
+    public static int RsPage(int f, int input, int nbytes, int policy, int fuse, emon.Port.Cells spans, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells ofz, emon.Port.Cells oaz) {
         // `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
         // before the write, having asked what the rounds up to there ask).
         // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
@@ -203,7 +288,7 @@ public static class Rasterin {
         int did = Plan.PuId(f, Plan.PiDecode());
         int ad = Plan.AnFind(ans, did);
         if (ad < 0) {
-            Plan.RqDecode(rq, did, input, 0, nbytes, Plan.FltNone(), f);
+            RsDecode(rq, did, input, nbytes, spans, f, 0);
             return Plan.UsRequests();
         }
         if (Plan.AnStatus(ans, ad) != Plan.PsOk()) {

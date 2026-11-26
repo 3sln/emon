@@ -35,7 +35,7 @@
       ^Cells ys13 ^Cells ys14 ^Cells ys15 ^Cells ys16 ^Cells ys17 ^Cells ys18 ^Cells snapg ^Cells snapk
       ^Cells snapf ^Cells cand ^Cells aim ^Cells fi ^Buf cbytes ^Text evidence ^I32 nl0 ^I32 fused ^I32 hassnap
       ^I32 fcode ^I32 fnode
-      ^Cells pscr ^Cells mspatch ^Cells mspixel ^I32 kind ^I32 ifmt ^I32 ipages ^I32 imajor ^I32 iminor ^I32 ienc ^I32 rfrom])
+      ^Cells pscr ^Cells mspatch ^Cells mspixel ^Cells mscuts ^Cells spans ^I32 kind ^I32 ifmt ^I32 ipages ^I32 imajor ^I32 iminor ^I32 ienc ^I32 rfrom])
 
 ;; THE DOCUMENT PASS'S SCRATCH (P10.6 S3, D485): what `en-attempt` (the PDF document pass and the raster one) and `en-asset-unit` open, read and write that is
 ;; NOT the unit's own (`Doc`'s): the opened document's tables, the content interpreter's, the catalogue's and the tagged tree's, the asset unit's. One field a
@@ -50,6 +50,7 @@
       ^Cells fz0 ^Cells fz1 ^Cells fz2 ^Cells fz3 ^Cells fz4 ^Buf zb])
 
 (defctx ^:pub Scratch [^Cells seams ^Cells mskeys ^Cells mscode ^Cells msa ^Cells msb ^Cells msdrop ^Cells mslines ^Cells mswords
+                       ^Cells msorder ^Cells msincoming ^Cells msoutgoing
                         ^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
       ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^Cells tbx ^Cells tbk ^Cells tbo ^Cells s0 ^Cells s1 ^Cells s2 ^Cells s3 ^Cells s4
       ^Cells s5 ^Cells s6 ^Cells s7 ^Cells s8 ^Cells s9 ^Cells s10 ^Cells s11 ^Cells s12 ^Cells s13 ^Cells s14

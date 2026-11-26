@@ -1679,7 +1679,7 @@
     (cells-drop raw 0)
     (return k)))
 
-(defn ^:pub ^I32 pa-build [^Cells wd ^Cells et ^I32 npages
+(defn ^:pub ^I32 pa-build [^Cells wd ^Cells et ^I32 npages ^Cells photo-order
                            ^:mut ^Cells pages ^:mut ^Cells layout
                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                            ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
@@ -1705,6 +1705,7 @@
         ^:mut ^I32 med 0
         ^:mut ^I32 indents 0
         ^:mut ^I32 p 1
+        ^:mut ^I32 position 1
         ^:mut ^I32 i 0
         ^:mut ^I32 n 0
         ^:mut ^I32 nu 0
@@ -1738,8 +1739,13 @@
     (cells-drop fr 0)
     (cells-drop al 0)
     (cells-drop dbg 0)
-    (while (<= p npages)
-      (do (pa-collect ord lt p ix off)
+    (while (<= position npages)
+      (do (set p position)
+          (if (> (cells-len photo-order) 0)
+            (do (set p (cells-at photo-order (- position 1)))
+                (set r 0)
+                (set tcur 0)))
+          (pa-collect ord lt p ix off)
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
           ;; the lines that are not upright stand alone (D136), each written before the first paragraph that starts at or below its top (P12.7, `pa-close`): queued as the page begins
@@ -1752,6 +1758,7 @@
           (set tcur (tb-skip tb tcur p))
           (while (and (< r nf) (< (cells-at cf (+ (* r CF_STRIDE) CF_PAGE)) p))
             (set r (+ r 1)))
+          (if (> (cells-len photo-order) 0) (set pend r))
           (set r1 r)
           (while (and (< r1 nf) (== (cells-at cf (+ (* r1 CF_STRIDE) CF_PAGE)) p)
                       (== (cells-at cf (+ (* r1 CF_STRIDE) CF_ROLE)) (rl-body)))
@@ -1760,7 +1767,7 @@
             (do (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 p hc))
                 (set open 0)
                 (set prev -1)
-                (if (> p 1) (pa-milestone nodes p hc))
+                (if (> position 1) (pa-milestone nodes p hc))
                 (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc))
                 (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc)))
             (do (set i r)
@@ -1801,7 +1808,7 @@
                             (set before-page 0)
                             (if (== i r) (set before-page p))
                             (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty before-page hc))
-                            (if (and (== i r) (> p 1)) (pa-milestone nodes p hc))
+                            (if (and (== i r) (> position 1)) (pa-milestone nodes p hc))
                             (if (== i r)
                               (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend i ty 0 hc)))
                             (set tcur (pa-tables tb tcur p (pa-ymid2 lt b) b wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))
@@ -1837,7 +1844,14 @@
                       (set open 0)
                       (set prev -1)
                       (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
-          (set p (+ p 1))))
+          (if (> (cells-len photo-order) 0)
+            (do (set r1 r)
+                (while (and (< r1 nf) (== (cells-at cf (+ (* r1 CF_STRIDE) CF_PAGE)) p))
+                  (set r1 (+ r1 1)))
+                (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend r1 1000000000 0 hc))
+                (set open 0)
+                (set prev -1)))
+          (set position (+ position 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc)
     (al-pass nodes attrs al tm)
     (return 0)))

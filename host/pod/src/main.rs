@@ -563,6 +563,24 @@ impl From<Error> for PodError {
 }
 
 fn input_of(v: &Edn) -> Result<Input, PodError> {
+    if let Edn::Map(m) = v {
+        if let Some(group) = get(m, "images") {
+            let Edn::Vec(images) = group else {
+                return Err(PodError::usage(":images must be a vector of single-frame image inputs"));
+            };
+            if ["path", "bytes", "password"].iter().any(|key| get(m, key).is_some()) {
+                return Err(PodError::usage(":images is a complete input"));
+            }
+            let mut inputs = Vec::with_capacity(images.len());
+            for image in images {
+                if matches!(image, Edn::Map(fields) if get(fields, "images").is_some()) {
+                    return Err(PodError::usage("each member of :images must be a single-frame image"));
+                }
+                inputs.push(input_of(image)?);
+            }
+            return Input::images(inputs).map_err(|e| PodError::usage(e.to_string()));
+        }
+    }
     let (path, bytes, password) = match v {
         Edn::Str(p) => (Some(p.clone()), None, None),
         Edn::Map(m) => {

@@ -23,6 +23,7 @@ import (
 	"emon/scan"
 	"emon/scriptcheck"
 	"emon/sealpx"
+	"emon/seams"
 	"emon/sigpx"
 	"emon/upscale"
 	"emon/xalign"
@@ -713,6 +714,10 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 		}
 	} else {
 		nsel = scan.ScSetAsideClips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos)
+		if port.BmsHas(bms, did) == 1 {
+			seams.MsLineCuts(port.BmsGet(bms, did), olines, scr, scan.ScSelBase(), nsel, bx0, by0, bx1, by1, 2880000/dpi100, s6)
+			nsel = scan.ScSetAsideCutInk(olines, owords, scr, nsel, s6)
+		}
 	}
 	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines, etext, rules, comps, inks)
 	if (port.CellsAt(rtp, retarget.RtpPrimary()) != run) && (port.CellsAt(rtp, retarget.RtpQ()) != 0) {

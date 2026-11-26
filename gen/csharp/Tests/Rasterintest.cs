@@ -25,11 +25,26 @@ public static class Rasterintest {
         emon.Port.Cells ledger = emon.Port.NewCells();
         emon.Port.Cells layout = emon.Port.NewCells();
         Model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout);
-        return Rasterin.RsDoc(emon.Port.SrcOfBlob(emon.Testport.HexBlob("49492a0008000000")), 7, Rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask);
+        return Rasterin.RsDoc(emon.Port.SrcOfBlob(emon.Testport.HexBlob("49492a0008000000")), 7, Rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask, emon.Port.NewCells());
+    }
+    [Xunit.Fact]
+    public static void TestImageListDecodesEachMemberAtItsOwnOffset() {
+        emon.Port.Src source = emon.Port.SrcOfBlob(emon.Testport.HexBlob("454d4f4e494d4731020000000400000008000000ffd8ffe089504e470d0a1a0a"));
+        emon.Port.Cells ans = emon.Port.NewCells();
+        emon.Port.Cells rq = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells spans = emon.Port.NewCells();
+        emon.Testport.AssertEq(Rasterin.RsSniff(source), Rasterin.RsImages(), "image list header");
+        Plan.AnDecode(ans, 1, 60, 80, 3, 30000, 0, 1);
+        emon.Testport.AssertEq(Rasterin.RsDoc(source, 7, Rasterin.RsImages(), ans, rq, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), spans), Plan.UsRequests(), "only the second member needs a header");
+        emon.Testport.AssertEq(Plan.RecId(rq, 0), 2, "second page request");
+        emon.Testport.AssertEq(emon.Port.CellsAt(spans, 0), 20, "first encoded image starts after the directory");
+        emon.Testport.AssertEq(emon.Port.CellsAt(spans, 3), 24, "second encoded image starts after the first");
+        emon.Testport.AssertEq(emon.Port.CellsAt(spans, 4), 8, "second encoded image retains its original length");
     }
     internal static int PagePol(int f, emon.Port.Cells ans, emon.Port.Cells rq, int policy, emon.Port.Cells loc, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
         // no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D564: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
-        return Rasterin.RsPage(f, 7, 8, policy, 0, ans, rq, loc, emon.Port.NewBitmapSet(), mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        return Rasterin.RsPage(f, 7, 8, policy, 0, emon.Port.NewCells(), ans, rq, loc, emon.Port.NewBitmapSet(), mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
     }
     [Xunit.Fact]
     public static void TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore() {
@@ -237,7 +252,7 @@ public static class Rasterintest {
     }
     internal static int PagePx(emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, int fuse, emon.Port.Cells mask, emon.Port.Cells et, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells oruns, emon.Port.Cells olines, emon.Port.Cells owords) {
         // Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.
-        return Rasterin.RsPage(0, 7, 8, 2, fuse, ans, rq, emon.Port.NewCells(), bms, mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        return Rasterin.RsPage(0, 7, 8, 2, fuse, emon.Port.NewCells(), ans, rq, emon.Port.NewCells(), bms, mask, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), et, emon.Port.NewCells(), emon.Port.NewCells(), oruns, emon.Port.NewCells(), olines, owords, emon.Port.NewCells(), emon.Port.NewCells(), wd, ln, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
     }
     [Xunit.Fact]
     public static void TestAFrameFedSidewaysIsReadFromItsTurnedView() {

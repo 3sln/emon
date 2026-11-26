@@ -47,7 +47,8 @@
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
-            [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-set-aside-clips sc-emit-sel sc-prep sc-lang sc-answer]]
+            [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-set-aside-clips sc-set-aside-cut-ink sc-sel-base sc-emit-sel sc-prep sc-lang sc-answer]]
+            [emon.seams :refer [ms-line-cuts]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
             [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
             [emon.sigpx :refer [sp-find-without sp-find sp-record sp-drop-lines]]
@@ -604,7 +605,11 @@
         (if (== (rem turns 2) 1)
           (set nsel (sc-set-aside-clips olines owords etext scr nsel 0 0 clip-h clip-w fourpx photos))
           (set nsel (sc-set-aside-clips olines owords etext scr nsel 0 0 clip-w clip-h fourpx photos)))
-        (set nsel (sc-set-aside-clips olines owords etext scr nsel bx0 by0 bx1 by1 fourpx photos))))
+        (do (set nsel (sc-set-aside-clips olines owords etext scr nsel bx0 by0 bx1 by1 fourpx photos))
+            (if (== (bms-has bms did) 1)
+              (do (ms-line-cuts (bms-get bms did) olines scr (sc-sel-base) nsel bx0 by0 bx1 by1
+                                (quot 2880000 dpi100) s6)
+                  (set nsel (sc-set-aside-cut-ink olines owords scr nsel s6)))))))
     (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines etext rules comps inks)
     (if (and (!= (cells-at rtp (rtp-primary)) run) (!= (cells-at rtp (rtp-q)) 0)) (set mv (+ mv 8)))
     (cells-set mask i mv)

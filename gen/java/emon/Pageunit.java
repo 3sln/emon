@@ -674,6 +674,10 @@ public final class Pageunit {
             }
         } else {
             nsel = Scan.scSetAsideClips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos);
+            if (emon.Port.bmsHas(bms, did) == 1) {
+                Seams.msLineCuts(emon.Port.bmsGet(bms, did), olines, scr, Scan.scSelBase(), nsel, bx0, by0, bx1, by1, 2880000 / dpi100, s6);
+                nsel = Scan.scSetAsideCutInk(olines, owords, scr, nsel, s6);
+            }
         }
         Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         if ((emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != run) && (emon.Port.cellsAt(rtp, Retarget.rtpQ()) != 0)) {

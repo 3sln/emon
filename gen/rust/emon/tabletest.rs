@@ -343,12 +343,12 @@ pub(crate) fn tt_run_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cells
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    tb_build(wd, ln, et, grl, gfl, np, &mut crate::port::Cells::new(), tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return 7;
     }
     lc_copy(ln, lt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    pa_build(wd, et, np, &mut crate::port::Cells::new(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }
@@ -432,12 +432,12 @@ pub(crate) fn tt_count_an(wd: &mut crate::port::Cells, ln: &mut crate::port::Cel
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    tb_build(wd, ln, et, grl, gfl, np, &mut crate::port::Cells::new(), tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return 7;
     }
     lc_copy(ln, lt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    pa_build(wd, et, np, &mut crate::port::Cells::new(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     tt_brief(t, nodes, attrs, text);
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
         return -1;
@@ -2192,7 +2192,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     pa_pages(pg, pages);
     let np: i32 = crate::port::cells_len(pages) / 16;
     gf_doc(pa, pts, mk, im, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, np, &mut crate::port::Cells::new(), tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, &mut crate::port::Cells::new());
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return 7;
     }
@@ -2200,7 +2200,7 @@ pub(crate) fn tt_golden(pdf: &[u8], mut t: &mut String, mut tvt: &mut String) ->
     lc_copy(ln, lt);
     in_detect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
     hd_analyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    pa_build(wd, et, np, &mut crate::port::Cells::new(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     if model_check(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
         return 3;
     }
@@ -2373,7 +2373,7 @@ fn test_right_aligned_amounts_make_one_numeric_column() {
     tt_at(wd, ln, et, &crate::testport::text_blob("100.00")[..], 40500, 16400, 0, 1);
     tt_at(wd, ln, et, &crate::testport::text_blob("Total")[..], 7600, 18000, 1, 0);
     tt_at(wd, ln, et, &crate::testport::text_blob("1,111.00")[..], 40500, 18000, 1, 1);
-    crate::testport::assert_eq(tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "the amounts make one table");
+    crate::testport::assert_eq(tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, &mut crate::port::Cells::new(), tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbk, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 1, "the amounts make one table");
     crate::testport::assert_eq(tt_body_audit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership");
     crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
     crate::testport::assert_eq(tb_model_col(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
@@ -2462,7 +2462,7 @@ fn test_empty_date_markers_do_not_split_a_ledger() {
 pub(crate) fn tt_own_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells) -> i32 {
     let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
-    tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbo, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, &mut crate::port::Cells::new(), tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), tbo, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return -7;
     }
@@ -2866,7 +2866,7 @@ pub(crate) fn tt_ruled_build(wd: &mut crate::port::Cells, mut ln: &mut crate::po
     let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
     gf_doc(pa, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, gfx_mode(), grl, gfl, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    tb_build(wd, ln, et, grl, gfl, 1, &mut crate::port::Cells::new(), tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return -7;
     }
@@ -4980,7 +4980,7 @@ pub(crate) fn tt_widget_build(wd: &mut crate::port::Cells, mut ln: &mut crate::p
     let gfl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     page_new(pages, 1, 61200, 79200, 0, pk_vector());
     gf_doc(pa, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), 1, gfx_mode(), grl, gfl, &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
-    tb_build(wd, ln, et, grl, gfl, 1, tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), an);
+    tb_build(wd, ln, et, grl, gfl, 1, &mut crate::port::Cells::new(), tb, tc, tw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), an);
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return -7;
     }
@@ -5667,12 +5667,12 @@ pub(crate) fn tt_run_scored_an(wd: &mut crate::port::Cells, ln: &mut crate::port
         page_new(pages, 2, 61200, 79200, 0, pk_vector());
     }
     gf_doc(pa, gpts, gmk, gim, np, gfx_mode(), grl, gfl, cand, &mut crate::port::Cells::new());
-    tb_scored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+    tb_scored(wd, ln, et, grl, gfl, np, &mut crate::port::Cells::new(), tb, tc, tw, tq, tx, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
     if tt_body_audit(wd, et, tb, tc, tw) != 0 {
         return 7;
     }
     lc_copy(ln, lt);
-    pa_build(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
+    pa_build(wd, et, np, &mut crate::port::Cells::new(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, &mut crate::port::Cells::new());
     tt_brief(t, nodes, attrs, text);
     return model_check(nodes, attrs, regions, text, pages, ledger, layout, st);
 }

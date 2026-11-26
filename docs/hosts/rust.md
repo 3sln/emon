@@ -132,7 +132,7 @@ implement `Renderer` (`render(source, password, &RenderRequest) -> Result<Bitmap
 - The `no_retarget` test setting of `Options` is not in the published crate (`bb package --check` proves it).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the rust host: 338 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the rust host: 339 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -252,6 +252,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::HtmlOptions::pretty` | `field bool` |
 | `emon::Input` | `struct derive(Clone)` |
 | `emon::Input::bytes` | `fn (Vec<u8>) -> Input` |
+| `emon::Input::images` | `fn (impl IntoIterator<Item = Input>) -> io::Result<Input>` |
 | `emon::Input::impl From<&[u8]>` | `impl` |
 | `emon::Input::impl From<Vec<u8>>` | `impl` |
 | `emon::Input::impl std::fmt::Debug` | `impl` |

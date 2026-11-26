@@ -29,7 +29,7 @@
             [emon.plan :refer [rq-decode an-find an-status an-arg flt-none ps-ok ps-unsupported ps-limit
                                us-requests pu-id pi-decode]]
             [emon.model :refer [page-new page-set-resolution pk-image node-set-flags node-set-attr-int
-                                node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown]]
+                                node-set-attr-text text-append-cp fk-format fk-pages fl-dpi-unknown afm-png afm-jpeg afm-tiff]]
             [emon.pageunit :refer [pu-scan-core]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -40,6 +40,7 @@
 (defn ^:pub ^I32 rs-png [] (return 1))
 (defn ^:pub ^I32 rs-jpeg [] (return 2))
 (defn ^:pub ^I32 rs-tiff [] (return 3))
+(defn ^:pub ^I32 rs-images [] (return 4))
 
 ;; The unit's own failure statuses (the PDF unit's are 1..10, D075).
 (defn ^:pub ^I32 rs-undecodable [] (return 21))
@@ -64,7 +65,38 @@
       (if (and (== a 255) (and (== b 216) (== c 255))) (return (rs-jpeg)))
       (if (and (== a 73) (and (== b 73) (and (== c 42) (== d 0)))) (return (rs-tiff)))
       (if (and (== a 77) (and (== b 77) (and (== c 0) (== d 42)))) (return (rs-tiff)))
+      (if (and (>= n 8) (== a 69) (== b 77) (== c 79) (== d 78)
+               (== (ps-u8 src 4) 73) (== (ps-u8 src 5) 77) (== (ps-u8 src 6) 71)
+               (== (ps-u8 src 7) 49)) (return (rs-images)))
       (return (rs-none)))))
+
+(defn ^I32 rs-u31 [^Src src ^I32 at]
+  (let [^I32 hi (ps-u8 src (+ at 3))]
+    (if (> hi 127) (return -1))
+    (return (+ (ps-u8 src at) (* 256 (ps-u8 src (+ at 1)))
+               (* 65536 (ps-u8 src (+ at 2))) (* 16777216 hi)))))
+
+(defn ^I32 rs-image-plan [^Src src ^:mut ^Cells spans]
+  (comment "An image list is a header, a little-endian frame count and lengths, then original encoded images.")
+  (let [^I32 nbytes (ps-len src) ^:mut ^I32 count 0 ^:mut ^I32 offset 0
+        ^:mut ^I32 i 0 ^:mut ^I32 length 0 ^:mut ^I32 format 0]
+    (if (< nbytes 16) (return 0))
+    (set count (rs-u31 src 8))
+    (if (or (< count 1) (> count (quot (- nbytes 12) 4))) (return 0))
+    (if (> count (limit-of 8)) (limit-breach 8 count))
+    (set offset (+ 12 (* count 4)))
+    (while (< i count)
+      (do (set length (rs-u31 src (+ 12 (* i 4))))
+          (if (or (< length 4) (> length (- nbytes offset))) (return 0))
+          (set format (afm-tiff))
+          (if (== (ps-u8 src offset) 137) (set format (afm-png)))
+          (if (== (ps-u8 src offset) 255) (set format (afm-jpeg)))
+          (cells-push spans offset) (cells-push spans length)
+          (cells-push spans format)
+          (set offset (+ offset length))
+          (set i (+ i 1))))
+    (if (!= offset nbytes) (return 0))
+    (return count)))
 
 (defn ^I32 rs-frame-arg [^I32 info ^I32 f]
   (comment "The `frame` field of the request for frame `f`: itself, or `-f - 1` for a header-only request.")
@@ -95,6 +127,9 @@
       (do (text-append-cp text 106) (text-append-cp text 112) (text-append-cp text 101) (text-append-cp text 103)))
     (if (== fmt (rs-tiff))
       (do (text-append-cp text 116) (text-append-cp text 105) (text-append-cp text 102) (text-append-cp text 102)))
+    (if (== fmt (rs-images))
+      (do (text-append-cp text 105) (text-append-cp text 109) (text-append-cp text 97)
+          (text-append-cp text 103) (text-append-cp text 101) (text-append-cp text 115)))
     (node-set-attr-text nodes attrs 0 (fk-format) start (- (cells-len text) start))
     (return 0)))
 
@@ -114,28 +149,40 @@
   (if (== policy 0) (return 0))
   (return 1))
 
+(defn ^I32 rs-decode [^:mut ^Cells rq ^I32 id ^I32 input ^I32 nbytes ^Cells spans ^I32 f ^I32 header]
+  (if (> (cells-len spans) 0)
+    (rq-decode rq id input (cells-at spans (* f 3)) (cells-at spans (+ (* f 3) 1)) (flt-none) (rs-frame-arg header 0))
+    (rq-decode rq id input 0 nbytes (flt-none) (rs-frame-arg header f)))
+  (return 0))
+
 (defn ^:pub ^I32 rs-doc [^Src src ^I32 input ^I32 fmt ^Cells ans ^:mut ^Cells rq
                           ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells text ^:mut ^Cells pages
-                          ^:mut ^Cells mask]
+                          ^:mut ^Cells mask ^:mut ^Cells spans]
   (comment "THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),")
   (comment "round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame")
   (comment "in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is")
   (comment "decoded and no OCR is asked here: that is each frame's own page unit, `rs-page`. Answers `us-requests`, a failure")
   (comment "status, or 0.")
   (let [^I32 nbytes (ps-len src)
-        ^I32 a0 (an-find ans 1)]
+        ^I32 a0 (an-find ans 1)
+        ^:mut ^I32 grouped 0]
+    (cells-drop spans 0)
+    (if (== fmt (rs-images))
+      (do (set grouped (rs-image-plan src spans))
+          (if (== grouped 0) (return (rs-undecodable)))))
     (if (< a0 0)
-      (do (rq-decode rq 1 input 0 nbytes (flt-none) (rs-frame-arg 1 0))
+      (do (rs-decode rq 1 input nbytes spans 0 1)
           (return (us-requests))))
     (if (!= (an-status ans a0) (ps-ok)) (return (rs-fail ans a0)))
-    (let [^I32 frames (an-arg ans a0 5)
+    (let [^:mut ^I32 frames (an-arg ans a0 5)
           ^:mut ^I32 f 1
           ^:mut ^I32 asked 0]
+      (if (> grouped 0) (set frames grouped))
       (if (< frames 1) (return (rs-undecodable)))
       (if (> frames (limit-of 8)) (limit-breach 8 frames))
       (while (< f frames)
         (do (if (< (an-find ans (+ f 1)) 0)
-              (do (rq-decode rq (+ f 1) input 0 nbytes (flt-none) (rs-frame-arg 1 f))
+              (do (rs-decode rq (+ f 1) input nbytes spans f 1)
                   (set asked 1)))
             (set f (+ f 1))))
       (if (== asked 1) (return (us-requests)))
@@ -146,6 +193,7 @@
       (while (< f frames)
         (do (let [^I32 a (an-find ans (+ f 1))]
               (if (!= (an-status ans a) (ps-ok)) (return (rs-fail ans a)))
+              (if (and (> grouped 0) (!= (an-arg ans a 5) 1)) (return (rs-unsupported)))
               (let [^I32 w (an-arg ans a 0)
                     ^I32 h (an-arg ans a 1)
                     ^I32 dpi100 (an-arg ans a 3)
@@ -161,7 +209,7 @@
             (set f (+ f 1))))
       (return 0))))
 
-(defn ^:pub ^I32 rs-page [^I32 f ^I32 input ^I32 nbytes ^I32 policy ^I32 fuse ^Cells ans ^:mut ^Cells rq ^Cells loc
+(defn ^:pub ^I32 rs-page [^I32 f ^I32 input ^I32 nbytes ^I32 policy ^I32 fuse ^Cells spans ^Cells ans ^:mut ^Cells rq ^Cells loc
                           ^BitmapSet bms ^:mut ^Cells mask ^:mut ^Cells scr
                           ^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells etext ^:mut ^Cells feats
                           ^:mut ^Cells images ^:mut ^Cells oruns ^:mut ^Cells oblocks ^:mut ^Cells olines
@@ -182,7 +230,7 @@
   (let [^I32 did (pu-id f (pi-decode))
         ^I32 ad (an-find ans did)]
     (if (< ad 0)
-      (do (rq-decode rq did input 0 nbytes (flt-none) f)
+      (do (rs-decode rq did input nbytes spans f 0)
           (return (us-requests))))
     (if (!= (an-status ans ad) (ps-ok)) (return (rs-fail ans ad)))
     (if (== policy 0) (return 0))

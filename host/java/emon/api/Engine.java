@@ -407,7 +407,7 @@ public final class Engine {
                 Planrun.Unit unitF = (answers, rq, bms, payload) -> {
                     try {
                         emon.Enctx.Arenas t = b.arenas.clone();
-                        Units.Pending p = new Units.Pending(Units.cloneCells(pend.cand), Units.cloneBuf(pend.cbytes), pend.rfrom);
+                        Units.Pending p = new Units.Pending(Units.cloneCells(pend.cand), Units.cloneBuf(pend.cbytes), pend.rfrom, pend.spans);
                         Units.assetStageFigures(t, p, opts, idx, (int) size, answers, rq, bms);
                         if (Port.cellsLen(rq) > 0) {
                             return Planrun.UNIT_REQUESTS;

@@ -93,19 +93,56 @@ class EmonInput {
   /// An input in memory.
   EmonInput.bytes(Uint8List bytes, {this.password})
       : _bytes = bytes,
-        path = null;
+        path = null,
+        _images = null;
 
   /// Not available on the web (see the class comment).
-  EmonInput.file(String this.path, {this.password}) : _bytes = null;
+  EmonInput.file(String this.path, {this.password}) : _bytes = null, _images = null;
+
+  /// Groups single-frame images as one document, in upload order.
+  EmonInput.images(List<EmonInput> images)
+      : _images = List.unmodifiable(images), path = null, _bytes = null, password = null {
+    if (images.isEmpty ||
+        images.length > (0x7fffffff - 12) ~/ 4 ||
+        images.any((image) => image._images != null || image.password != null)) {
+      throw ArgumentError('expected a nonempty list of single-frame image inputs');
+    }
+  }
 
   final Uint8List? _bytes;
+  final List<EmonInput>? _images;
   final String? path;
 
   /// The password of an encrypted PDF (UTF-8 bytes; never written to a Model or a transcript).
   final Uint8List? password;
 
+  Uint8List? _packImages() {
+    final images = _images;
+    if (images == null) return null;
+    final header = Uint8List(12 + 4 * images.length);
+    header.setAll(0, ascii.encode('EMONIMG1'));
+    final lengths = ByteData.sublistView(header);
+    lengths.setUint32(8, images.length, Endian.little);
+    final frames = <Uint8List>[];
+    var size = header.length;
+    for (var i = 0; i < images.length; i++) {
+      final image = images[i]._bytes ?? (throw EmonError('usage', 'the web has no file system: pass the bytes', EmonErrorCategory.usage));
+      if (image.length < 4 || image.length > 0x7fffffff - size) {
+        throw ArgumentError('invalid image input or combined image size');
+      }
+      lengths.setUint32(12 + 4 * i, image.length, Endian.little);
+      frames.add(image);
+      size += image.length;
+    }
+    final bytes = BytesBuilder(copy: false)..add(header);
+    for (final frame in frames) {
+      bytes.add(frame);
+    }
+    return bytes.takeBytes();
+  }
+
   JSAny _toJs() {
-    final b = _bytes;
+    final b = _packImages() ?? _bytes;
     if (b == null) throw EmonError('usage', 'the web has no file system: EmonInput.file($path) cannot be read; pass the bytes', EmonErrorCategory.usage);
     if (password == null) return b.toJS;
     return _object({'source': b.toJS, 'password': password!.toJS});

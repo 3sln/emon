@@ -361,12 +361,12 @@ func ttRunAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t *
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	table.TbBuild(wd, ln, et, grl, gfl, np, port.NewCells(), tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return 7
 	}
 	columns.LcCopy(ln, lt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	para.PaBuild(wd, et, np, port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }
@@ -451,12 +451,12 @@ func ttCountAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells, t
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	table.TbBuild(wd, ln, et, grl, gfl, np, port.NewCells(), tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return 7
 	}
 	columns.LcCopy(ln, lt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	para.PaBuild(wd, et, np, port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	ttBrief(t, nodes, attrs, text)
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return -1
@@ -2244,7 +2244,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	para.PaPages(pg, pages)
 	var np int32 = port.CellsLen(pages) / 16
 	gfuse.GfDoc(pa, pts, mk, im, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, np, port.NewCells(), tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, port.NewCells())
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return 7
 	}
@@ -2252,7 +2252,7 @@ func ttGolden(pdf []byte, t *strings.Builder, tvt *strings.Builder) int32 {
 	columns.LcCopy(ln, lt)
 	initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii)
 	heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	para.PaBuild(wd, et, np, port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	if model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0 {
 		return 3
 	}
@@ -2427,7 +2427,7 @@ func TestRightAlignedAmountsMakeOneNumericColumn(emonT *testing.T) {
 	ttAt(wd, ln, et, port.TextBlob("100.00"), 40500, 16400, 0, 1)
 	ttAt(wd, ln, et, port.TextBlob("Total"), 7600, 18000, 1, 0)
 	ttAt(wd, ln, et, port.TextBlob("1,111.00"), 40500, 18000, 1, 1)
-	port.AssertEq(emonT, table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), tbk, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "the amounts make one table")
+	port.AssertEq(emonT, table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, port.NewCells(), tb, tc, tw, port.NewCells(), port.NewCells(), tbk, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 1, "the amounts make one table")
 	port.AssertEq(emonT, ttBodyAudit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership")
 	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor")
 	port.AssertEq(emonT, table.TbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column")
@@ -2519,7 +2519,7 @@ func TestEmptyDateMarkersDoNotSplitALedger(emonT *testing.T) {
 func ttOwnBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tbo *port.Cells) int32 {
 	var pages *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
-	table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), tbo, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	table.TbBuild(wd, ln, et, port.NewCells(), port.NewCells(), 1, port.NewCells(), tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), tbo, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return -7
 	}
@@ -2924,7 +2924,7 @@ func ttRuledBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cells
 	var gfl *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	gfuse.GfDoc(pa, port.NewCells(), port.NewCells(), port.NewCells(), 1, gfuse.GfxMode(), grl, gfl, port.NewCells(), port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	table.TbBuild(wd, ln, et, grl, gfl, 1, port.NewCells(), tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return -7
 	}
@@ -5044,7 +5044,7 @@ func ttWidgetBuild(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cell
 	var gfl *port.Cells = port.NewCells()
 	model.PageNew(pages, 1, 61200, 79200, 0, model.PkVector())
 	gfuse.GfDoc(pa, port.NewCells(), port.NewCells(), port.NewCells(), 1, gfuse.GfxMode(), grl, gfl, port.NewCells(), port.NewCells())
-	table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), an)
+	table.TbBuild(wd, ln, et, grl, gfl, 1, port.NewCells(), tb, tc, tw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), an)
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return -7
 	}
@@ -5735,12 +5735,12 @@ func ttRunScoredAn(wd *port.Cells, ln *port.Cells, et *port.Cells, pa *port.Cell
 		model.PageNew(pages, 2, 61200, 79200, 0, model.PkVector())
 	}
 	gfuse.GfDoc(pa, gpts, gmk, gim, np, gfuse.GfxMode(), grl, gfl, cand, port.NewCells())
-	table.TbScored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
+	table.TbScored(wd, ln, et, grl, gfl, np, port.NewCells(), tb, tc, tw, tq, tx, port.NewCells(), port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an)
 	if ttBodyAudit(wd, et, tb, tc, tw) != 0 {
 		return 7
 	}
 	columns.LcCopy(ln, lt)
-	para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	para.PaBuild(wd, et, np, port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	ttBrief(t, nodes, attrs, text)
 	return model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st)
 }

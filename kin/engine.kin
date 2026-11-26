@@ -19,7 +19,7 @@
 ;; (`assets: figures`, D351: the Model is not sealed yet), 2 `pl-check` failed (`fcode`), 3 `model-check` failed (`fcode`, `fnode`), 4
 ;; `model-check-assets` failed (`fcode`, `fnode`).
 (ns emon.engine
-  (:require [emon.lang :refer [I32 Cells Buf Text Src BitmapSet fd emit-ascii]]
+  (:require [emon.lang :refer [I32 Cells Buf Text Src Bitmap BitmapSet fd emit-ascii]]
             [emon.enctx :refer [Cfg Doc EvArenas Arenas Scratch Pass]]
             [emon.port :refer [cells-len cells-at cells-push cells-drop cells-swap cells-copy-into cells-free buf-truncate src-missed text-i32 bms-has bms-get]]
             [emon.model :refer [model-init model-check model-check-assets page-count page-w page-h page-set-size text-append-cp node-set-attr-text fk-locale afm-png afm-jpeg afm-tiff]]
@@ -35,7 +35,7 @@
             [emon.pdfx :refer [px-index-build]]
             [emon.pdfmeta :refer [pm-run]]
             [emon.pdfannot :refer [pa-run]]
-            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-doc rs-page]]
+            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-images rs-doc rs-page]]
             [emon.planloop :refer [ds-undecodable ds-unsupported-image ds-no-pages ds-content-failed]]
             [emon.tlhealth :refer [th-run th-append th-write th-write-ocr]]
             [emon.gfuse :refer [gf-doc gfx-mode gf-fuse gf-write]]
@@ -48,7 +48,7 @@
             [emon.tagtable :refer [tt-emit]]
             [emon.pdfstruct :refer [tg-trust tg-read tg-join]]
             [emon.furniture :refer [fu-find fu-write]]
-            [emon.table :refer [tb-build]]
+            [emon.table :refer [tb-build tb-seam-gaps]]
             [emon.tscore :refer [ts-build]]
             [emon.columns :refer [lc-copy lc-mark-asides]]
             [emon.initial :refer [in-detect]]
@@ -62,10 +62,10 @@
             [emon.scriptcheck :refer [sk-tag-conflicts]]
             [emon.scan :refer [sc-node-engines sc-write-rejected-ocr sc-write-empty-ocr sc-write-empty-regions sc-clean-text sc-trust sc-tag sc-tag-unread sc-write-bare]]
             [emon.ocrledger :refer [oc-account oc-ink-account]]
-            [emon.seams :refer [ms-run ms-evidence ms-sample]]
+            [emon.seams :refer [ms-run ms-evidence ms-sample ms-sample-cut]]
             [emon.rasterplan :refer [rp-settings]]
             [emon.asset :refer [as-settings as-run as-page-cands as-collect as-run-figures]]
-            [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot bit-and]]))
+            [kin.lang :refer [defn return let set while if do comment + - * < > >= == != and or quot rem bit-and]]))
 
 ;; ----------------------------------------------------------------------------------------------- the document pass (P10.6 S3, D485)
 
@@ -89,6 +89,7 @@
 (defn ^:pub ^I32 en-fmt-png [] (return 1))
 (defn ^:pub ^I32 en-fmt-jpeg [] (return 2))
 (defn ^:pub ^I32 en-fmt-tiff [] (return 3))
+(defn ^:pub ^I32 en-fmt-images [] (return 4))
 
 (defn ^I32 en-locale [^Cfg c ^Doc d]
   (comment "The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.")
@@ -113,7 +114,7 @@
   (comment "OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the")
   (comment "glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).")
   (model-init (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd m pages) (fd m ledger) (fd m layout))
-  (let [^I32 status (rs-doc view idx fmt ans rq (fd m nodes) (fd m attrs) (fd m text) (fd m pages) (fd d mask))
+  (let [^I32 status (rs-doc view idx fmt ans rq (fd m nodes) (fd m attrs) (fd m text) (fd m pages) (fd d mask) (fd d spans))
         ^I32 np (page-count (fd m pages))]
     (if (src-missed view) (return (at-miss)))
     (if (== status 1) (return (at-requests)))
@@ -127,6 +128,7 @@
     (set (fd d ifmt) (en-fmt-tiff))
     (if (== fmt (rs-png)) (set (fd d ifmt) (en-fmt-png)))
     (if (== fmt (rs-jpeg)) (set (fd d ifmt) (en-fmt-jpeg)))
+    (if (== fmt (rs-images)) (set (fd d ifmt) (en-fmt-images)))
     (if (< np 0)
       (set (fd d ipages) 0)
       (set (fd d ipages) np))
@@ -276,7 +278,7 @@
                         (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
                         (fd d ys0) (fd d ys1) (fd d ys2) (fd d ys3) (fd d ys4) (fd d ys5) (fd d ys6) (fd d ys7) (fd d ys8) (fd d ys9) (fd d ys10) (fd d ys11)
                         (fd d ys12) (fd d ys13) (fd d ys14) (fd d ys15) (fd d ys16) (fd d ys17) (fd d ys18) (fd ev ofuse) (fd ev oarb))))
-  (return (rs-page i idx nbytes (fd c ocr) (+ (+ (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-hybrid c))) (* 16 (en-fallback c))) (en-photo-lines c)) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
+  (return (rs-page i idx nbytes (fd c ocr) (+ (+ (+ (+ (* 2 (fd c nort)) (* 4 (fd c dry))) (* 8 (en-hybrid c))) (* 16 (en-fallback c))) (en-photo-lines c)) (fd d spans) ans rq (fd d loc) bms (fd d mask) (fd d pscr)
                    (fd ev epages) (fd ev views) (fd d et) (fd ev feats) (fd ev images) (fd ev oruns) (fd ev oblocks) (fd ev olines) (fd ev owords) (fd ev osyms)
                    (fd ev oalts) (fd d wd) (fd d ln) (fd ev refs) (fd ev tlines) (fd d cg)
                    (fd ev inks) (fd ev comps) (fd ev rules) (fd ev prims) (fd ev pts)
@@ -303,14 +305,17 @@
     (if (== status 0)
       (do (comment "Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.")
           (or-assemble (fd ev oruns) r0 (fd ev rules) (+ i 1) (fd d ln) l0 (fd d wd) w0 (fd d pscr))
-          (if (and (== (fd c dry) 0) (!= (fd c capture) 1) (> (fd d ipages) 1) (> (ln-count (fd d ln)) l0)
+          (if (and (== (fd c dry) 0) (!= (fd c capture) 1) (> (fd d ipages) 1)
+                   (> (rem (cells-at (fd d mask) i) 4) 0)
                    (== (bit-and (cells-at (fd d mask) i) 8) 0))
             (let [^I32 id (pu-id i (pi-decode))
                   ^I32 ep (ev-page-row (fd ev epages) (+ i 1))]
               (if (and (>= ep 0) (== (bms-has bms id) 1))
-                (ms-sample (bms-get bms id) (fd d ln) l0
-                           (ep-get (fd ev epages) ep (epf-width)) (ep-get (fd ev epages) ep (epf-height))
-                           (fd d mspatch) (fd d mspixel) (fd d ys0) (fd d ys1)))))
+                (let [^Bitmap image (bms-get bms id)]
+                  (ms-sample-cut image (+ i 1) (fd d mscuts))
+                  (ms-sample image (fd d ln) l0
+                             (ep-get (fd ev epages) ep (epf-width)) (ep-get (fd ev epages) ep (epf-height))
+                             (fd d mspatch) (fd d mspixel) (fd d ys0) (fd d ys1))))))
           (if (< (oxs-collect ans (fd ev views) (fd ev oruns) (fd ev olines) (fd ev oxs)) 0) (return 2))
           (if (< (oxs-check (fd ev oxs) (fd ev oruns)) 0) (return 2))))
     (return status)))
@@ -332,14 +337,14 @@
       (if (or (src-missed view) (== rc 12)) (return 7))
       (return rc))))
 
-(defn ^:pub ^I32 en-asset-figures [^Cfg c ^Arenas m ^:mut ^Cells cand ^:mut ^Buf cbytes ^I32 rfrom ^Pass p ^I32 input ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
+(defn ^:pub ^I32 en-asset-figures [^Cfg c ^Arenas m ^:mut ^Cells cand ^:mut ^Buf cbytes ^I32 rfrom ^Cells spans ^Pass p ^I32 input ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
   (comment "P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates")
   (comment "(`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's")
   (comment "and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and")
   (comment "runs it again). `p` is fresh for the attempt.")
   (as-settings (fd m nodes) (fd m attrs) (fd m text) (fd c level) (fd c dpi) (fd c pixels) (fd c abyte) (fd c tbyte) (fd c sigs))
   (return (as-run-figures (fd m nodes) (fd m attrs) (fd m regions) (fd m pages) cand cbytes (fd m assets) (fd m uses) (fd m abytes)
-                          (fd c abyte) (fd c tbyte) (fd c sigs) (fd c dpi) (fd c pixels) input nbytes rfrom ans rq bms
+                          (fd c abyte) (fd c tbyte) (fd c sigs) (fd c dpi) (fd c pixels) input nbytes rfrom spans ans rq bms
                           (fd p fz0) (fd p zb) (fd p fz1) (fd p fz2) (fd p fz3) (fd p fz4))))
 
 ;; ----------------------------------------------------------------------------------------------- the evidence's dump
@@ -422,23 +427,26 @@
         ^:mut ^I32 pending 0
         ^:mut ^I32 w 0]
     (ms-run np (fd c capture) (fd d mask) (fd m pages) (fd ev olines) (fd d et) (fd d fl) (fd d fw)
-            (fd d mspatch) (fd d mspixel)
+            (fd d mspatch) (fd d mspixel) (fd d mscuts)
             (fd m ledger) (fd m text) (fd s seams) (fd s mskeys) (fd s mscode) (fd s msa) (fd s msb)
-            (fd s msdrop) (fd s mslines) (fd s mswords))
-    (if (!= (fd c keep) 0) (ms-evidence (fd d evidence) (fd s seams)))
+            (fd s msdrop) (fd s mslines) (fd s mswords)
+            (fd s msorder) (fd s msincoming) (fd s msoutgoing))
+    (if (!= (fd c keep) 0)
+      (ms-evidence (fd d evidence) (fd s seams) (fd s msorder) (fd d mask) (fd d mscuts) (fd c capture)))
     ;; Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
     (fu-find (fd d fw) (fd d fl) (fd d et) (fd d gl) (fd d mk) (fd m pages) np (fd d txt) (fd d md) (fd d lb) trust (fd c furn) (fd s cd) (fd s sl)
          (fd s gr) (fd s ford) (fd s tx) (fd s bh) (fd s fo) (fd s fp) (fd s ft) (fd s pl))
     ;; Tables (P5): found before the paragraphs, which leave their lines out and place them (`emon.table`). The tagged tables' scratch and verdicts (P5.5, `emon.tagtable`).
     (if (== (fd c tabl) 1)
-      (ts-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
+      (ts-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s msorder) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
          (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
          (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
          (fd s g3) (fd s g4) (fd s g5) (fd s tv) (fd d an))
-      (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
+      (tb-build (fd d fw) (fd d fl) (fd d et) (fd d grl) (fd d gfl) np (fd s msorder) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd s tbx) (fd s tbk) (fd s tbo) (fd s s0) (fd s s1) (fd s s2)
          (fd s s3) (fd s s4) (fd s s5) (fd s s6) (fd s s7) (fd s s8) (fd s s9) (fd s s10) (fd s s11) (fd s s12) (fd s s13) (fd s s14) (fd s s15)
          (fd s s16) (fd s s17) (fd s s18) (fd m pages) (fd d gl) (fd d mk) (fd d se) (fd d sc) (fd d ss) (fd s ta0) (fd s g0) (fd s g1) (fd s g2)
          (fd s g3) (fd s g4) (fd s g5) (fd s tv) (fd d an)))
+    (tb-seam-gaps (fd s tb) (fd s seams))
     ;; the tagged tables' verdicts join the evidence dump, as `tb` (P5.5), and the dump is closed
     (if (!= (fd c keep) 0)
       (do (if (and (== kind 0) (> (cells-len (fd s tv)) 0))
@@ -547,7 +555,7 @@
         (il-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd d ift) (fd s sf) (fd d an) (fd d txt) (fd d pg) (fd m pages) np (fd m text) (fd s hc)
  (fd s isw))))
     (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (en-oe-mode c) (fd s s0)) 0) (return 2))
-    (pa-build (fd d fw) (fd d et) np (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
+    (pa-build (fd d fw) (fd d et) np (fd s msorder) (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
          (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
          (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al) (fd s pix))
     ;; the figures (P8.1, SPEC 10.6): at every level of `assets`, before the restructuring, which pairs a caption with the figure beside it

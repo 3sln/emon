@@ -2717,6 +2717,35 @@ pub fn sc_clip_edge(top: i32, bottom: i32, left: i32, right: i32, height: i32, t
     }
     return 0;
 }
+pub(crate) fn sc_mark_clipped(mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, line: i32) -> i32 {
+    let mut w: i32 = ol_get(olines, line, lh_first());
+    let end: i32 = w + ol_get(olines, line, lh_count());
+    ol_set(olines, line, olf_conf(), ev_clipped_conf());
+    while (w >= 0) && (w < end) {
+        sc_flag(owords, w, oe_clipped());
+        w += 1;
+    }
+    return 0;
+}
+pub fn sc_set_aside_cut_ink(mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, n: i32, cuts: &mut crate::port::Cells) -> i32 {
+    if crate::port::cells_len(cuts) != n {
+        return n;
+    }
+    let mut i: i32 = 0;
+    let mut kept: i32 = 0;
+    let mut line: i32 = 0;
+    while i < n {
+        line = crate::port::cells_at(scr, sc_sel_base() + i);
+        if crate::port::cells_at(cuts, i) == 1 {
+            sc_mark_clipped(olines, owords, line);
+        } else {
+            sc_sel_set(scr, kept, line);
+            kept += 1;
+        }
+        i += 1;
+    }
+    return kept;
+}
 pub fn sc_set_aside_clips(mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, n: i32, x0: i32, y0: i32, x1: i32, y1: i32, fourpx: i32, photos: i32) -> i32 {
     // Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
     // leave only complete lines in the selection consumed by structure and table recovery.
@@ -2765,12 +2794,7 @@ pub fn sc_set_aside_clips(mut olines: &mut crate::port::Cells, mut owords: &mut 
             sc_sel_set(scr, kept, line);
             kept += 1;
         } else {
-            ol_set(olines, line, olf_conf(), ev_clipped_conf());
-            w = first;
-            while w < end {
-                sc_flag(owords, w, oe_clipped());
-                w += 1;
-            }
+            sc_mark_clipped(olines, owords, line);
         }
         i += 1;
     }

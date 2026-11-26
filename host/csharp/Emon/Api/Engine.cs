@@ -429,7 +429,7 @@ public sealed class Engine {
                 emon.Planrun.Unit unitF = (answers, rq, bms, payload) => {
                     try {
                         emon.Enctx.Arenas t = b.Arenas.Clone();
-                        var p = new Units.Pending(Units.CloneCells(pend.Cand), Units.CloneBuf(pend.Cbytes), pend.Rfrom);
+                        var p = new Units.Pending(Units.CloneCells(pend.Cand), Units.CloneBuf(pend.Cbytes), pend.Rfrom, pend.Spans);
                         Units.AssetStageFigures(t, p, opts, idx, (int) size, answers, rq, bms);
                         if (emon.Port.CellsLen(rq) > 0) {
                             return emon.Planrun.UnitRequests;

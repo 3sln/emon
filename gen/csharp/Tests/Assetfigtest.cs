@@ -176,7 +176,7 @@ public static class Assetfigtest {
             Plan.AnDecode(ans, Plan.AuId(Plan.AuDecode()), 306, 396, 3, 3600, 0, 1);
             AfFill(emon.Port.BmsPut(bms, Plan.AuId(Plan.AuDecode()), 306, 396, 3), 306, 396, 3);
         }
-        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, Model.AfmPng(), ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, Model.AfmPng(), emon.Port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.CellsDrop(res, 0);
         emon.Port.CellsPush(res, emon.Port.CellsLen(rq));
         emon.Port.CellsPush(res, Plan.RecCount(rq));
@@ -323,7 +323,7 @@ public static class Assetfigtest {
         if (stage == 2) {
             Plan.AnFail(ans, Plan.PkCrop(), Plan.AuId(n), Plan.PsUnsupported());
         }
-        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, emon.Port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.CellsDrop(res, 0);
         emon.Port.CellsPush(res, Plan.RecCount(rq));
         if (emon.Port.CellsLen(rq) > 0) {
@@ -499,7 +499,7 @@ public static class Assetfigtest {
         }
         Model.NodeSetAttrInt(nodes, attrs, n, Model.FkImage(), 0);
         AfBoxcells(box);
-        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.CellsDrop(res, 0);
         emon.Port.CellsPush(res, Plan.RecCount(rq));
         emon.Port.CellsPush(res, Model.NodeAttrIntOr(nodes, attrs, n, Model.FkNoasset(), -1));
@@ -566,7 +566,7 @@ public static class Assetfigtest {
         f2 = AfNode(nodes, regions, 0, Model.NkFigure(), Model.FgUnknown(), 1, 7200, 10000, 30000, 30000);
         AfNode(nodes, regions, f2, Model.NkCaption(), 0, 1, 7200, 32000, 20000, 34000);
         AfBoxcells(box);
-        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.CellsDrop(res, 0);
         emon.Port.CellsPush(res, Plan.RecCount(rq));
         emon.Port.CellsPush(res, Plan.RecId(rq, 0));
@@ -621,7 +621,7 @@ public static class Assetfigtest {
         AfFill(emon.Port.BmsPut(bms, Plan.AuId(b), 105, 105, 3), 105, 105, 3);
         Plan.AnRender(ans, Plan.AuId(d), 110, 110, 3, 150);
         AfFill(emon.Port.BmsPut(bms, Plan.AuId(d), 110, 110, 3), 110, 110, 3);
-        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.AsRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.NewCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.CellsDrop(res, 0);
         emon.Port.CellsPush(res, emon.Port.CellsLen(rq));
         emon.Port.CellsPush(res, Model.AssetCount(assets));

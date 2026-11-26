@@ -49,7 +49,7 @@
             [emon.model :refer [node-count node-kind node-parent node-first-child
                                 node-next node-text-start node-text-len
                                 node-has-text node-region-head
-                                node-region-count node-conf node-src node-sub node-aux
+                                node-region-count node-conf node-flags node-src node-sub node-aux fl-seam-gap
                                 page-count page-number page-layout-first
                                 page-layout-count layout-count layout-page
                                 layout-band layout-col layout-x0 layout-y0
@@ -906,6 +906,8 @@
           (h-align-attr t o nodes attrs n)
           (h-common t o nodes regions pages layout n)
           (emit-ascii t ">")
+          (if (!= (bit-and (node-flags nodes n) (fl-seam-gap)) 0)
+            (emit-ascii t "<span data-emon-seam-gap=\"true\">[unread]</span>"))
           (set hb (h-body t o nodes attrs regions pages layout text assets uses abytes prefix n (+ d 1)))
           (if (> hb 0) (h-nl t o d))
           (if (> sub 0) (emit-ascii t "</th>"))

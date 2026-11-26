@@ -154,3 +154,19 @@ geometry, policy furniture, milestones on.
 <!-- bb docs:end outputs -->
 
 The JSON is described in [docs/model.md](model.md). The command-line tool is in [docs/cli.md](cli.md).
+
+## Multi-photo inputs
+
+To put separate single-frame images in one document, use Rust `Input::images`,
+Go `ImagesInput`, Java `Input.images`, C# `Input.Images`, Dart
+`EmonInput.images`, or C `emon_convert_images`. The JavaScript SDK accepts an
+array of inputs in `convert`. The Babashka pod accepts an input map with an
+`:images` vector. Supply the photos in upload order.
+
+With `capture=auto`, emon compares the end of each raster page with the start
+of another and checks for cropped text. It can deduplicate a corroborated
+overlap and recover the reading order of linked photos. An uncertain overlap
+keeps both copies and appears as `possible-duplicate` in evidence. Evidence
+uses original source page numbers. A verified change in reading order appears
+in `photoOrder`. A gap in a continued table yields a row flagged
+`seam-gap`, which HTML renders as unread.

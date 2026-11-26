@@ -2072,7 +2072,7 @@ public final class Para {
         emon.Port.cellsDrop(raw, 0);
         return k;
     }
-    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al, emon.Port.Cells ix) {
+    public static int paBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells photoOrder, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al, emon.Port.Cells ix) {
         // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
         // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2091,6 +2091,7 @@ public final class Para {
         int med = 0;
         int indents = 0;
         int p = 1;
+        int position = 1;
         int i = 0;
         int n = 0;
         int nu = 0;
@@ -2126,7 +2127,13 @@ public final class Para {
         emon.Port.cellsDrop(fr, 0);
         emon.Port.cellsDrop(al, 0);
         emon.Port.cellsDrop(dbg, 0);
-        while (p <= npages) {
+        while (position <= npages) {
+            p = position;
+            if (emon.Port.cellsLen(photoOrder) > 0) {
+                p = emon.Port.cellsAt(photoOrder, position - 1);
+                r = 0;
+                tcur = 0;
+            }
             paCollect(ord, lt, p, ix, off);
             n = emon.Port.cellsLen(ord);
             nu = paUprightCount(lt, ord);
@@ -2141,6 +2148,9 @@ public final class Para {
             while ((r < nf) && (emon.Port.cellsAt(cf, (r * CF_STRIDE) + CF_PAGE) < p)) {
                 r += 1;
             }
+            if (emon.Port.cellsLen(photoOrder) > 0) {
+                pend = r;
+            }
             r1 = r;
             while ((r1 < nf) && (emon.Port.cellsAt(cf, (r1 * CF_STRIDE) + CF_PAGE) == p) && (emon.Port.cellsAt(cf, (r1 * CF_STRIDE) + CF_ROLE) == Model.rlBody())) {
                 r1 += 1;
@@ -2149,7 +2159,7 @@ public final class Para {
                 pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, p, hc);
                 open = 0;
                 prev = -1;
-                if (p > 1) {
+                if (position > 1) {
                     paMilestone(nodes, p, hc);
                 }
                 pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
@@ -2194,7 +2204,7 @@ public final class Para {
                                 beforePage = p;
                             }
                             pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, beforePage, hc);
-                            if ((i == r) && (p > 1)) {
+                            if ((i == r) && (position > 1)) {
                                 paMilestone(nodes, p, hc);
                             }
                             if (i == r) {
@@ -2243,7 +2253,16 @@ public final class Para {
                     tcur = paTables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                 }
             }
-            p += 1;
+            if (emon.Port.cellsLen(photoOrder) > 0) {
+                r1 = r;
+                while ((r1 < nf) && (emon.Port.cellsAt(cf, (r1 * CF_STRIDE) + CF_PAGE) == p)) {
+                    r1 += 1;
+                }
+                pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, r1, 1000000000, 0, hc);
+                open = 0;
+                prev = -1;
+            }
+            position += 1;
         }
         paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc);
         Align.alPass(nodes, attrs, al, tm);

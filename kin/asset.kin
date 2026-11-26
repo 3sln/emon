@@ -1337,17 +1337,21 @@
 (defn ^I32 as-do-crop [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells pages
                        ^:mut ^Cells cand ^:mut ^Buf cbytes ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
                        ^I32 maxbytes ^I32 totbytes ^I32 n ^I32 pg ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1
-                       ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
+                       ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom ^Cells spans ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
                        ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec ^:mut ^Cells box]
   (comment "Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of")
   (comment "the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.")
   (let [^I32 pgi (- pg 1)
         ^I32 id (au-id (+ (au-decode) pgi))
-        ^I32 a (an-find ans id)]
+        ^I32 a (an-find ans id)
+        ^:mut ^I32 format rfrom]
     (if (< a 0)
       (do (if (< (rec-find rq id) 0)
-            (rq-decode rq id input 0 nbytes (flt-none) pgi))
+            (if (> (cells-len spans) 0)
+              (rq-decode rq id input (cells-at spans (* pgi 3)) (cells-at spans (+ (* pgi 3) 1)) (flt-none) 0)
+              (rq-decode rq id input 0 nbytes (flt-none) pgi)))
           (return 1)))
+    (if (> (cells-len spans) 0) (set format (cells-at spans (+ (* pgi 3) 2))))
     (if (== (an-ok ans a) 0)
       (do (as-set-noasset nodes attrs n (nz-codec))
           (return 0)))
@@ -1386,14 +1390,14 @@
                             (set c (+ c 1))))
                       (set x (+ x 1))))
                 (set y (+ y 1))))
-          (as-emit-row cand row cbytes pic maxpix (* (page-dpi pages pgi) 100) 0 rfrom (ao-cropped) ws z rows tmp rec)
+          (as-emit-row cand row cbytes pic maxpix (* (page-dpi pages pgi) 100) 0 format (ao-cropped) ws z rows tmp rec)
           (as-admit nodes attrs n cand row cbytes assets uses abytes maxbytes totbytes box 0)
           (return 0))))))
 
 (defn ^:pub ^I32 as-run-figures [^:mut ^Cells nodes ^:mut ^Cells attrs ^Cells regions ^Cells pages
                                  ^:mut ^Cells cand ^:mut ^Buf cbytes
                                  ^:mut ^Cells assets ^:mut ^Cells uses ^:mut ^Buf abytes
-                                 ^I32 maxbytes ^I32 totbytes ^I32 sigs ^I32 dpi ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom
+                                 ^I32 maxbytes ^I32 totbytes ^I32 sigs ^I32 dpi ^I32 maxpix ^I32 input ^I32 nbytes ^I32 rfrom ^Cells spans
                                  ^Cells ans ^:mut ^Cells rq ^BitmapSet bms
                                  ^:mut ^Cells ws ^:mut ^Buf z ^:mut ^Cells rows ^:mut ^Cells tmp ^:mut ^Cells rec ^:mut ^Cells box]
   (comment "The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).")
@@ -1479,7 +1483,7 @@
                                       dpi maxpix input ans rq bms ws z rows tmp rec box))
                       (if (== src 3)
                         (as-do-crop nodes attrs pages cand cbytes assets uses abytes maxbytes totbytes n rpg rx0 ry0 rx1 ry1
-                                    maxpix input nbytes rfrom ans rq bms ws z rows tmp rec box))))))
+                                    maxpix input nbytes rfrom spans ans rq bms ws z rows tmp rec box))))))
           (set n (+ n 1))))
     (return (asset-count assets))))
 

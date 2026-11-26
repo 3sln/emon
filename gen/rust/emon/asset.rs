@@ -1580,17 +1580,25 @@ pub(crate) fn as_do_render(mut nodes: &mut crate::port::Cells, mut attrs: &mut c
     as_admit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, d);
     return 0;
 }
-pub(crate) fn as_do_crop(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, n: i32, pg: i32, x0: i32, y0: i32, x1: i32, y1: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
+pub(crate) fn as_do_crop(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, n: i32, pg: i32, x0: i32, y0: i32, x1: i32, y1: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, spans: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
     // Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of
     // the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.
     let pgi: i32 = pg - 1;
     let id: i32 = au_id(au_decode() + pgi);
     let a: i32 = an_find(ans, id);
+    let mut format: i32 = rfrom;
     if a < 0 {
         if rec_find(rq, id) < 0 {
-            rq_decode(rq, id, input, 0, nbytes, flt_none(), pgi);
+            if crate::port::cells_len(spans) > 0 {
+                rq_decode(rq, id, input, crate::port::cells_at(spans, pgi * 3), crate::port::cells_at(spans, (pgi * 3) + 1), flt_none(), 0);
+            } else {
+                rq_decode(rq, id, input, 0, nbytes, flt_none(), pgi);
+            }
         }
         return 1;
+    }
+    if crate::port::cells_len(spans) > 0 {
+        format = crate::port::cells_at(spans, (pgi * 3) + 2);
     }
     if an_ok(ans, a) == 0 {
         as_set_noasset(nodes, attrs, n, nz_codec());
@@ -1646,11 +1654,11 @@ pub(crate) fn as_do_crop(mut nodes: &mut crate::port::Cells, mut attrs: &mut cra
         }
         y += 1;
     }
-    as_emit_row(cand, row, cbytes, pic, maxpix, page_dpi(pages, pgi) * 100, 0, rfrom, ao_cropped(), ws, z, rows, tmp, rec);
+    as_emit_row(cand, row, cbytes, pic, maxpix, page_dpi(pages, pgi) * 100, 0, format, ao_cropped(), ws, z, rows, tmp, rec);
     as_admit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, r#box, 0);
     return 0;
 }
-pub fn as_run_figures(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, sigs: i32, dpi: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
+pub fn as_run_figures(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, regions: &mut crate::port::Cells, pages: &mut crate::port::Cells, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, mut assets: &mut crate::port::Cells, mut uses: &mut crate::port::Cells, mut abytes: &mut crate::port::Buf, maxbytes: i32, totbytes: i32, sigs: i32, dpi: i32, maxpix: i32, input: i32, nbytes: i32, rfrom: i32, spans: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut ws: &mut crate::port::Cells, mut z: &mut crate::port::Buf, mut rows: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut rec: &mut crate::port::Cells, mut r#box: &mut crate::port::Cells) -> i32 {
     // The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).
     // `dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`
     // asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the
@@ -1756,7 +1764,7 @@ pub fn as_run_figures(mut nodes: &mut crate::port::Cells, mut attrs: &mut crate:
                     as_do_render(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, dpi, maxpix, input, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
                 }
                 if src == 3 {
-                    as_do_crop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+                    as_do_crop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, spans, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
                 }
             }
         }

@@ -14980,3 +14980,21 @@ The fixed-seed qualification and the plan items stay open until the implementati
 On Tesseract seed 917, duplicated rows fell from nine to four. The four remaining duplicates came from a reversed upload and carried no seam flag. The run found zero false merges, flagged seven of eleven lost-text seams, and missed one total present in the full-image control. The careful clean-cut and distinct-page controls had byte-identical Models under automatic and scan capture. Held-out seed 918 left two unflagged duplicated rows and flagged three of five lost-text seams in a two-receipt smoke run with six traps. The PP-OCR policy identity changes with the scan policy. Recordings for the previous identity need fresh qualification.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Recover photo order and convert separate image sources together
+
+Consider both directions of an anchored raster join. A bounded raster run changes reading order when its corroborated joins form a unique complete chain. If the chain is ambiguous, retain upload order and report candidate overlaps in either direction. The table and paragraph stages follow a recovered order. Page numbers continue to identify the original sources. Evidence reports the order as `photoOrder` and identifies photo pages by cut ink or corroborated overlap.
+
+An image group supplies the original encoded bytes to the existing raster requests by range. The headers and limits are checked before the pages are read. Each member has one frame. The same raster path handles TIFF and grouped inputs. The first group member remains source page one even if it appears later in the Model body.
+
+Narrow ink strokes across the actual bitmap edge can corroborate a cropped line independently of its OCR confidence and can flag a seam when the engine omitted the fragment. A gap between linked table fragments creates an unread row marked `seam-gap`. The policy still needs targeted OCR of a spliced strip and broader alignment across changes in OCR segmentation.
+
+The receipt gate records the historical word aggregate separately. The distinct-page trap contributes to seam checks, but its second page has no gold from the first receipt, so it is excluded from the comparable word aggregate. The Tesseract workflow runs the fixed seed on grouped images. A sweep can compare a retained report for the same seed and exact piece hashes. P13.23 and P13.24 stay open pending qualification.
+
+The first 200-receipt sweep encountered a CORD photo whose signature check overflowed the pixel arithmetic. Coverage and tortuosity use wide products. The sweep records completed case scores and driver errors as it runs so a failed conversion leaves measurements for the other cases.
+
+In the direct-image seed 917 run, the evidence-supported order removed the four duplicates from the reversed upload. One flagged duplicate and zero false merges remained. The run detected nine of eleven lost seams, including the genuine-repeat seam, and raised four spurious gap flags. Recall was 0.7816 against 0.7825 for separate-image concatenation over the same receipt cases. The missed total appeared in the first OCR reading and was absent from the selected flow. Both intentionally cut bottom edges were detected in the clipping smoke test. An incidental top-edge fragment in one bottom crop went unflagged, yielding 2/3 aggregate recall.
+
+Tesseract sweep 920 completed 200 receipts and six traps without driver errors. Across 470 seams, duplicates went from 220 in concatenation to 201 after joining, including 160 unflagged. The sweep flagged 168 of 216 lost seams and raised 121 spurious gaps. It counted one false merge at the 97% visibility threshold. The retained copy had the same word sequence as the dropped copy. Word precision and recall were 0.724204 and 0.736301 against 0.722748 and 0.736341 for concatenation. The sweep failed acceptance. Its measured ratchet reference is `tools/multishot/tesseract-sweep-920.json`.
+
+- [ ] **Signed off** (maintainer)

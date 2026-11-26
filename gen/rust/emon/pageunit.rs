@@ -19,6 +19,7 @@ use crate::emon::retarget::*;
 use crate::emon::scan::*;
 use crate::emon::scriptcheck::*;
 use crate::emon::sealpx::*;
+use crate::emon::seams::*;
 use crate::emon::sigpx::*;
 use crate::emon::upscale::*;
 use crate::emon::xalign::*;
@@ -692,6 +693,10 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
         }
     } else {
         nsel = sc_set_aside_clips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos);
+        if crate::port::bms_has(bms, did) == 1 {
+            ms_line_cuts(crate::port::bms_get(bms, did), olines, scr, sc_sel_base(), nsel, bx0, by0, bx1, by1, 2880000 / dpi100, s6);
+            nsel = sc_set_aside_cut_ink(olines, owords, scr, nsel, s6);
+        }
     }
     sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
     if (crate::port::cells_at(rtp, rtp_primary()) != run) && (crate::port::cells_at(rtp, rtp_q()) != 0) {

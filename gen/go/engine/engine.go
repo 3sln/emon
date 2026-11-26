@@ -100,6 +100,10 @@ func EnFmtTiff() int32 {
 	return 3
 }
 
+func EnFmtImages() int32 {
+	return 4
+}
+
 func enLocale(c *enctx.Cfg, d *enctx.Doc) int32 {
 	// The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
 	if c.Haveloc != 0 {
@@ -128,7 +132,7 @@ func enAttemptRaster(view *port.Src, c *enctx.Cfg, d *enctx.Doc, m *enctx.Arenas
 	// OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
 	// glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
 	model.ModelInit(m.Nodes, m.Attrs, m.Regions, m.Text, m.Pages, m.Ledger, m.Layout)
-	var status int32 = rasterin.RsDoc(view, idx, fmt, ans, rq, m.Nodes, m.Attrs, m.Text, m.Pages, d.Mask)
+	var status int32 = rasterin.RsDoc(view, idx, fmt, ans, rq, m.Nodes, m.Attrs, m.Text, m.Pages, d.Mask, d.Spans)
 	var np int32 = model.PageCount(m.Pages)
 	if port.SrcMissed(view) {
 		return AtMiss()
@@ -151,6 +155,9 @@ func enAttemptRaster(view *port.Src, c *enctx.Cfg, d *enctx.Doc, m *enctx.Arenas
 	}
 	if fmt == rasterin.RsJpeg() {
 		d.Ifmt = EnFmtJpeg()
+	}
+	if fmt == rasterin.RsImages() {
+		d.Ifmt = EnFmtImages()
 	}
 	if np < 0 {
 		d.Ipages = 0
@@ -335,7 +342,7 @@ func enPageInner(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx in
 	if d.Kind == EnKindPdf() {
 		return pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)))+(16*enFallback(c)))+enPhotoLines(c), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 	}
-	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)))+(16*enFallback(c)))+enPhotoLines(c), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
+	return rasterin.RsPage(i, idx, nbytes, c.Ocr, ((((2*c.Nort)+(4*c.Dry))+(8*enHybrid(c)))+(16*enFallback(c)))+enPhotoLines(c), d.Spans, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb)
 }
 
 func enOcrPlanned(c *enctx.Cfg, d *enctx.Doc) int32 {
@@ -368,11 +375,13 @@ func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, 
 	if status == 0 {
 		// Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
 		oilrows.OrAssemble(ev.Oruns, r0, ev.Rules, i+1, d.Ln, l0, d.Wd, w0, d.Pscr)
-		if (c.Dry == 0) && (c.Capture != 1) && (d.Ipages > 1) && (evidence.LnCount(d.Ln) > l0) && ((port.CellsAt(d.Mask, i) & 8) == 0) {
+		if (c.Dry == 0) && (c.Capture != 1) && (d.Ipages > 1) && ((port.CellsAt(d.Mask, i) % 4) > 0) && ((port.CellsAt(d.Mask, i) & 8) == 0) {
 			var id int32 = plan.PuId(i, plan.PiDecode())
 			var ep int32 = evidence.EvPageRow(ev.Epages, i+1)
 			if (ep >= 0) && (port.BmsHas(bms, id) == 1) {
-				seams.MsSample(port.BmsGet(bms, id), d.Ln, l0, evidence.EpGet(ev.Epages, ep, evidence.EpfWidth()), evidence.EpGet(ev.Epages, ep, evidence.EpfHeight()), d.Mspatch, d.Mspixel, d.Ys0, d.Ys1)
+				var image *port.Bitmap = port.BmsGet(bms, id)
+				seams.MsSampleCut(image, i+1, d.Mscuts)
+				seams.MsSample(image, d.Ln, l0, evidence.EpGet(ev.Epages, ep, evidence.EpfWidth()), evidence.EpGet(ev.Epages, ep, evidence.EpfHeight()), d.Mspatch, d.Mspixel, d.Ys0, d.Ys1)
 			}
 		}
 		if oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0 {
@@ -405,13 +414,13 @@ func EnAssetUnit(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, p *en
 	return rc
 }
 
-func EnAssetFigures(c *enctx.Cfg, m *enctx.Arenas, cand *port.Cells, cbytes *port.Buf, rfrom int32, p *enctx.Pass, input int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
+func EnAssetFigures(c *enctx.Cfg, m *enctx.Arenas, cand *port.Cells, cbytes *port.Buf, rfrom int32, spans *port.Cells, p *enctx.Pass, input int32, nbytes int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet) int32 {
 	// P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
 	// (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
 	// and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
 	// runs it again). `p` is fresh for the attempt.
 	asset.AsSettings(m.Nodes, m.Attrs, m.Text, c.Level, c.Dpi, c.Pixels, c.Abyte, c.Tbyte, c.Sigs)
-	return asset.AsRunFigures(m.Nodes, m.Attrs, m.Regions, m.Pages, cand, cbytes, m.Assets, m.Uses, m.Abytes, c.Abyte, c.Tbyte, c.Sigs, c.Dpi, c.Pixels, input, nbytes, rfrom, ans, rq, bms, p.Fz0, p.Zb, p.Fz1, p.Fz2, p.Fz3, p.Fz4)
+	return asset.AsRunFigures(m.Nodes, m.Attrs, m.Regions, m.Pages, cand, cbytes, m.Assets, m.Uses, m.Abytes, c.Abyte, c.Tbyte, c.Sigs, c.Dpi, c.Pixels, input, nbytes, rfrom, spans, ans, rq, bms, p.Fz0, p.Zb, p.Fz1, p.Fz2, p.Fz3, p.Fz4)
 }
 
 func EnDump(et *port.Cells, gl *port.Cells, wd *port.Cells, ln *port.Cells, mk *port.Cells, fnt *port.Cells, grl *port.Cells, gfl *port.Cells, ggp *port.Cells, grg *port.Cells, ev *enctx.EvArenas, t *strings.Builder) int32 {
@@ -486,16 +495,17 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	var trust int32 = pdfstruct.TgTrust(d.Ss)
 	var pending int32 = 0
 	var w int32 = 0
-	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords)
+	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing)
 	if c.Keep != 0 {
-		seams.MsEvidence(d.Evidence, s.Seams)
+		seams.MsEvidence(d.Evidence, s.Seams, s.Msorder, d.Mask, d.Mscuts, c.Capture)
 	}
 	furniture.FuFind(d.Fw, d.Fl, d.Et, d.Gl, d.Mk, m.Pages, np, d.Txt, d.Md, d.Lb, trust, c.Furn, s.Cd, s.Sl, s.Gr, s.Ford, s.Tx, s.Bh, s.Fo, s.Fp, s.Ft, s.Pl)
 	if c.Tabl == 1 {
-		tscore.TsBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
+		tscore.TsBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Msorder, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
 	} else {
-		table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
+		table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Msorder, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
 	}
+	table.TbSeamGaps(s.Tb, s.Seams)
 	if c.Keep != 0 {
 		if (kind == 0) && (port.CellsLen(s.Tv) > 0) {
 			port.TextAscii(d.Evidence, ",\"tb\":")
@@ -701,7 +711,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, enOeMode(c), s.S0) < 0 {
 		return 2
 	}
-	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
+	para.PaBuild(d.Fw, d.Et, np, s.Msorder, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
 	if kind == 0 {
 		enFigures(m, s, d, c.Level)
 	}

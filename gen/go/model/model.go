@@ -1001,6 +1001,9 @@ func FlScriptUnread() int32 {
 func FlUncalibratedEngine() int32 {
 	return 2048
 }
+func FlSeamGap() int32 {
+	return 4096
+}
 func FlEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "low-conf")
@@ -1048,6 +1051,10 @@ func FlEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 2048 {
 		port.TextAscii(t, "uncalibrated-engine")
+		return 1
+	}
+	if code == 4096 {
+		port.TextAscii(t, "seam-gap")
 		return 1
 	}
 	return 0

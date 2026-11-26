@@ -8,6 +8,7 @@ import (
 	"emon/model"
 	"emon/port"
 	"emon/seams"
+	"emon/table"
 	"testing"
 )
 
@@ -55,7 +56,7 @@ func lawSeam(emonT *testing.T, capture int32, born int32, strong int32, middle i
 		evidence.OlSet(ol, r, evidence.OlfConf(), 300)
 	}
 	lawLine(fl, fw, et, 2, 400, 82)
-	port.AssertEq(emonT, seams.MsRun(2, capture, mask, pages, ol, et, fl, fw, port.NewCells(), port.NewCells(), ledger, text, decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expectedDrop, "rows dropped")
+	port.AssertEq(emonT, seams.MsRun(2, capture, mask, pages, ol, et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), ledger, text, decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expectedDrop, "rows dropped")
 	port.AssertEq(emonT, model.LedgerCount(ledger), expectedDrop, "dropped rows retained in ledger")
 	if expectedKind == 0 {
 		port.AssertEq(emonT, port.CellsLen(decisions), 0, "no seam on an ordinary break")
@@ -77,6 +78,54 @@ func TestSingleCopyMatchIsAmbiguous(emonT *testing.T) {
 	lawSeam(emonT, 2, 0, 1, 0, 0, 0, 2)
 }
 
+func TestALinkedTableGapEmitsAnUnreadRow(emonT *testing.T) {
+	var tables *port.Cells = port.NewCells()
+	var seams *port.Cells = port.NewCells()
+	var empty *port.Cells = port.NewCells()
+	var nodes *port.Cells = port.NewCells()
+	var attrs *port.Cells = port.NewCells()
+	var regions *port.Cells = port.NewCells()
+	var text *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var layout *port.Cells = port.NewCells()
+	var i int32 = 0
+	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	for i < 64 {
+		port.CellsPush(tables, 0)
+		i += 1
+	}
+	i = 0
+	for i < 2 {
+		var base int32 = i * 32
+		port.CellsSet(tables, base, i+1)
+		port.CellsSet(tables, base+3, 450)
+		port.CellsSet(tables, base+4, 1000)
+		port.CellsSet(tables, base+5, 4)
+		port.CellsSet(tables, base+8, 2)
+		i += 1
+	}
+	port.CellsSet(tables, 18, 2)
+	port.CellsSet(tables, 19, 2)
+	port.CellsSet(tables, 53, 1)
+	port.CellsPush(seams, 1)
+	port.CellsPush(seams, 2)
+	port.CellsPush(seams, 3)
+	port.CellsPush(seams, 0)
+	port.CellsPush(seams, 0)
+	table.TbSeamGaps(tables, seams)
+	table.TbEmit(tables, 0, 0, empty, empty, empty, empty, empty, empty, nodes, attrs, regions, text, port.NewCells(), port.NewCells(), ledger)
+	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, port.NewCells()), 0, "the unread row is a valid Model")
+	port.AssertEq(emonT, model.NodeCount(nodes), 6, "one row with two cells")
+	port.AssertEq(emonT, model.NodeKind(nodes, 3), model.NkRow(), "the gap belongs to the table body")
+	port.AssertEq(emonT, model.NodeFlags(nodes, 3), model.FlSeamGap(), "the row is unread")
+	port.AssertEq(emonT, model.NodeKind(nodes, 4), model.NkCell(), "the unread row keeps the table columns")
+	port.AssertEq(emonT, model.NodeFlags(nodes, 4), model.FlSeamGap(), "the first cell is unread")
+	port.AssertEq(emonT, model.NodeFlags(nodes, 5), model.FlSeamGap(), "the second cell is unread")
+}
+
 func TestCleanBreakAndClippedGap(emonT *testing.T) {
 	lawSeam(emonT, 2, 0, 0, 0, 0, 0, 0)
 	lawSeam(emonT, 2, 0, 0, 0, 1, 0, 3)
@@ -85,6 +134,99 @@ func TestCleanBreakAndClippedGap(emonT *testing.T) {
 func TestScanModeAndBornDigitalPassThrough(emonT *testing.T) {
 	lawSeam(emonT, 1, 0, 4, 0, 0, 0, 0)
 	lawSeam(emonT, 2, 1, 4, 0, 0, 0, 0)
+}
+
+func TestReversedPhotosUseTheUniqueAnchoredOrder(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var order *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var i int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	for i < 4 {
+		lawLine(fl, fw, et, 1, 20+(i*30), 65+i)
+		lawLine(fl, fw, et, 2, 700+(i*30), 65+i)
+		i += 1
+	}
+	lawLine(fl, fw, et, 2, 50, 91)
+	lawLine(fl, fw, et, 1, 450, 92)
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells()), 4, "remove the leading duplicate lines of the later photo")
+	port.AssertEq(emonT, port.CellsAt(order, 0), 2, "source page two starts the document")
+	port.AssertEq(emonT, port.CellsAt(order, 1), 1, "source page one follows")
+	port.AssertEq(emonT, port.CellsAt(decisions, 0), 2, "the seam preserves upload provenance")
+}
+
+func TestSeveralStrokesAtTheBitmapEdgeAreClippingEvidence(emonT *testing.T) {
+	var pixels *port.Bitmap = port.BmsPut(port.NewBitmapSet(), 1, 50, 12, 1)
+	var cuts *port.Cells = port.NewCells()
+	var x int32 = 0
+	var y int32 = 0
+	for y < 12 {
+		x = 0
+		for x < 50 {
+			port.BitmapSetU8(pixels, x, y, 0, 255)
+			x += 1
+		}
+		y += 1
+	}
+	x = 12
+	for x < 40 {
+		port.BitmapSetU8(pixels, x, 10, 0, 20)
+		port.BitmapSetU8(pixels, x, 11, 0, 20)
+		x += 12
+	}
+	seams.MsSampleCut(pixels, 1, cuts)
+	port.AssertEq(emonT, port.CellsAt(cuts, 0), 0, "blank top")
+	port.AssertEq(emonT, port.CellsAt(cuts, 1), 1, "glyphs continue through the lower edge")
+}
+
+func lawBandLine(fl *port.Cells, fw *port.Cells, et *port.Cells, page int32, y int32, n int32) int32 {
+	var line int32 = evidence.LnCount(fl)
+	var i int32 = 0
+	var first int32 = 0
+	var word int32 = 0
+	var start int32 = 0
+	for i < n {
+		start = port.CellsLen(et)
+		port.CellsPush(et, 65+i)
+		if page == 1 {
+			port.CellsPush(et, 46)
+		} else {
+			port.CellsPush(et, 44)
+		}
+		word = evidence.WdNew(fw, page, 50+(30*i), y, 75+(30*i), y+12, 50, y+12, 400, y+12, 0, 0, start, 2, line, 900, -1)
+		if i == 0 {
+			first = word
+		}
+		i += 1
+	}
+	evidence.LnNew(fl, page, 50, y, 400, y+12, 50, y+12, 400, y+12, 0, 0, first, n)
+	return 0
+}
+
+func TestAnOcrVariantNeedsContextBeforeDeduplication(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 50, 91)
+	lawBandLine(fl, fw, et, 1, 900, 3)
+	lawBandLine(fl, fw, et, 2, 50, 4)
+	lawLine(fl, fw, et, 2, 500, 92)
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate")
 }
 
 func TestPixelCorrelationNeedsContrastAndPositiveCovariance(emonT *testing.T) {

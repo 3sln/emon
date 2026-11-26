@@ -17,9 +17,12 @@
 package emon
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"sort"
 	"sync"
 )
 
@@ -71,7 +74,7 @@ type readerAtSource struct {
 	n int64
 }
 
-func (s *readerAtSource) Size() int64                            { return s.n }
+func (s *readerAtSource) Size() int64                             { return s.n }
 func (s *readerAtSource) ReadAt(p []byte, off int64) (int, error) { return s.r.ReadAt(p, off) }
 
 // SeekSource is an io.ReadSeeker: the size is taken once, when the source is made (seek to the end);
@@ -137,6 +140,74 @@ func NewInput(src ByteSource) Input { return Input{Source: src} }
 
 // BytesInput is an in-memory source over b (not copied) with no password.
 func BytesInput(b []byte) Input { return Input{Source: &BytesSource{b: b}} }
+
+// ImagesInput groups single-frame images as one document without copying their encoded bytes.
+func ImagesInput(images ...Input) (Input, error) {
+	invalid := errors.New("expected a nonempty list of single-frame image inputs within the input size limit")
+	if len(images) == 0 || len(images) > (math.MaxInt32-12)/4 {
+		return Input{}, invalid
+	}
+	header := make([]byte, 12+4*len(images))
+	copy(header, "EMONIMG1")
+	binary.LittleEndian.PutUint32(header[8:], uint32(len(images)))
+	s := &imagesSource{parts: []ByteSource{BytesInput(header).Source}, starts: []int64{0}, size: int64(len(header))}
+	for i, image := range images {
+		if image.Source == nil || image.hasPw || image.Password != nil {
+			return Input{}, invalid
+		}
+		n := image.Source.Size()
+		if n < 4 || n > math.MaxInt32-s.size {
+			return Input{}, invalid
+		}
+		binary.LittleEndian.PutUint32(header[12+4*i:], uint32(n))
+		s.parts = append(s.parts, image.Source)
+		s.starts = append(s.starts, s.size)
+		s.size += n
+	}
+	return NewInput(s), nil
+}
+
+type imagesSource struct {
+	parts  []ByteSource
+	starts []int64
+	size   int64
+}
+
+func (s *imagesSource) Size() int64 { return s.size }
+
+func (s *imagesSource) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, errors.New("negative offset")
+	}
+	i := sort.Search(len(s.starts), func(i int) bool { return s.starts[i] > off }) - 1
+	total := 0
+	for len(p) > 0 && off < s.size {
+		end := s.size
+		if i+1 < len(s.starts) {
+			end = s.starts[i+1]
+		}
+		count := len(p)
+		if int64(count) > end-off {
+			count = int(end - off)
+		}
+		n, err := s.parts[i].ReadAt(p[:count], off-s.starts[i])
+		total += n
+		if n != count {
+			if err == nil {
+				err = io.ErrUnexpectedEOF
+			}
+			return total, err
+		}
+		if err != nil && err != io.EOF {
+			return total, err
+		}
+		p, off, i = p[n:], off+int64(n), i+1
+	}
+	if len(p) > 0 {
+		return total, io.EOF
+	}
+	return total, nil
+}
 
 // ReaderAtInput is an io.ReaderAt of a known size: an *os.File and its size, an *io.SectionReader, ...
 func ReaderAtInput(r io.ReaderAt, size int64) Input {

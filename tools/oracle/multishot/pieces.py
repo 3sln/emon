@@ -77,7 +77,8 @@ def generate(case, out):
     pieces = []
     for i, (top, bottom, blank) in enumerate(case["windows"]):
         view, matrix = warp(image, top, bottom, rng, case["careful"])
-        projections = [visibility(row["box"], np.linalg.inv(matrix), view.size) for row in case["rows"]]
+        inverse = np.linalg.inv(matrix)
+        projections = [visibility(row["box"], inverse, view.size) for row in case["rows"]]
         if blank:
             view = ImageOps.expand(view, (0, 0, 0, blank), fill="white")
         path = out / f"piece-{i}.jpg"
@@ -85,12 +86,15 @@ def generate(case, out):
         pieces.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                        "visible": [p[0] for p in projections],
                        "boxes": [p[1] for p in projections]})
-    sequence = out / "sequence.tiff"
-    frames = [Image.open(pieces[i]["path"]).convert("RGB") for i in case["order"]]
-    if case.get("other"):
-        frames = [frames[0], ImageOps.exif_transpose(Image.open(case["other"])).convert("RGB")]
-    frames[0].save(sequence, save_all=True, append_images=frames[1:], compression="tiff_lzw")
-    return {"scan": str(scan), "pieces": pieces, "sequence": str(sequence)}
+    manifest = {"scan": str(scan), "pieces": pieces}
+    if case.get("tiff", True):
+        sequence = out / "sequence.tiff"
+        frames = [Image.open(pieces[i]["path"]).convert("RGB") for i in case["order"]]
+        if case.get("other"):
+            frames = [frames[0], ImageOps.exif_transpose(Image.open(case["other"])).convert("RGB")]
+        frames[0].save(sequence, save_all=True, append_images=frames[1:], compression="tiff_lzw")
+        manifest["sequence"] = str(sequence)
+    return manifest
 
 
 def clip_cases(case, out):
@@ -130,8 +134,15 @@ def clip_cases(case, out):
     return readings
 
 
-if __name__ == "__main__":
-    output = Path(sys.argv[1])
-    spec = json.load(sys.stdin)
+def run(spec, output):
     job = clip_cases if "target" in spec else generate
-    print(json.dumps(job(spec, output)))
+    print(json.dumps(job(spec, Path(output))))
+
+
+if __name__ == "__main__":
+    if sys.argv[1] == "--batch":
+        for line in sys.stdin:
+            spec, output = json.loads(line)
+            run(spec, output)
+    else:
+        run(json.load(sys.stdin), sys.argv[1])

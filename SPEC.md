@@ -146,7 +146,11 @@ A conversion may have **several inputs** (an image set, scans of one
 document; §13.1, D058): intake runs once per input, in the caller's order,
 and the document's pages are the inputs' pages concatenated in that order.
 The Source records, per page, which input and which page or frame of it the
-page came from.
+page came from. An explicit group of single-frame PNG, JPEG or TIFF inputs
+forms one raster document. Intake reports `images` for the group. Models and
+evidence retain the original page numbers even when a proved overlap changes
+the body reading order. When requested, the evidence reports this sequence as
+`photoOrder`.
 
 The **Source** value is small: it is what the host needs to *plan* stage 1
 (which pages to render, at what resolution, what to OCR) before any expensive

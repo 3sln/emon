@@ -27,6 +27,10 @@ func RsTiff() int32 {
 	return 3
 }
 
+func RsImages() int32 {
+	return 4
+}
+
 func RsUndecodable() int32 {
 	return 21
 }
@@ -65,7 +69,61 @@ func RsSniff(src *port.Src) int32 {
 	if (a == 77) && ((b == 77) && ((c == 0) && (d == 42))) {
 		return RsTiff()
 	}
+	if (n >= 8) && (a == 69) && (b == 77) && (c == 79) && (d == 78) && (pdfsrc.PsU8(src, 4) == 73) && (pdfsrc.PsU8(src, 5) == 77) && (pdfsrc.PsU8(src, 6) == 71) && (pdfsrc.PsU8(src, 7) == 49) {
+		return RsImages()
+	}
 	return RsNone()
+}
+
+func rsU31(src *port.Src, at int32) int32 {
+	var hi int32 = pdfsrc.PsU8(src, at+3)
+	if hi > 127 {
+		return -1
+	}
+	return pdfsrc.PsU8(src, at) + (256 * pdfsrc.PsU8(src, at+1)) + (65536 * pdfsrc.PsU8(src, at+2)) + (16777216 * hi)
+}
+
+func rsImagePlan(src *port.Src, spans *port.Cells) int32 {
+	// An image list is a header, a little-endian frame count and lengths, then original encoded images.
+	var nbytes int32 = pdfsrc.PsLen(src)
+	var count int32 = 0
+	var offset int32 = 0
+	var i int32 = 0
+	var length int32 = 0
+	var format int32 = 0
+	if nbytes < 16 {
+		return 0
+	}
+	count = rsU31(src, 8)
+	if (count < 1) || (count > ((nbytes - 12) / 4)) {
+		return 0
+	}
+	if count > port.LimitOf(8) {
+		port.LimitBreach(8, count)
+	}
+	offset = 12 + (count * 4)
+	for i < count {
+		length = rsU31(src, 12+(i*4))
+		if (length < 4) || (length > (nbytes - offset)) {
+			return 0
+		}
+		format = model.AfmTiff()
+		if pdfsrc.PsU8(src, offset) == 137 {
+			format = model.AfmPng()
+		}
+		if pdfsrc.PsU8(src, offset) == 255 {
+			format = model.AfmJpeg()
+		}
+		port.CellsPush(spans, offset)
+		port.CellsPush(spans, length)
+		port.CellsPush(spans, format)
+		offset += length
+		i += 1
+	}
+	if offset != nbytes {
+		return 0
+	}
+	return count
 }
 
 func rsFrameArg(info int32, f int32) int32 {
@@ -120,6 +178,14 @@ func rsFormatName(nodes *port.Cells, attrs *port.Cells, text *port.Cells, fmt in
 		model.TextAppendCp(text, 102)
 		model.TextAppendCp(text, 102)
 	}
+	if fmt == RsImages() {
+		model.TextAppendCp(text, 105)
+		model.TextAppendCp(text, 109)
+		model.TextAppendCp(text, 97)
+		model.TextAppendCp(text, 103)
+		model.TextAppendCp(text, 101)
+		model.TextAppendCp(text, 115)
+	}
 	model.NodeSetAttrText(nodes, attrs, 0, model.FkFormat(), start, port.CellsLen(text)-start)
 	return 0
 }
@@ -148,7 +214,16 @@ func rsWantOcr(info int32, policy int32) int32 {
 	return 1
 }
 
-func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, mask *port.Cells) int32 {
+func rsDecode(rq *port.Cells, id int32, input int32, nbytes int32, spans *port.Cells, f int32, header int32) int32 {
+	if port.CellsLen(spans) > 0 {
+		plan.RqDecode(rq, id, input, port.CellsAt(spans, f*3), port.CellsAt(spans, (f*3)+1), plan.FltNone(), rsFrameArg(header, 0))
+	} else {
+		plan.RqDecode(rq, id, input, 0, nbytes, plan.FltNone(), rsFrameArg(header, f))
+	}
+	return 0
+}
+
+func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells, text *port.Cells, pages *port.Cells, mask *port.Cells, spans *port.Cells) int32 {
 	// THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
 	// round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
 	// in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
@@ -156,8 +231,16 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	// status, or 0.
 	var nbytes int32 = pdfsrc.PsLen(src)
 	var a0 int32 = plan.AnFind(ans, 1)
+	var grouped int32 = 0
+	port.CellsDrop(spans, 0)
+	if fmt == RsImages() {
+		grouped = rsImagePlan(src, spans)
+		if grouped == 0 {
+			return RsUndecodable()
+		}
+	}
 	if a0 < 0 {
-		plan.RqDecode(rq, 1, input, 0, nbytes, plan.FltNone(), rsFrameArg(1, 0))
+		rsDecode(rq, 1, input, nbytes, spans, 0, 1)
 		return plan.UsRequests()
 	}
 	if plan.AnStatus(ans, a0) != plan.PsOk() {
@@ -166,6 +249,9 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	var frames int32 = plan.AnArg(ans, a0, 5)
 	var f int32 = 1
 	var asked int32 = 0
+	if grouped > 0 {
+		frames = grouped
+	}
 	if frames < 1 {
 		return RsUndecodable()
 	}
@@ -174,7 +260,7 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	}
 	for f < frames {
 		if plan.AnFind(ans, f+1) < 0 {
-			plan.RqDecode(rq, f+1, input, 0, nbytes, plan.FltNone(), rsFrameArg(1, f))
+			rsDecode(rq, f+1, input, nbytes, spans, f, 1)
 			asked = 1
 		}
 		f += 1
@@ -190,6 +276,9 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 		var a int32 = plan.AnFind(ans, f+1)
 		if plan.AnStatus(ans, a) != plan.PsOk() {
 			return rsFail(ans, a)
+		}
+		if (grouped > 0) && (plan.AnArg(ans, a, 5) != 1) {
+			return RsUnsupported()
 		}
 		var w int32 = plan.AnArg(ans, a, 0)
 		var h int32 = plan.AnArg(ans, a, 1)
@@ -213,7 +302,7 @@ func RsDoc(src *port.Src, input int32, fmt int32, ans *port.Cells, rq *port.Cell
 	return 0
 }
 
-func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells, oaz *port.Cells) int32 {
+func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, spans *port.Cells, ans *port.Cells, rq *port.Cells, loc *port.Cells, bms *port.BitmapSet, mask *port.Cells, scr *port.Cells, epages *port.Cells, views *port.Cells, etext *port.Cells, feats *port.Cells, images *port.Cells, oruns *port.Cells, oblocks *port.Cells, olines *port.Cells, owords *port.Cells, osyms *port.Cells, oalts *port.Cells, words *port.Cells, lines *port.Cells, refs *port.Cells, tlines *port.Cells, cg *port.Cells, inks *port.Cells, comps *port.Cells, rules *port.Cells, prims *port.Cells, tpts *port.Cells, ws *port.Cells, sv *port.Cells, aux *port.Cells, snap *port.Cells, rtp *port.Cells, rn *port.Cells, ri *port.Cells, cs *port.Cells, vr *port.Cells, pc *port.Cells, sg *port.Cells, mem *port.Cells, s1 *port.Cells, s2 *port.Cells, s3 *port.Cells, s4 *port.Cells, s5 *port.Cells, s6 *port.Cells, ofz *port.Cells, oaz *port.Cells) int32 {
 	// `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
 	// before the write, having asked what the rounds up to there ask).
 	// The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
@@ -225,7 +314,7 @@ func RsPage(f int32, input int32, nbytes int32, policy int32, fuse int32, ans *p
 	var did int32 = plan.PuId(f, plan.PiDecode())
 	var ad int32 = plan.AnFind(ans, did)
 	if ad < 0 {
-		plan.RqDecode(rq, did, input, 0, nbytes, plan.FltNone(), f)
+		rsDecode(rq, did, input, nbytes, spans, f, 0)
 		return plan.UsRequests()
 	}
 	if plan.AnStatus(ans, ad) != plan.PsOk() {

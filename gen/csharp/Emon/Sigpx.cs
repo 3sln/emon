@@ -516,7 +516,7 @@ public static class Sigpx {
         int kind = 0;
         int conf = 0;
         int rgb = 0;
-        int ln = 0;
+        long ln = (long) 0;
         int r = 0;
         int g = 0;
         int b = 0;
@@ -548,14 +548,14 @@ public static class Sigpx {
         if (swc > SpPen()) {
             return 0;
         }
-        if ((ink * 100) > ((wpx * hpx) * SpCover())) {
+        if ((((long) ink) * 100) > ((((long) wpx) * ((long) hpx)) * ((long) SpCover()))) {
             return 0;
         }
         if (SpRuledInk(mask, zw, zh, wpx, ink) == 1) {
             return 0;
         }
-        ln = ink / sw;
-        if ((((ln * ln) / 4) * 100) < ((((wpx * wpx) + (hpx * hpx)) / 4) * Sigmark.SgTort())) {
+        ln = (long) (ink / sw);
+        if ((((ln * ln) / 4) * 100) < ((((((long) wpx) * ((long) wpx)) + (((long) hpx) * ((long) hpx))) / 4) * ((long) Sigmark.SgTort()))) {
             return 0;
         }
         if ((w <= Sigmark.SgIniW()) && (h <= Sigmark.SgIniH())) {

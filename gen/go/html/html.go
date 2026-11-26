@@ -1174,6 +1174,9 @@ func hBlock(t *strings.Builder, o int32, nodes *port.Cells, attrs *port.Cells, r
 		hAlignAttr(t, o, nodes, attrs, n)
 		hCommon(t, o, nodes, regions, pages, layout, n)
 		port.TextAscii(t, ">")
+		if (model.NodeFlags(nodes, n) & model.FlSeamGap()) != 0 {
+			port.TextAscii(t, "<span data-emon-seam-gap=\"true\">[unread]</span>")
+		}
 		hb = hBody(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d+1)
 		if hb > 0 {
 			hNl(t, o, d)

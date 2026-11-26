@@ -1,10 +1,12 @@
 (ns emon.seamstest
-  (:require [emon.lang :refer [I32 Cells]]
-            [emon.test :refer [deftest assert-eq new-cells TestT test-t]]
-            [emon.port :refer [cells-push cells-at cells-len]]
+  (:require [emon.lang :refer [I32 Cells Bitmap]]
+            [emon.test :refer [deftest assert-eq new-cells new-bitmap-set TestT test-t]]
+            [emon.port :refer [cells-push cells-at cells-set cells-len bms-put bitmap-set-u8]]
             [emon.evidence :refer [ln-new ln-count wd-new ol-new ol-set olf-conf]]
-            [emon.model :refer [page-new pk-image ledger-count]]
-            [emon.seams :refer [ms-run ms-ncc]]
+            [emon.model :refer [page-new pk-image ledger-count model-init model-check
+                                node-count node-kind node-flags nk-row nk-cell fl-seam-gap]]
+            [emon.seams :refer [ms-run ms-ncc ms-sample-cut]]
+            [emon.table :refer [tb-seam-gaps tb-emit]]
             [kin.lang :refer [defn let if do set while return + - * < ==]]))
 
 (defn ^I32 law-line [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 y ^I32 cp]
@@ -39,8 +41,9 @@
       (do (set r (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 -1 0))
           (ol-set ol r (olf-conf) 300)))
     (law-line fl fw et 2 400 82)
-    (assert-eq (ms-run 2 capture mask pages ol et fl fw (new-cells) (new-cells) ledger text decisions
+    (assert-eq (ms-run 2 capture mask pages ol et fl fw (new-cells) (new-cells) (new-cells) ledger text decisions
                        (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)) expected-drop "rows dropped")
     (assert-eq (ledger-count ledger) expected-drop "dropped rows retained in ledger")
     (if (== expected-kind 0)
@@ -57,6 +60,40 @@
 (deftest test-single-copy-match-is-ambiguous
   (law-seam (test-t) 2 0 1 0 0 0 2))
 
+(deftest test-a-linked-table-gap-emits-an-unread-row
+  (let [^Cells tables (new-cells) ^Cells seams (new-cells) ^Cells empty (new-cells)
+        ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
+        ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
+        ^Cells layout (new-cells) ^:mut ^I32 i 0]
+    (model-init nodes attrs regions text pages ledger layout)
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (while (< i 64) (do (cells-push tables 0) (set i (+ i 1))))
+    (set i 0)
+    (while (< i 2)
+      (do (let [^I32 base (* i 32)]
+            (cells-set tables base (+ i 1))
+            (cells-set tables (+ base 3) 450)
+            (cells-set tables (+ base 4) 1000)
+            (cells-set tables (+ base 5) 4)
+            (cells-set tables (+ base 8) 2))
+          (set i (+ i 1))))
+    (cells-set tables 18 2)
+    (cells-set tables 19 2)
+    (cells-set tables 53 1)
+    (cells-push seams 1) (cells-push seams 2) (cells-push seams 3)
+    (cells-push seams 0) (cells-push seams 0)
+    (tb-seam-gaps tables seams)
+    (tb-emit tables 0 0 empty empty empty empty empty empty nodes attrs regions text
+             (new-cells) (new-cells) ledger)
+    (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "the unread row is a valid Model")
+    (assert-eq (node-count nodes) 6 "one row with two cells")
+    (assert-eq (node-kind nodes 3) (nk-row) "the gap belongs to the table body")
+    (assert-eq (node-flags nodes 3) (fl-seam-gap) "the row is unread")
+    (assert-eq (node-kind nodes 4) (nk-cell) "the unread row keeps the table columns")
+    (assert-eq (node-flags nodes 4) (fl-seam-gap) "the first cell is unread")
+    (assert-eq (node-flags nodes 5) (fl-seam-gap) "the second cell is unread")))
+
 (deftest test-clean-break-and-clipped-gap
   (law-seam (test-t) 2 0 0 0 0 0 0)
   (law-seam (test-t) 2 0 0 0 1 0 3))
@@ -64,6 +101,74 @@
 (deftest test-scan-mode-and-born-digital-pass-through
   (law-seam (test-t) 1 0 4 0 0 0 0)
   (law-seam (test-t) 2 1 4 0 0 0 0))
+
+(deftest test-reversed-photos-use-the-unique-anchored-order
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells order (new-cells)
+        ^Cells decisions (new-cells) ^:mut ^I32 i 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (while (< i 4)
+      (do (law-line fl fw et 1 (+ 20 (* i 30)) (+ 65 i))
+          (law-line fl fw et 2 (+ 700 (* i 30)) (+ 65 i))
+          (set i (+ i 1))))
+    (law-line fl fw et 2 50 91)
+    (law-line fl fw et 1 450 92)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells))
+               4 "remove the leading duplicate lines of the later photo")
+    (assert-eq (cells-at order 0) 2 "source page two starts the document")
+    (assert-eq (cells-at order 1) 1 "source page one follows")
+    (assert-eq (cells-at decisions 0) 2 "the seam preserves upload provenance")))
+
+(deftest test-several-strokes-at-the-bitmap-edge-are-clipping-evidence
+  (let [^Bitmap pixels (bms-put (new-bitmap-set) 1 50 12 1)
+        ^Cells cuts (new-cells) ^:mut ^I32 x 0 ^:mut ^I32 y 0]
+    (while (< y 12)
+      (do (set x 0)
+          (while (< x 50)
+            (do (bitmap-set-u8 pixels x y 0 255) (set x (+ x 1))))
+          (set y (+ y 1))))
+    (set x 12)
+    (while (< x 40)
+      (do (bitmap-set-u8 pixels x 10 0 20)
+          (bitmap-set-u8 pixels x 11 0 20)
+          (set x (+ x 12))))
+    (ms-sample-cut pixels 1 cuts)
+    (assert-eq (cells-at cuts 0) 0 "blank top")
+    (assert-eq (cells-at cuts 1) 1 "glyphs continue through the lower edge")))
+
+(defn ^I32 law-band-line [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 y ^I32 n]
+  (let [^I32 line (ln-count fl)
+        ^:mut ^I32 i 0 ^:mut ^I32 first 0 ^:mut ^I32 word 0 ^:mut ^I32 start 0]
+    (while (< i n)
+      (do (set start (cells-len et))
+          (cells-push et (+ 65 i))
+          (if (== page 1) (cells-push et 46) (cells-push et 44))
+          (set word (wd-new fw page (+ 50 (* 30 i)) y (+ 75 (* 30 i)) (+ y 12)
+                            50 (+ y 12) 400 (+ y 12) 0 0 start 2 line 900 -1))
+          (if (== i 0) (set first word))
+          (set i (+ i 1))))
+    (ln-new fl page 50 y 400 (+ y 12) 50 (+ y 12) 400 (+ y 12) 0 0 first n)
+    (return 0)))
+
+(deftest test-an-ocr-variant-needs-context-before-deduplication
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 50 91)
+    (law-band-line fl fw et 1 900 3)
+    (law-band-line fl fw et 2 50 4)
+    (law-line fl fw et 2 500 92)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+               0 "punctuation and an extra tail token do not prove an overlap on their own")
+    (assert-eq (cells-at decisions 2) 2 "the OCR variant is still reported as a possible duplicate")))
 
 (deftest test-pixel-correlation-needs-contrast-and-positive-covariance
   (let [^Cells pixels (new-cells)]

@@ -2709,6 +2709,35 @@ public static class Scan {
         }
         return 0;
     }
+    internal static int ScMarkClipped(emon.Port.Cells olines, emon.Port.Cells owords, int line) {
+        int w = Evidence.OlGet(olines, line, Evidence.LhFirst());
+        int end = w + Evidence.OlGet(olines, line, Evidence.LhCount());
+        Evidence.OlSet(olines, line, Evidence.OlfConf(), Evidence.EvClippedConf());
+        while ((w >= 0) && (w < end)) {
+            ScFlag(owords, w, Evidence.OeClipped());
+            w += 1;
+        }
+        return 0;
+    }
+    public static int ScSetAsideCutInk(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, int n, emon.Port.Cells cuts) {
+        if (emon.Port.CellsLen(cuts) != n) {
+            return n;
+        }
+        int i = 0;
+        int kept = 0;
+        int line = 0;
+        while (i < n) {
+            line = emon.Port.CellsAt(scr, ScSelBase() + i);
+            if (emon.Port.CellsAt(cuts, i) == 1) {
+                ScMarkClipped(olines, owords, line);
+            } else {
+                ScSelSet(scr, kept, line);
+                kept += 1;
+            }
+            i += 1;
+        }
+        return kept;
+    }
     public static int ScSetAsideClips(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr, int n, int x0, int y0, int x1, int y1, int fourpx, int photos) {
         // Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
         // leave only complete lines in the selection consumed by structure and table recovery.
@@ -2757,12 +2786,7 @@ public static class Scan {
                 ScSelSet(scr, kept, line);
                 kept += 1;
             } else {
-                Evidence.OlSet(olines, line, Evidence.OlfConf(), Evidence.EvClippedConf());
-                w = first;
-                while (w < end) {
-                    ScFlag(owords, w, Evidence.OeClipped());
-                    w += 1;
-                }
+                ScMarkClipped(olines, owords, line);
             }
             i += 1;
         }

@@ -18,6 +18,9 @@ pub fn rs_jpeg() -> i32 {
 pub fn rs_tiff() -> i32 {
     return 3;
 }
+pub fn rs_images() -> i32 {
+    return 4;
+}
 pub fn rs_undecodable() -> i32 {
     return 21;
 }
@@ -53,7 +56,59 @@ pub fn rs_sniff(src: &crate::port::Src) -> i32 {
     if (a == 77) && ((b == 77) && ((c == 0) && (d == 42))) {
         return rs_tiff();
     }
+    if (n >= 8) && (a == 69) && (b == 77) && (c == 79) && (d == 78) && (ps_u8(src, 4) == 73) && (ps_u8(src, 5) == 77) && (ps_u8(src, 6) == 71) && (ps_u8(src, 7) == 49) {
+        return rs_images();
+    }
     return rs_none();
+}
+pub(crate) fn rs_u31(src: &crate::port::Src, at: i32) -> i32 {
+    let hi: i32 = ps_u8(src, at + 3);
+    if hi > 127 {
+        return -1;
+    }
+    return ps_u8(src, at) + (256 * ps_u8(src, at + 1)) + (65536 * ps_u8(src, at + 2)) + (16777216 * hi);
+}
+pub(crate) fn rs_image_plan(src: &crate::port::Src, mut spans: &mut crate::port::Cells) -> i32 {
+    // An image list is a header, a little-endian frame count and lengths, then original encoded images.
+    let nbytes: i32 = ps_len(src);
+    let mut count: i32 = 0;
+    let mut offset: i32 = 0;
+    let mut i: i32 = 0;
+    let mut length: i32 = 0;
+    let mut format: i32 = 0;
+    if nbytes < 16 {
+        return 0;
+    }
+    count = rs_u31(src, 8);
+    if (count < 1) || (count > ((nbytes - 12) / 4)) {
+        return 0;
+    }
+    if count > crate::port::limit_of(8) {
+        crate::port::limit_breach(8, count);
+    }
+    offset = 12 + (count * 4);
+    while i < count {
+        length = rs_u31(src, 12 + (i * 4));
+        if (length < 4) || (length > (nbytes - offset)) {
+            return 0;
+        }
+        format = afm_tiff();
+        if ps_u8(src, offset) == 137 {
+            format = afm_png();
+        }
+        if ps_u8(src, offset) == 255 {
+            format = afm_jpeg();
+        }
+        crate::port::cells_push(spans, offset);
+        crate::port::cells_push(spans, length);
+        crate::port::cells_push(spans, format);
+        offset += length;
+        i += 1;
+    }
+    if offset != nbytes {
+        return 0;
+    }
+    return count;
 }
 pub(crate) fn rs_frame_arg(info: i32, f: i32) -> i32 {
     // The `frame` field of the request for frame `f`: itself, or `-f - 1` for a header-only request.
@@ -104,6 +159,14 @@ pub(crate) fn rs_format_name(mut nodes: &mut crate::port::Cells, mut attrs: &mut
         text_append_cp(text, 102);
         text_append_cp(text, 102);
     }
+    if fmt == rs_images() {
+        text_append_cp(text, 105);
+        text_append_cp(text, 109);
+        text_append_cp(text, 97);
+        text_append_cp(text, 103);
+        text_append_cp(text, 101);
+        text_append_cp(text, 115);
+    }
     node_set_attr_text(nodes, attrs, 0, fk_format(), start, crate::port::cells_len(text) - start);
     return 0;
 }
@@ -128,7 +191,15 @@ pub(crate) fn rs_want_ocr(info: i32, policy: i32) -> i32 {
     }
     return 1;
 }
-pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut mask: &mut crate::port::Cells) -> i32 {
+pub(crate) fn rs_decode(mut rq: &mut crate::port::Cells, id: i32, input: i32, nbytes: i32, spans: &mut crate::port::Cells, f: i32, header: i32) -> i32 {
+    if crate::port::cells_len(spans) > 0 {
+        rq_decode(rq, id, input, crate::port::cells_at(spans, f * 3), crate::port::cells_at(spans, (f * 3) + 1), flt_none(), rs_frame_arg(header, 0));
+    } else {
+        rq_decode(rq, id, input, 0, nbytes, flt_none(), rs_frame_arg(header, f));
+    }
+    return 0;
+}
+pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut mask: &mut crate::port::Cells, mut spans: &mut crate::port::Cells) -> i32 {
     // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
     // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
     // in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
@@ -136,16 +207,27 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
     // status, or 0.
     let nbytes: i32 = ps_len(src);
     let a0: i32 = an_find(ans, 1);
+    let mut grouped: i32 = 0;
+    crate::port::cells_drop(spans, 0);
+    if fmt == rs_images() {
+        grouped = rs_image_plan(src, spans);
+        if grouped == 0 {
+            return rs_undecodable();
+        }
+    }
     if a0 < 0 {
-        rq_decode(rq, 1, input, 0, nbytes, flt_none(), rs_frame_arg(1, 0));
+        rs_decode(rq, 1, input, nbytes, spans, 0, 1);
         return us_requests();
     }
     if an_status(ans, a0) != ps_ok() {
         return rs_fail(ans, a0);
     }
-    let frames: i32 = an_arg(ans, a0, 5);
+    let mut frames: i32 = an_arg(ans, a0, 5);
     let mut f: i32 = 1;
     let mut asked: i32 = 0;
+    if grouped > 0 {
+        frames = grouped;
+    }
     if frames < 1 {
         return rs_undecodable();
     }
@@ -154,7 +236,7 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
     }
     while f < frames {
         if an_find(ans, f + 1) < 0 {
-            rq_decode(rq, f + 1, input, 0, nbytes, flt_none(), rs_frame_arg(1, f));
+            rs_decode(rq, f + 1, input, nbytes, spans, f, 1);
             asked = 1;
         }
         f += 1;
@@ -170,6 +252,9 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
         let a: i32 = an_find(ans, f + 1);
         if an_status(ans, a) != ps_ok() {
             return rs_fail(ans, a);
+        }
+        if (grouped > 0) && (an_arg(ans, a, 5) != 1) {
+            return rs_unsupported();
         }
         let w: i32 = an_arg(ans, a, 0);
         let h: i32 = an_arg(ans, a, 1);
@@ -192,7 +277,7 @@ pub fn rs_doc(src: &crate::port::Src, input: i32, fmt: i32, ans: &mut crate::por
     }
     return 0;
 }
-pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut ofz: &mut crate::port::Cells, mut oaz: &mut crate::port::Cells) -> i32 {
+pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, spans: &mut crate::port::Cells, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, loc: &mut crate::port::Cells, bms: &crate::port::BitmapSet, mut mask: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut etext: &mut crate::port::Cells, mut feats: &mut crate::port::Cells, mut images: &mut crate::port::Cells, mut oruns: &mut crate::port::Cells, mut oblocks: &mut crate::port::Cells, mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, mut osyms: &mut crate::port::Cells, mut oalts: &mut crate::port::Cells, mut words: &mut crate::port::Cells, mut lines: &mut crate::port::Cells, mut refs: &mut crate::port::Cells, mut tlines: &mut crate::port::Cells, mut cg: &mut crate::port::Cells, mut inks: &mut crate::port::Cells, mut comps: &mut crate::port::Cells, mut rules: &mut crate::port::Cells, mut prims: &mut crate::port::Cells, mut tpts: &mut crate::port::Cells, mut ws: &mut crate::port::Cells, mut sv: &mut crate::port::Cells, mut aux: &mut crate::port::Cells, mut snap: &mut crate::port::Cells, mut rtp: &mut crate::port::Cells, mut rn: &mut crate::port::Cells, mut ri: &mut crate::port::Cells, mut cs: &mut crate::port::Cells, mut vr: &mut crate::port::Cells, mut pc: &mut crate::port::Cells, mut sg: &mut crate::port::Cells, mut mem: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut ofz: &mut crate::port::Cells, mut oaz: &mut crate::port::Cells) -> i32 {
     // `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
     // before the write, having asked what the rounds up to there ask).
     // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
@@ -204,7 +289,7 @@ pub fn rs_page(f: i32, input: i32, nbytes: i32, policy: i32, fuse: i32, ans: &mu
     let did: i32 = pu_id(f, pi_decode());
     let ad: i32 = an_find(ans, did);
     if ad < 0 {
-        rq_decode(rq, did, input, 0, nbytes, flt_none(), f);
+        rs_decode(rq, did, input, nbytes, spans, f, 0);
         return us_requests();
     }
     if an_status(ans, ad) != ps_ok() {

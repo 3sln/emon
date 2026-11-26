@@ -153,7 +153,8 @@
   (let [command (into [bin "--out=bundle"
                        (if (= engine "tesseract") "--tesseract" (str "--ocr-engine=" engine))]
                       (concat args paths))
-        child (process command {:out :string :err :string :extra-env {"OMP_THREAD_LIMIT" "1"}})
+        child (process command {:out :string :err :string :shutdown destroy
+                                :extra-env {"OMP_THREAD_LIMIT" "1"}})
         result (deref child 180000 ::timeout)]
     (when (= result ::timeout)
       (destroy child)
@@ -233,11 +234,13 @@
                         (re-matches #"[-=*_.]{3,}" text)))))
         lines))
 
-(defn false-merges [case pieces dropped]
-  (let [order (:order case)]
+(defn false-merges [case pieces dropped seams]
+  (let [order (:order case)
+        predecessors (into {} (for [{:keys [left right kind]} seams :when (= kind "overlap")]
+                                [right left]))]
     (count (remove (fn [{:keys [page] :as row}]
-                     (when (> page 1)
-                       (let [left (pieces (order (- page 2)))
+                     (when-let [left-page (get predecessors page)]
+                       (let [left (pieces (order (dec left-page)))
                              right (pieces (order (dec page)))
                              shared (:shared (seam-gold left right))]
                          (some #(row-read? (get-in case [:rows %]) (get-in right [:boxes %]) [row]) shared))))
@@ -252,15 +255,19 @@
      :lost (if (seq lost) 1 0) :lost-flagged (if (and (seq lost) gap?) 1 0)
      :spurious-gap (if (and (empty? lost) gap?) 1 0)}))
 
-(defn run-case [bin engine mode case manifest]
+(defn run-case [bin engine mode case manifest tiff]
   (let [pieces (:pieces manifest)
         paths (mapv :path pieces)
         order (:order case)
         separate (mapv #(bundle bin engine [] [%]) paths)
         scan (bundle bin engine [] [(:scan manifest)])
-        actual (when (= mode "gate") (bundle bin engine [] [(:sequence manifest)]))
+        document (if tiff [(:sequence manifest)]
+                     (into ["--images"] (if-let [other (:other case)]
+                                          [(paths (first order)) other]
+                                          (mapv paths order))))
+        actual (when (= mode "gate") (bundle bin engine [] document))
         control (when (and actual (:careful case))
-                  (bundle bin engine ["--capture=scan"] [(:sequence manifest)]))
+                  (bundle bin engine ["--capture=scan"] document))
         text-of #(model-text (:model %))
         concat-text (str/join " " (map text-of (mapv separate order)))
         final-text (if actual (text-of actual) concat-text)
@@ -278,12 +285,14 @@
                      :total-after actual-total
                      :total-missing (if (and (pos? scan-total) (zero? actual-total)) 1 0)
                      :total-duplicates (if (pos? scan-total) (max 0 (- actual-total scan-total)) 0)
-                     :false-merges (false-merges case pieces (dropped-seam-reads (:model actual)))
+                     :false-merges (false-merges case pieces (dropped-seam-reads (:model actual)) seams)
                      :changed-clean (if (and control (some #{"clean" "different-pages"} [(:kind case)])
                                              (not= (:canonical actual) (:canonical control))) 1 0)
                      :changed-repeat (if (and control (some #{"identical" "repeat"} [(:kind case)])
                                               (not= (:canonical actual) (:canonical control))) 1 0)}]
-    {:words {:scan (score-words (:rows case) (text-of scan))
+    {:kind (:kind case)
+     :order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
+     :words {:scan (score-words (:rows case) (text-of scan))
              :concat (score-words (:rows case) concat-text)
              :actual (score-words (:rows case) final-text)}
      :checks case-checks
@@ -292,19 +301,27 @@
                                    (seam-gold left right))
                           a (inc (.indexOf order i))
                           b (inc (.indexOf order (inc i)))
-                          marks (keep :kind (filter #(and (= a (:left %)) (= b (:right %))) seams))]
+                          marks (keep (fn [{:keys [left right kind]}]
+                                        (when (or (and (= a left) (= b right))
+                                                  (and (= a right) (= b left) (= kind "possible-duplicate")))
+                                          kind))
+                                      seams)]
                       {:bucket (if (:careful case) (:kind case) (:bucket gold))
                        :concat (seam-score (:rows case) gold left right (before i) (before (inc i)) [])
                        :actual (seam-score (:rows case) gold left right (after i) (after (inc i)) marks)}))
                   (range) pieces (rest pieces))}))
 
 (defn sum-maps [maps] (apply merge-with + {} maps))
+(defn word-report [rows]
+  (into {} (for [kind [:scan :concat :actual]
+                 :let [{:keys [gold-words read-words matched-words]}
+                       (sum-maps (map #(get-in % [:words kind]) rows))]]
+             [kind {:precision (ratio matched-words read-words)
+                    :recall (ratio matched-words gold-words)}])))
+
 (defn report [rows]
-  {:words (into {} (for [kind [:scan :concat :actual]
-                         :let [{:keys [gold-words read-words matched-words]}
-                               (sum-maps (map #(get-in % [:words kind]) rows))]]
-                     [kind {:precision (ratio matched-words read-words)
-                            :recall (ratio matched-words gold-words)}]))
+  {:words (word-report (remove #(= "different-pages" (:kind %)) rows))
+   :historical-words (word-report rows)
    :checks (sum-maps (map :checks rows))
    :buckets (into (sorted-map)
                   (for [[bucket seams] (group-by :bucket (mapcat :seams rows))]
@@ -377,7 +394,8 @@
            :seed {:coerce :long} :n {:coerce :long} :set {:coerce :string}
            :pieces {:coerce :string} :ocr-engine {:coerce :string} :report {:coerce :boolean}
            :keep {:coerce :boolean} :baseline {:coerce :boolean} :clipped {:coerce :boolean} :help {:coerce :boolean}
-           :bin {:coerce :string}})
+           :tiff {:coerce :boolean} :bin {:coerce :string} :output {:coerce :string}
+           :ratchet {:coerce :string}})
 
 (defn driver [engine bin]
   (or bin (System/getenv "EMON_MULTISHOT_BIN")
@@ -405,23 +423,72 @@
   (let [buckets (map :actual (vals (:buckets result)))
         {:keys [unflagged dup lost lost-flagged spurious-gap]} (sum-maps buckets)
         {:keys [changed-clean changed-repeat total-missing total-duplicates false-merges]} (:checks result)
-        {:keys [actual scan]} (:words result)]
+        {:keys [actual concat scan]} (:words result)]
     (when (or (pos? unflagged) (and strict? (pos? dup)) (not= lost lost-flagged)
               (pos? spurious-gap) (pos? changed-clean) (pos? changed-repeat) (pos? total-missing)
               (pos? total-duplicates) (pos? false-merges)
+              (< (:recall actual) (:recall concat))
               (< (:recall actual) (- (:recall scan) 0.05))
               (< (:precision actual) (- (:precision scan) 0.04)))
       (fail "multishot acceptance failed (see per-bucket counts)"))))
 
+(defn compare-sweep! [reference current]
+  (when-not (= (select-keys reference [:seed :mode :input :cases])
+               (select-keys current [:seed :mode :input :cases]))
+    (fail "sweep ratchet requires the same seed, input mode and piece hashes"))
+  (doseq [[engine old] (:engines reference)]
+    (let [now (get-in current [:engines engine])]
+      (when-not now (fail (str "sweep ratchet is missing engine " (name engine))))
+      (doseq [metric [:precision :recall]]
+        (when (< (get-in now [:words :actual metric]) (get-in old [:words :actual metric]))
+          (fail (str "sweep ratchet: " (name engine) " word " (name metric) " fell"))))
+      (doseq [[bucket old-scores] (:buckets old)
+              metric [:dup :unflagged :spurious-gap]]
+        (when (> (get-in now [:buckets bucket :actual metric]) (get-in old-scores [:actual metric]))
+          (fail (str "sweep ratchet: " (name engine) " " (name bucket) " " (name metric) " rose")))))))
+
+(defn score-cases [score cases manifests checkpoint]
+  (if-not checkpoint
+    (mapv score cases manifests)
+    ;; Finish each pair before writing its scores or releasing the crop directory.
+    (let [rows (into []
+                     (mapcat (fn [batch]
+                               (let [jobs (mapv (fn [[i case manifest]]
+                                                  (future
+                                                    (try {:index i :score (score case manifest)}
+                                                         (catch Exception e {:index i :error (ex-message e)}))))
+                                                batch)
+                                     results (mapv deref jobs)]
+                                 (doseq [row results] (checkpoint row))
+                                 results)))
+                     (partition-all 2 (map vector (range) cases manifests)))]
+      (when-let [errors (seq (keep :error rows))]
+        (fail (str (count errors) " sweep cases failed. First error: " (first errors))))
+      (mapv :score rows))))
+
+(defn crop-cases [python run-dir cases tiff]
+  (let [jobs (mapv (fn [i case]
+                     [(assoc case :tiff (boolean tiff))
+                      (str (fs/create-dir (fs/path run-dir (str i))))])
+                   (range) cases)
+        input (str/join "\n" (map json/generate-string jobs))
+        output (:out (shell {:in input :out :string :shutdown destroy}
+                            python "tools/oracle/multishot/pieces.py" "--batch"))
+        manifests (mapv #(json/parse-string % true) (str/split-lines output))]
+    (when-not (= (count cases) (count manifests))
+      (fail "crop generator returned the wrong number of manifests"))
+    manifests))
+
 (defn main []
-  (let [{:keys [ci sweep seed n set pieces ocr-engine report keep baseline clipped help bin]}
+  (let [{:keys [ci sweep seed n set pieces ocr-engine report keep baseline clipped help tiff bin output ratchet]}
         (cli/parse-opts *command-line-args* {:spec spec :restrict true})
-        result-file (fs/path scratch "report.json")]
+        result-file (if output (fs/path output) (fs/path scratch "report.json"))]
     (cond
-      help (println "bb multishot [--ci | --sweep | --clipped] [--seed N] [--n N] [--set sroie,cord] [--pieces 2-5] [--ocr-engine tesseract|apple-vision|ppocr|all] [--baseline] [--report] [--keep] [--bin FILE]")
+      help (println "bb multishot [--ci | --sweep | --clipped] [--seed N] [--n N] [--set sroie,cord] [--pieces 2-5] [--ocr-engine tesseract|apple-vision|ppocr|all] [--baseline] [--report] [--keep] [--tiff] [--bin FILE] [--output FILE] [--ratchet FILE]")
       report (print (slurp (str result-file)))
       :else
-      (let [seed (or seed (if ci 917 (.nextLong (java.util.Random.))))
+      (let [reference (when ratchet (read-json ratchet))
+            seed (or seed (:seed reference) (if ci 917 (.nextLong (java.util.Random.))))
             rng (java.util.Random. seed)
             sets (str/split (or set "sroie,cord") #",")
             [lo hi] (mapv parse-long (str/split (or pieces (if ci "2" "2-5")) #"-"))
@@ -435,6 +502,7 @@
             per-set (if (and ci (nil? n) (nil? set)) [12 4]
                         (counts sets (or n (if sweep 200 16))))]
         (when (or (> (count (filter identity [ci sweep clipped])) 1) (and clipped baseline)
+                  (and ratchet (or (not sweep) baseline (= "baseline" (:mode reference))))
                   (some #(not (#{"sroie" "cord"} %)) sets)
                   (not (and lo hi (<= 2 lo hi 5))) (some #(not (some #{%} engines)) selected)
                   (some #(not (pos? %)) per-set))
@@ -445,17 +513,12 @@
               mode (cond clipped "clipped" baseline "baseline" :else "gate")]
           (fs/create-dirs scratch)
           (let [run-dir (fs/create-temp-dir {:dir scratch :prefix "run-"})
-                python (or (System/getenv "EMON_MULTISHOT_PYTHON") "python3")]
+                python (or (System/getenv "EMON_MULTISHOT_PYTHON") "python3")
+                checkpoint-file (str result-file ".cases.jsonl")]
             (try
               (println "multishot seed" seed "mode" mode "cases" (count cases) "engines" selected)
-              (let [manifests
-                    (mapv (fn [i case]
-                            (let [dir (fs/create-dir (fs/path run-dir (str i)))]
-                              (json/parse-string
-                               (:out (shell {:in (json/generate-string case) :out :string}
-                                            python "tools/oracle/multishot/pieces.py" (str dir)))
-                               true)))
-                          (range) cases)
+              (when sweep (spit checkpoint-file ""))
+              (let [manifests (crop-cases python run-dir cases tiff)
                     hashes (mapv (fn [case manifest]
                                    {:id (:id case) :kind (:kind case) :order (:order case)
                                     :pieces (if clipped
@@ -465,22 +528,35 @@
                     results
                     (into {} (for [engine selected
                                    :let [bin (driver engine bin)
-                                         rows (mapv (fn [case manifest]
-                                                      (binding [*out* *err*]
-                                                        (println engine "seed" seed "case" (:id case) (:kind case)))
+                                         rows (score-cases (fn [case manifest]
+                                                      (locking *err*
+                                                        (binding [*out* *err*]
+                                                          (println engine "seed" seed "case" (:id case) (:kind case))))
                                                       (try
                                                         (if clipped
                                                           (clip-metrics bin engine manifest)
-                                                          (run-case bin engine mode case manifest))
+                                                          (run-case bin engine mode case manifest tiff))
                                                         (catch Exception e
                                                           (fail (str "seed " seed " case " (:id case) " " (:kind case) ": " (ex-message e))))))
-                                                    cases manifests)]]
+                                                    cases manifests
+                                                    (when sweep
+                                                      (fn [{:keys [index] :as row}]
+                                                        (spit checkpoint-file
+                                                              (str (json/generate-string
+                                                                    (assoc (dissoc row :index)
+                                                                           :engine engine :seed seed
+                                                                           :case (nth hashes index)))
+                                                                   "\n")
+                                                              :append true))))]]
                                [engine (if clipped
-                                         (clip-report rows)
+                                         (cond-> (clip-report rows) keep (assoc :case-scores rows))
                                          (cond-> (multishot/report rows)
-                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows ci)))))]))]
-                (let [output (json/generate-string {:seed seed :mode mode :cases hashes :engines results} {:pretty true})]
-                  (spit (str result-file) (str output "\n"))
+                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows ci)))
+                                           keep (assoc :case-scores rows)))]))]
+                (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
+                            :cases hashes :engines results}]
+                  (spit (str result-file) (str (json/generate-string data {:pretty true}) "\n"))
+                  (when reference (compare-sweep! reference (json/parse-string (json/generate-string data) true)))
                   (println (json/generate-string results {:pretty true})))
                 (when (and (or ci sweep) (not baseline))
                   (doseq [[engine summary] results]

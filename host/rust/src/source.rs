@@ -152,6 +152,30 @@ impl Input {
     pub fn bytes(b: Vec<u8>) -> Input {
         Input::new(b)
     }
+
+    /// Group single-frame images as one document, in upload order.
+    /// The engine reads the original encoded images through their sources.
+    pub fn images(images: impl IntoIterator<Item = Input>) -> io::Result<Input> {
+        let images: Vec<_> = images.into_iter().collect();
+        let invalid = || io::Error::new(io::ErrorKind::InvalidInput, "expected a nonempty list of single-frame image inputs within the input size limit");
+        let mut end = 12usize.checked_add(images.len().checked_mul(4).ok_or_else(invalid)?)
+            .filter(|n| *n <= i32::MAX as usize && !images.is_empty()).ok_or_else(invalid)? as u64;
+        let mut header = Vec::with_capacity(end as usize);
+        header.extend_from_slice(b"EMONIMG1");
+        header.extend_from_slice(&(images.len() as u32).to_le_bytes());
+        let mut frames = Vec::with_capacity(images.len());
+        for input in images {
+            let len = input.source.len();
+            if input.password.is_some() || len < 4 {
+                return Err(invalid());
+            }
+            let start = end;
+            end = end.checked_add(len).filter(|n| *n <= i32::MAX as u64).ok_or_else(invalid)?;
+            header.extend_from_slice(&(len as u32).to_le_bytes());
+            frames.push((start, input.source));
+        }
+        Ok(Input::new(ImageSource { header, frames, end }))
+    }
     pub fn seekable<R: Read + Seek + Send + 'static>(r: R) -> io::Result<Input> {
         Ok(Input::new(SeekSource::new(r)?))
     }
@@ -162,6 +186,32 @@ impl Input {
     pub fn with_password(mut self, password: impl Into<Vec<u8>>) -> Input {
         self.password = Some(password.into());
         self
+    }
+}
+
+struct ImageSource {
+    header: Vec<u8>,
+    frames: Vec<(u64, Arc<dyn ByteSource>)>,
+    end: u64,
+}
+
+impl ByteSource for ImageSource {
+    fn len(&self) -> u64 {
+        self.end
+    }
+
+    fn read_at(&self, off: u64, buf: &mut [u8]) -> io::Result<usize> {
+        let index = self.frames.partition_point(|(start, _)| *start <= off);
+        if index == 0 {
+            return read_slice(&self.header, off, buf);
+        }
+        let (start, source) = &self.frames[index - 1];
+        let end = self.frames.get(index).map_or(self.end, |(start, _)| *start);
+        let len = buf.len().min(end.saturating_sub(off) as usize);
+        if len == 0 {
+            return Ok(0);
+        }
+        source.read_at(off - start, &mut buf[..len])
     }
 }
 

@@ -1664,17 +1664,25 @@ func asDoRender(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages
 	return 0
 }
 
-func asDoCrop(nodes *port.Cells, attrs *port.Cells, pages *port.Cells, cand *port.Cells, cbytes *port.Buf, assets *port.Cells, uses *port.Cells, abytes *port.Buf, maxbytes int32, totbytes int32, n int32, pg int32, x0 int32, y0 int32, x1 int32, y1 int32, maxpix int32, input int32, nbytes int32, rfrom int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, ws *port.Cells, z *port.Buf, rows *port.Cells, tmp *port.Cells, rec *port.Cells, box *port.Cells) int32 {
+func asDoCrop(nodes *port.Cells, attrs *port.Cells, pages *port.Cells, cand *port.Cells, cbytes *port.Buf, assets *port.Cells, uses *port.Cells, abytes *port.Buf, maxbytes int32, totbytes int32, n int32, pg int32, x0 int32, y0 int32, x1 int32, y1 int32, maxpix int32, input int32, nbytes int32, rfrom int32, spans *port.Cells, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, ws *port.Cells, z *port.Buf, rows *port.Cells, tmp *port.Cells, rec *port.Cells, box *port.Cells) int32 {
 	// Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of
 	// the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.
 	var pgi int32 = pg - 1
 	var id int32 = plan.AuId(plan.AuDecode() + pgi)
 	var a int32 = plan.AnFind(ans, id)
+	var format int32 = rfrom
 	if a < 0 {
 		if plan.RecFind(rq, id) < 0 {
-			plan.RqDecode(rq, id, input, 0, nbytes, plan.FltNone(), pgi)
+			if port.CellsLen(spans) > 0 {
+				plan.RqDecode(rq, id, input, port.CellsAt(spans, pgi*3), port.CellsAt(spans, (pgi*3)+1), plan.FltNone(), 0)
+			} else {
+				plan.RqDecode(rq, id, input, 0, nbytes, plan.FltNone(), pgi)
+			}
 		}
 		return 1
+	}
+	if port.CellsLen(spans) > 0 {
+		format = port.CellsAt(spans, (pgi*3)+2)
 	}
 	if plan.AnOk(ans, a) == 0 {
 		asSetNoasset(nodes, attrs, n, model.NzCodec())
@@ -1730,12 +1738,12 @@ func asDoCrop(nodes *port.Cells, attrs *port.Cells, pages *port.Cells, cand *por
 		}
 		y += 1
 	}
-	asEmitRow(cand, row, cbytes, pic, maxpix, model.PageDpi(pages, pgi)*100, 0, rfrom, model.AoCropped(), ws, z, rows, tmp, rec)
+	asEmitRow(cand, row, cbytes, pic, maxpix, model.PageDpi(pages, pgi)*100, 0, format, model.AoCropped(), ws, z, rows, tmp, rec)
 	asAdmit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, box, 0)
 	return 0
 }
 
-func AsRunFigures(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, cand *port.Cells, cbytes *port.Buf, assets *port.Cells, uses *port.Cells, abytes *port.Buf, maxbytes int32, totbytes int32, sigs int32, dpi int32, maxpix int32, input int32, nbytes int32, rfrom int32, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, ws *port.Cells, z *port.Buf, rows *port.Cells, tmp *port.Cells, rec *port.Cells, box *port.Cells) int32 {
+func AsRunFigures(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pages *port.Cells, cand *port.Cells, cbytes *port.Buf, assets *port.Cells, uses *port.Cells, abytes *port.Buf, maxbytes int32, totbytes int32, sigs int32, dpi int32, maxpix int32, input int32, nbytes int32, rfrom int32, spans *port.Cells, ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, ws *port.Cells, z *port.Buf, rows *port.Cells, tmp *port.Cells, rec *port.Cells, box *port.Cells) int32 {
 	// The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).
 	// `dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`
 	// asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the
@@ -1841,7 +1849,7 @@ func AsRunFigures(nodes *port.Cells, attrs *port.Cells, regions *port.Cells, pag
 					asDoRender(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, dpi, maxpix, input, ans, rq, bms, ws, z, rows, tmp, rec, box)
 				}
 				if src == 3 {
-					asDoCrop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, ans, rq, bms, ws, z, rows, tmp, rec, box)
+					asDoCrop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, spans, ans, rq, bms, ws, z, rows, tmp, rec, box)
 				}
 			}
 		}

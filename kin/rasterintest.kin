@@ -15,7 +15,7 @@
             [emon.upscale :refer [ri-upscale rv-upscaled]]
             [emon.model :refer [model-init node-flags node-attr-int-or page-count page-number page-w page-h
                                 page-kind page-dpi page-px-w page-px-h pk-image fl-dpi-unknown fk-pages]]
-            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-doc rs-page rs-cpt rs-undecodable
+            [emon.rasterin :refer [rs-sniff rs-none rs-png rs-jpeg rs-tiff rs-images rs-doc rs-page rs-cpt rs-undecodable
                                    rs-unsupported]]
             [kin.lang :refer [defn return let set while if do comment
                               + - * < > <= >= == != and or quot]]))
@@ -39,12 +39,24 @@
         ^Cells ledger (new-cells)
         ^Cells layout (new-cells)]
     (model-init nodes attrs regions text pages ledger layout)
-    (return (rs-doc (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) ans rq nodes attrs text pages mask))))
+    (return (rs-doc (src-of-blob (hex-blob "49492a0008000000")) 7 (rs-tiff) ans rq nodes attrs text pages mask (new-cells)))))
+
+(deftest test-image-list-decodes-each-member-at-its-own-offset
+  (let [^Src source (src-of-blob (hex-blob "454d4f4e494d4731020000000400000008000000ffd8ffe089504e470d0a1a0a"))
+        ^Cells ans (new-cells) ^Cells rq (new-cells) ^Cells pages (new-cells) ^Cells spans (new-cells)]
+    (assert-eq (rs-sniff source) (rs-images) "image list header")
+    (an-decode ans 1 60 80 3 30000 0 1)
+    (assert-eq (rs-doc source 7 (rs-images) ans rq (new-cells) (new-cells) (new-cells) pages (new-cells) spans)
+               (us-requests) "only the second member needs a header")
+    (assert-eq (rec-id rq 0) 2 "second page request")
+    (assert-eq (cells-at spans 0) 20 "first encoded image starts after the directory")
+    (assert-eq (cells-at spans 3) 24 "second encoded image starts after the first")
+    (assert-eq (cells-at spans 4) 8 "second encoded image retains its original length")))
 
 (defn ^I32 page-pol [^I32 f ^Cells ans ^Cells rq ^I32 policy ^Cells loc ^Cells mask ^Cells et ^Cells wd ^Cells ln
                      ^Cells oruns ^Cells olines ^Cells owords]
   (comment "no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D564: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)")
-  (return (rs-page f 7 8 policy 0 ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
+  (return (rs-page f 7 8 policy 0 (new-cells) ans rq loc (new-bitmap-set) mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
                    oruns (new-cells) olines owords (new-cells) (new-cells) wd ln
                    (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
@@ -245,7 +257,7 @@
 
 (defn ^I32 page-px [^Cells ans ^:mut ^Cells rq ^BitmapSet bms ^I32 fuse ^:mut ^Cells mask ^Cells et ^Cells wd ^Cells ln ^Cells oruns ^Cells olines ^Cells owords]
   (comment "Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.")
-  (return (rs-page 0 7 8 2 fuse ans rq (new-cells) bms mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
+  (return (rs-page 0 7 8 2 fuse (new-cells) ans rq (new-cells) bms mask (new-cells) (new-cells) (new-cells) et (new-cells) (new-cells)
                    oruns (new-cells) olines owords (new-cells) (new-cells) wd ln
                    (new-cells) (new-cells) (new-cells)
                    (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)

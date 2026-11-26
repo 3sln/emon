@@ -36,7 +36,7 @@ export function urlSource(
   url: string | URL,
   options?: { fetch?: typeof fetch; headers?: Record<string, string>; signal?: AbortSignal; fetchOptions?: RequestInit },
 ): Promise<ByteSource>;
-export function toSource(input: Input, options?: { lazy?: boolean; max?: number }): Promise<ByteSource>;
+export function toSource(input: Input | readonly Input[], options?: { lazy?: boolean; max?: number }): Promise<ByteSource>;
 
 /** A request for the OCR port (`ports.ocr`): see `@3sln/emon/tesseract`. */
 export interface OcrRequest {
@@ -193,7 +193,7 @@ export class Emon {
     defaults?: { chunk?: number },
   ): Promise<Emon>;
   readonly defaults: { chunk?: number };
-  convert(input: Input | InputWithPassword, options?: ConvertOptions): Promise<Model>;
+  convert(input: Input | InputWithPassword | readonly Input[], options?: ConvertOptions): Promise<Model>;
   /** Stage 0 of each input, cheap. */
   intake(inputs: Input | InputWithPassword | Array<Input | InputWithPassword>, options?: ConvertOptions): Promise<IntakeResult[]>;
 }

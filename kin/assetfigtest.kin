@@ -196,7 +196,7 @@
     (if (== stage 1)
       (do (an-decode ans (au-id (au-decode)) 306 396 3 3600 0 1)
           (af-fill (bms-put bms (au-id (au-decode)) 306 396 3) 306 396 3)))
-    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 (afm-png)
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 (afm-png) (new-cells)
                     ans rq bms ws z rows tmp rec box)
     (cells-drop res 0)
     (cells-push res (cells-len rq))
@@ -314,7 +314,7 @@
           (af-fill (bms-put bms (au-id n) (cells-at rc 2) (cells-at rc 3) 3) (cells-at rc 2) (cells-at rc 3) 3)))
     (if (== stage 2)
       (an-fail ans (pk-crop) (au-id n) (ps-unsupported)))
-    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 dpi maxpix 3 1234 0
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 dpi maxpix 3 1234 0 (new-cells)
                     ans rq bms ws z rows tmp rec box)
     (cells-drop res 0)
     (cells-push res (rec-count rq))
@@ -435,7 +435,7 @@
       (set n (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 10000 10000 30000 30000)))
     (node-set-attr-int nodes attrs n (fk-image) 0)
     (af-boxcells box)
-    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0 (new-cells)
                     ans rq bms ws z rows tmp rec box)
     (cells-drop res 0)
     (cells-push res (rec-count rq))
@@ -502,7 +502,7 @@
     (set f2 (af-node nodes regions 0 (nk-figure) (fg-unknown) 1 7200 10000 30000 30000))
     (af-node nodes regions f2 (nk-caption) 0 1 7200 32000 20000 34000)
     (af-boxcells box)
-    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0 (new-cells)
                     ans rq bms ws z rows tmp rec box)
     (cells-drop res 0)
     (cells-push res (rec-count rq))
@@ -557,7 +557,7 @@
     (af-fill (bms-put bms (au-id b) 105 105 3) 105 105 3)
     (an-render ans (au-id d) 110 110 3 150)
     (af-fill (bms-put bms (au-id d) 110 110 3) 110 110 3)
-    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0
+    (as-run-figures nodes attrs regions pages cand cbytes assets uses abytes 4194304 33554432 0 150 4194304 3 1234 0 (new-cells)
                     ans rq bms ws z rows tmp rec box)
     (cells-drop res 0)
     (cells-push res (cells-len rq))

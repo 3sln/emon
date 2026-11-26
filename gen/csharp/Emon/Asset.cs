@@ -1575,17 +1575,25 @@ public static class Asset {
         AsAdmit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, box, d);
         return 0;
     }
-    internal static int AsDoCrop(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int n, int pg, int x0, int y0, int x1, int y1, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
+    internal static int AsDoCrop(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int n, int pg, int x0, int y0, int x1, int y1, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells spans, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
         // Node `n` cut from its raster frame: the frame's `decode` request when no answer is in (answers 1), else the rectangle of
         // the decoded pixels the region maps to (floor at the low edge, ceiling at the high, exact samples), or the reason.
         int pgi = pg - 1;
         int id = Plan.AuId(Plan.AuDecode() + pgi);
         int a = Plan.AnFind(ans, id);
+        int format = rfrom;
         if (a < 0) {
             if (Plan.RecFind(rq, id) < 0) {
-                Plan.RqDecode(rq, id, input, 0, nbytes, Plan.FltNone(), pgi);
+                if (emon.Port.CellsLen(spans) > 0) {
+                    Plan.RqDecode(rq, id, input, emon.Port.CellsAt(spans, pgi * 3), emon.Port.CellsAt(spans, (pgi * 3) + 1), Plan.FltNone(), 0);
+                } else {
+                    Plan.RqDecode(rq, id, input, 0, nbytes, Plan.FltNone(), pgi);
+                }
             }
             return 1;
+        }
+        if (emon.Port.CellsLen(spans) > 0) {
+            format = emon.Port.CellsAt(spans, (pgi * 3) + 2);
         }
         if (Plan.AnOk(ans, a) == 0) {
             AsSetNoasset(nodes, attrs, n, Model.NzCodec());
@@ -1641,11 +1649,11 @@ public static class Asset {
             }
             y += 1;
         }
-        AsEmitRow(cand, row, cbytes, pic, maxpix, Model.PageDpi(pages, pgi) * 100, 0, rfrom, Model.AoCropped(), ws, z, rows, tmp, rec);
+        AsEmitRow(cand, row, cbytes, pic, maxpix, Model.PageDpi(pages, pgi) * 100, 0, format, Model.AoCropped(), ws, z, rows, tmp, rec);
         AsAdmit(nodes, attrs, n, cand, row, cbytes, assets, uses, abytes, maxbytes, totbytes, box, 0);
         return 0;
     }
-    public static int AsRunFigures(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int sigs, int dpi, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
+    public static int AsRunFigures(emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells pages, emon.Port.Cells cand, emon.Port.Buf cbytes, emon.Port.Cells assets, emon.Port.Cells uses, emon.Port.Buf abytes, int maxbytes, int totbytes, int sigs, int dpi, int maxpix, int input, int nbytes, int rfrom, emon.Port.Cells spans, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms, emon.Port.Cells ws, emon.Port.Buf z, emon.Port.Cells rows, emon.Port.Cells tmp, emon.Port.Cells rec, emon.Port.Cells box) {
         // The asset stage at the level `figures`, in node-id order: SPEC 10.11's sources for every figure and seal (see above).
         // `dpi` and `maxpix` are `asset-dpi` and `asset-pixels`; `input` and `nbytes` the input's index and length (a `decode`
         // asks for the whole file); `rfrom` is 0 for a PDF and the `afm` of the format for a raster input (its frames are the
@@ -1751,7 +1759,7 @@ public static class Asset {
                         AsDoRender(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, dpi, maxpix, input, ans, rq, bms, ws, z, rows, tmp, rec, box);
                     }
                     if (src == 3) {
-                        AsDoCrop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, ans, rq, bms, ws, z, rows, tmp, rec, box);
+                        AsDoCrop(nodes, attrs, pages, cand, cbytes, assets, uses, abytes, maxbytes, totbytes, n, rpg, rx0, ry0, rx1, ry1, maxpix, input, nbytes, rfrom, spans, ans, rq, bms, ws, z, rows, tmp, rec, box);
                     }
                 }
             }

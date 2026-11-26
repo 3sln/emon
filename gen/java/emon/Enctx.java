@@ -222,6 +222,8 @@ public final class Enctx {
         public emon.Port.Cells pscr = emon.Port.newCells();
         public emon.Port.Cells mspatch = emon.Port.newCells();
         public emon.Port.Cells mspixel = emon.Port.newCells();
+        public emon.Port.Cells mscuts = emon.Port.newCells();
+        public emon.Port.Cells spans = emon.Port.newCells();
         public int kind = 0;
         public int ifmt = 0;
         public int ipages = 0;
@@ -304,6 +306,8 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.pscr, this.pscr);
             emon.Port.cellsCopyInto(c.mspatch, this.mspatch);
             emon.Port.cellsCopyInto(c.mspixel, this.mspixel);
+            emon.Port.cellsCopyInto(c.mscuts, this.mscuts);
+            emon.Port.cellsCopyInto(c.spans, this.spans);
             c.kind = this.kind;
             c.ifmt = this.ifmt;
             c.ipages = this.ipages;
@@ -456,6 +460,9 @@ public final class Enctx {
         public emon.Port.Cells msdrop = emon.Port.newCells();
         public emon.Port.Cells mslines = emon.Port.newCells();
         public emon.Port.Cells mswords = emon.Port.newCells();
+        public emon.Port.Cells msorder = emon.Port.newCells();
+        public emon.Port.Cells msincoming = emon.Port.newCells();
+        public emon.Port.Cells msoutgoing = emon.Port.newCells();
         public emon.Port.Cells cd = emon.Port.newCells();
         public emon.Port.Cells sl = emon.Port.newCells();
         public emon.Port.Cells gr = emon.Port.newCells();
@@ -607,6 +614,9 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.msdrop, this.msdrop);
             emon.Port.cellsCopyInto(c.mslines, this.mslines);
             emon.Port.cellsCopyInto(c.mswords, this.mswords);
+            emon.Port.cellsCopyInto(c.msorder, this.msorder);
+            emon.Port.cellsCopyInto(c.msincoming, this.msincoming);
+            emon.Port.cellsCopyInto(c.msoutgoing, this.msoutgoing);
             emon.Port.cellsCopyInto(c.cd, this.cd);
             emon.Port.cellsCopyInto(c.sl, this.sl);
             emon.Port.cellsCopyInto(c.gr, this.gr);

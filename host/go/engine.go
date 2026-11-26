@@ -1018,6 +1018,8 @@ func intakeOf(doc *enctx.Doc, n uint64) Intake {
 		format = "png"
 	case engine.EnFmtJpeg():
 		format = "jpeg"
+	case engine.EnFmtImages():
+		format = "images"
 	}
 	return Intake{Format: format, VersionMajor: doc.Imajor, VersionMinor: doc.Iminor, Pages: int(max(doc.Ipages, 0)), Encrypted: doc.Ienc == 1, Bytes: n}
 }
@@ -1051,7 +1053,7 @@ func finished(r int32, doc *enctx.Doc, m *arenas, info Intake, opts Options) out
 		// `figures` leaves the asset stage to the asset unit (D351): what it needs
 		var pending *pendingAssets
 		if r == 1 {
-			pending = &pendingAssets{doc.Cand, doc.Cbytes, doc.Rfrom}
+			pending = &pendingAssets{doc.Cand, doc.Cbytes, doc.Rfrom, doc.Spans}
 		}
 		return outcome{built: &built{arenas: m, evidence: evs, intake: info, pending: pending}}
 	case 2:
@@ -1112,7 +1114,7 @@ func boolInt(b bool) int32 {
 // caller made. It writes the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it
 // has no answer to into rq (then its results are meaningless: the loop answers and runs it again).
 func assetStageFigures(m *arenas, p *pendingAssets, opts Options, input, nbytes int32, ans, rq *port.Cells, bms *port.BitmapSet) {
-	engine.EnAssetFigures(cfgOf(opts), m, p.cand, p.cbytes, p.rfrom, enctx.NewPass(), input, nbytes, ans, rq, bms)
+	engine.EnAssetFigures(cfgOf(opts), m, p.cand, p.cbytes, p.rfrom, p.spans, enctx.NewPass(), input, nbytes, ans, rq, bms)
 }
 
 // dispatch is ONE ATTEMPT OF THE DOCUMENT PASS for one input, from scratch on a fresh view and fresh contexts: kin's `EnAttempt` (a PNG, JPEG or
@@ -1236,6 +1238,7 @@ type pendingAssets struct {
 	cand   *port.Cells
 	cbytes *port.Buf
 	rfrom  int32
+	spans  *port.Cells
 }
 
 type outcome struct {
@@ -1689,7 +1692,7 @@ phases:
 					}
 				}()
 				t := b.arenas.Clone()
-				p := &pendingAssets{cloneCells(pend.cand), cloneBuf(pend.cbytes), pend.rfrom}
+				p := &pendingAssets{cloneCells(pend.cand), cloneBuf(pend.cbytes), pend.rfrom, pend.spans}
 				assetStageFigures(t, p, opts, int32(idx), int32(size), answers, rq, bms)
 				if port.CellsLen(rq) > 0 {
 					return port.PlanUnitRequests

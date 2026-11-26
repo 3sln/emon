@@ -1,13 +1,12 @@
-;; Document-space seams between consecutive raster pages. The page units have
-;; already withheld clipped OCR lines. Page positions and source indices stay
-;; intact so the same table continuation runs across both raster and PDF pages.
+;; Document-space seams between raster pages. The page units have already
+;; withheld clipped OCR lines. Evidence uses original source page numbers.
 (ns emon.seams
-  (:require [emon.lang :refer [I32 I64 Cells Text Bitmap emit-ascii i64 i32]]
+  (:require [emon.lang :refer [I32 I64 Cells Text Bitmap emit-ascii i64 i32 mul64]]
             [emon.port :refer [cells-at cells-set cells-push cells-drop cells-len cells-swap text-i32
                                bitmap-w bitmap-h bitmap-channels bitmap-u8]]
             [emon.evidence :refer [ln-count ln-get wd-get ol-count ol-get olf-conf lf-order
                                    hd-page hd-tstart hd-tlen lh-first lh-count lh-x0 lh-x1 lh-y0 lh-y1]]
-            [emon.model :refer [page-h ledger-add ledger-set-text text-append-cp sr-ocr dr-seam-duplicate]]
+            [emon.model :refer [page-h page-px-h ledger-add ledger-set-text text-append-cp sr-ocr dr-seam-duplicate]]
             [emon.player :refer [fw-count fw-copy-word fl-copy-line]]
             [kin.lang :refer [defn return let set while if do comment + - * quot rem < > <= >= == != and or]]))
 
@@ -17,11 +16,11 @@
   (if (or (== cp 45) (== cp 42) (== cp 61) (== cp 95) (== cp 46) (== cp 8212)) (return 1))
   (return 0))
 
-(defn ^I32 ms-index [^Cells fl ^Cells fw ^Cells et ^:mut ^Cells keys ^:mut ^Cells codepoints]
+(defn ^I32 ms-index [^Cells fl ^Cells fw ^Cells et ^I32 np ^:mut ^Cells keys ^:mut ^Cells codepoints]
   (comment "Each flow line has a normalized text span and a kind: blank 0, separator 1, or content 2.")
   (let [^:mut ^I32 line 0 ^:mut ^I32 word 0 ^:mut ^I32 stop 0
         ^:mut ^I32 start 0 ^:mut ^I32 pos 0 ^:mut ^I32 end 0
-        ^:mut ^I32 cp 0 ^:mut ^I32 kind 0]
+        ^:mut ^I32 cp 0 ^:mut ^I32 kind 0 ^:mut ^I32 at 0]
     (while (< line (ln-count fl))
       (do (set start (cells-len codepoints))
           (set kind 0)
@@ -44,6 +43,14 @@
           (cells-push keys (- (cells-len codepoints) start))
           (cells-push keys kind)
           (set line (+ line 1))))
+    (while (< at np)
+      (do (cells-push keys line) (cells-push keys 0) (set at (+ at 1))))
+    (set line 0)
+    (while (< line (ln-count fl))
+      (do (set at (+ (* (ln-count fl) 3) (* (- (ln-get fl line (hd-page)) 1) 2)))
+          (if (== (cells-at keys (+ at 1)) 0) (cells-set keys at line))
+          (cells-set keys (+ at 1) (+ line 1))
+          (set line (+ line 1))))
     (return line)))
 
 (defn ^I32 ms-key [^Cells keys ^I32 line ^I32 field]
@@ -60,6 +67,66 @@
           (set i (+ i 1))))
     (return 1)))
 
+(defn ^I32 ms-one-edit [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
+  (comment "Allow one OCR edit on a substantial line.")
+  (let [^I32 na (ms-key keys a 1) ^I32 nb (ms-key keys b 1)
+        ^I32 sa (ms-key keys a 0) ^I32 sb (ms-key keys b 0)
+        ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 edits 0]
+    (if (or (< na 8) (< nb 8) (> na (+ nb 1)) (> nb (+ na 1))) (return 0))
+    (while (and (< i na) (< j nb))
+      (do (if (== (cells-at codepoints (+ sa i)) (cells-at codepoints (+ sb j)))
+            (do (set i (+ i 1)) (set j (+ j 1)))
+            (do (if (> edits 0) (return 0))
+                (set edits 1)
+                (if (>= na nb) (set i (+ i 1)))
+                (if (>= nb na) (set j (+ j 1)))))))
+    (if (> (+ edits (- na i) (- nb j)) 1) (return 0))
+    (return 1)))
+
+(defn ^I32 ms-next-token-char [^Cells text ^I32 at ^I32 end]
+  (let [^:mut ^I32 i at ^:mut ^I32 cp 0]
+    (while (< i end)
+      (do (set cp (cells-at text i))
+          (if (or (== cp 32) (and (>= cp 48) (<= cp 57)) (and (>= cp 97) (<= cp 122)) (>= cp 128))
+            (return i))
+          (set i (+ i 1))))
+    (return i)))
+
+(defn ^I32 ms-token-band [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
+  (comment "A substantially identical word band may have punctuation variants or one extra final token.")
+  (let [^:mut ^I32 i (ms-key keys a 0) ^:mut ^I32 j (ms-key keys b 0)
+        ^I32 ea (+ i (ms-key keys a 1)) ^I32 eb (+ j (ms-key keys b 1))
+        ^:mut ^I32 words 0 ^:mut ^I32 chars 0]
+    (set i (ms-next-token-char codepoints i ea))
+    (set j (ms-next-token-char codepoints j eb))
+    (while (and (< i ea) (< j eb) (== (cells-at codepoints i) (cells-at codepoints j)))
+      (do (if (== (cells-at codepoints i) 32)
+            (do (if (> chars 0) (set words (+ words 1))) (set chars 0))
+            (set chars (+ chars 1)))
+          (set i (ms-next-token-char codepoints (+ i 1) ea))
+          (set j (ms-next-token-char codepoints (+ j 1) eb))))
+    (if (and (< i ea) (< j eb)) (return 0))
+    (if (> chars 0) (set words (+ words 1)))
+    (if (< words 3) (return 0))
+    (if (< i ea)
+      (do (if (!= (cells-at codepoints i) 32) (return 0))
+          (set i (+ i 1))
+          (while (< i ea)
+            (do (if (== (cells-at codepoints i) 32) (return 0))
+                (set i (+ i 1))))))
+    (if (< j eb)
+      (do (if (!= (cells-at codepoints j) 32) (return 0))
+          (set j (+ j 1))
+          (while (< j eb)
+            (do (if (== (cells-at codepoints j) 32) (return 0))
+                (set j (+ j 1))))))
+    (return 1)))
+
+(defn ^I32 ms-variant [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
+  (if (or (!= (ms-key keys a 2) 2) (!= (ms-key keys b 2) 2)) (return 0))
+  (if (== (ms-one-edit keys codepoints a b) 1) (return 1))
+  (return (ms-token-band keys codepoints a b)))
+
 (defn ^I32 ms-y [^Cells fl ^I32 line]
   (return (+ (ln-get fl line (lh-y0)) (ln-get fl line (lh-y1)))))
 
@@ -69,23 +136,82 @@
     (if (>= p pixels) (return (- pixels 1)))
     (return p)))
 
+(defn ^I32 ms-grey [^Bitmap bitmap ^I32 x ^I32 y ^I32 channels]
+  (let [^I32 red (bitmap-u8 bitmap x y 0)]
+    (if (< channels 3) (return red))
+    (return (quot (+ (* 77 red) (* 150 (bitmap-u8 bitmap x y 1))
+                     (* 29 (bitmap-u8 bitmap x y 2))) 256))))
+
+(defn ^I32 ms-dark-edge [^Bitmap bitmap ^I32 x ^I32 y ^I32 channels]
+  (let [^I32 grey (ms-grey bitmap x y channels)]
+    (if (and (>= (- (ms-grey bitmap (- x 5) y channels) grey) 24)
+             (>= (- (ms-grey bitmap (+ x 5) y channels) grey) 24))
+      (return 1))
+    (return 0)))
+
+(defn ^I32 ms-cut-ink [^Bitmap bitmap ^I32 y ^I32 inward ^I32 left ^I32 right]
+  (comment "Narrow dark strokes crossing the outermost rows corroborate a physical cut, even when OCR omits")
+  (comment "the fragment. Require several separate strokes to reject page borders and isolated noise.")
+  (let [^I32 w (bitmap-w bitmap) ^I32 channels (bitmap-channels bitmap)
+        ^:mut ^I32 x left ^:mut ^I32 last -2 ^:mut ^I32 strokes 0
+        ^:mut ^I32 inside 0 ^:mut ^I32 last-inside -2]
+    (if (< x 5) (set x 5))
+    (while (and (< x (- w 5)) (< x right))
+      (do (if (== (ms-dark-edge bitmap x (+ y inward) channels) 1)
+            (do (if (> (- x last-inside) 1) (set inside (+ inside 1)))
+                (set last-inside x)
+                (if (== (ms-dark-edge bitmap x y channels) 1)
+                  (do (if (> (- x last) 1) (set strokes (+ strokes 1)))
+                      (set last x)))))
+          (if (and (>= strokes 2) (>= inside 3)) (return 1))
+          (set x (+ x 1))))
+    (return 0)))
+
+(defn ^:pub ^I32 ms-sample-cut [^Bitmap bitmap ^I32 page ^:mut ^Cells cuts]
+  (let [^I32 h (bitmap-h bitmap) ^I32 w (bitmap-w bitmap)]
+    (while (< (cells-len cuts) (* page 2)) (cells-push cuts 0))
+    (if (< h 3) (return 0))
+    (cells-set cuts (- (* page 2) 2) (ms-cut-ink bitmap 0 1 0 w))
+    (cells-set cuts (- (* page 2) 1) (ms-cut-ink bitmap (- h 1) -1 0 w))
+    (return 0)))
+
+(defn ^:pub ^I32 ms-line-cuts [^Bitmap bitmap ^Cells lines ^Cells selection ^I32 start ^I32 count
+                              ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 fourpx ^:mut ^Cells cuts]
+  (comment "Corroborate an OCR box only with strokes in the same horizontal span of its own bitmap edge.")
+  (cells-drop cuts 0)
+  (let [^I32 w (bitmap-w bitmap) ^I32 h (bitmap-h bitmap)
+        ^:mut ^I32 i 0 ^:mut ^I32 line 0 ^:mut ^I32 top 0 ^:mut ^I32 bottom 0
+        ^:mut ^I32 left 0 ^:mut ^I32 right 0 ^:mut ^I32 cut 0]
+    (if (or (< h 3) (<= x1 x0)) (return 0))
+    (while (< i count)
+      (do (set line (cells-at selection (+ start i)))
+          (set top (- (ol-get lines line (lh-y0)) y0))
+          (set bottom (- y1 (ol-get lines line (lh-y1))))
+          (set cut 0)
+          (if (or (and (<= top fourpx) (>= top (- 0 fourpx)))
+                  (and (<= bottom fourpx) (>= bottom (- 0 fourpx))))
+            (do (set left (ms-pixel (- (ol-get lines line (lh-x0)) x0) w (- x1 x0)))
+                (set right (ms-pixel (- (ol-get lines line (lh-x1)) x0) w (- x1 x0)))
+                (if (<= top bottom)
+                  (set cut (ms-cut-ink bitmap 0 1 left right))
+                  (set cut (ms-cut-ink bitmap (- h 1) -1 left right)))))
+          (cells-push cuts cut)
+          (set i (+ i 1))))
+    (return count)))
+
 (defn ^I32 ms-patch [^Bitmap bitmap ^Cells lines ^I32 line ^I32 width ^I32 height ^:mut ^Cells pixels]
   (let [^I32 w (bitmap-w bitmap) ^I32 h (bitmap-h bitmap)
         ^I32 x0 (ln-get lines line (lh-x0)) ^I32 y0 (ln-get lines line (lh-y0))
         ^I32 dx (- (ln-get lines line (lh-x1)) x0)
         ^I32 dy (- (ln-get lines line (lh-y1)) y0)
         ^I32 channels (bitmap-channels bitmap)
-        ^:mut ^I32 u 0 ^:mut ^I32 v 0 ^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 grey 0]
+        ^:mut ^I32 u 0 ^:mut ^I32 v 0 ^:mut ^I32 x 0 ^:mut ^I32 y 0]
     (while (< v 12)
       (do (set y (ms-pixel (+ y0 (quot (* (- v 2) dy) 8)) h height))
           (set u 0)
           (while (< u 32)
             (do (set x (ms-pixel (+ x0 (quot (* (+ (* u 2) 1) dx) 64)) w width))
-                (set grey (bitmap-u8 bitmap x y 0))
-                (if (>= channels 3)
-                  (set grey (quot (+ (+ (* 77 grey) (* 150 (bitmap-u8 bitmap x y 1)))
-                                     (* 29 (bitmap-u8 bitmap x y 2))) 256)))
-                (cells-push pixels grey)
+                (cells-push pixels (ms-grey bitmap x y channels))
                 (set u (+ u 1))))
           (set v (+ v 1))))
     (return 0)))
@@ -165,11 +291,12 @@
   (comment "Compare a suffix of a with a prefix of b. Separator matches carry no content votes.")
   (let [^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 prev-a -1
         ^:mut ^I32 prev-b -1 ^:mut ^I32 votes 0 ^:mut ^I32 delta-a 0 ^:mut ^I32 delta-b 0
-        ^:mut ^I32 ha 0 ^:mut ^I32 hb 0]
+        ^:mut ^I32 ha 0 ^:mut ^I32 hb 0 ^:mut ^I32 exact 0]
     (while (< i n)
       (do (set la (cells-at a (- (- n 1) i)))
           (set lb (cells-at b i))
-          (if (== (ms-equal keys codepoints la lb) 0) (return 0))
+          (set exact (ms-equal keys codepoints la lb))
+          (if (and (== exact 0) (== (ms-variant keys codepoints la lb) 0)) (return 0))
           (if (>= prev-a 0)
             (do (set delta-a (- (ms-y fl la) (ms-y fl prev-a)))
                 (set delta-b (- (ms-y fl lb) (ms-y fl prev-b)))
@@ -181,21 +308,27 @@
                     (return 0)))))
           (if (== (ms-key keys la 2) 2)
             (if (or (< prev-a 0) (== (ms-equal keys codepoints la prev-a) 0))
-              (set votes (+ votes 1))))
+              (if (== exact 1) (set votes (+ votes 32)) (set votes (+ votes 1)))))
           (set prev-a la) (set prev-b lb)
           (set i (+ i 1))))
     (return votes)))
 
-(defn ^I32 ms-gap [^Cells ol ^Cells pages ^I32 page]
-  (let [^:mut ^I32 i 0 ^:mut ^I32 height 0 ^:mut ^I32 edge 0]
+(defn ^I32 ms-gap [^Cells ol ^Cells pages ^Cells cuts ^I32 left ^I32 right]
+  (if (or (and (< (- (* left 2) 1) (cells-len cuts)) (== (cells-at cuts (- (* left 2) 1)) 1))
+          (and (< (- (* right 2) 2) (cells-len cuts)) (== (cells-at cuts (- (* right 2) 2)) 1)))
+    (return 1))
+  (let [^:mut ^I32 i 0 ^:mut ^I32 edge 0 ^:mut ^I32 page 0 ^:mut ^I32 height 0 ^:mut ^I32 pixels 0]
     (while (< i (ol-count ol))
-      (do (if (and (>= (ol-get ol i (olf-conf)) 0)
-                   (or (== (ol-get ol i (hd-page)) page) (== (ol-get ol i (hd-page)) (+ page 1))))
-            (do (set height (- (ol-get ol i (lh-y1)) (ol-get ol i (lh-y0))))
-                (if (== (ol-get ol i (hd-page)) page)
-                  (set edge (- (page-h pages (- page 1)) (ol-get ol i (lh-y1))))
+      (do (set page (ol-get ol i (hd-page)))
+          (if (and (>= (ol-get ol i (olf-conf)) 0) (or (== page left) (== page right)))
+            (do (set height (page-h pages (- page 1)))
+                (set pixels (page-px-h pages (- page 1)))
+                (if (== page left)
+                  (set edge (- height (ol-get ol i (lh-y1))))
                   (set edge (ol-get ol i (lh-y0))))
-                (if (or (<= edge 150) (<= (* edge 2) height)) (return 1))))
+                (if (and (>= edge 0)
+                         (or (== edge 0) (and (> pixels 0) (<= (mul64 (i64 edge) (i64 pixels)) (i64 height)))))
+                  (return 1))))
           (set i (+ i 1))))
     (return 0)))
 
@@ -234,73 +367,199 @@
     (cells-swap fw new-words)
     (return 0)))
 
-(defn ^I32 ms-raster-pair [^Cells mask ^I32 page]
-  (if (and (> (rem (cells-at mask (- page 1)) 4) 0) (> (rem (cells-at mask page) 4) 0))
-    (return 1))
+(defn ^I32 ms-raster [^Cells mask ^I32 page]
+  (return (rem (cells-at mask (- page 1)) 4)))
+
+(defn ^I32 ms-page-edge [^Cells fl ^Cells keys ^I32 page ^I32 bottom ^:mut ^Cells band]
+  (let [^I32 at (+ (* (ln-count fl) 3) (* (- page 1) 2))
+        ^I32 end (cells-at keys (+ at 1))
+        ^:mut ^I32 i (cells-at keys at)]
+    (cells-drop band 0)
+    (while (< i end)
+      (do (if (and (== (ln-get fl i (hd-page)) page) (> (ms-key keys i 2) 0))
+            (ms-edge-add fl band i bottom))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ms-pair [^Cells fl ^Cells keys ^Cells codepoints ^I32 left ^I32 right
+                    ^:mut ^Cells a ^:mut ^Cells b]
+  (ms-page-edge fl keys left 1 a)
+  (ms-page-edge fl keys right 0 b)
+  (let [^:mut ^I32 n 1 ^:mut ^I32 score 0 ^:mut ^I32 best 0]
+    (while (and (<= n (cells-len a)) (<= n (cells-len b)))
+      (do (set score (ms-run-score fl a b keys codepoints n))
+          (if (and (> score 0) (> (+ (* score 32) n) best))
+            (set best (+ (* score 32) n)))
+          (set n (+ n 1))))
+    (return best)))
+
+(defn ^I32 ms-accepted [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells offsets ^Cells pixels ^I32 match]
+  (let [^I32 score (quot match 32) ^I32 n (rem match 32)
+        ^I32 exact (quot score 32) ^I32 variant (rem score 32)]
+    (if (or (>= exact 4)
+            (and (>= exact 3) (> variant 0) (>= exact variant))
+            (and (>= (+ exact variant) 2) (>= (ms-pixel-votes fl a b keys offsets pixels n) 2)))
+      (return 1))
+    (return 0)))
+
+(defn ^I32 ms-order [^Cells fl ^Cells keys ^Cells codepoints ^Cells offsets ^Cells pixels
+                     ^I32 first ^I32 end ^:mut ^Cells order ^:mut ^Cells incoming
+                     ^:mut ^Cells outgoing ^:mut ^Cells a ^:mut ^Cells b]
+  (comment "Recover a unique complete chain of corroborated, directional joins. Preserve upload order if")
+  (comment "the evidence leaves a missing link, branching chain, or cycle. Limit all-pairs work per run.")
+  (if (or (< (- end first) 2) (> (- end first) 16)) (return 0))
+  (cells-drop incoming 0) (cells-drop outgoing 0)
+  (let [^:mut ^I32 left first ^:mut ^I32 right first ^:mut ^I32 match 0
+        ^:mut ^I32 start 0 ^:mut ^I32 cur 0 ^:mut ^I32 i first]
+    (while (< i end)
+      (do (cells-push incoming 0) (cells-push outgoing 0) (set i (+ i 1))))
+    (while (< left end)
+      (do (set right first)
+          (while (< right end)
+            (do (if (!= left right)
+                  (do (set match (ms-pair fl keys codepoints left right a b))
+                      (if (== (ms-accepted fl a b keys offsets pixels match) 1)
+                        (do (if (!= (cells-at outgoing (- left first)) 0) (return 0))
+                            (if (!= (cells-at incoming (- right first)) 0) (return 0))
+                            (cells-set outgoing (- left first) right)
+                            (cells-set incoming (- right first) left)))))
+                (set right (+ right 1))))
+          (set left (+ left 1))))
+    (set i first)
+    (while (< i end)
+      (do (if (== (cells-at incoming (- i first)) 0)
+            (do (if (> start 0) (return 0)) (set start i)))
+          (set i (+ i 1))))
+    (set cur start) (set i first)
+    (while (and (> cur 0) (< i end))
+      (do (set cur (cells-at outgoing (- cur first))) (set i (+ i 1))))
+    (if (or (< i end) (> cur 0)) (return 0))
+    (set cur start) (set i first)
+    (while (< i end)
+      (do (cells-set order (- i 1) cur)
+          (set cur (cells-at outgoing (- cur first)))
+          (set i (+ i 1))))
+    (return 1)))
+
+(defn ^I32 ms-mark [^:mut ^Cells seams ^I32 left ^I32 right ^I32 kind ^I32 match]
+  (cells-push seams left) (cells-push seams right) (cells-push seams kind)
+  (cells-push seams (rem match 32))
+  (cells-push seams (+ (quot match 1024) (rem (quot match 32) 32)))
   (return 0))
 
+(defn ^I32 ms-ambiguous-skips [^Cells fl ^Cells keys ^Cells codepoints ^I32 first ^I32 end
+                                ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells seams]
+  (comment "Report nonadjacent candidates when multiple photos were uploaded but no full order is supported.")
+  (if (> (- end first) 16) (return 0))
+  (let [^:mut ^I32 left first ^:mut ^I32 right 0 ^:mut ^I32 match 0]
+    (while (< (+ left 2) end)
+      (do (set right (+ left 2))
+          (while (< right end)
+            (do (set match (ms-pair fl keys codepoints left right a b))
+                (if (> match 0) (ms-mark seams left right 2 match))
+                (set match (ms-pair fl keys codepoints right left a b))
+                (if (> match 0) (ms-mark seams right left 2 match))
+                (set right (+ right 1))))
+          (set left (+ left 1))))
+    (return 0)))
+
 (defn ^:pub ^I32 ms-run [^I32 np ^I32 capture ^Cells mask ^Cells pages ^Cells ol ^Cells et ^:mut ^Cells fl ^:mut ^Cells fw
-                        ^Cells offsets ^Cells pixels
+                        ^Cells offsets ^Cells pixels ^Cells cuts
                         ^:mut ^Cells ledger ^:mut ^Cells model-text ^:mut ^Cells seams
                         ^:mut ^Cells keys ^:mut ^Cells codepoints ^:mut ^Cells a ^:mut ^Cells b
-                        ^:mut ^Cells dropped ^:mut ^Cells new-lines ^:mut ^Cells new-words]
+                        ^:mut ^Cells dropped ^:mut ^Cells new-lines ^:mut ^Cells new-words
+                        ^:mut ^Cells order ^:mut ^Cells incoming ^:mut ^Cells outgoing]
   (cells-drop seams 0) (cells-drop keys 0) (cells-drop codepoints 0) (cells-drop dropped 0)
+  (cells-drop order 0)
   (if (or (< np 2) (== capture 1)) (return 0))
-  (let [^:mut ^I32 pair-check 1]
-    (while (and (< pair-check np) (== (ms-raster-pair mask pair-check) 0))
-      (set pair-check (+ pair-check 1)))
-    (if (>= pair-check np) (return 0)))
-  (ms-index fl fw et keys codepoints)
-  (let [^:mut ^I32 page 1 ^:mut ^I32 i 0 ^:mut ^I32 n 0 ^:mut ^I32 length 0
-        ^:mut ^I32 score 0 ^:mut ^I32 best 0 ^:mut ^I32 best-n 0
-        ^:mut ^I32 gap 0 ^:mut ^I32 changes 0 ^:mut ^I32 accepted 0]
+  (let [^:mut ^I32 first-pair 1]
+    (while (and (< first-pair np)
+                (or (== (ms-raster mask first-pair) 0) (== (ms-raster mask (+ first-pair 1)) 0)))
+      (set first-pair (+ first-pair 1)))
+    (if (>= first-pair np) (return 0)))
+  (ms-index fl fw et np keys codepoints)
+  (let [^:mut ^I32 page 1 ^:mut ^I32 end 1 ^:mut ^I32 i 0
+        ^:mut ^I32 line 0 ^:mut ^I32 changes 0 ^:mut ^I32 left 0 ^:mut ^I32 right 0
+        ^:mut ^I32 forward 0 ^:mut ^I32 reverse 0 ^:mut ^I32 accepted 0
+        ^:mut ^I32 reverse-accepted 0 ^:mut ^I32 ordered 0]
+    (while (<= page np)
+      (do (cells-push order page) (set page (+ page 1))))
     (while (< i (ln-count fl))
       (do (cells-push dropped 0) (set i (+ i 1))))
-    (while (< page np)
-      (do (if (== (ms-raster-pair mask page) 1)
-            (do (cells-drop a 0) (cells-drop b 0)
-                (set i 0)
-                (while (< i (ln-count fl))
-                  (do (if (> (ms-key keys i 2) 0)
-                        (do (if (== (ln-get fl i (hd-page)) page) (ms-edge-add fl a i 1))
-                            (if (== (ln-get fl i (hd-page)) (+ page 1)) (ms-edge-add fl b i 0))))
-                      (set i (+ i 1))))
-                (set best 0) (set best-n 0)
-                (set n 1)
-                (while (and (<= n (cells-len a)) (<= n (cells-len b)))
-                  (do (set score (ms-run-score fl a b keys codepoints n))
-                      (if (> score best) (do (set best score) (set best-n n)))
-                      (set n (+ n 1))))
-                (set gap (ms-gap ol pages page))
-                (set length best-n)
-                (set accepted 0)
-                (if (or (>= best 4) (and (>= best 2) (>= (ms-pixel-votes fl a b keys offsets pixels length) 2)))
-                  (set accepted 1))
-                (if (== accepted 1)
+    (set page 1)
+    (while (<= page np)
+      (do (set end (+ page 1))
+          (if (> (ms-raster mask page) 0)
+            (while (and (<= end np) (> (ms-raster mask end) 0))
+              (set end (+ end 1))))
+          (set ordered (ms-order fl keys codepoints offsets pixels page end order incoming outgoing a b))
+          (if (== ordered 0) (ms-ambiguous-skips fl keys codepoints page end a b seams))
+          (while (< (+ page 1) end)
+            (do (set left (cells-at order (- page 1)))
+                (set right (cells-at order page))
+                (set reverse (ms-pair fl keys codepoints right left a b))
+                (set reverse-accepted (ms-accepted fl a b keys offsets pixels reverse))
+                (set forward (ms-pair fl keys codepoints left right a b))
+                (set accepted (ms-accepted fl a b keys offsets pixels forward))
+                (if (and (== accepted 1) (== reverse-accepted 0))
                   (do (set i 0)
-                      (while (< i length)
-                        (do (set n (cells-at b i))
-                            (if (== (cells-at dropped n) 0)
-                              (do (ms-drop-line fl fw et n ledger model-text)
-                                  (cells-set dropped n 1)
+                      (while (< i (rem forward 32))
+                        (do (set line (cells-at b i))
+                            (if (== (cells-at dropped line) 0)
+                              (do (ms-drop-line fl fw et line ledger model-text)
+                                  (cells-set dropped line 1)
                                   (set changes (+ changes 1))))
-                            (set i (+ i 1))))))
-                (if (> best 0)
-                  (do (cells-push seams page) (cells-push seams (+ page 1))
-                      (if (== accepted 1) (cells-push seams 1) (cells-push seams 2))
-                      (cells-push seams length) (cells-push seams best)))
-                (if (and (== best 0) (> gap 0))
-                  (do (cells-push seams page) (cells-push seams (+ page 1))
-                      (cells-push seams 3) (cells-push seams 0) (cells-push seams 0)))))
-          (set page (+ page 1))))
+                            (set i (+ i 1))))
+                      (ms-mark seams left right 1 forward))
+                  (do (if (> forward 0) (ms-mark seams left right 2 forward))
+                      (if (and (== ordered 0) (> reverse 0)) (ms-mark seams right left 2 reverse))
+                      (if (and (== forward 0) (== (ms-gap ol pages cuts left right) 1))
+                        (ms-mark seams left right 3 0))))
+                (set page (+ page 1))))
+          (set page end)))
     (if (> changes 0)
       (do (cells-drop new-lines 0) (cells-drop new-words 0)
           (ms-rebuild fl fw dropped new-lines new-words)))
+    (set i 0)
+    (while (and (< i np) (== (cells-at order i) (+ i 1))) (set i (+ i 1)))
+    (if (== i np) (cells-drop order 0))
     (return changes)))
 
-(defn ^:pub ^I32 ms-evidence [^:mut ^Text out ^Cells seams]
+(defn ^I32 ms-photo-page [^Cells seams ^Cells cuts ^I32 page]
+  (comment "A bitmap edge with cut text or a corroborated overlap classifies this raster page as a partial photo.")
+  (comment "The overlap can supply that evidence even when the photo has clean margins.")
+  (if (and (<= (* page 2) (cells-len cuts))
+           (> (+ (cells-at cuts (- (* page 2) 2)) (cells-at cuts (- (* page 2) 1))) 0))
+    (return 1))
+  (let [^:mut ^I32 i 0]
+    (while (< i (cells-len seams))
+      (do (if (and (== (cells-at seams (+ i 2)) 1)
+                   (or (== (cells-at seams i) page) (== (cells-at seams (+ i 1)) page)))
+            (return 1))
+          (set i (+ i 5)))))
+  (return 0))
+
+(defn ^:pub ^I32 ms-evidence [^:mut ^Text out ^Cells seams ^Cells order ^Cells mask ^Cells cuts ^I32 capture]
+  (let [^:mut ^I32 page 1 ^:mut ^I32 count 0]
+    (if (and (!= capture 1) (> (cells-len mask) 1))
+      (while (<= page (cells-len mask))
+        (do (if (and (> (ms-raster mask page) 0)
+                     (or (== capture 2) (== (ms-photo-page seams cuts page) 1)))
+              (do (if (== count 0) (emit-ascii out ",\"photoPages\":[") (emit-ascii out ","))
+                  (text-i32 out page)
+                  (set count (+ count 1))))
+            (set page (+ page 1)))))
+    (if (> count 0) (emit-ascii out "]")))
   (let [^:mut ^I32 i 0 ^:mut ^I32 kind 0]
+    (if (> (cells-len order) 0)
+      (do (emit-ascii out ",\"photoOrder\":[")
+          (while (< i (cells-len order))
+            (do (if (> i 0) (emit-ascii out ","))
+                (text-i32 out (cells-at order i))
+                (set i (+ i 1))))
+          (emit-ascii out "]")))
     (if (== (cells-len seams) 0) (return 0))
+    (set i 0)
     (emit-ascii out ",\"seams\":[")
     (while (< i (cells-len seams))
       (do (if (> i 0) (emit-ascii out ","))

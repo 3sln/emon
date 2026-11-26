@@ -37,12 +37,27 @@ func docOf(ans *port.Cells, rq *port.Cells, nodes *port.Cells, attrs *port.Cells
 	var ledger *port.Cells = port.NewCells()
 	var layout *port.Cells = port.NewCells()
 	model.ModelInit(nodes, attrs, regions, text, pages, ledger, layout)
-	return rasterin.RsDoc(port.SrcOfBlob(port.HexBlob("49492a0008000000")), 7, rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask)
+	return rasterin.RsDoc(port.SrcOfBlob(port.HexBlob("49492a0008000000")), 7, rasterin.RsTiff(), ans, rq, nodes, attrs, text, pages, mask, port.NewCells())
+}
+
+func TestImageListDecodesEachMemberAtItsOwnOffset(emonT *testing.T) {
+	var source *port.Src = port.SrcOfBlob(port.HexBlob("454d4f4e494d4731020000000400000008000000ffd8ffe089504e470d0a1a0a"))
+	var ans *port.Cells = port.NewCells()
+	var rq *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var spans *port.Cells = port.NewCells()
+	port.AssertEq(emonT, rasterin.RsSniff(source), rasterin.RsImages(), "image list header")
+	plan.AnDecode(ans, 1, 60, 80, 3, 30000, 0, 1)
+	port.AssertEq(emonT, rasterin.RsDoc(source, 7, rasterin.RsImages(), ans, rq, port.NewCells(), port.NewCells(), port.NewCells(), pages, port.NewCells(), spans), plan.UsRequests(), "only the second member needs a header")
+	port.AssertEq(emonT, plan.RecId(rq, 0), 2, "second page request")
+	port.AssertEq(emonT, port.CellsAt(spans, 0), 20, "first encoded image starts after the directory")
+	port.AssertEq(emonT, port.CellsAt(spans, 3), 24, "second encoded image starts after the first")
+	port.AssertEq(emonT, port.CellsAt(spans, 4), 8, "second encoded image retains its original length")
 }
 
 func pagePol(f int32, ans *port.Cells, rq *port.Cells, policy int32, loc *port.Cells, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
 	// no pixel in the bitmap set: the unit is the slim one, the first pass's lines (D564: with pixels it is `emon.pageunit`'s scan unit, whose laws are there)
-	return rasterin.RsPage(f, 7, 8, policy, 0, ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	return rasterin.RsPage(f, 7, 8, policy, 0, port.NewCells(), ans, rq, loc, port.NewBitmapSet(), mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 
 func TestTheDocumentPassAsksForFrameZerosHeaderAndNothingMore(emonT *testing.T) {
@@ -254,7 +269,7 @@ func whiteFrame(bms *port.BitmapSet, id int32, w int32, h int32) int32 {
 
 func pagePx(ans *port.Cells, rq *port.Cells, bms *port.BitmapSet, fuse int32, mask *port.Cells, et *port.Cells, wd *port.Cells, ln *port.Cells, oruns *port.Cells, olines *port.Cells, owords *port.Cells) int32 {
 	// Frame 0 of an input of one frame under the policy `always`, with the pixels of its decode in `bms` and `fuse` the page unit's flags.
-	return rasterin.RsPage(0, 7, 8, 2, fuse, ans, rq, port.NewCells(), bms, mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	return rasterin.RsPage(0, 7, 8, 2, fuse, port.NewCells(), ans, rq, port.NewCells(), bms, mask, port.NewCells(), port.NewCells(), port.NewCells(), et, port.NewCells(), port.NewCells(), oruns, port.NewCells(), olines, owords, port.NewCells(), port.NewCells(), wd, ln, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
 }
 
 func TestAFrameFedSidewaysIsReadFromItsTurnedView(emonT *testing.T) {

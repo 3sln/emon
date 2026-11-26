@@ -81,6 +81,9 @@ pub fn en_fmt_jpeg() -> i32 {
 pub fn en_fmt_tiff() -> i32 {
     return 3;
 }
+pub fn en_fmt_images() -> i32 {
+    return 4;
+}
 pub(crate) fn en_locale(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc) -> i32 {
     // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
     if c.haveloc != 0 {
@@ -107,7 +110,7 @@ pub(crate) fn en_attempt_raster(view: &crate::port::Src, c: &mut crate::emon::en
     // OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
     // glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
     model_init(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut m.pages, &mut m.ledger, &mut m.layout);
-    let status: i32 = rs_doc(view, idx, fmt, ans, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, &mut d.mask);
+    let status: i32 = rs_doc(view, idx, fmt, ans, rq, &mut m.nodes, &mut m.attrs, &mut m.text, &mut m.pages, &mut d.mask, &mut d.spans);
     let np: i32 = page_count(&mut m.pages);
     if crate::port::src_missed(view) {
         return at_miss();
@@ -130,6 +133,9 @@ pub(crate) fn en_attempt_raster(view: &crate::port::Src, c: &mut crate::emon::en
     }
     if fmt == rs_jpeg() {
         d.ifmt = en_fmt_jpeg();
+    }
+    if fmt == rs_images() {
+        d.ifmt = en_fmt_images();
     }
     if np < 0 {
         d.ipages = 0;
@@ -306,7 +312,7 @@ pub(crate) fn en_page_inner(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon
     if d.kind == en_kind_pdf() {
         return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, ((((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c))) + en_photo_lines(c), &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
     }
-    return rs_page(i, idx, nbytes, c.ocr, ((((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c))) + en_photo_lines(c), ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
+    return rs_page(i, idx, nbytes, c.ocr, ((((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c))) + en_photo_lines(c), &mut d.spans, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
 }
 pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc) -> i32 {
     if c.ocr == 0 {
@@ -337,11 +343,13 @@ pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc,
     if status == 0 {
         // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
         or_assemble(&mut ev.oruns, r0, &mut ev.rules, i + 1, &mut d.ln, l0, &mut d.wd, w0, &mut d.pscr);
-        if (c.dry == 0) && (c.capture != 1) && (d.ipages > 1) && (ln_count(&mut d.ln) > l0) && ((crate::port::cells_at(&mut d.mask, i) & 8) == 0) {
+        if (c.dry == 0) && (c.capture != 1) && (d.ipages > 1) && ((crate::port::cells_at(&mut d.mask, i) % 4) > 0) && ((crate::port::cells_at(&mut d.mask, i) & 8) == 0) {
             let id: i32 = pu_id(i, pi_decode());
             let ep: i32 = ev_page_row(&mut ev.epages, i + 1);
             if (ep >= 0) && (crate::port::bms_has(bms, id) == 1) {
-                ms_sample(crate::port::bms_get(bms, id), &mut d.ln, l0, ep_get(&mut ev.epages, ep, epf_width()), ep_get(&mut ev.epages, ep, epf_height()), &mut d.mspatch, &mut d.mspixel, &mut d.ys0, &mut d.ys1);
+                let image: &crate::port::Bitmap = crate::port::bms_get(bms, id);
+                ms_sample_cut(image, i + 1, &mut d.mscuts);
+                ms_sample(image, &mut d.ln, l0, ep_get(&mut ev.epages, ep, epf_width()), ep_get(&mut ev.epages, ep, epf_height()), &mut d.mspatch, &mut d.mspixel, &mut d.ys0, &mut d.ys1);
             }
         }
         if oxs_collect(ans, &mut ev.views, &mut ev.oruns, &mut ev.olines, &mut ev.oxs) < 0 {
@@ -372,13 +380,13 @@ pub fn en_asset_unit(view: &crate::port::Src, pw: &crate::port::Src, c: &mut cra
     }
     return rc;
 }
-pub fn en_asset_figures(c: &mut crate::emon::enctx::Cfg, m: &mut crate::emon::enctx::Arenas, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, rfrom: i32, p: &mut crate::emon::enctx::Pass, input: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
+pub fn en_asset_figures(c: &mut crate::emon::enctx::Cfg, m: &mut crate::emon::enctx::Arenas, mut cand: &mut crate::port::Cells, mut cbytes: &mut crate::port::Buf, rfrom: i32, spans: &mut crate::port::Cells, p: &mut crate::emon::enctx::Pass, input: i32, nbytes: i32, ans: &mut crate::port::Cells, mut rq: &mut crate::port::Cells, bms: &crate::port::BitmapSet) -> i32 {
     // P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
     // (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
     // and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
     // runs it again). `p` is fresh for the attempt.
     as_settings(&mut m.nodes, &mut m.attrs, &mut m.text, c.level, c.dpi, c.pixels, c.abyte, c.tbyte, c.sigs);
-    return as_run_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.pages, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, c.abyte, c.tbyte, c.sigs, c.dpi, c.pixels, input, nbytes, rfrom, ans, rq, bms, &mut p.fz0, &mut p.zb, &mut p.fz1, &mut p.fz2, &mut p.fz3, &mut p.fz4);
+    return as_run_figures(&mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.pages, cand, cbytes, &mut m.assets, &mut m.uses, &mut m.abytes, c.abyte, c.tbyte, c.sigs, c.dpi, c.pixels, input, nbytes, rfrom, spans, ans, rq, bms, &mut p.fz0, &mut p.zb, &mut p.fz1, &mut p.fz2, &mut p.fz3, &mut p.fz4);
 }
 pub fn en_dump(et: &mut crate::port::Cells, gl: &mut crate::port::Cells, wd: &mut crate::port::Cells, ln: &mut crate::port::Cells, mk: &mut crate::port::Cells, fnt: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, ggp: &mut crate::port::Cells, grg: &mut crate::port::Cells, ev: &mut crate::emon::enctx::EvArenas, mut t: &mut String) -> i32 {
     // The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.
@@ -447,16 +455,17 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let trust: i32 = tg_trust(&mut d.ss);
     let mut pending: i32 = 0;
     let mut w: i32 = 0;
-    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords);
+    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut d.mscuts, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords, &mut s.msorder, &mut s.msincoming, &mut s.msoutgoing);
     if c.keep != 0 {
-        ms_evidence(&mut d.evidence, &mut s.seams);
+        ms_evidence(&mut d.evidence, &mut s.seams, &mut s.msorder, &mut d.mask, &mut d.mscuts, c.capture);
     }
     fu_find(&mut d.fw, &mut d.fl, &mut d.et, &mut d.gl, &mut d.mk, &mut m.pages, np, &mut d.txt, &mut d.md, &mut d.lb, trust, c.furn, &mut s.cd, &mut s.sl, &mut s.gr, &mut s.ford, &mut s.tx, &mut s.bh, &mut s.fo, &mut s.fp, &mut s.ft, &mut s.pl);
     if c.tabl == 1 {
-        ts_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.tbk, &mut s.tbo, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);
+        ts_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.msorder, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.tbk, &mut s.tbo, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);
     } else {
-        tb_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.tbk, &mut s.tbo, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);
+        tb_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.msorder, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.tbk, &mut s.tbo, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);
     }
+    tb_seam_gaps(&mut s.tb, &mut s.seams);
     if c.keep != 0 {
         if (kind == 0) && (crate::port::cells_len(&mut s.tv) > 0) {
             crate::port::text_ascii(&mut d.evidence, ",\"tb\":");
@@ -662,7 +671,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, en_oe_mode(c), &mut s.s0) < 0 {
         return 2;
     }
-    pa_build(&mut d.fw, &mut d.et, np, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);
+    pa_build(&mut d.fw, &mut d.et, np, &mut s.msorder, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);
     if kind == 0 {
         en_figures(m, s, d, c.level);
     }

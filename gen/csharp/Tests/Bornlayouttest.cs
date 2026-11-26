@@ -92,7 +92,7 @@ public static class Bornlayouttest {
         emon.Port.Cells nix = emon.Port.NewCells();
         Notes.NtAnalyze(wd, lt, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
         Lists.LsAnalyze(wd, lt, et, sf, pa, hc, cd, pi, lws, tw);
-        Para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        Para.PaBuild(wd, et, npages, emon.Port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         return 0;
     }
     internal static int BlFind(emon.Port.Cells nodes, int kind, int nth) {

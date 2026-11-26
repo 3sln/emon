@@ -149,7 +149,7 @@ ships to fill it.
   cannot hide a package; `api/surface.edn` lists it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the java host: 393 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the java host: 394 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -338,6 +338,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Input` | `final class` |
 | `emon.api.Input#bytes(ByteBuffer)` | `static Input` |
 | `emon.api.Input#bytes(byte[])` | `static Input` |
+| `emon.api.Input#images(Input...)` | `static Input` |
 | `emon.api.Input#of(ByteSource)` | `static Input` |
 | `emon.api.Input#seekable(SeekableByteChannel)` | `static Input throws IOException` |
 | `emon.api.Input#spooled(InputStream,long)` | `static Input throws IOException` |

@@ -104,7 +104,7 @@ func blModel(wd *port.Cells, ln *port.Cells, et *port.Cells, npages int32, nodes
 	var nix *port.Cells = port.NewCells()
 	notes.NtAnalyze(wd, lt, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix)
 	lists.LsAnalyze(wd, lt, et, sf, pa, hc, cd, pi, lws, tw)
-	para.PaBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
+	para.PaBuild(wd, et, npages, port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, port.NewCells())
 	return 0
 }
 

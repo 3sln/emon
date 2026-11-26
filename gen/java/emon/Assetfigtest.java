@@ -174,7 +174,7 @@ public final class Assetfigtest {
             Plan.anDecode(ans, Plan.auId(Plan.auDecode()), 306, 396, 3, 3600, 0, 1);
             afFill(emon.Port.bmsPut(bms, Plan.auId(Plan.auDecode()), 306, 396, 3), 306, 396, 3);
         }
-        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, Model.afmPng(), ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, Model.afmPng(), emon.Port.newCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.cellsDrop(res, 0);
         emon.Port.cellsPush(res, emon.Port.cellsLen(rq));
         emon.Port.cellsPush(res, Plan.recCount(rq));
@@ -320,7 +320,7 @@ public final class Assetfigtest {
         if (stage == 2) {
             Plan.anFail(ans, Plan.pkCrop(), Plan.auId(n), Plan.psUnsupported());
         }
-        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, emon.Port.newCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.cellsDrop(res, 0);
         emon.Port.cellsPush(res, Plan.recCount(rq));
         if (emon.Port.cellsLen(rq) > 0) {
@@ -492,7 +492,7 @@ public final class Assetfigtest {
         }
         Model.nodeSetAttrInt(nodes, attrs, n, Model.fkImage(), 0);
         afBoxcells(box);
-        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.newCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.cellsDrop(res, 0);
         emon.Port.cellsPush(res, Plan.recCount(rq));
         emon.Port.cellsPush(res, Model.nodeAttrIntOr(nodes, attrs, n, Model.fkNoasset(), -1));
@@ -558,7 +558,7 @@ public final class Assetfigtest {
         f2 = afNode(nodes, regions, 0, Model.nkFigure(), Model.fgUnknown(), 1, 7200, 10000, 30000, 30000);
         afNode(nodes, regions, f2, Model.nkCaption(), 0, 1, 7200, 32000, 20000, 34000);
         afBoxcells(box);
-        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.newCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.cellsDrop(res, 0);
         emon.Port.cellsPush(res, Plan.recCount(rq));
         emon.Port.cellsPush(res, Plan.recId(rq, 0));
@@ -612,7 +612,7 @@ public final class Assetfigtest {
         afFill(emon.Port.bmsPut(bms, Plan.auId(b), 105, 105, 3), 105, 105, 3);
         Plan.anRender(ans, Plan.auId(d), 110, 110, 3, 150);
         afFill(emon.Port.bmsPut(bms, Plan.auId(d), 110, 110, 3), 110, 110, 3);
-        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, box);
+        Asset.asRunFigures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, emon.Port.newCells(), ans, rq, bms, ws, z, rows, tmp, rec, box);
         emon.Port.cellsDrop(res, 0);
         emon.Port.cellsPush(res, emon.Port.cellsLen(rq));
         emon.Port.cellsPush(res, Model.assetCount(assets));

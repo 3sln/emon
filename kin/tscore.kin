@@ -4,7 +4,7 @@
             [emon.table :refer [tb-scored]]
             [kin.lang :refer [defn return]]))
 
-(defn ^:pub ^I32 ts-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
+(defn ^:pub ^I32 ts-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np ^Cells photo-order
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
                            ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
@@ -15,4 +15,4 @@
                            ^Cells gl ^Cells mk ^Cells se ^Cells sc ^Cells ss ^Cells grg
                            ^:mut ^Cells g0 ^:mut ^Cells g1 ^:mut ^Cells g2 ^:mut ^Cells g3 ^:mut ^Cells g4 ^:mut ^Cells g5
                            ^:mut ^Cells tv ^Cells an]
-  (return (tb-scored wd ln et grl gfl np tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an)))
+  (return (tb-scored wd ln et grl gfl np photo-order tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an)))

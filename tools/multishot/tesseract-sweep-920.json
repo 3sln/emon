@@ -1,0 +1,1328 @@
+{
+  "seed" : 920,
+  "mode" : "gate",
+  "input" : "images",
+  "cases" : [ {
+    "id" : "sroie-test-sroie_00139",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "c3e8961afc45de9343a7c34052ac7a3b1b1182c1e68860fdda5efb6c27eae771", "631ca9846581fd64328e3add7e26fc43ca2be89dbdd52580f82dd713039a2afa", "14bb69526601528535a05032af335acefcf917995bdaefdb280864b8333792e4", "57b1e8b794217cab5b80163831fd1a4ccf5bb200bcbf594f59d844b5f4515691" ]
+  }, {
+    "id" : "sroie-test-sroie_00303",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "29bc9728b591237de76f3831c6c218425db7e0a09ba80b243a7ebb53e88926ee", "e169626b51d3ee59ebb6d55b086b923094e4027a31e2c5ebb5834f65bd22582b", "69172c608481e30c643fc66a3285bc4127e65b35c8eb694c4998de9fbca15d59" ]
+  }, {
+    "id" : "sroie-test-sroie_00109",
+    "kind" : "gap",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "aa37bdacd107a0c504677a4dfc3ed5fbbc83ec2126db7439837554167d418d0a", "744f6cbb188c96d116b9a36b12a6335998aa109d2dbc789cc27dd809e3fee83e" ]
+  }, {
+    "id" : "sroie-test-sroie_00289",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "07c51efc4169fdf2a629861587b8b6fb496aeed8b80a44d5baac2de252a73291", "6a567e722abba21284820f8cf2e532fab8eef183acdf17e340cca7dfe620a2fe", "a41374c7eee9857f0680275ebfc857d99d78485dbb1bf84e0d48c927d04df619" ]
+  }, {
+    "id" : "sroie-test-sroie_00161",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "fd9f5eb1598f07939e216a43d0fea9833651f7bb91921f31859ab84063998418", "ce77343f3dce057f4891ca6b626f70c2803b5bd3704dcf1e849bffc706c8c39c", "ac838d235d6542c06f2eb99a8d343915bfe46ddac8d526bb3c5c643a8aa5251b" ]
+  }, {
+    "id" : "sroie-test-sroie_00086",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "bcbf91e64a6c68e7da525c1459227c6469568e71aad75f2bce906d1d9aa9e5b8", "e5f05be80d59cfb7ae60d26152d785927f2145ebf91dbed81ff34f96c17b2338", "519855e1ea18a35f5101baf948fef9d0491f515d34704d3f2a7382e17efd44b5", "c459df06b5dd3cd3ecd768c3d349f6321de9c9f8fb48729497c32468611e8a4b", "cd41e800f13f8e01de7de35ef1cc52bfcf0dbad330e8fc8ba58bb3bd17452061" ]
+  }, {
+    "id" : "sroie-test-sroie_00044",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "96be8cc65c862463ed78f6fd329af04ca313d8d5eb399c518a671081fa591552", "9cf4eb40e52cc7428b95013b5b6d4c1679e6b53a2cd894481e8742086b12e7df", "355473d6f3211a853ee67bbbb5c4411855b0c837b372ce3ed43d7ddbe722f1cc" ]
+  }, {
+    "id" : "sroie-test-sroie_00348",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "deb16197ffe62871ee4f991a37661afe6e5105fd3ad64f670a56e0eb9123d327", "df6585878093847a853311540325db7fb0c0498176e1b2dd271b7fa8af7eab0c", "395a91188e4b7255923abff0450048aa3b70e7e992c92d6f46875ea52fca01ce" ]
+  }, {
+    "id" : "sroie-test-sroie_00149",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "5641a62f0297f08bf9dc529a63accd9a1cc589ad77c0cfa570f8926b98582ccd", "3c2aa65ac9e64c1b8df3d00d98fb4e2286529660cb86ba2ee9de3bcdb288b3c9", "4514df8f901ab25221ee4759c0b8b1a11ce0023dd23c37c9aed705cf33b41808" ]
+  }, {
+    "id" : "sroie-test-sroie_00061",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "6d877f8181e36178ef94810b88d32d8f42bc4cae88555a334118c2bdd58a3a07", "d2183d4d77496b33729a2e79f1e4c3349b31096956423ab0637081ba00b1ac1e", "c1d9f8e7fea53f4695234536a0393bf0b44959af75ce171b190545ab9d16a7b1", "8f94b5789d20cfecd7d5f392128f07783d26028122a1deeeeddfc1e914dee778" ]
+  }, {
+    "id" : "sroie-test-sroie_00114",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "f35ab2fed8a68dd928386759f6d740bcb7d0dae47e520d5277148fb9ad560e77", "e7b4570459408754864617323167ee57142bfa33b4fda4a1725f424e3b819f7c", "6474fd7422e0b700f7e9ff26467a1c6d79d4d11c48308e6720f30806f5997586", "05825bfee86b2f8866570aa6a47fcfb6e873b53a444a61f9b1950bd7c19fe7a5", "b57cbeec506e0c44a85b70b7972f5275c158672e80798a6b00a62bb572491957" ]
+  }, {
+    "id" : "sroie-test-sroie_00060",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "d5ca33f28419d99cbb16e79bf5c29e375bee515cfc128b17ed83149fc72f151b", "4dc26eacd315b3aea08c7a0a1340f63e79441bc6cb388d872b035ca14665559d", "9af840f4bfaabb21ce7673e5462826dfa4044ddd563269d96efab5e9d2991ea3" ]
+  }, {
+    "id" : "sroie-test-sroie_00174",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "735d76a8bd25da48dc6984583f99595dcf009dc6de1f49fcffb778f9a0ba4017", "25ceea75123ab7f5fb223b357e895cfa34c08d8201fe7d701f722a7b127c4c8c" ]
+  }, {
+    "id" : "sroie-test-sroie_00296",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "3067ae18e51b4bf799570d4bb151d0316159a80ad98328eb3044b73500edc0b3", "0f7328546ad4bf603b34e821b6f01ec8bee57df33a32ec22273611b0823f60a9", "e09992c5fe4d3b28cf8481fb1b3d7e23fd2daee071d2fd5485bd00e526418f12" ]
+  }, {
+    "id" : "sroie-test-sroie_00028",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "0dc1ae3b31b4cfc51ae29c38fdbaacd5805982c19cb5345e9b1c0efaf3200eaf", "5dfd0a03532c3af9d26b6e7cde797107bda6de842d84ef27d063905c86d000c8", "4b8ad56920fa4d015f1a814a4431a4a0bfea68356cb3ff4eeb951770a334f3fd" ]
+  }, {
+    "id" : "sroie-test-sroie_00351",
+    "kind" : "4+",
+    "order" : [ 1, 0, 3, 2 ],
+    "pieces" : [ "b13cb99acef6464c2320d82e664c1548518c7c6b0d5e844a242569e37db59a15", "ad34f5533639c9264d801323c2cb947cb87d65d8ac0751c6673980addd171171", "c3a60069341e1bac9d061c7da9ff7cb3fb9601e16d266ae8a3d5368e0fa0e32a", "137d916fb150c2be59cc6e2cfb0cdddfe72b0d8f589fe7dce0b4bf30a5bd7c25" ]
+  }, {
+    "id" : "sroie-test-sroie_00145",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "1cdb536ee71410f3c00290cf8b27f6d8643988b95850d2fada8f0406951e5985", "e2e6d069bcff88f4b2666503ca76841f59b9a1e84e58a359ce48904d49f4d113" ]
+  }, {
+    "id" : "sroie-test-sroie_00159",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "476f60c5724780d8928faa2489281180c4f38a5df81e842f0245758f09226dcd", "de95b04acb90c538babbe4c792cabb6ad7db952a603122b5fccd202c4b464a9e", "51c8766f0875177da178b1b2a3e29435598c9e640c447e98459bf7ab702c52eb", "e11b0649c13eccb6019661c1c25fb0b80aade9f989b61a840178d5d8a5d67a30", "917aee43b522b6b79e501cb2739db54a33700b9da3cfe9da804ae849d042b5c6" ]
+  }, {
+    "id" : "sroie-test-sroie_00072",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 4, 3 ],
+    "pieces" : [ "7106244ceae3333439230b1b667a727982566cd0ba308976b06d0f858cc99c57", "e424a0afafd8ca30f0773f4557ce4657a935c6b65db33f1eb292013df8602252", "08ffb96ad4220d44a0bdebb1966ead1baa59c306ea0f7573edc622f20ef14cca", "3918a3563f84cb478c37850910924324bdddc27f69cff0ee63ccbdd52295c44a", "e02d2177c264e1bc80fdffc7811c82bd784a7969e0500245a1c0c343f6c3baf1" ]
+  }, {
+    "id" : "sroie-test-sroie_00340",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "413a2a8703cc2caeb7be6e18221cbe9fb2e1c33387bbeab3cf512d1585943d1d", "cb9563d14c321d4e7e700e205a50031e8026504bb537e3ec9228414227d59040", "9e53855ad0790362488be7531625e3b116ad13ef97d8cd8fedcc1cf9cbe5fcf7", "921a45f5748233ac7689059d5c09af079320fcd69d77cd9598510e45249aeae9", "54fe16e3dc0e1f0a29613a3f8d2637c72ed3102ae9f33578059fcccf222f6d6c" ]
+  }, {
+    "id" : "sroie-test-sroie_00256",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "7b2414d0887d714866d493d780008cb5496f026ebb6152cb19d7263cdb560398", "c12bf8f055abeee6b46518c34a81994e985924cf0ff204fb81e5a779f117f6c3" ]
+  }, {
+    "id" : "sroie-test-sroie_00141",
+    "kind" : "1",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "7e8ee40a10399be7934440cc548cda1fa86145bcf03fa2bee2f0bb6ae4669927", "29a3e7dc05a79d79a182693be4fccbd79df0a9e395c7182467035f6d401995e0", "72563381d0af7fb7e1fcab5bced7647d68ce7192479b131ab0286f4e8643bd87" ]
+  }, {
+    "id" : "sroie-test-sroie_00051",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "12e8b192752ac44d56ea222ae6452bd094df9f7131c1ebebe32eeafeda620b99", "40a64195673e970bb088f4bb230fe305d64981b179914ff3c3f4791eb26be291", "0667a168c3a996dec446021d2aa45eddf33e34e4ed83bed6051eb780940a0ec5" ]
+  }, {
+    "id" : "sroie-test-sroie_00282",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "94447707de4296655139140845415bad982716f6bd2fa1953e1107076512aa91", "ef92faaf736f9f643fefe435034858b864952f17ebceba61a45a72225b64eae7", "d590537a227fc772a89e7db280d700a3692806160917ad841f90308f7514cb3f", "e6bcdb090856d64b23d5b334dd09d68d5d633346c639cb118b9e7f6cbebaae88", "9255642389c659c4a7f47e48cec16251b0a3d9be3b1fbab3f8f8de6dadfda212" ]
+  }, {
+    "id" : "sroie-test-sroie_00129",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "466c3bdc76a81170184b24f9ea09795b5904facd2716df8f54af452913387133", "9730dbffc80b94de6a9ab4ffdeab31461e4a4f60fc46b20f701cbf3f8a43ae9a", "797d9a4228060578f1e3dd0d84bc09ff862bf1513b3a9363a00e7ee90de98b71", "9b2bdb3aa1c2e6acc952fa327abcafa7986c4055c9453e7811e4fb9b8b3c0a71" ]
+  }, {
+    "id" : "sroie-test-sroie_00331",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "810591abc33893c032cfa28084565ec55e9dfaeb0ee8e7474747edaef2e99875", "fc1f5d44b2be69fbce8d4b361ffce7450f2d153a30f32fe721d44fd20005bfab", "dbdcff16ba9a1c24e75425e73afb8b9ce91e43c9f37aec0e3dec47e7ae9bbafe", "0598aced00ed09f656661a5be669e27b4ee4eb881b5fedd1314e5d801dfff56b", "96f6f31a41dc5778fb5218b6b696789ced0b6cd51d19eb406b633e974aa0d3da" ]
+  }, {
+    "id" : "sroie-test-sroie_00318",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "40a6d6c9401e1a85428d4751e172e249c90d845423f9856a030a36a2d2621505", "06b0ed5a117b01b5c1ada1224cea12f9d2207f3427733d602a540b8dd4c8f60b" ]
+  }, {
+    "id" : "sroie-test-sroie_00175",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "f8e895a97f77d3a7d28eff4fe9084d62b42d5116e3cca63e09c2c17e5e6e7dff", "97d7fc1eb5003f36d719155b0e14864e2544ed07065de56c0d27278f48e6bc7a", "d3043aa37c2b8f205c73f4346e9406e00ebb7cf0c2c874102764ee4bb5ee6025" ]
+  }, {
+    "id" : "sroie-test-sroie_00234",
+    "kind" : "2-3",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "8016773bd6de6eab11fcadf2815477c15ed97c88114b715b1b63c5f621bd0632", "4876c0ae559f45d9e946e77c4f3ef78d83fb1dfa298bf9ec17a73bcfcde80c3e" ]
+  }, {
+    "id" : "sroie-test-sroie_00197",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "f6720c9e836d263679a8a67d7121308bdc2e7dc82dc39a3246ce306283bf5a72", "0f9e7e7dcf080c442402e141b23716d20dd8e4d520d2b4d9bee0254e00376d75", "f9af2cd9121519fa3676a4ff7a9e70a4e98b4341a49de58b5d0ef7cc3603acb7", "5d47444c4ea8d06c2f4010fd287bdd2fa1e86bf7e6cb460c2513135e53a0cf95", "a9d2700448fa3e9794199158c6c68d7e90a260cc4949ed4fd826dc12a9390237" ]
+  }, {
+    "id" : "sroie-test-sroie_00154",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "caf8bbb5622adef8912ce1a1b629ca67fa7c67aa68040d5feb593b1b8b612a31", "9ac1f32dd8e39bd0fcadeb0225c8d32c8873d1ec0f501a7d082ad6ce5759c9de", "b3669267082a2acce934038021eaace697e423789f6020243b8d50ed6fab7c04", "9e2ab1a0cacf362ac82f9870c470e51c6e2abd5425a9a2423f77d26b0d40c0c9" ]
+  }, {
+    "id" : "sroie-test-sroie_00135",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "bba42e94588ec0d8dd02d363339679d9f8cfc033673ecae59dff70d854424bb5", "68f55a505004371b0e804ebd9548c5a6b7f061a516f99bfedbf3069a5495daf4" ]
+  }, {
+    "id" : "sroie-test-sroie_00065",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "39ac0fb60e9b0b19821f9adead07d94bb016d2dbdf05e730c7a7580196a5c92f", "6a1bafeb36e99d8e9793e5d8a43dc22d6d51c9c89045a7aadbe3b47de8ecacbc", "64fa456113bc8b7e24bce7ba88c41f1846756a6fb023d4f22111c50f34b1dcbb", "d7e59c7e904f4a729efeb68cd8f6afd5fef162fe1eb57b27da3a2e41a4830853", "d73af1449436b92f6d101789464ecb0bc59e801cfa8865578cddbdafc1766544" ]
+  }, {
+    "id" : "sroie-test-sroie_00291",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "ae9ff7bfcb9cdae8e4d5b7290a09085a5841f7bd3a19349cfac6d26aa9ab68ad", "8aa2868876a3d829e9af9eb5300e7a5d5815749c193bb80c6fedb92b17168e2c" ]
+  }, {
+    "id" : "sroie-test-sroie_00276",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "1a12d8c5d0c7bd02627aa13edb76eea26c7ea80f0496ef9f1f339d0a57cd1b04", "d390c5927ef6780c466084941eba763b3b3d06145bfcac3a6b7a02cdfb33bbd0", "d4e90c4d0125313736144b168a4cbd832ef85f45431938c835cde57368dc6337", "31bbbf2fc61e4e78d566cb1e681811d6a309d9e08fad7129e68b535bd8feebb1" ]
+  }, {
+    "id" : "sroie-test-sroie_00283",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "79c8d3e940cb119029dadc60eb443a87d0d17043eeecb2e1436919aa38ced3fc", "6d8c503783acf4bbd36b9110536a79749174b0395cbdbabddcf0d89d79c32645" ]
+  }, {
+    "id" : "sroie-test-sroie_00323",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "e7dc292fa1d87814b6703e3f629f5c1854d07dd5e2b7fd3c46061cdf86b90131", "fd5e19656238807633a2f655b91913273677ab28aca4b95c34dfbf90d39f0ef5", "ff9b3b95adc0a9be65df06b5e3c707e4dce9d87c93c903d5fb956bdbd06672b0" ]
+  }, {
+    "id" : "sroie-test-sroie_00310",
+    "kind" : "abut",
+    "order" : [ 0, 2, 1 ],
+    "pieces" : [ "c1b53d5029054dd41aeb6a7f42f898cef3e3edb5d5e996ee1780a67aba8c7596", "14c5cf9133efd85c02e6e9e67da83094d36f37afec9237b8dc02f4e84605cbde", "18dbc35ec4f967167b2f3de1b117b5d302412b36beb2c104d8269a915239f1ac" ]
+  }, {
+    "id" : "sroie-test-sroie_00054",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "534ea60c0c3c5325cee9d883ef024ebb216386bd5876152eebd277e48838d7b7", "007a65533ac8c6a2433cfebad8c937284512141567854d1c2fd187e361330612" ]
+  }, {
+    "id" : "sroie-test-sroie_00254",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "91e379960a24e286156334ad2ecd96c42170a172cbeaa99787e98e6b3d8ca8f4", "c6b4c4546fa0e86a621e7275a9e5990cc2fb2da166ee16cb4c15411990e0aafe" ]
+  }, {
+    "id" : "sroie-test-sroie_00270",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "d114ca804b60ea3e68806a3fb322c1e2472ffe07425e75123f9ebfbc5e1af89e", "eb94d4e45132180e262ae3ed3ae262c0a98071c6b9ce9cff2a27ca2fa48a0c9c" ]
+  }, {
+    "id" : "sroie-test-sroie_00251",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "ae8fe53739864a6d0165de7854f094b0fc9819306abb5ff0bc79154840fd1ed3", "bf5ec92005567e9bde01263da46fd218851ac0405b33f72b36728b588a0d1e9b", "e6c0ea7f7acfa23662b2029db368ec8e53e0089a8bfa52822a5540545e9e9cfe" ]
+  }, {
+    "id" : "sroie-test-sroie_00081",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "7985cb68cfc5efcf873aeddfafb33f5fe14fe516990cf839d585e4a788c8603f", "6c907c144be3af422715123014e152a31086bd0ff3c605161d7daeb74fc933b0" ]
+  }, {
+    "id" : "sroie-test-sroie_00221",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "bdf9ed1047ccfc39076d123ebeb60ef16b7329f4673814642fc6b04d97e9f8b6", "4545775367bc6d38b54bf3479acc957fd67ec2ac9bc6d99460c480dce0446714", "acf6c6d169b499355f2ace0abba2822a12d7e39f86c1d9a92e8c6896fe7f96b5", "626e6c528e128bc07438d0c320cb629e407aaccb02542bfbfc3efc921a6ed137", "156768fb8c1349752d428dedb5bfdc57abee588f6e2124e0268eb254efcf902d" ]
+  }, {
+    "id" : "sroie-test-sroie_00231",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "d9f2843b776f0f2a3a66f206f462614a846783c1b6166ba9235123ff88624b36", "549a49abdd72d1a0b9be9283ed24caad291b88390f6cc91c1b0955850ab340a1" ]
+  }, {
+    "id" : "sroie-test-sroie_00107",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "86a410f64aa19e90fe4457752055b34f1945613b8860eab826ca5ecd790ffe64", "c67f869ab68e70a443452775b195bf5a6f54ddd7e7592f41afe13476e8bc25a0", "5c6179f086b21b1ec03b684fc734991bde8e394a8da66a4e0bb78ceae85a8f66" ]
+  }, {
+    "id" : "sroie-test-sroie_00085",
+    "kind" : "abut",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "f2b1090761c22c48ae331373d15ffd7b2737663b9aced6481416332f3cd3ac31", "c27ea5b95fab952c105e9fbfa82f4a4c8491177ec23c188160df72be22114d31", "f601a52a7099a921dcecada27e16fdec6e3e1fcdf7ee34f5094be4be624faab3" ]
+  }, {
+    "id" : "sroie-test-sroie_00043",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "41eab0f3378ff99c7541e9a2645bb82ac6c49b24b158b972941b1be617271766", "20321a22ad8cca28e0dfae912d0e0776f56164850b91543e646d2236a3a8a4af" ]
+  }, {
+    "id" : "sroie-test-sroie_00140",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "0e989368e8a020bcdcb461fa52810dcc8b3b95b438c69a7ba76d84c5f6a2f8b7", "1c4b08e7b19a565eb0089f8097e267bb97a3c358ab44825270e11c1a29769786" ]
+  }, {
+    "id" : "sroie-test-sroie_00287",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "0c753c2d39c162b7b45f146a9b021bf8334b289ee8c725af348cadad9a501d27", "179589fdc8840a6ce64a374353af79b8a9aaa84ca27b0cab814824f9feb59894", "873068e21977f713a4e0348ef2a5d9de0eb0e5621dc3c27b6192e199d4e53416", "44b47e6d3bb4ae6a48a26e9c87865664ded96c06ef6e626fa88af823d04e1413" ]
+  }, {
+    "id" : "sroie-test-sroie_00047",
+    "kind" : "4+",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "f8a3c4c8ac1315496ee78ea6db5ff346f52c339bfcbc2d64812c2ff357de3ef6", "f0d9dd26762a4c60dc0070ad8b7609fd61c9d2da7111874bed0e4be7103d0733", "b43ccba1301fa1ed88d23f19049b9b2ec20541e14b4adf75cb4ad53e013451d2" ]
+  }, {
+    "id" : "sroie-test-sroie_00199",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "87b0b0245962627a3830bc498eba8030be38e838b91f7b0f447c2a96f19b0773", "f82230fb46f1139a7119f5062d7e40e717e23383e3246c1cf991617935a9b9bb", "f89035c7b159bbdbe38640a823201ab2f6ae09426f913263835f0def97cfc34a" ]
+  }, {
+    "id" : "sroie-test-sroie_00096",
+    "kind" : "partial",
+    "order" : [ 2, 3, 4, 1, 0 ],
+    "pieces" : [ "d4f783fac775c3ed97912bda0ba400745e7248861406934458f05bd0af13b073", "f7940eeaecacd576f98968fcd17834f246d63840d2fb7ad60a00a2b13dce8b4e", "8aed22dc5181b8aa367231a0b9d36e1cb43c4fa0b7ac7ffeebd064d6db9c69a0", "1fbc6c14686f20dbcf354a286fb86c2c45f59aaea80cbbc362aa639bc7899224", "fe56fb3f1c027f115f2bb0c8b28259ebb5d56969cef9111134e92237bc3f3c95" ]
+  }, {
+    "id" : "sroie-test-sroie_00242",
+    "kind" : "4+",
+    "order" : [ 1, 3, 2, 0 ],
+    "pieces" : [ "ee56f67e69d373d7c0af3a2de289f124240004b7f20f1680695d4af90dc397b9", "6e14f1cf87c10b21714f856b0c4f57663f0ad1c4c79c550f9119ecbc3b7e5797", "018cafb79bd7753f9255afca4ccc022f872ea2bacb4be59a831bc634bcf9ae32", "fd53b2d088b0554103271b85a0e53cf78262f97bc8057ee92973b5a4d7dbddb2" ]
+  }, {
+    "id" : "sroie-test-sroie_00030",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "f6d7d4eead77792ef2e6cd5c328686f75523314143833bbb19dba6f13eb2725a", "dc3afca2b52048503b04670c9b92eac0e252aa6e9ae73ed35e492c8842728965" ]
+  }, {
+    "id" : "sroie-test-sroie_00203",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "7c368139040714e262f1f95e6c6707677ea7b8de527b3dc809efa532de5f039a", "46b4680928a6b2f054760ca494799fae53112fbfb25b8304dca0ddfa6cfd23cf" ]
+  }, {
+    "id" : "sroie-test-sroie_00012",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "49c11e26d9d80200db63c0c489fb23af696d6a67d59e448d2a3093420b7b4ad5", "08a7777276d6621e70d9978c7dbebc5962544df3f85b8d2cf08b158d1a3bec3f", "8337dab6805d64344065994b196085e67d43d1a53dbe9f5db6b2ed24486efe5d" ]
+  }, {
+    "id" : "sroie-test-sroie_00257",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "9b9bb71948542b8fcc9694a345b8ec1dada6abce72e3e821d9170d54c89869e0", "f91067e53126deab8a31ca215038d89ffced5b2fae086b206f5cbddf7e15492c", "11e233ce81541957cd47663ceb3729773ac7f5b3357d574719df81421fe0f2e8", "ea84648ac79540398620289d2d8aed55ec3386330706280fca492a39c15b47b6", "3af6f47a701c5d705085854dc827be51ca3081d36d664e0a233b33e222c5841b" ]
+  }, {
+    "id" : "sroie-test-sroie_00260",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "8c94466b3bd23877e72f320d62fbd32fc18410ba6e0c008e22b2791e44f46c27", "f302f64b386b4e1a57683bad0dce62d9fa921b91055ebd179c4d8d8036ebca81" ]
+  }, {
+    "id" : "sroie-test-sroie_00084",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "561f8eb60738ad2fb3041545339d6ff586a476cf2519cce9022649d09e59960e", "f7c44a77043c4913afc9a67c0ef6d69649b571e3de899d17c0dd260e907d24ca" ]
+  }, {
+    "id" : "sroie-test-sroie_00083",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "08aa70711d70be922fabf42713d64a1e391338dd3bf3ca416fb23b4350b4cf51", "bc5a2d2dee69dae3e20ab08e68fbfe5763b84df7a4acc14a0317e115dc6766da" ]
+  }, {
+    "id" : "sroie-test-sroie_00162",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "ad517a72e8e4e30a5e9bcdae97f8fdd494814abfeffaffaabbb092dfb5e7b6b4", "28fcf3b36ca4abc5d32813f49c4a6aa08f72023bd61f5e4d73e1f92b44f77e09", "2a6b78f874583d5c48f800b72ff2b283c39a869b69b92f4ea764c196cef7e506", "af0effff8fc6cda863c95c835cc2baacdf8f965172bcdfcbe8b4fa94340fd755", "91335188fbf5cdf2c1d74de473a9a43d14e0ed7418837ab1e123e77d6d5ab98d" ]
+  }, {
+    "id" : "sroie-test-sroie_00071",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "f37362eeb2f2519ce7bab0b9f7e32059bee1ce7d483f0c9d03de59f68608d0e4", "934c24db031c1cad69f59893a3e4a6473e495a954358b02db0bb79468574a32f" ]
+  }, {
+    "id" : "sroie-test-sroie_00332",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "0d783e7e3dea2f6f6fddd6e9ef59a036e5d68a57e83a098177a21f78e9377b73", "9af957c8c1d85ca1e2d315d44d3a875bd313d488f44466b837b1cdbaba2b5227" ]
+  }, {
+    "id" : "sroie-test-sroie_00130",
+    "kind" : "4+",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "5aec719ddd56c5e93ac785387b718c3183f6a57104820e40cca5879c7b795f02", "ac3f48ebfe0d7620dcc67662e10ccb92fd4e53bae9cc022751ae52d12fe23c87" ]
+  }, {
+    "id" : "sroie-test-sroie_00016",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "cb29cb3dc0a9ca89687f7551d298cb448953851249ada28feef2f0cba43826fd", "b68460240dfe88ef7981314ee0b8248ce9b541aea087ab739b56c7670f357fbc" ]
+  }, {
+    "id" : "sroie-test-sroie_00299",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "47d2ca9160a937ecd0eaa5d454b380272be684de754f92853ea5a86b12695e3c", "096748ca1c6c8b6f1ea329c83056d249c1a16112723a33a7fada832964e0c410", "40a515063607d53f71eaa919f94d5caa56a648c4a48d6460aab2984c5a3300c3" ]
+  }, {
+    "id" : "sroie-test-sroie_00080",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "a039a0be0b5b5267bcc028c39a6c3d18df47faba2917957d73969c0d6791bf6f", "8846c2320a7a8b46548f0d01b32460fbee3ca640c1ed93dd9c56364e0c994d7a", "69e7abcc0c14f7e949b49ea2bf6b76dfa083903288ea05d59be6e3be88a80054", "5c30595517ab07e40ed77680a6bcbfb60a831fcf6bf6770ef5a5dbedb7368110", "e193fc301bc0e9c236ee00c8457bb4c9f733dd7a77d1daf482cc26fbaf22e28a" ]
+  }, {
+    "id" : "sroie-test-sroie_00008",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "5874286d4453b01d10fa949aa896a8b74d050c7c7f071ff414000a7ebf28682c", "8fb5e80b8075472b20c9572a389334728ada40fa82260d8a82e3eae6dc8bb650", "db2612a6f8bcace4e50fcf2d6ff14f88356c602a926f8ec9047521f6f89641b0", "dd401bd7291b1b6bb333f503f02048f1788cdbd9fa61b7a1b051d4fecdcb3d34", "5b3dd5c5ff3647f0f26cb9fca5bb470768efb8a5afe22904ae8fcf0a98f900c6" ]
+  }, {
+    "id" : "sroie-test-sroie_00294",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "d8d6eea07232067fa34b37e85a95e5988891a209baa71384c3b0321a4efe3d80", "d527998f6d6ae032dba09f0e96811f12158ecf3b1dbf9ae855ba4dba41cf9683", "94c5925f629d632923215da088c1fdf46e9abd9fa588a9be805f32ef8010fcb0", "a879f806a9c42e4a5492fff68de8d5bf9995479afaf4014aa7d1ac199002cd3e", "1abbd323e13f917fcdb0dc297e0ccba3b82d66a351d0a20d711806c4a05fa800" ]
+  }, {
+    "id" : "sroie-test-sroie_00352",
+    "kind" : "1",
+    "order" : [ 1, 0, 3, 2 ],
+    "pieces" : [ "db5dfe72e2c06500a39482db29997fba3934d2533aaac0efdb8ccf952c785681", "a3545fc21dc3da61aa2ae41defee8332ac249823a06979d34bc3e86c3b47e71a", "439c5d24a1747abb4981ac03322e356fe54c169dadccd10d4ee095e5a69f8a26", "516bce2fff16e481c13d7f4e05f1b666564cfa73595884ade293ea1b1991fe03" ]
+  }, {
+    "id" : "sroie-test-sroie_00295",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "ff21dd15914d9a2b015220454215e965c86932bc5c456806c476c3599f2d23d3", "c6472efc7a4f22a78f87bf3f5095829d13a95941afd2c2c88c1bca5e94d91e6b", "2fe21100d47f92c084416f30cc01ab908d3ab7b28306bf4322dc35c02fcda080", "ee43b313f29d6077cb59d3492cce8c259f19cfc1df4688d53afd2ffe5c06c48c" ]
+  }, {
+    "id" : "sroie-test-sroie_00330",
+    "kind" : "1",
+    "order" : [ 4, 3, 2, 1, 0 ],
+    "pieces" : [ "d9c0a4eb276b283894417ae7f5384940baff57f43ff9a75564876c6d785475a3", "a284db2abd310b1c0aec621871d8e08e3267cd257d18a2054581a258aeb9c8fd", "c2781f7b65695e585d90673f615318e07214a4865dfd7c21f7f3389ac02d1ab2", "cb79d6d7202be68b92ec9417623ec1e8f90b55947599d26bb78bf9fade619c2a", "9774518c0bf0226c213b9dfd3acbb935eed9a7d7f1c655c4019845de85ea3c44" ]
+  }, {
+    "id" : "sroie-test-sroie_00067",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "71b8a850f28ac83a5104ad2225c941480c432a5fcb73912eff3eefdb6760b374", "4b4119066295be5a932abae869b65124e26bed3fb4c938b23d1eb36e3ef1f92b", "2cd61d9a7a9e371c508bbe18cfb99491092b2eb9348b4baa2dd82f4b074024aa" ]
+  }, {
+    "id" : "sroie-test-sroie_00333",
+    "kind" : "2-3",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "0171bac434bef681649d0573c902afd245c22e1ec95da5dad49ef8b29b46a00a", "91582465ffed6406f9c642926d3b557c46e8d90137286ad64d64be325593380a" ]
+  }, {
+    "id" : "sroie-test-sroie_00360",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "b10d0ec2c5a227738547c004fd8dff88219929c0885355694e5a74388bd18b8d", "5e456d4defa72ccab495b4317c5783b3578094cf5cb5f7bb8211deb14cc1e2ab" ]
+  }, {
+    "id" : "sroie-test-sroie_00224",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "6d6bc11b6147f76b1585ac4d926b0a53118ecb73991fdd1b2425bc513d63e81a", "e89ad8ef29bd04e79b4350f75dad1db8215d075ca5de371e78e0e1d3f67caa89", "5e15e733918a34ae844e913263b677f060fe9884532f6c2b88356af020e62f91" ]
+  }, {
+    "id" : "sroie-test-sroie_00284",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "da69645954117e4cc0d5e425d76e13c499c56fc7358d69d6d222b3b761be0d3f", "cb2ec7a3e4c0a6dd6610eac4312e3b486bac7aa519b03815265192baa86c099a", "669e9b135c13e1c36eb6a097970ff845cc6cec01695376f338c26f437cc36198" ]
+  }, {
+    "id" : "sroie-test-sroie_00338",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "95ced0cc88a6f8657dc752b671588a60dc6e9e81cae8dbde7139d36ce831e56a", "4f9329a8e79d39341dc5aca1b230b0b2b131cd109cdba99fdec2f5a74971c348" ]
+  }, {
+    "id" : "sroie-test-sroie_00052",
+    "kind" : "abut",
+    "order" : [ 1, 2, 0 ],
+    "pieces" : [ "ad43ce6eae81ae244bea9f17c75e027d3a3de3eb7b64385bc864f012470062cd", "8f80a16ccf3a12452293e5d59981282d7e6e6229d4895fe06f5899463c022e4e", "be2ee3f40f3825243b340480e57b02c2a146f26ce89c9a27d618e5feca1974f0" ]
+  }, {
+    "id" : "sroie-test-sroie_00023",
+    "kind" : "gap",
+    "order" : [ 1, 4, 0, 3, 2 ],
+    "pieces" : [ "c774cf3e38fdd1426d1915bbdfb459a2874521de40ab781370364d2c517278f5", "fa3c0f357104a75091dbc7d0a47ce85e7e7e32fb19178865e39c4270278c4df2", "4f51d4b7903a470606fb6e4fad619b3e5dd9716a1a731f291f976fac7b59a681", "79cba64a749761e34dec7db8c33cc69781b1503f0fb413332f616437c2c70416", "021b256164a07764f6b2f92a6664469b759dee2029b64d065a9056d859366073" ]
+  }, {
+    "id" : "sroie-test-sroie_00155",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "f6c3efb1053d3b6491595f5912f3ddc25e449e03d985f6fa88f3ad3706377e9d", "132d09bd03c40a0a1c0bffb122896a5a42af469dc33015e0ae296fc309a0b34b" ]
+  }, {
+    "id" : "sroie-test-sroie_00279",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "426f8bb37f64feb2af1138ca85f5c2c7798697d6b8ff7e988492d82ee60fbbc3", "a569a42e8aea3d7eea9f45c7b12ec8192c6619daa6adc01382bcaaca5c2b462c", "c0c73e56d6e3712ae6b0c246a2cafcca4d4c01060b3e47e6e7ccbb0bfab55a55", "3373cde10899431cfe881f9cd835ffbb99bc879511b5d046c2df9a2f107d48b3" ]
+  }, {
+    "id" : "sroie-test-sroie_00034",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "7b1a6f74829e764096445437fd08371b31bdf02a6ca64effda5380c4173e30fc", "16c254374e574daf030ac8a2898653e137791145da7cf4de777ac0bd4cc2a764" ]
+  }, {
+    "id" : "sroie-test-sroie_00074",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "10adef422079afa11ec63142ae92155d2df333693e7e054020e5a0572a4fc55d", "ffd54f39942955dd7c5fd1dc2caf0a8e336645a495de942bdd00cfae3f51be2c", "765aa8903e3b3cef4e915bc856ad78956cb6f6361440075cf41f535ba132652e", "fee1259e08255756b847063cd92af8c766c8c7dd9587103615e3014f30e28784", "43a681f07afc0d32c421dbd9627d0672a38965e0e72f09e600e31c7ae95751c5" ]
+  }, {
+    "id" : "sroie-test-sroie_00015",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "f96346cdb69185b86667105bc44f8a22bcfc875a7b4d4c74f7ab1711387d94bd", "7924e31d43cdc7b3662fba714c2b9e2e8571b5a466b6a9306a011ec50e2f4223", "ec4eb63af0955a80c2da61bf61d37871d900a1ddfccd85229a947ae3e116170e", "0565c4a602a066200524a19d7c45fd049ec090d71f46b91da05d367eda89ae61", "994e3fec44a8a8f535c7f2ee9204bd4e916db8c3d6ee54c0b5ca0aa04da7172d" ]
+  }, {
+    "id" : "sroie-test-sroie_00285",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "6d90f2a44783a357d464e4c725619aa7d6968e5f4c24c468a10277d40edb212d", "e3ce49054667542e5c3add991770cb634fb65202f5a34a0bdc2aefd1072f2457", "870210af629f751cf0be9376d883070dec778ded3a68e294946849afebb75577", "cab308557f541316c3cd88a5e1e7005cfff4a44ff9caea7886607ab2961d5417" ]
+  }, {
+    "id" : "sroie-test-sroie_00334",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "43ee4d95b88f0976e13b119434f9f517bc2f3aa774b66f899453087fb3417125", "bda9df0b15798fddee8e8680da1f6f3f102c4015ef8a9c2b83baa7928636e693", "e339443d3d27516b7b82fcc54005e06c2cf735b1bfe5eb6376809d332711acd3", "932760f047de61cb9eacb366f2e3360f12279a6916a214e32a3345bfac0cb872", "c5f7e9647df6d26347b5059e4d43bc918843b11d8f140f2093661cf0ba2e0c21" ]
+  }, {
+    "id" : "sroie-test-sroie_00099",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "fc977e0dcccc1cb3fd83f859d9aa85c00268faf400290a3344b8b8b0dce9f6c8", "38821c1ed66b722c959ca59fc9a3b54d74907fe2787f572c0b3b99ec5551561a", "fe73d57d4b588385cb7b3fa55dfe4a1e2bf52b124f688921eaf2ed9e99dac81a", "f34042790f27f59bc8d16f1e056a6d7630312aafe79c86f9d48a286e4b1854f4" ]
+  }, {
+    "id" : "sroie-test-sroie_00202",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "afaa088aea410cf9322b23f74499d05ba64782e791f6460518fe501ec95fd354", "1a4acb94cc9eafdcbc3d5deef8aea1e98e94e7889f5ebd52f214f96b8f353bca" ]
+  }, {
+    "id" : "sroie-test-sroie_00312",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "301a819fdb439fabd75d0bb5d0b78f9a112335ebae762edf0311599944b51a70", "617bd694abb1aa0abc0ad52b4a34f158f5c4be559fa67a16ee0ebd18ae8201a2", "77a789fb43a9d19323d99732b459e0bb9eee9bb5fc9b957639d830a70d0d41a8", "de90f289721e00581f6486d60fc8632100ceb0424548f3261b24cdf9e898aaf7" ]
+  }, {
+    "id" : "sroie-test-sroie_00342",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "dbbb6cd8734e8b5bf52040c161e603915d5564cf5c7fded7f032641fe0499f93", "1531422fa9831bbc841c0dabc4ea0d377ebb66afc248fdd80d2bcf83dbb4b125", "987e905a557bf7d3bde304e835264ed90b485341cc2d4f699c7d5d747ace279a", "db141cb9949ff437a0273787fcc4dc4ed806d1ad3b7437a6aa51696f049f4968" ]
+  }, {
+    "id" : "sroie-test-sroie_00105",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "8fe58a61269f03f1b3ee6af7a98ccc5c19a57bb28cdc6305e4bdd541bbebcb4e", "d48137bd0daa9592a3a0e3e03bb0338b97bce17e68eafb763b77ecdc00a5e4d6", "c1737976ad76337ed0f01849c7c07e1dcb85b5e22d1031efe4c5ab7a4096f50c" ]
+  }, {
+    "id" : "sroie-test-sroie_00347",
+    "kind" : "2-3",
+    "order" : [ 0, 3, 2, 1 ],
+    "pieces" : [ "f8a7cb806416f5c8f775ac4dd4be2b23393259169fd4aa4c4985ccd0ab0a8303", "d25c6b96868e5b623cae394bb8a2df901c2d5c7cc2414b5c738a317fae729d55", "d486b13590465582e5decfaac3158df91a9e5ae52c2297ca0cddfafc563e31bd", "a9d3df70f3ce325a7fadb159cc45cdfbb2e06039691d5cb4b68fd1b464b32beb" ]
+  }, {
+    "id" : "sroie-test-sroie_00206",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "f2b0c7eb7f85ec4fd32121dc5bd55b1e8b6a53c92ce801b615e75d21f6e9835f", "ece3c0875305cdd981bd45bd60d41f32a89b3928c16bf5563004a492abe6f4c7" ]
+  }, {
+    "id" : "sroie-test-sroie_00336",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "fc6426687ab94d6bb9de36c5c826ce9afd76a37b747cb9c701a6a93998fa3458", "1266a293b001c5c366e9fcffbb4b637b38b02024b38ca9a5d66aecb58c5cc9e4" ]
+  }, {
+    "id" : "sroie-test-sroie_00108",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "d7e4a3134555bf64b19b86327e6f4496c5294f8e8072e44a2354a2b5dc33ddfe", "d56758a0252b693cb76b6cdbc19b4155b8a8301e55986ef457c5b639682a3e81" ]
+  }, {
+    "id" : "sroie-test-sroie_00353",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "bfd821ec6a20170c9a79f7ca805e186a0b266d1836712166ee74970f9b18e0e8", "a8c6921aa34690fd66962901d1ff25d1fe5256b34e9263c07a4e0ddc2f07547b" ]
+  }, {
+    "id" : "sroie-test-sroie_00326",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "d38e11c0acf2393172b506c4ef0f7fd3ab69f2f786a77a129b848d443368f348", "06d9f4688f0e37975101990d860f4856ed016dcce8d887c41eeadc9c7cbca9b1", "4a8fbecd9972bc12775a936aa2e7331c692149e704d9a894a13e65c67e3e462c", "18bee0e10f786a72bd7c665103afcdcc9ef90d7281956d1adc5a2b4c0ecc0e0c", "c6d88a1b1f52f11ddf7f758f8e731c80f79370f2d7b98ca0f7d67183de37aa52" ]
+  }, {
+    "id" : "sroie-test-sroie_00204",
+    "kind" : "4+",
+    "order" : [ 2, 1, 0, 3 ],
+    "pieces" : [ "a7254248ee5ec455baeea160936c53037616f98112e321cb0db0e57f173eee1d", "ac2cb3cb08b42f2979e338cddf75a183b818fd8ddeb8191a41673c57dab3af31", "df1450fd12fada1a371cd75dddee09272b7741bb3e7a5d3f6663574966a2056e", "9618d229e5dab52bdb0c0e2553218e162fb86d83adb50be6b28d73ddff237195" ]
+  }, {
+    "id" : "cord-test-cord_00039",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "6596788a3d04f9299f85717db76e3381ae838102b8c78e93685c356b9144d4a1", "5f117503280b21b414f4d7a4eb572455853397f7555746527a119237344ea9a3", "2ce4506e66d434d3c89489fe27a264ff7cba40215a512a6b5c732403f4cf38a1" ]
+  }, {
+    "id" : "cord-test-cord_00059",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "d7568d0eb52c844398ab77db94b560eb3904725ec3b43130e90c974022772c0c", "199f23f77cd64bb9dd5037b19f47bc2b3328d48ecfac45ef52930c52b3b7c78d", "58404d630b4b9955acbeecd5fa347e88023ce23adaedb3fe44adee28a2942aed", "08bdb7c4b697049520514680edbdc621b8c50e7a9c7502cd25bba93083e87643", "b15e7f36bf911271d88033d8fa5df49dfc1a2c605dc0d2dd9c76c62a796a309e" ]
+  }, {
+    "id" : "cord-validation-cord_00059",
+    "kind" : "abut",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "d7c0b4a7ecd74721bb5ab7662f7392df871428bdac66a69e698065cd5341aa51", "2ed4da1d4a527c151d2b1b9a6e306a4120af995ea033a2b31cd1c6456321f988", "9baed2b3be85b00ee5a02488483c595bbd903de8baf1fb27ae178af2b143e199" ]
+  }, {
+    "id" : "cord-test-cord_00061",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "b293da32d27c00147db2d17df2c5dfe45ff29e8c1bbc459cfc3b8c3d62245069", "1e0f98d8fcb640fe384a0aa31f534ef92eb3b04fc89dd1d5f43a3842b300fdb0" ]
+  }, {
+    "id" : "cord-test-cord_00051",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "27db3cfb3491ccbf70f018b41b016f27d8ef76a8e977a8cee3b507991c9644af", "48fd529b23f3b6c3275145a4c47c272479392b474094cb28add4c4927afa6760" ]
+  }, {
+    "id" : "cord-validation-cord_00093",
+    "kind" : "2-3",
+    "order" : [ 0, 2, 1 ],
+    "pieces" : [ "6e829ca9aa7cc24baee65a1519fa2c87935ce1376be905c254cb137f13910d75", "aa5af6cdfe904317b9eb0155ba4f26b2f21f866db3bd13f25526ab60db7a46c4", "781e1e431762a8eceb94c4b644a2d5f355108b9d6b72dc2f35789e6f0479a8e6" ]
+  }, {
+    "id" : "cord-test-cord_00038",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "b28788e987c2adef969ae3c76b3e2f25f5eda4ed154e841578268a65ab26fd3e", "c81a2b94b4e128dee453b67bb8a4b3ac2210d78df92b05a18cc5567164eaa571", "dc951b5e89460024f37ac912664fae8ad908697eb0006bae5a38ffdaa09913e5" ]
+  }, {
+    "id" : "cord-test-cord_00026",
+    "kind" : "2-3",
+    "order" : [ 2, 0, 3, 1, 4 ],
+    "pieces" : [ "6c4d1ccd7478176b91cb0a62f0dd370a552c9b8d70e4f9af2164db92a1322186", "2ba20748f2d24da1f4bc96645b944c77d085659804563fbf97d59f9d8d19002e", "cc4a5a7a3475380f1d9e2cf7df0fde71ef41ede4b6e3cc8344e42ef736a7a366", "93aec780af4bdf610350e4c8dd96a963f597b1f6031f1446525db0f9307f8124", "23c40fa52759be7eb1cf57895bf04f8bc9439569cb0d05a75b3ecb3db6ee9cda" ]
+  }, {
+    "id" : "cord-validation-cord_00088",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "46d26ad5095dafe64a3b0227453e4fdb285f4578770b05b4610ff5ddfc227f2d", "38f7071a52f7b155f64eea94d6aca209ff544ce8135631e79b41c4f3f4b87d83", "738ae1fb181e7d6785a63107f8a258f83af0c13b6f89a43eec713c71c5fe8611" ]
+  }, {
+    "id" : "cord-validation-cord_00041",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "8f8937a6b6d2436cb6823084482124c695f32f448d04923f3f85626885b54ff2", "5921f602f3f007305b842c52514e9a591aa349656d76dbc20f981ac3713d08c0", "f7c3a0588df41d606bd7d12604fc7107e0ed43b9da52eef4890e40de99b68c0b", "b3613fffbcc763b430928857e8259aa48f95512e168ab6503efd76589e5b19ba" ]
+  }, {
+    "id" : "cord-test-cord_00085",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "55037ea40c0d1085066312ecde55b307994302ae3d2dcd26cce4f9c3b7fb43be", "888a460688ac52293d157cc5897e034026089adc0417519ca2250f46ff869370" ]
+  }, {
+    "id" : "cord-test-cord_00017",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "08235e447e9f20bed546280a29b30a4894077ccdb9d2f3982489fc31c33ceb17", "8ddf54874c5135109112907f499c47eb84978a5858ee38748b6fbbc5fd7a2da3" ]
+  }, {
+    "id" : "cord-test-cord_00070",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "f150cea6a7ca8d852b8894fa30e759ce18dfae92b146350b69ec16e117e23f6c", "e1e34ac30296173337e84397c80b2e2c5cfbdcbbdf7afc17f584b7df1120afdc", "98a8864f3f6ddb4aa3f256ed04bc5403709f5b9aa556d57264a4a16e07d95ed5" ]
+  }, {
+    "id" : "cord-test-cord_00041",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "59dfa9d6bf25f5cef94b865d672acdda63d54116fbc72b9f047d38df9bf55d85", "3c53fe74e66cf164af8be1ed2eb89238078764d94827b6aef7d3b21f0e24d6b1" ]
+  }, {
+    "id" : "cord-validation-cord_00025",
+    "kind" : "2-3",
+    "order" : [ 0, 2, 1 ],
+    "pieces" : [ "2dddcaf9e8b7450afcefd40cfc63bdb862c006f732abaa21be808c7fe0553813", "c966357d9be54115a504f37dcfec0486f5dc65c75ec54e98a2434d66594fbae6", "9278a29e929ae2a536d7fb742fecc9bc809a6b891231794861746a9e6ae111db" ]
+  }, {
+    "id" : "cord-test-cord_00074",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "9c9d42d137c8c7f39b24fa2e5d12d7a84b34abc065c91dfed828284563b0fa11", "8ef294aa14fe36c70e10ff4cac76b328de715058e418a2d667fcdcdc93e7bdcd" ]
+  }, {
+    "id" : "cord-test-cord_00029",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "cc5d2fcaeea2763fd15e529ec89eccb4d7c15c79971fc256d5a848106284ebdf", "19dfc7dbbcb37792cb061072dc8982259c7cbf1ec89cf369adc38c893790bb93", "5ab3bcda824469bceaf7cbc48961b489186c64df5922b21382a05716bf0650d5", "fa65e9424225fe17b7f342afa4db4bf04e2e573596dd02271f9b7fc307eea0af" ]
+  }, {
+    "id" : "cord-test-cord_00099",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "2dea3ef12c611dc20fb0f5278099cd63f4c1481f2ba24958c592617febf4d6a9", "a6f58f4fa280144f51d1d11aec955da6a363862dcb190515b76b05c968d7388e", "ece21a06a357b1c6bf6267504b050515580809333f7edaec1a827da3293e5d91" ]
+  }, {
+    "id" : "cord-test-cord_00014",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "241482842c757bf7b27cd1169566944b137e26594cce9a21d44d8b814ac8106f", "e2b4cf8409c57cf2954597d1d467b2be8bcbd80d319c3c680e89519e7ad1a428", "1dd35ebb6b2e7f47285d1f40f40961aeb44b70806d9c8435debf027faa1ecbe3", "8e17f6181c872ca31624c3ad6059908dcd6bde559870f84054bd736a9174e35e", "979778e5d80d85bbd6e389dcb6475147415879fa216f4c730d922ca95060c405" ]
+  }, {
+    "id" : "sroie-test-sroie_00146",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "518faf87e5e142a20460e87d95873fcd641fac177a83c2288d5c08d14aad927a", "7fc1e7851c1cfe45e117633ca1b00aa6d5d717ffeec4ea5d87a0b3f99278b9fc", "385051413ac1febd24422ed8ac65ebede69ebaefb47647d35692b2ef3d97df34", "9f1b3d197521c76699e1adff38e7f70cc1b378483b1d3e69532e109a4d54142c", "0f7d75cdb812e5da2d05bb627a2f41da553b4a9fdaf8e8fb4c3ec8e5bb0f5d37" ]
+  }, {
+    "id" : "sroie-test-sroie_00110",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "d0f82c534872c9ef322ceb79ee2fb11a0df1dcb0c70703b82e164fea6ce7d00c", "0eddbfcb0657344a3094ad3f6a31912bd8a7a063d10fb54a8972ae1f8f5b6b5e", "0aea8581dc91991bbd2025d313508f38d208fc565e94d6de020dd96bad157543" ]
+  }, {
+    "id" : "sroie-test-sroie_00305",
+    "kind" : "2-3",
+    "order" : [ 1, 2, 0 ],
+    "pieces" : [ "b4ec0b3b4d9ba4b00439c427a71947e7634d3b16285d775fd56fe5207938b5b0", "1521c6cdd4afed6af756d599feb136cc0ed8674d0b2f11f9a297f75e565bb38a", "0dcd66578661dab169d9529b976f340f446e37d301cd7fe657268e45632707b7" ]
+  }, {
+    "id" : "sroie-test-sroie_00210",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "342e7d1c8a19f938729a49cd9522abccb26c2cfd1de6125178374ce88793edc7", "d76ef0e8239e080e64a54c4457e4cbe1e920877d91c49e207ac86faa3a99ebd7", "f011136ce843ee52686feb192dac42b187a00c6922cb96f2023754f3e78c9cae", "b656895b0f97501ea0d6c35bb85c580897bb552eb6251df7750640530d00766f" ]
+  }, {
+    "id" : "sroie-test-sroie_00006",
+    "kind" : "partial",
+    "order" : [ 2, 4, 3, 0, 1 ],
+    "pieces" : [ "66f969c125e5805556ac7a82565bb5c5c61d46e2016be8d7573d5354e7283217", "c380196d4eedadd07363c9a61743a7ae2751c86c5be0d3d1732f49ddc79e751a", "9f5e8effabbd3e4bf8a80be38d90378ea11fcf9d26cc8c77cad00163995e8bb8", "12324c1a7d3fe1f06b611def561d9e141e4ea995266f9fa93a2c063b0909ac7d", "460f1d4d3a6a7dc45e4ba555c9e909a538502abf95fae93ee2af75b5e452a5aa" ]
+  }, {
+    "id" : "sroie-test-sroie_00147",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "ae324f92c5c6bf3d82bd6e6a0a876a662a1c5b35b4ef4ca3a9d9d32bd3dfc091", "8a57f68b1bb9a48e3765b70253879a4a3716e032a1e32ff58a85c8d3a102c963" ]
+  }, {
+    "id" : "sroie-test-sroie_00298",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "aeeee9a5b2756ec2d3c84c521043e08c484684f68ac33fe57de892bbb10f0571", "a750489513c4d4245ae9b20b2a8029e103d6331ab38731a2409fb20ab80b3163" ]
+  }, {
+    "id" : "sroie-test-sroie_00062",
+    "kind" : "2-3",
+    "order" : [ 1, 2, 0, 3 ],
+    "pieces" : [ "a608b71687890f5f98ffc4b218d4b7a7bda2f242b9ea241ad0185390c5d9dd24", "1b6f4528637341ed96cc66034942447d258c0d15a3b57ded607fd9d7703ee414", "3023c210345afeaafd3874a070a0cc5d0516ccd90b3e315d2822f912b19bb62a", "407b5333f3a7342367aa41e4f6281f0d468866edf1399263f454a86d0c1fd1cc" ]
+  }, {
+    "id" : "sroie-test-sroie_00021",
+    "kind" : "abut",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "8207a893289d18b75bd768e884f708ab8ca95d41111edae7c15613e8fe2d62c1", "398d373f14bf1dddac9ea018d44406a5c175f308d47b3451267d625ccb792539", "7c0e894c9448a2c842a3c339a3cd81a0fea3b28a8fb6f1ea38690d1e1df48ee9" ]
+  }, {
+    "id" : "sroie-test-sroie_00213",
+    "kind" : "abut",
+    "order" : [ 0, 2, 1 ],
+    "pieces" : [ "5e6b1a8cb5ecae402b5f17d38cdc5cbebb32d3370dff7fe1de10e00220c618ff", "9327b03c6db6895f4a77a60a84910200c32a55f3a93c53b5d3d5a7ee92d29c69", "f7ef359c6caeff2c9385176fa0922c08e0318c41eaaa548452ad4248c0cd684d" ]
+  }, {
+    "id" : "sroie-test-sroie_00350",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "c35b7661ae1ef2f2fa6a8757801d37fc330775ae520d2bd25e1bb4af5bfc3607", "1e31f7ce9be31d6b0e5eb9647d53e13968dcc09792cd47c62b65941b83a9b5ad", "bf4f66b925960e7ae313735807a566ec7f1642ef0354ea3ae9a0d1ae0aaac887", "136759e1097fef82a5823f5551411db02af1abe867d0f4c05775e6440a9f8d3d" ]
+  }, {
+    "id" : "sroie-test-sroie_00223",
+    "kind" : "2-3",
+    "order" : [ 3, 2, 4, 0, 1 ],
+    "pieces" : [ "b040a43d9026dbe631ca35c5c5184e191a94d3f0731d166a3d86f8cc0be04c74", "f1dc7d21ac514cdd7730598fcd7eb338d57d0a1f07fbe112a92a76f04960a9f3", "4b263fe4f42d59c3e06f5e62eda35030fbe55b5bf7e22ef168a0669ab5f3571c", "01a3e6e202e87cb76a69bedbbab2fa4621f930d68139343889fb4a0eb3aa7871", "267b4178b5388bec5071188599653984ad7c37292dfca2d2e1b1478e83546ca8" ]
+  }, {
+    "id" : "sroie-test-sroie_00248",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "d74bffce31064cf01d65ef23f5ab8b827c59881be441c56b8577f63235679515", "7eee0a0bdc0fd843fd6d3f681b47603953d640b9e0763d590710709a473ab168" ]
+  }, {
+    "id" : "sroie-test-sroie_00219",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "41ba05edb1e7b7f47511a95afd2af1aa611f4499b00478571e16eb65fbff9027", "9307b7d7d8c24915f36236cf6a13e4680b1ba7de9e1392ce475367541ddeec6c", "6a293814afe6542b7046934a45a4e8634403386c1311dd18178fdc2e29b1f0e2", "45c2aa5a9b6f03888ea1a1a2e48979dc1f6fe9e0f4c876c38190e62ef0e0da3d" ]
+  }, {
+    "id" : "sroie-test-sroie_00087",
+    "kind" : "1",
+    "order" : [ 1, 4, 2, 0, 3 ],
+    "pieces" : [ "ba26bf71d53bdb386ef4387781ec47f9c83d7381fb0fda7d179a842b658876cf", "7b0565a7435854448b3a9ae134b6141dc2cf14b8785c1c100af778f377371eb2", "509fa643ce02958db22e5320fb76cca6460af016ccab3ba25e9bcc7ca6a8803a", "dc623141a3de2da13a4e524a6dd69a8282571905609bb70ff6b46cdd0771411c", "5dfc0d66393dc7c146bc65f26672ec68e04e9173eea4a6bc49197e9cd2d234bd" ]
+  }, {
+    "id" : "sroie-test-sroie_00059",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "0a45553b43282f6b24ff89a050f0889657835cf93108e69daf51a1b32f9d16c9", "6e6469edccafcd537a9b7e303a78fda7b9dccd551668ab6c8dc691446f8e3fd9", "d71215e70ddc108358ad6169694b0f4b64cb512d0b7ef70807a72b15a7461e18", "765f3cddeb60f9b26a30e5c13187e13ab47a8d5e962558769af7d5985486ef1e", "97fe207fb6611f4106e489628c5e2b330897876f0fdb0af228636d2b7a39c6eb" ]
+  }, {
+    "id" : "sroie-test-sroie_00100",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "7d11d66de3213ff28e094c1275b4f155553d24aae4052af7d1842097568d1e7a", "9b8bd5d0eb7e5541eb0641288ec6dd6e06991765820ca59da996e10bf6b73895", "666bc7dffbf7678a5a37430beab2a9a098e2f98299674ac0278b71d4af6c90d7", "ae7266a22f1871f873520ea0934d3c994fce4a9fc7c1e7c3b53f20a3bbb5a176" ]
+  }, {
+    "id" : "sroie-test-sroie_00036",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "4a3d1c6f50760adfd83ac0ca779a94254aff0783c1ddb019ad6f2cbb8e33f607", "f0c16226663c970beead96f9da67fc32c31cdcae529e322e33d0e1369c7c3c91", "4325e234306acbb95bf9140d32ecf42ccb467e335481ca62925be89104cb8527" ]
+  }, {
+    "id" : "sroie-test-sroie_00240",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "a715ea733aca926ea1017c7dcfad8239b8a430ebb39fbe366fa990a9025ed2cc", "05d181d3f3b833ce5d53e2dba1c93c3d14811bada90a3a806601a1839fb72e20", "b9030993d4be27fa45f596d7326afc48e4e34bcee21aa87462bd004b8880e2ec" ]
+  }, {
+    "id" : "sroie-test-sroie_00173",
+    "kind" : "1",
+    "order" : [ 0, 2, 3, 1 ],
+    "pieces" : [ "2aaa0d7b635b85ece217fa38e375277d15d56dfcaa7a335665c0ddc03996a3cf", "427ed734ea89ed2b480f6e1c5d03bf5c35d5589c2fe60e2c8d273d4f1df2ec19", "6765dad1ad3e6a13a9f9625db916a2b6bfd40ad42e24bb60dfe2ca06af8c5d89", "661a4e932c7cf1cc5d5fd8abe3aa3cda57fe029f57be99be2498cb6f95ad303d" ]
+  }, {
+    "id" : "sroie-test-sroie_00189",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "e0301e2f05e40328f08ed354f02efa02a9967ef715bebfe53189502d3d1c3a50", "3143c79b8ef19ea708cb521fb0f749361dc0efce9ddcd3a4ecf1d48d27a76570", "8b4e2608e66b7b5e0b7e661c461b1fef54b15273cc4f63448eb431688f0cff69" ]
+  }, {
+    "id" : "sroie-test-sroie_00116",
+    "kind" : "4+",
+    "order" : [ 0, 3, 2, 1 ],
+    "pieces" : [ "2f2de5d5222c6f4eec9cc6a32a60a1a7625c7b2d970f453840ac59fa5e9c64bf", "4ae1fc081a0e6d5ec3142d317ef815158a249a80f10fa8b4e46398c3ea383d48", "f7364f8b5347e1d6ce87969b71bc0efd0a8e7eec2dc438c427a350519ff18b98", "2527d6d0ccbdac48f2b86239fb824c806e28531dea687d946c2e4ef8fdc46a9f" ]
+  }, {
+    "id" : "sroie-test-sroie_00050",
+    "kind" : "1",
+    "order" : [ 2, 3, 1, 0 ],
+    "pieces" : [ "877899d8344c27b0673a7d1a72292b7d66c1bcb1a5445936ebc370f0b789fed3", "0ece69593a32fbeb37990cdf561e3b8e80c46cb3cf1e91e2098581ae52258a4d", "1345e5b8e88260f2f5010a5786cba7f3994f3b31800e3d56a9ea15a592bd75ce", "60632c321a20a799b39b4284f5d7c9b05cdaf1e4085ab3f08f83e9459fccc12b" ]
+  }, {
+    "id" : "sroie-test-sroie_00314",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "0614ff3495c281425205fd8d7dc858e01127c58d761c3ea2e4ac542945f8efcf", "f605c43b9335c253fd104822150f47257816344c8c6c06e6e9a8ff213ea53abe", "aa7d245a581eed4077bb4e433e0ef22ab729ace0be7ae26ffad1aca2198efba5" ]
+  }, {
+    "id" : "sroie-test-sroie_00137",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "cbfba4253537051bb0d2cc73382f87d413824838ef40584cc0ffcc86302f7fb5", "d35fb7afca3fa0bc5c35d0b8f08bdf0c6f61cbed34dfc6cf7112a6c4840ce8e9" ]
+  }, {
+    "id" : "sroie-test-sroie_00357",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "c60d923c2b96743be908db7688f079e8d6147b04088f7996ac4ae6d904047b2c", "a751669712bbe835b70338a39a2dc6fd8cc8569b498346226522535cad9d8091" ]
+  }, {
+    "id" : "sroie-test-sroie_00024",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "e2f7455b5bffecc7d4204515f672b593080e83e77c9021152b206ea1869b54a8", "3f21b24b664c28c6f79203b7002f2f30572370a7540d425ca8b16d26feda8ba8", "882ebd789c3676deca7574cac5d547fb9cc6a09de5d483a999398a5eb2d8d74a", "9af4621bc2f94747a49cb8dc1cefea12c80ed823e0c8e88b85872000bef4e097" ]
+  }, {
+    "id" : "sroie-test-sroie_00075",
+    "kind" : "1",
+    "order" : [ 2, 4, 1, 3, 0 ],
+    "pieces" : [ "79511ccc6f0d44d4c63371f998ee6b9dbe24fa025b733bdb5e7992329caeed19", "6b437ffd4a1677d29366a81f679f619dfb50435c315cf7b5c77ae95bc0ee1805", "e50e99a0d7522be57bfbc9f0bb39bdc0e30d6b81ed3bbe213f2c2702db55e65a", "c6a3a01ef28d10798e6ad30448a80502b3bd7e6fa793a895916f7fae9cbbe600", "a3fde43599844d2eaf4802b2f6617cd566caafb7a47c49ffa34d0d4e8a3a6c78" ]
+  }, {
+    "id" : "sroie-test-sroie_00233",
+    "kind" : "partial",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "1fc9d071cce9d3266f865f687d2f1cfaaf60db3fdc7e543881af2244e4dd0c3f", "1fcfabc94f78db46e1d1a478ffabce22f72785c5696c78cc395b33612af72765" ]
+  }, {
+    "id" : "sroie-test-sroie_00227",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "4ced6c9f56c1d240dea9e702cb614ae571f0290a4ad04a60e002fb3689b1e2a6", "55630ef83420a280a36c71efebb93340ec612eb74b7a379c2f400ebb32e149c7", "fd2a7eb7fdf0419cba57ec35c281c7be783822e679f28df23e7d97c0e760fcfa" ]
+  }, {
+    "id" : "sroie-test-sroie_00320",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "f5cc5368130d3dfaf51439440e290bf9d63aad3eef6c2926313d77e1fcdf9300", "22c5f61356acdf5535553c704c4faf59dca59726736102a4b4dbc275617e493f", "54f03133dae602fbbdc5b96937b7df1ac3fdf30181ee0789f5e399d190e9bb14", "1f32fcd8e66e016270b903af2b18d4629e265384b779dc9166d7eac0591d01eb" ]
+  }, {
+    "id" : "sroie-test-sroie_00163",
+    "kind" : "gap",
+    "order" : [ 1, 0, 2 ],
+    "pieces" : [ "92e3a450d34f6bf42d771c9e9f76505d0c31d1d246d690bcc196a2cfc63af8e0", "36095f2bd0d52ad5557d5350e50b62dc9021f85d038cb1ca5a473f73cd2c828c", "26c00879b229c697acaf0ff5d5c50979ca61e124b0966aebbf5da29751250706" ]
+  }, {
+    "id" : "sroie-test-sroie_00172",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "acb9779750571a1dee8c3d0266d079d8246bd3290d54f0d9cd2a12be973c8a5b", "3f667423a1f2d2cd3fe38ed671e21eea4f03ca95a14c9b3859f8ebc176f22f90", "d5efa0e8df678cfd50c1314d766ea3c2bf9f0faeb903c811f23f4d3068303266", "d7854dc4bfae716c789547a1241633d3a3663353312962c28d9d9da6c2213408" ]
+  }, {
+    "id" : "sroie-test-sroie_00266",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "d434366f7132fbc58118aa393785da83b6a25b988008a0c6b309fd9763cc007b", "fd28eb8cd0cc0d1f53b686c48f820342c65aec28cb7d24ef9862bdabb403bc04", "7569250125219370fb656e661f4ba890573286437bda66605a9b423231cb9c07" ]
+  }, {
+    "id" : "sroie-test-sroie_00187",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "ded6c559e790fb2b75c33fbe84a23d1b79a77cec48fb1a84c47b1d3f4420c60a", "392227c88c438087e5742f321a0fe188086ecf0f612e8576c6ed8b199209d80f" ]
+  }, {
+    "id" : "sroie-test-sroie_00235",
+    "kind" : "2-3",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "a6aff62461a32d5827d1da15315c959022cbe6e520ad59e3d137be1a65526053", "7e9c6a84699967a9c01c095e17e48a5da912a9fe2bec77e686459a15abf02ede" ]
+  }, {
+    "id" : "sroie-test-sroie_00180",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "53b4d9e74a68942bbd26d23ad77ff57f0a4b86ff2a57d4174b9c5ba76851a058", "7d7a3a49a6bc65aa4a8003c9f7b6112a7df0044a7d383507de1d1a6673edcb6a", "b0e2a36929e5d16b076978be78af59a5913f032d7302b02f684c2f3c61008c8d", "a77ecf922ecd2f19ac52ed169d96b22dba8fadc9f79158cac85eaa3d4b035d46" ]
+  }, {
+    "id" : "sroie-test-sroie_00128",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "b9e65ebb1e65e0c679291654d66bd77e857301710c123921db02b24f3b6f8210", "72b5d9ea72282ab01900aaf3ea0250c7a712be1609757ff8e4c6d2814445970c" ]
+  }, {
+    "id" : "sroie-test-sroie_00217",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "b027df480085bd29db7bdedbbdd22d0f4acd051caf65b3793d4be59622fab5e4", "06dd4cd355c069e9ea5811183393d73a7839aa8ec8a3385ac2367556538ac4c5", "f8f65c0f2d9bfca4574c69b3f4b25180bee9d0ccf363eb7c7a6051f2d077c2b7" ]
+  }, {
+    "id" : "sroie-test-sroie_00341",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "e9939ed0d2db90ad8407e34f755daa6c60d082c07eb237c35fa37d9309b24bc0", "6435e516f5993ee7d6108f75557972b9c1b487f553f94540dcc6134cd0d54bbe", "0b1e719176acf0bbf6df2f9b556356c9449e0ac512f050649327d31fbb5fd6ee", "17d6841660630dfa4df9de6f81832d9256b1cae09a9544f84f4dee5bc3df298e", "c203956b99e8ffa9d18ba396eaeb652afc6af29a229de7b12b83532661131e1b" ]
+  }, {
+    "id" : "sroie-test-sroie_00259",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "20f9f6462766114d3c550cb14edc1c7fe8e447d8ab248c3c740db471d3b2b771", "d07050c5e069f3800d981e1cba515cf37b99c0673701b2e0d6a9484f820dfe53" ]
+  }, {
+    "id" : "sroie-test-sroie_00148",
+    "kind" : "gap",
+    "order" : [ 0, 2, 1 ],
+    "pieces" : [ "c22e6e496825431c7d8831672cd1b38e1178a263ed96d5d362e9f7a46faa20d6", "34ddb3cc903cc58ca2d50adc0f8ce2fea120f70c0d185d3aba44c38148ac1419", "d49940e462a1c2d91d1c06536fa5f2034fe3fa5a150e81878832761ea0fc8f44" ]
+  }, {
+    "id" : "sroie-test-sroie_00307",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "66bef56411bfa89e58c236d52f60f91da1c2a54b99be465db42a59f0457c50a3", "e1277a4f559521f9bce8ced0ccccb5a6285a523128f558186ddb8eea847bd526" ]
+  }, {
+    "id" : "sroie-test-sroie_00079",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "e299920487d5f9e6d16da1323452d29bb60a99bb9d1e33d32f3801911a2dbc9c", "0449ea4b57e6104848e995129ded952caa7ea0a0bee0fb04ee5657985f58f30b", "4fd3f18887b38385c19a8517ea6ad9f07ef0f31487264b632180665ceb5a7395", "0be1a6f40bce47b51d889c959d51f342b7d9cd886a537f32e2b4892e7325aa9a", "40465a531c507bb910df8c97e734d734951af6f9d4a2dda71bf916c8431211fa" ]
+  }, {
+    "id" : "sroie-test-sroie_00349",
+    "kind" : "gap",
+    "order" : [ 1, 0 ],
+    "pieces" : [ "4565b1004ae42c356f90fa614ccf1f1e22d850af1ab729e2a457d3c4a2a1058a", "b3f87b65b3cc168b46f57147139cfce6ddb342c3b29a5c2bdee174ac0267946e" ]
+  }, {
+    "id" : "sroie-test-sroie_00165",
+    "kind" : "2-3",
+    "order" : [ 4, 0, 3, 2, 1 ],
+    "pieces" : [ "72f1dfd640b5b43519185bf0b03afc946b0e056547c3f4e3a220d9b7f023ebd1", "2618ed67ba58c974a7a8e408734c7008a35e5a4cb45f0903d8f5a9759991d7fc", "885855a9cd02d609282aa824cd56fdce1d2a73ffabe1e70d156683ca97af423f", "3a5a2a40a2e2b41c3f140a58bd9b46b45f8f4367434926e66f6f80a345ea80f3", "7fe7787d89be63d2b2e3c4039c66c7f7f5fce86aab3223486ba7ba2e1654a75c" ]
+  }, {
+    "id" : "sroie-test-sroie_00121",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "ffc78786eb3354402a967f0e63a40ca1b53173dfe2e558ae86e6980088db7bef", "3a43e05d4b35d8d175b386ae981e213e3a2bb411adc1a875e6267048a798ebee", "6a20c4c6a4f54935192a796c7eb124d7847a6ecbad61d055d113f3f66660a389", "2cbfeb1fe8c9afd63fe3ff78decfd3f900ab4a90e9ec6c6070d1d89dd2ee1d8a", "132b612178a35a1a9449e59e7ce777b2be534fcf3fd1611908ad55e4442990ed" ]
+  }, {
+    "id" : "sroie-test-sroie_00239",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "126fc502451a49145d18b1fc3eb73cfcb87e6d4a30c88139b091bcbf7f0a2cd1", "6402e54c5095a4f331f46adfc5b44f2c0c6ddd464b776d285cb545bc629b8f80", "082f267af36e08702323cb5647ab5322ba50c41b42355563810a212ba08456e3", "f6695d69e8a734cf4a2f8a521ed6139dfcea534a3b6f5a5f6270b2273679598a", "8e490cb8c5c691e2b52012f473d2be0cd98525538b51836b9ba71cd97c25c764" ]
+  }, {
+    "id" : "sroie-test-sroie_00292",
+    "kind" : "abut",
+    "order" : [ 1, 2, 0 ],
+    "pieces" : [ "3538db6749b8522ca3a376cda280a0ca043dd4e4d7979015205d2cfd99c3cdb8", "e00e559edde97bc19821f743af28518cc9ad3d44d5271b18bca6a064c3a71f64", "aabf617e4dc0b9dfc2f1e2f39d86a342e589700cfc6a7ed2ab887c1408919baa" ]
+  }, {
+    "id" : "sroie-test-sroie_00063",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "4453d36d793c990884fd35742e8f84ea3bbaa344445d8684a646591f9c6124ba", "0e65dd470534425ca3556b8a1f7f030f98941491e3100ece2f34ed8e6759f5dc", "ebc26c825133c0d26462a2ca4f1839f7e631d1aa9a64cd5e1511e0a7855e2eb9", "c331ac36a352827bb5ca97451d782cc6d1407efc948482ece3c0af9ed616dcbd", "c90393bd278397ae04953eb63e5cd749f90b74c30d7ac44913f6cd284576291c" ]
+  }, {
+    "id" : "sroie-test-sroie_00293",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "e520d6f39e5e445011bad9b1a7e666285a75d0429cc2f8e7318f1e1887d462ff", "93a91bec0f095d917ce5e997831c5158ae1b2109d0b6f798c6b47704ce17cf3b" ]
+  }, {
+    "id" : "sroie-test-sroie_00275",
+    "kind" : "gap",
+    "order" : [ 0, 4, 3, 1, 2 ],
+    "pieces" : [ "4d76c662a50a6b22dbff841e9a60d39d95c4a42272714f88039cb0fbc0395a4a", "dc51f75c5f03c1534a894386f2746b612537e42ed32dc49467b56e58e97cdd10", "d316d3265fc5b7af35c444b4f2a91a6ba687ab3a803dc2f7bdfb8decd040d6de", "e82fcdb8d5011fd4117cd6705309d93036ffb5040d41c65c6482047c372fdbbf", "fddfbf40875d7b973aa1f776be0ec155d3cce102e79cafc8017d175ad2c00164" ]
+  }, {
+    "id" : "sroie-test-sroie_00321",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "81329c029004995d63710612271735d9a4d07d9fd368b52481d3f452cbabf285", "88148165b67f92e0ebeeb49a81dcbb98baacbe259ba6b97c30f875974ce29084", "031290ac6d49dba591c14f332fff486697f83f3b6750571452c3e2e569db960b" ]
+  }, {
+    "id" : "sroie-test-sroie_00198",
+    "kind" : "1",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "fe54cd5c509e2b9c60cba7eb1af4862d7333f39eb84245b61684ac695e5bc5e9", "fb3bd13b51597099e0f4097306ae0cc7ebe431d785f5a165ac6cfe6da924ecf1", "6ceb4cc5231356457aae4adf09ee50a5645cf4e8c1455c40819f4ae12fda620d", "24af93a822fe922d43b0d38fb0b0843e4237ca2cf7bedbab95cd9554fbb41c97" ]
+  }, {
+    "id" : "sroie-test-sroie_00313",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "9557816b126ebfa69a1695564331e6ec9731a0c683812d09b9daacff4afef4ee", "9c2909140d84f8d38fc8c30bb437dd21c0a368abe5b84c2226a992042cb7c25e" ]
+  }, {
+    "id" : "sroie-test-sroie_00358",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "bcb294d1e39a15cb0b6c86e46b024ef96faa1cd5c29fc422e2d82397341e130f", "f139a494efb41c9559746c122994a0a78754ca1011c67b3ab55519a8a4ca0222", "77c7b2ef01ab98b50d07ec9a29c1cb2e4b23f4c58e6e06fc9d97fb4786a6faec" ]
+  }, {
+    "id" : "sroie-test-sroie_00170",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "40f7000c59cd03b683144319f8a4b2257f3cf71deba96622310dbe9e7a4b2598", "2fc72870a615ec3cc02005dd38c86ec63c3574b12e2966a0fc6d41d67531692a", "876fb537976253d7f449904f565ec21fe7285d20b2b55f8295965b626fda15d2" ]
+  }, {
+    "id" : "sroie-test-sroie_00101",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "cc724ab03a899db5165c71bc33d21e740e8d6c0ace53610d991ec27a0e5d831f", "06ef304b84bcd941aa1eec327d3fd197277aa7224ce612afdca8afa91caa10d2", "1286529b918f8268c70155dd8f1eecb020a14695672c607b2d4c23126e8ce68a" ]
+  }, {
+    "id" : "sroie-test-sroie_00053",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "1069dfc3a1fe963dedbdd4fc7a0a7e109c1f7e581775f222d433a87be0bae4d0", "9898b04d3ec28aa63964180b0a03a2f9220dc305693cff7fb354a4560985480e", "d6326c62ad6e639b105b3f7a2427209ee50435d59c89d272f9d24d9b953fbcf2" ]
+  }, {
+    "id" : "sroie-test-sroie_00176",
+    "kind" : "gap",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "bbe229cf8676dfbf1eaa94457449da479e2e41183b8edf242d5b7fccdd706d2f", "061d1a65c4f0bd1f12b7db85a7b0af478a0b334aae56a375aa2bd6434c5e3c33" ]
+  }, {
+    "id" : "sroie-test-sroie_00185",
+    "kind" : "partial",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "84ea5fe40397bdd82737291e70574ad6f5f860c2723080d19290ebf533b4ff63", "08e620083e192d8ecac480ce0f849ab9c30966eba5d701b815089fd9e531f088" ]
+  }, {
+    "id" : "sroie-test-sroie_00188",
+    "kind" : "4+",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "54cb8826a8285b50dab1a4c79785d02e3c8c847db7ef6615cd8ee9df7494e4cc", "0d15e2cb0215f74c6d7f2d1bd268012cd1c2ed8fd079b51c073040d3805c350d" ]
+  }, {
+    "id" : "sroie-test-sroie_00193",
+    "kind" : "partial",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "7cb5a0097e6fb57d77b2fb2a775b60ead4e023cebdb50ed22a8e8594c86d1b99", "50238309a539358fd628290431d11284b217c564141265da89dc5da2633a53d3", "2dd76bce2e7e2c493ed1a76d52c3c331a5be55d4b8e71c7da4187d02fae46ff2", "b0a2c704208e6c120ecf86946ae7eb399a9cd64efba84914d3c778857ac4e4c3", "ee13c67381142f80c285dece6f5af63c1a639f4586f4152d18f865f96a4ffce1" ]
+  }, {
+    "id" : "sroie-test-sroie_00258",
+    "kind" : "partial",
+    "order" : [ 2, 3, 0, 1 ],
+    "pieces" : [ "bdb94fe1ee8f6c8f7585b5bf7c4375129635a98de5d79cc5ab35ae6920cb6fb7", "73068bc15e5155c58774e5dd16849df4b299e3aeaa9af09881c2c251f4735f69", "8289ebb7c0d40366c74d1eef6da60de278ff3f201a6a201816f05ebb7484158f", "7deb11679d21bd1c69863b49f6065d075c9c6bf96d2016467dee1e6711957fa7" ]
+  }, {
+    "id" : "sroie-test-sroie_00288",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "43d52c90910ca057076c3296358699bd868d75a580f06f37d368978223e8c6c0", "a9f6545e5430e9b2c8aaa25af19372b252a30fca8b5daf1051ed9213c265833d", "bd8196db706c3542215a1a66038efbaee39f50d86f18f07398900353d5beb242" ]
+  }, {
+    "id" : "sroie-test-sroie_00158",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "cd9968a4fdc2cef044db1acd3b2aeb961229d30da4ca3d8f9e9f74725573d494", "e21f1aa5fcba7d7cf82ff9187cee27d0170d7769a778519d8d9d8ebd9bfc51a9", "cb20477612a36321435fc11d6f0bc563af1d43a506140ab49c22c4637421e19e", "e71cf8b67950af0b41b2b45127e3df96776c70a4105a3ab2a73563823cd7028b" ]
+  }, {
+    "id" : "sroie-test-sroie_00002",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "35071924f7ea4d10cd04f9652fc6cab162a6e0354be8ed1e40bb13abc4b62403", "fa928df5592e6c77f0ac19345590a75e7779c6d77a73986ef16370cf437076a5", "7a723ae275785f71f042ec9814cba301636945068a5b45aa1e7d4becfbab66c3", "b2f9c891127ab9fd65ab0b85a955d65a230777ea37656b92a0fd1ca54c3c6b9b", "d6d279eba662ef3cc54eece6c2d1b69b9357c6cf464fe867ea18c86508aca275" ]
+  }, {
+    "id" : "sroie-test-sroie_00263",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "b8ba22b13cae16d95ab3534b53d80352b29a2e2c09bac0fee9f12320d4530cf2", "1747a0b19fb3050f8cc3ebb4e5182c1ae2f0db0563f78510bd8861cf9673d697", "fe1fdf49f4b59f3e76f4f363df2cf01d0522e47789b78c2d7dbbaaddb17c4bf1", "68b70845058842be20f108f6294932060ef47fbfbff3fc6cdac709b71412d7b3" ]
+  }, {
+    "id" : "sroie-test-sroie_00111",
+    "kind" : "abut",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "4b7fe8a65e0f76095355cf340a031b5069fb9b16cb3d99ea34124f965a9b1c5f", "479872a55df9a0c320aa37db3fdf78a76bc4e1e915364c9fc8da53dbc232a96a", "29b2648a6e42c7bdfbeadf9273b771d07d9f5bdcf3b37b0909978dba1d796cad", "d343006622642d0213eb39f19b8d5f40bf641ac8e52b18053d81c8a7b821919e" ]
+  }, {
+    "id" : "sroie-test-sroie_00040",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "af41e7345120504bcb70a8286fc7f4c02a7487099c9a7c3a6c77287207fea76a", "d5f3585052ee1902731bb2b1d8e8aa692cc720223a3d2878bfd4a971ac54773a", "53816d16c38cfc5dca8e938803b39b42314bd5322338e4273a3fa25fb1802ae1" ]
+  }, {
+    "id" : "sroie-test-sroie_00092",
+    "kind" : "2-3",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "f805a862529921410b51e97ea65f566315bfaaa4320a0434fb59dfd74c1660dd", "a10d342e4ec3dcb390f0b46561ce6ff78d6ed5411524c08725f2883d86a73984", "ad73546337ea4a1f51dde5e0193148214e7cc8f6226037388c0823fd1fb98373", "18b72229dd0d62e8f480b1aafa7a287ba6cf27627e7a842ee0bbefc15bea566c", "3b73e899ffccc16205b3b399f3963beb5dc8da5b07cb729e65873b89f2f891c0" ]
+  }, {
+    "id" : "sroie-test-sroie_00335",
+    "kind" : "abut",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "cd84faf53a8025d354183c2af6eaddc9e2eaf4bb6568f7af4c7c17808e921663", "8e410cef129195c2b6bc53e99684b9511a7cdb9edff6ce8f5ea040faeff77e9f" ]
+  }, {
+    "id" : "sroie-test-sroie_00302",
+    "kind" : "1",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "5b935c8e4a51aef3ed7719a99df3ba5654a00748a8bb701f586f39c5dd0975cc", "4e416905bbcb54f9d3fd14bdca839d596c1a6c7956a41c68219a681b9b86bc72" ]
+  }, {
+    "id" : "sroie-test-sroie_00191",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "edb30db797f8c1a34dd713bd48ca7090e0fb5c6d1455618ab6df09b700dd64ed", "5e5e8a543809d581f02c6f67c5959313dec297593816ece448248a652f7e5f84", "7044097e5ba7c20cd9bec374c4d788d2619beb805045fc66dfe815534c84e77f" ]
+  }, {
+    "id" : "sroie-test-sroie_00068",
+    "kind" : "4+",
+    "order" : [ 0, 1, 2, 3 ],
+    "pieces" : [ "f6d9f9fb9a7976cfde3470afabf7abd5199901354ce8dcb2a49d0e6362d9835c", "8907aa360d4634c49695c72a827b9f773e0165803deff2b5f9d8e1fc192527fe", "41ee9f0c13fb9055b61bbb31d83892d4352d8b83900cad3261e5961bab30cf62", "25fe62b32009783bc7d91e3155d170ed4bb77e045ae44d2e9e63786efbdab141" ]
+  }, {
+    "id" : "sroie-test-sroie_00152",
+    "kind" : "gap",
+    "order" : [ 1, 2, 0 ],
+    "pieces" : [ "06d550aacc5512829bbeb6be2b4e59497dcf261c25fe04296decc660a2347497", "a5e7149948570bea5af7d99523297dc4b113662b65bc0d66010cccf1d8f7809b", "61a2d4cef1c72ef22de85a635abf5c59baf22b52bee53938f87f888c5f091998" ]
+  }, {
+    "id" : "sroie-test-sroie_00232",
+    "kind" : "gap",
+    "order" : [ 0, 1, 2, 3, 4 ],
+    "pieces" : [ "b6643c3c9f973fced965297c1803185bd4bb6d2e5f1b529555bd27b3ce20475f", "ab6d90968510c90db0a3ac846a624cfb2e72f6e96d28683c54924b5380de0b88", "ee2e9a156ec0c979c456e4b721d5a08237f73cadea1682cfdd5dcd0e676b1e9f", "0f72d9a74f1ab6800c94e6b11ef0143ef5413d7d3c850ca9ce975f3826129721", "f615ebef5c5753a84377e71d6446e06b8fa5448ece4561126980d370909c4ae4" ]
+  }, {
+    "id" : "sroie-test-sroie_00143",
+    "kind" : "4+",
+    "order" : [ 1, 2, 0 ],
+    "pieces" : [ "c137f0b4637574383eea2a8ba68541ff2d9e211910471ccc3459511ee82a2981", "0bd0ad104eb10dfa7d3d4c4c370f3592f0eb34ae9918a7b9aa786970c68d4114", "018774a815229c16b789d2ba5b79fc8c7f4e170f01f30621d14c0fc0b23b0153" ]
+  }, {
+    "id" : "sroie-test-sroie_00082",
+    "kind" : "partial",
+    "order" : [ 4, 2, 3, 0, 1 ],
+    "pieces" : [ "e0566ffe8879271bf012d754b561ae427d966eeea92ea995b9f9046a22e94cb9", "33159b75c01ce3465bf1409e1f347e112b1ad38fd1fe590a37af5aa5281c5ec0", "0b6dd281e2e4b62caa9c7838267848bca5fe058b03799ea074a00e6d07bcb483", "db763214ca73242183efd6809751050dd03719ce78b3d2aaf32c2235099be9aa", "84e8faa9c15b766d8ae8aa15eeec282aab2563baeefcbfe3c295cecd5249937e" ]
+  }, {
+    "id" : "sroie-test-sroie_00142",
+    "kind" : "1",
+    "order" : [ 0, 1, 2 ],
+    "pieces" : [ "19273cd107c22e872f7463508bb74a89f485cf12d9be429730a316ee6d999b39", "c1d5a5ac0d52c777c0f74bd66c4978c069896941aaf7fef280a6754d9c9771aa", "140e7f767babb70a8bdb5c72ff65fbe22c1ab10c27d20451984ca014e41fd113" ]
+  }, {
+    "id" : "sroie-test-sroie_00207",
+    "kind" : "1",
+    "order" : [ 2, 3, 1, 0 ],
+    "pieces" : [ "4f169b5416c009d6bebbe24f6c647602a0bfd91dd4c5b1a4d7afbd68340ee4c0", "32409e43790fdd7864588d89db832e658e423ce3ff850e922a7122921ea5e858", "7842adeb1c5b89c1ace8982c511d94d5313221cd3910e3143f41d6a20287a13c", "a78bd74b255c897d0c483c31b0dc25aeccead73306aaf7cc4286eec8db051253" ]
+  }, {
+    "id" : "sroie-test-sroie_00139",
+    "kind" : "clean",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "2d763c9f541c220d08884990eb660ac095bc28f0f6a05811d3e458b1785e196f", "f69c3fb2983ccaff16dbe5b3097717c2e50ffc1ba4377959da94466d6941c473" ]
+  }, {
+    "id" : "sroie-test-sroie_00303",
+    "kind" : "identical",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "478a7a2998748ab93e1164ddc7598aa0430994bc0d780453559fb2aa15bbde2f", "f8c2223ae9a89ac5252fb281d1afc662c7940750858b632a2955d326665c365b" ]
+  }, {
+    "id" : "sroie-test-sroie_00109",
+    "kind" : "asymmetric",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "e3df86f9633a8e36fe6d33a011bf4c4fb63a61126eba4394706822b222c89d7f", "3c3ee274d1eeaf1e54d7529802b75027b27ba2a7b29235b7f7527e76350b09a1" ]
+  }, {
+    "id" : "sroie-test-sroie_00289",
+    "kind" : "repeat",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "a3746ecad0d6f7c86fdf80cd74f10dc05d40b96879c4f353c2d64ce37e64b9ce", "dc089993fd0bb98f2515c557c58ec8d5ce3240ae981167eccad0b72968fd4da1" ]
+  }, {
+    "id" : "sroie-test-sroie_00161",
+    "kind" : "separator",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "a8b7c77f46986046c88330334f401738b1de0f4c90f49de0656f2b6ba4295275", "3487548ec5f6534da042aa5ddeaec498672df18b2b90bd46d27a47b0b56e6d98" ]
+  }, {
+    "id" : "sroie-test-sroie_00086",
+    "kind" : "different-pages",
+    "order" : [ 0, 1 ],
+    "pieces" : [ "95c83ea5c7654fc62380dce5646418d2202ec446e375df4dbfdfa86ad96e6f22", "fb77db498d6a071b7c6a79e4d07433754bcc1f50c32c284ff5363a98d7a75f9e" ]
+  } ],
+  "engines" : {
+    "tesseract" : {
+      "words" : {
+        "scan" : {
+          "precision" : 0.786798390630602,
+          "recall" : 0.7836765464428838
+        },
+        "concat" : {
+          "precision" : 0.7227479845776376,
+          "recall" : 0.7363409117962147
+        },
+        "actual" : {
+          "precision" : 0.7242038713705901,
+          "recall" : 0.7363012339800817
+        }
+      },
+      "historical-words" : {
+        "scan" : {
+          "precision" : 0.7867317382851248,
+          "recall" : 0.7839323132882616
+        },
+        "concat" : {
+          "precision" : 0.7230261881668283,
+          "recall" : 0.7368046495077689
+        },
+        "actual" : {
+          "precision" : 0.720957249070632,
+          "recall" : 0.736092990155379
+        }
+      },
+      "checks" : {
+        "scan-total" : 151,
+        "total-before" : 344,
+        "total-after" : 335,
+        "total-missing" : 25,
+        "total-duplicates" : 57,
+        "false-merges" : 1,
+        "changed-clean" : 0,
+        "changed-repeat" : 0
+      },
+      "buckets" : {
+        "different-pages" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          }
+        },
+        "abut" : {
+          "concat" : {
+            "seams" : 67,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 67,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 37
+          }
+        },
+        "asymmetric" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 1,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 1,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 1
+          }
+        },
+        "1" : {
+          "concat" : {
+            "seams" : 66,
+            "shared" : 66,
+            "dup" : 21,
+            "unflagged" : 21,
+            "lost" : 2,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 66,
+            "shared" : 66,
+            "dup" : 21,
+            "unflagged" : 6,
+            "lost" : 2,
+            "lost-flagged" : 1,
+            "spurious-gap" : 27
+          }
+        },
+        "partial" : {
+          "concat" : {
+            "seams" : 126,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 126,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 126,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 126,
+            "lost-flagged" : 98,
+            "spurious-gap" : 0
+          }
+        },
+        "identical" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          }
+        },
+        "gap" : {
+          "concat" : {
+            "seams" : 81,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 81,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 81,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 81,
+            "lost-flagged" : 66,
+            "spurious-gap" : 0
+          }
+        },
+        "repeat" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          }
+        },
+        "2-3" : {
+          "concat" : {
+            "seams" : 79,
+            "shared" : 204,
+            "dup" : 91,
+            "unflagged" : 91,
+            "lost" : 5,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 79,
+            "shared" : 204,
+            "dup" : 88,
+            "unflagged" : 70,
+            "lost" : 5,
+            "lost-flagged" : 2,
+            "spurious-gap" : 34
+          }
+        },
+        "separator" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 4,
+            "dup" : 1,
+            "unflagged" : 1,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 4,
+            "dup" : 1,
+            "unflagged" : 1,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          }
+        },
+        "4+" : {
+          "concat" : {
+            "seams" : 45,
+            "shared" : 193,
+            "dup" : 107,
+            "unflagged" : 107,
+            "lost" : 2,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 45,
+            "shared" : 193,
+            "dup" : 91,
+            "unflagged" : 83,
+            "lost" : 2,
+            "lost-flagged" : 1,
+            "spurious-gap" : 21
+          }
+        },
+        "clean" : {
+          "concat" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "seams" : 1,
+            "shared" : 0,
+            "dup" : 0,
+            "unflagged" : 0,
+            "lost" : 0,
+            "lost-flagged" : 0,
+            "spurious-gap" : 1
+          }
+        }
+      }
+    }
+  },
+  "environment" : {
+    "os" : "macOS arm64",
+    "tesseract" : "5.5.3",
+    "leptonica" : "1.87.0",
+    "python" : "3.12.3",
+    "eng" : "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "osd" : "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"
+  }
+}

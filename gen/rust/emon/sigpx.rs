@@ -519,7 +519,7 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
     let mut kind: i32 = 0;
     let mut conf: i32 = 0;
     let mut rgb: i32 = 0;
-    let mut ln: i32 = 0;
+    let mut ln: i64 = 0 as i64;
     let mut r: i32 = 0;
     let mut g: i32 = 0;
     let mut b: i32 = 0;
@@ -551,14 +551,14 @@ pub(crate) fn sp_judge(page1: i32, views: &mut crate::port::Cells, srcview: i32,
     if swc > sp_pen() {
         return 0;
     }
-    if (ink * 100) > ((wpx * hpx) * sp_cover()) {
+    if ((ink as i64) * 100) > (((wpx as i64) * (hpx as i64)) * (sp_cover() as i64)) {
         return 0;
     }
     if sp_ruled_ink(mask, zw, zh, wpx, ink) == 1 {
         return 0;
     }
-    ln = ink / sw;
-    if (((ln * ln) / 4) * 100) < ((((wpx * wpx) + (hpx * hpx)) / 4) * sg_tort()) {
+    ln = (ink / sw) as i64;
+    if (((ln * ln) / 4) * 100) < (((((wpx as i64) * (wpx as i64)) + ((hpx as i64) * (hpx as i64))) / 4) * (sg_tort() as i64)) {
         return 0;
     }
     if (w <= sg_ini_w()) && (h <= sg_ini_h()) {

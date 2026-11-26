@@ -142,6 +142,8 @@ typedef struct emon_engines emon_engines;   /* the engines of a conversion (belo
 /* Convert one input to a Model.  `options`: kin's text (NULL: the defaults); record=1, js-ocr=1 and js-render=1 are options of a session and are refused.  `engines`: the OCR
  * adapters and the renderer the conversion uses (NULL: none: a scan is unread, a request for pdfium is `unsupported`). */
 int emon_convert(const emon_input *input, const char *options, const emon_engines *engines, emon_model **out, emon_error *err);
+/* Convert an array of single-frame image inputs to one Model, in upload order. Uses the same settings as emon_convert. */
+int emon_convert_images(const emon_input *inputs, size_t count, const char *options, const emon_engines *engines, emon_model **out, emon_error *err);
 /* The common case in one call: the canonical JSON (compact, or indented when `pretty`) / the HTML (`html_options` as for emon_model_html). */
 int emon_convert_json(const emon_input *input, const char *options, const emon_engines *engines, int pretty, emon_buf *out, emon_error *err);
 int emon_convert_html(const emon_input *input, const char *options, const emon_engines *engines, const char *html_options, emon_buf *out, emon_error *err);

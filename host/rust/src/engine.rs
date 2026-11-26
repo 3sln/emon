@@ -42,7 +42,7 @@
 // NOTHING IN THIS FILE NAMES A FILESYSTEM (D058): inputs are `source::ByteSource`s.
 
 use crate::emon::enctx::{Arenas, Cfg, Doc, EvArenas, Pass, Scratch};
-use crate::emon::engine::{at_failed, at_intake, at_internal, at_miss, at_requests, en_asset_figures, en_asset_unit, en_attempt, en_finish, en_fmt_jpeg, en_fmt_pdf, en_fmt_png, en_page, en_seal};
+use crate::emon::engine::{at_failed, at_intake, at_internal, at_miss, at_requests, en_asset_figures, en_asset_unit, en_attempt, en_finish, en_fmt_images, en_fmt_jpeg, en_fmt_pdf, en_fmt_png, en_page, en_seal};
 use crate::emon::html::*;
 use crate::emon::json::*;
 use crate::emon::model::*;
@@ -1113,6 +1113,8 @@ fn intake_of(doc: &Doc, len: u64) -> Intake {
         "png"
     } else if doc.ifmt == en_fmt_jpeg() {
         "jpeg"
+    } else if doc.ifmt == en_fmt_images() {
+        "images"
     } else {
         "tiff"
     };
@@ -1143,7 +1145,7 @@ fn finished(r: i32, mut doc: Doc, m: Arenas, info: Intake, opts: &Options) -> Ou
         0 | 1 => {
             let evidence = if opts.keep_evidence { Some(std::mem::take(&mut doc.evidence)) } else { None };
             // `figures` leaves the asset stage to the asset unit (D351): what it needs
-            let pending = if r == 1 { Some(PendingAssets { cand: std::mem::take(&mut doc.cand), cbytes: std::mem::take(&mut doc.cbytes), rfrom: doc.rfrom }) } else { None };
+            let pending = if r == 1 { Some(PendingAssets { cand: std::mem::take(&mut doc.cand), cbytes: std::mem::take(&mut doc.cbytes), rfrom: doc.rfrom, spans: std::mem::take(&mut doc.spans) }) } else { None };
             Outcome::Built(Built { arenas: m, evidence, intake: info, pending })
         }
         2 => Outcome::Failed(Error::Internal(format!("pl-check {}", doc.fcode))),
@@ -1325,6 +1327,7 @@ struct PendingAssets {
     cand: Cells,
     cbytes: Buf,
     rfrom: i32,
+    spans: Cells,
 }
 
 enum Outcome {
@@ -2108,7 +2111,7 @@ impl Kind {
 // the Model's settings and every figure's and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq`
 // (then its results are meaningless: the loop answers and runs it again).
 fn asset_stage_figures(m: &mut Arenas, p: &mut PendingAssets, opts: &Options, input: i32, nbytes: i32, ans: &mut Cells, rq: &mut Cells, bms: &BitmapSet) {
-    en_asset_figures(&mut cfg_of(opts), m, &mut p.cand, &mut p.cbytes, p.rfrom, &mut Pass::new(), input, nbytes, ans, rq, bms);
+    en_asset_figures(&mut cfg_of(opts), m, &mut p.cand, &mut p.cbytes, p.rfrom, &mut p.spans, &mut Pass::new(), input, nbytes, ans, rq, bms);
 }
 
 // A page of the Model's page table (SPEC 3.7). Sizes are in centipoints (1/100 point), as displayed.

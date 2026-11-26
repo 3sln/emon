@@ -17,6 +17,9 @@ public final class Rasterin {
     public static int rsTiff() {
         return 3;
     }
+    public static int rsImages() {
+        return 4;
+    }
     public static int rsUndecodable() {
         return 21;
     }
@@ -52,7 +55,59 @@ public final class Rasterin {
         if ((a == 77) && ((b == 77) && ((c == 0) && (d == 42)))) {
             return rsTiff();
         }
+        if ((n >= 8) && (a == 69) && (b == 77) && (c == 79) && (d == 78) && (Pdfsrc.psU8(src, 4) == 73) && (Pdfsrc.psU8(src, 5) == 77) && (Pdfsrc.psU8(src, 6) == 71) && (Pdfsrc.psU8(src, 7) == 49)) {
+            return rsImages();
+        }
         return rsNone();
+    }
+    public static int rsU31(emon.Port.Src src, int at) {
+        int hi = Pdfsrc.psU8(src, at + 3);
+        if (hi > 127) {
+            return -1;
+        }
+        return Pdfsrc.psU8(src, at) + (256 * Pdfsrc.psU8(src, at + 1)) + (65536 * Pdfsrc.psU8(src, at + 2)) + (16777216 * hi);
+    }
+    public static int rsImagePlan(emon.Port.Src src, emon.Port.Cells spans) {
+        // An image list is a header, a little-endian frame count and lengths, then original encoded images.
+        int nbytes = Pdfsrc.psLen(src);
+        int count = 0;
+        int offset = 0;
+        int i = 0;
+        int length = 0;
+        int format = 0;
+        if (nbytes < 16) {
+            return 0;
+        }
+        count = rsU31(src, 8);
+        if ((count < 1) || (count > ((nbytes - 12) / 4))) {
+            return 0;
+        }
+        if (count > emon.Port.limitOf(8)) {
+            emon.Port.limitBreach(8, count);
+        }
+        offset = 12 + (count * 4);
+        while (i < count) {
+            length = rsU31(src, 12 + (i * 4));
+            if ((length < 4) || (length > (nbytes - offset))) {
+                return 0;
+            }
+            format = Model.afmTiff();
+            if (Pdfsrc.psU8(src, offset) == 137) {
+                format = Model.afmPng();
+            }
+            if (Pdfsrc.psU8(src, offset) == 255) {
+                format = Model.afmJpeg();
+            }
+            emon.Port.cellsPush(spans, offset);
+            emon.Port.cellsPush(spans, length);
+            emon.Port.cellsPush(spans, format);
+            offset += length;
+            i += 1;
+        }
+        if (offset != nbytes) {
+            return 0;
+        }
+        return count;
     }
     public static int rsFrameArg(int info, int f) {
         // The `frame` field of the request for frame `f`: itself, or `-f - 1` for a header-only request.
@@ -103,6 +158,14 @@ public final class Rasterin {
             Model.textAppendCp(text, 102);
             Model.textAppendCp(text, 102);
         }
+        if (fmt == rsImages()) {
+            Model.textAppendCp(text, 105);
+            Model.textAppendCp(text, 109);
+            Model.textAppendCp(text, 97);
+            Model.textAppendCp(text, 103);
+            Model.textAppendCp(text, 101);
+            Model.textAppendCp(text, 115);
+        }
         Model.nodeSetAttrText(nodes, attrs, 0, Model.fkFormat(), start, emon.Port.cellsLen(text) - start);
         return 0;
     }
@@ -127,7 +190,15 @@ public final class Rasterin {
         }
         return 1;
     }
-    public static int rsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask) {
+    public static int rsDecode(emon.Port.Cells rq, int id, int input, int nbytes, emon.Port.Cells spans, int f, int header) {
+        if (emon.Port.cellsLen(spans) > 0) {
+            Plan.rqDecode(rq, id, input, emon.Port.cellsAt(spans, f * 3), emon.Port.cellsAt(spans, (f * 3) + 1), Plan.fltNone(), rsFrameArg(header, 0));
+        } else {
+            Plan.rqDecode(rq, id, input, 0, nbytes, Plan.fltNone(), rsFrameArg(header, f));
+        }
+        return 0;
+    }
+    public static int rsDoc(emon.Port.Src src, int input, int fmt, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells text, emon.Port.Cells pages, emon.Port.Cells mask, emon.Port.Cells spans) {
         // THE DOCUMENT PASS of a raster input (P7.U): stage 0, HEADER ONLY (D187). Round 1 asks for frame 0's header (id 1),
         // round 2 for every other frame's (ids `f + 1`); then the root's `format` and `pages`, and one `image` page row per frame
         // in frame order, from the sizes and resolutions the headers answered. `mask` gets one 0 cell a page. No pixel is
@@ -135,8 +206,16 @@ public final class Rasterin {
         // status, or 0.
         int nbytes = Pdfsrc.psLen(src);
         int a0 = Plan.anFind(ans, 1);
+        int grouped = 0;
+        emon.Port.cellsDrop(spans, 0);
+        if (fmt == rsImages()) {
+            grouped = rsImagePlan(src, spans);
+            if (grouped == 0) {
+                return rsUndecodable();
+            }
+        }
         if (a0 < 0) {
-            Plan.rqDecode(rq, 1, input, 0, nbytes, Plan.fltNone(), rsFrameArg(1, 0));
+            rsDecode(rq, 1, input, nbytes, spans, 0, 1);
             return Plan.usRequests();
         }
         if (Plan.anStatus(ans, a0) != Plan.psOk()) {
@@ -145,6 +224,9 @@ public final class Rasterin {
         int frames = Plan.anArg(ans, a0, 5);
         int f = 1;
         int asked = 0;
+        if (grouped > 0) {
+            frames = grouped;
+        }
         if (frames < 1) {
             return rsUndecodable();
         }
@@ -153,7 +235,7 @@ public final class Rasterin {
         }
         while (f < frames) {
             if (Plan.anFind(ans, f + 1) < 0) {
-                Plan.rqDecode(rq, f + 1, input, 0, nbytes, Plan.fltNone(), rsFrameArg(1, f));
+                rsDecode(rq, f + 1, input, nbytes, spans, f, 1);
                 asked = 1;
             }
             f += 1;
@@ -169,6 +251,9 @@ public final class Rasterin {
             int a = Plan.anFind(ans, f + 1);
             if (Plan.anStatus(ans, a) != Plan.psOk()) {
                 return rsFail(ans, a);
+            }
+            if ((grouped > 0) && (Plan.anArg(ans, a, 5) != 1)) {
+                return rsUnsupported();
             }
             int w = Plan.anArg(ans, a, 0);
             int h = Plan.anArg(ans, a, 1);
@@ -191,7 +276,7 @@ public final class Rasterin {
         }
         return 0;
     }
-    public static int rsPage(int f, int input, int nbytes, int policy, int fuse, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells ofz, emon.Port.Cells oaz) {
+    public static int rsPage(int f, int input, int nbytes, int policy, int fuse, emon.Port.Cells spans, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.Cells loc, emon.Port.BitmapSet bms, emon.Port.Cells mask, emon.Port.Cells scr, emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells etext, emon.Port.Cells feats, emon.Port.Cells images, emon.Port.Cells oruns, emon.Port.Cells oblocks, emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells osyms, emon.Port.Cells oalts, emon.Port.Cells words, emon.Port.Cells lines, emon.Port.Cells refs, emon.Port.Cells tlines, emon.Port.Cells cg, emon.Port.Cells inks, emon.Port.Cells comps, emon.Port.Cells rules, emon.Port.Cells prims, emon.Port.Cells tpts, emon.Port.Cells ws, emon.Port.Cells sv, emon.Port.Cells aux, emon.Port.Cells snap, emon.Port.Cells rtp, emon.Port.Cells rn, emon.Port.Cells ri, emon.Port.Cells cs, emon.Port.Cells vr, emon.Port.Cells pc, emon.Port.Cells sg, emon.Port.Cells mem, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells ofz, emon.Port.Cells oaz) {
         // `fuse` is the page unit's flags (`emon.pageunit`'s `pu-px` and `pu-dry`: bit 2 the hidden setting `no-retarget`, bit 4 a DRY attempt, P10.2: it stops
         // before the write, having asked what the rounds up to there ask).
         // The unit of frame `f` (0-based) of a raster input: its pixels (`decode` id `pi-decode`, a whole image file, whose
@@ -203,7 +288,7 @@ public final class Rasterin {
         int did = Plan.puId(f, Plan.piDecode());
         int ad = Plan.anFind(ans, did);
         if (ad < 0) {
-            Plan.rqDecode(rq, did, input, 0, nbytes, Plan.fltNone(), f);
+            rsDecode(rq, did, input, nbytes, spans, f, 0);
             return Plan.usRequests();
         }
         if (Plan.anStatus(ans, ad) != Plan.psOk()) {

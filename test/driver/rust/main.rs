@@ -217,7 +217,8 @@ fn main() {
     let mut password: Option<String> = None;
     let mut source = "bytes".to_string();
     let mut stats = false;
-    let mut file: Option<String> = None;
+    let mut files = Vec::new();
+    let mut image_group = false;
     let mut record: Option<String> = None;
     let mut replay: Option<String> = None;
     let mut concurrent: usize = 1;
@@ -231,6 +232,8 @@ fn main() {
     for a in std::env::args().skip(1) {
         if let Some(v) = a.strip_prefix("--out=") {
             out = v.to_string();
+        } else if a == "--images" {
+            image_group = true;
         } else if a == "--pretty" {
             pretty = true;
         } else if let Some(v) = a.strip_prefix("--html=") {
@@ -286,13 +289,16 @@ fn main() {
             kin_text.push('\n');
         } else if a.starts_with("--") {
             usage(&format!("unknown flag {}", a));
-        } else if file.is_none() {
-            file = Some(a);
         } else {
-            usage("one FILE");
+            files.push(a);
         }
     }
-    let file = file.unwrap_or_else(|| usage("no FILE"));
+    if files.is_empty() || (!image_group && files.len() != 1) {
+        usage("supply one FILE or --images FILE...");
+    }
+    if image_group && password.is_some() {
+        usage("--images does not take a PDF password");
+    }
     if record.is_some() && replay.is_some() {
         usage("--record and --replay are two ways");
     }
@@ -315,25 +321,36 @@ fn main() {
     }
 
     // THE DRIVER READS THE FILE (the library never does): three ways of handing the Engine the same bytes.
-    let io = |e: std::io::Error| -> ! {
-        eprintln!("emon-rs: {}: {}", file, e);
-        std::process::exit(1)
-    };
-    let mut input = match source.as_str() {
-        "bytes" => Input::bytes(std::fs::read(&file).unwrap_or_else(|e| io(e))),
-        "seek" => Input::seekable(std::fs::File::open(&file).unwrap_or_else(|e| io(e))).unwrap_or_else(|e| io(e)),
-        "spool" => {
-            let f = std::fs::File::open(&file).unwrap_or_else(|e| io(e));
-            // a plain `Read`: no seek is used
-            struct ForwardOnly(std::fs::File);
-            impl Read for ForwardOnly {
-                fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
-                    self.0.read(b)
+    let read_input = |file: &str| {
+        let io = |e: std::io::Error| -> ! {
+            eprintln!("emon-rs: {}: {}", file, e);
+            std::process::exit(1)
+        };
+        match source.as_str() {
+            "bytes" => Input::bytes(std::fs::read(file).unwrap_or_else(|e| io(e))),
+            "seek" => Input::seekable(std::fs::File::open(file).unwrap_or_else(|e| io(e))).unwrap_or_else(|e| io(e)),
+            "spool" => {
+                let f = std::fs::File::open(file).unwrap_or_else(|e| io(e));
+                // A plain `Read`: no seek is used.
+                struct ForwardOnly(std::fs::File);
+                impl Read for ForwardOnly {
+                    fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+                        self.0.read(b)
+                    }
                 }
+                Input::spooled(ForwardOnly(f), 1 << 30).unwrap_or_else(|e| io(e))
             }
-            Input::spooled(ForwardOnly(f), 1 << 30).unwrap_or_else(|e| io(e))
+            _ => usage("--source is bytes, seek or spool"),
         }
-        _ => usage("--source is bytes, seek or spool"),
+    };
+    let mut input = if image_group {
+        Input::images(files.iter().map(|file| read_input(file))).unwrap_or_else(|e| usage(&e.to_string()))
+    } else {
+        read_input(&files[0])
+    };
+    let io = |e: std::io::Error| -> ! {
+        eprintln!("emon-rs: {}", e);
+        std::process::exit(1)
     };
     if let Some(p) = password {
         input = input.with_password(p.into_bytes());

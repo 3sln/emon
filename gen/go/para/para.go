@@ -2208,7 +2208,7 @@ func paTables(tb *port.Cells, tcur int32, p int32, ymid2 int32, lb int32, wd *po
 	return k
 }
 
-func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, ledger *port.Cells, ii *port.Cells, al *port.Cells, ix *port.Cells) int32 {
+func PaBuild(wd *port.Cells, et *port.Cells, npages int32, photoOrder *port.Cells, pages *port.Cells, layout *port.Cells, nodes *port.Cells, attrs *port.Cells, regions *port.Cells, text *port.Cells, ord *port.Cells, raw *port.Cells, tmp *port.Cells, fr *port.Cells, gp *port.Cells, lt *port.Cells, ls *port.Cells, sd *port.Cells, it *port.Cells, io *port.Cells, rw *port.Cells, gu *port.Cells, ac *port.Cells, tm *port.Cells, cf *port.Cells, lo *port.Cells, pr *port.Cells, dbg *port.Cells, hc *port.Cells, tb *port.Cells, tc *port.Cells, tw *port.Cells, tq *port.Cells, ledger *port.Cells, ii *port.Cells, al *port.Cells, ix *port.Cells) int32 {
 	// Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
 	// holds is not in the reading order at all.
 	// Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2227,6 +2227,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	var med int32 = 0
 	var indents int32 = 0
 	var p int32 = 1
+	var position int32 = 1
 	var i int32 = 0
 	var n int32 = 0
 	var nu int32 = 0
@@ -2262,7 +2263,13 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 	port.CellsDrop(fr, 0)
 	port.CellsDrop(al, 0)
 	port.CellsDrop(dbg, 0)
-	for p <= npages {
+	for position <= npages {
+		p = position
+		if port.CellsLen(photoOrder) > 0 {
+			p = port.CellsAt(photoOrder, position-1)
+			r = 0
+			tcur = 0
+		}
 		paCollect(ord, lt, p, ix, off)
 		n = port.CellsLen(ord)
 		nu = paUprightCount(lt, ord)
@@ -2277,6 +2284,9 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 		for (r < nf) && (port.CellsAt(cf, (r*cfStride)+cfPage) < p) {
 			r += 1
 		}
+		if port.CellsLen(photoOrder) > 0 {
+			pend = r
+		}
 		r1 = r
 		for (r1 < nf) && (port.CellsAt(cf, (r1*cfStride)+cfPage) == p) && (port.CellsAt(cf, (r1*cfStride)+cfRole) == model.RlBody()) {
 			r1 += 1
@@ -2285,7 +2295,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, p, hc)
 			open = 0
 			prev = -1
-			if p > 1 {
+			if position > 1 {
 				paMilestone(nodes, p, hc)
 			}
 			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc)
@@ -2330,7 +2340,7 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 							beforePage = p
 						}
 						pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, i, ty, beforePage, hc)
-						if (i == r) && (p > 1) {
+						if (i == r) && (position > 1) {
 							paMilestone(nodes, p, hc)
 						}
 						if i == r {
@@ -2379,7 +2389,16 @@ func PaBuild(wd *port.Cells, et *port.Cells, npages int32, pages *port.Cells, la
 				tcur = paTables(tb, tcur, p, paAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc)
 			}
 		}
-		p += 1
+		if port.CellsLen(photoOrder) > 0 {
+			r1 = r
+			for (r1 < nf) && (port.CellsAt(cf, (r1*cfStride)+cfPage) == p) {
+				r1 += 1
+			}
+			pend = paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, r1, 1000000000, 0, hc)
+			open = 0
+			prev = -1
+		}
+		position += 1
 	}
 	paClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, nf, 1000000000, 0, hc)
 	align.AlPass(nodes, attrs, al, tm)

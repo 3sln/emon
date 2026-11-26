@@ -140,6 +140,44 @@ export async function urlSource(url, { fetch: f = globalThis.fetch.bind(globalTh
  * `URL`), a `ReadableStream`, or any `{ size, read }`.
  */
 export async function toSource(x, opts = {}) {
+  if (Array.isArray(x)) {
+    const max = Math.min(opts.max ?? 2 ** 31 - 1, 2 ** 31 - 1);
+    if (!x.length) throw new TypeError('emon: expected a nonempty list of single-frame images');
+    let size = 12 + 4 * x.length;
+    if (size > max) throw new EmonError('input-bytes', 'image list exceeds the input-bytes limit');
+    const header = new Uint8Array(size);
+    header.set(new TextEncoder().encode('EMONIMG1'));
+    const lengths = new DataView(header.buffer);
+    lengths.setUint32(8, x.length, true);
+    const parts = [{ start: 0, source: bytesSource(header) }];
+    for (let i = 0; i < x.length; i++) {
+      if (Array.isArray(x[i])) throw new TypeError('emon: each member must be a single-frame image');
+      const source = await toSource(x[i], { ...opts, max: max - size });
+      if (!Number.isSafeInteger(source.size) || source.size < 4) throw new TypeError('emon: invalid image size');
+      if (source.size > max - size) throw new EmonError('input-bytes', 'image list exceeds the input-bytes limit');
+      lengths.setUint32(12 + 4 * i, source.size, true);
+      parts.push({ start: size, source });
+      size += source.size;
+    }
+    return {
+      size,
+      async read(offset, length) {
+        const end = Math.min(size, offset + length);
+        const bytes = new Uint8Array(Math.max(0, end - offset));
+        let written = 0;
+        for (const { start, source } of parts) {
+          const from = Math.max(offset, start);
+          const to = Math.min(end, start + source.size);
+          if (from >= to) continue;
+          const chunk = asU8(await source.read(from - start, to - from));
+          if (chunk.length !== to - from) throw new SourceChangedError('an image changed while it was being read');
+          bytes.set(chunk, written);
+          written += chunk.length;
+        }
+        return bytes;
+      },
+    };
+  }
   if (x && typeof x === 'object' && typeof x.read === 'function' && typeof x.size === 'number') return x;
   if (x instanceof ArrayBuffer || ArrayBuffer.isView(x)) return bytesSource(x, opts);
   if (typeof Blob !== 'undefined' && x instanceof Blob) return blobSource(x);

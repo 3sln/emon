@@ -991,6 +991,9 @@ pub fn fl_script_unread() -> i32 {
 pub fn fl_uncalibrated_engine() -> i32 {
     return 2048;
 }
+pub fn fl_seam_gap() -> i32 {
+    return 4096;
+}
 pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "low-conf");
@@ -1038,6 +1041,10 @@ pub fn fl_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 2048 {
         crate::port::text_ascii(t, "uncalibrated-engine");
+        return 1;
+    }
+    if code == 4096 {
+        crate::port::text_ascii(t, "seam-gap");
         return 1;
     }
     return 0;

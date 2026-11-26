@@ -994,6 +994,9 @@ public static class Model {
     public static int FlUncalibratedEngine() {
         return 2048;
     }
+    public static int FlSeamGap() {
+        return 4096;
+    }
     public static int FlEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "low-conf");
@@ -1041,6 +1044,10 @@ public static class Model {
         }
         if (code == 2048) {
             emon.Port.TextAscii(t, "uncalibrated-engine");
+            return 1;
+        }
+        if (code == 4096) {
+            emon.Port.TextAscii(t, "seam-gap");
             return 1;
         }
         return 0;

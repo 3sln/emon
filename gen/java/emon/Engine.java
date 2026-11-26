@@ -41,6 +41,9 @@ public final class Engine {
     public static int enFmtTiff() {
         return 3;
     }
+    public static int enFmtImages() {
+        return 4;
+    }
     public static int enLocale(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         // The locale hint's code points (kin's `loc`: what `emon.scan` reads the OCR language from); empty for none.
         if (c.haveloc != 0) {
@@ -67,7 +70,7 @@ public final class Engine {
         // OCR: P6.5), and its OCR lines are the text layer's lines to everything after (D213): the stages after it are the PDF's, in its order, with the
         // glyph-fed ones given empty arenas. The Model the pass begins is `m`'s (its pages and nodes).
         Model.modelInit(m.nodes, m.attrs, m.regions, m.text, m.pages, m.ledger, m.layout);
-        int status = Rasterin.rsDoc(view, idx, fmt, ans, rq, m.nodes, m.attrs, m.text, m.pages, d.mask);
+        int status = Rasterin.rsDoc(view, idx, fmt, ans, rq, m.nodes, m.attrs, m.text, m.pages, d.mask, d.spans);
         int np = Model.pageCount(m.pages);
         if (emon.Port.srcMissed(view)) {
             return atMiss();
@@ -90,6 +93,9 @@ public final class Engine {
         }
         if (fmt == Rasterin.rsJpeg()) {
             d.ifmt = enFmtJpeg();
+        }
+        if (fmt == Rasterin.rsImages()) {
+            d.ifmt = enFmtImages();
         }
         if (np < 0) {
             d.ipages = 0;
@@ -266,7 +272,7 @@ public final class Engine {
         if (d.kind == enKindPdf()) {
             return Pageunit.puRunPdf(i, idx, c.ocr, d.plan, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ((((2 * c.nort) + (4 * c.dry)) + (8 * enHybrid(c))) + (16 * enFallback(c))) + enPhotoLines(c), d.fw, d.fl, d.hl, ev.refs, d.cg, ev.tlines, d.xs0, d.xs1, d.xs2, d.xs3, d.xs4, d.xs5, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys1, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
         }
-        return Rasterin.rsPage(i, idx, nbytes, c.ocr, ((((2 * c.nort) + (4 * c.dry)) + (8 * enHybrid(c))) + (16 * enFallback(c))) + enPhotoLines(c), ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
+        return Rasterin.rsPage(i, idx, nbytes, c.ocr, ((((2 * c.nort) + (4 * c.dry)) + (8 * enHybrid(c))) + (16 * enFallback(c))) + enPhotoLines(c), d.spans, ans, rq, d.loc, bms, d.mask, d.pscr, ev.epages, ev.views, d.et, ev.feats, ev.images, ev.oruns, ev.oblocks, ev.olines, ev.owords, ev.osyms, ev.oalts, d.wd, d.ln, ev.refs, ev.tlines, d.cg, ev.inks, ev.comps, ev.rules, ev.prims, ev.pts, d.ys0, d.ys2, d.ys3, d.ys4, d.ys5, d.ys6, d.ys7, d.ys8, d.ys9, d.ys10, d.ys11, d.ys12, d.ys13, d.ys14, d.ys15, d.ys16, d.ys17, d.ys18, ev.ofuse, ev.oarb);
     }
     public static int enOcrPlanned(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         if (c.ocr == 0) {
@@ -297,11 +303,13 @@ public final class Engine {
         if (status == 0) {
             // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
             Oilrows.orAssemble(ev.oruns, r0, ev.rules, i + 1, d.ln, l0, d.wd, w0, d.pscr);
-            if ((c.dry == 0) && (c.capture != 1) && (d.ipages > 1) && (Evidence.lnCount(d.ln) > l0) && ((emon.Port.cellsAt(d.mask, i) & 8) == 0)) {
+            if ((c.dry == 0) && (c.capture != 1) && (d.ipages > 1) && ((emon.Port.cellsAt(d.mask, i) % 4) > 0) && ((emon.Port.cellsAt(d.mask, i) & 8) == 0)) {
                 int id = Plan.puId(i, Plan.piDecode());
                 int ep = Evidence.evPageRow(ev.epages, i + 1);
                 if ((ep >= 0) && (emon.Port.bmsHas(bms, id) == 1)) {
-                    Seams.msSample(emon.Port.bmsGet(bms, id), d.ln, l0, Evidence.epGet(ev.epages, ep, Evidence.epfWidth()), Evidence.epGet(ev.epages, ep, Evidence.epfHeight()), d.mspatch, d.mspixel, d.ys0, d.ys1);
+                    emon.Port.Bitmap image = emon.Port.bmsGet(bms, id);
+                    Seams.msSampleCut(image, i + 1, d.mscuts);
+                    Seams.msSample(image, d.ln, l0, Evidence.epGet(ev.epages, ep, Evidence.epfWidth()), Evidence.epGet(ev.epages, ep, Evidence.epfHeight()), d.mspatch, d.mspixel, d.ys0, d.ys1);
                 }
             }
             if (Oilsrc.oxsCollect(ans, ev.views, ev.oruns, ev.olines, ev.oxs) < 0) {
@@ -332,13 +340,13 @@ public final class Engine {
         }
         return rc;
     }
-    public static int enAssetFigures(emon.Enctx.Cfg c, emon.Enctx.Arenas m, emon.Port.Cells cand, emon.Port.Buf cbytes, int rfrom, emon.Enctx.Pass p, int input, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
+    public static int enAssetFigures(emon.Enctx.Cfg c, emon.Enctx.Arenas m, emon.Port.Cells cand, emon.Port.Buf cbytes, int rfrom, emon.Port.Cells spans, emon.Enctx.Pass p, int input, int nbytes, emon.Port.Cells ans, emon.Port.Cells rq, emon.Port.BitmapSet bms) {
         // P8.5's asset stage at the level `figures` (SPEC 10.11, D351): one attempt of the asset unit, on copies the caller made of the Model and the candidates
         // (`cand`, `cbytes`: the document unit's; `rfrom` is 0 for a PDF or the `afm` of a raster input's format). It writes the Model's settings and every figure's
         // and seal's asset or reason, and any `crop` or `decode` request it has no answer to into `rq` (then its results are meaningless: the loop answers and
         // runs it again). `p` is fresh for the attempt.
         Asset.asSettings(m.nodes, m.attrs, m.text, c.level, c.dpi, c.pixels, c.abyte, c.tbyte, c.sigs);
-        return Asset.asRunFigures(m.nodes, m.attrs, m.regions, m.pages, cand, cbytes, m.assets, m.uses, m.abytes, c.abyte, c.tbyte, c.sigs, c.dpi, c.pixels, input, nbytes, rfrom, ans, rq, bms, p.fz0, p.zb, p.fz1, p.fz2, p.fz3, p.fz4);
+        return Asset.asRunFigures(m.nodes, m.attrs, m.regions, m.pages, cand, cbytes, m.assets, m.uses, m.abytes, c.abyte, c.tbyte, c.sigs, c.dpi, c.pixels, input, nbytes, rfrom, spans, ans, rq, bms, p.fz0, p.zb, p.fz1, p.fz2, p.fz3, p.fz4);
     }
     public static int enDump(emon.Port.Cells et, emon.Port.Cells gl, emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells mk, emon.Port.Cells fnt, emon.Port.Cells grl, emon.Port.Cells gfl, emon.Port.Cells ggp, emon.Port.Cells grg, emon.Enctx.EvArenas ev, StringBuilder t) {
         // The evidence dump of a conversion, OPEN (`}` is the caller's, who may add a member first): `ev` is what the OCR stages made, the rest the text layer's.
@@ -407,16 +415,17 @@ public final class Engine {
         int trust = Pdfstruct.tgTrust(d.ss);
         int pending = 0;
         int w = 0;
-        Seams.msRun(np, c.capture, d.mask, m.pages, ev.olines, d.et, d.fl, d.fw, d.mspatch, d.mspixel, m.ledger, m.text, s.seams, s.mskeys, s.mscode, s.msa, s.msb, s.msdrop, s.mslines, s.mswords);
+        Seams.msRun(np, c.capture, d.mask, m.pages, ev.olines, d.et, d.fl, d.fw, d.mspatch, d.mspixel, d.mscuts, m.ledger, m.text, s.seams, s.mskeys, s.mscode, s.msa, s.msb, s.msdrop, s.mslines, s.mswords, s.msorder, s.msincoming, s.msoutgoing);
         if (c.keep != 0) {
-            Seams.msEvidence(d.evidence, s.seams);
+            Seams.msEvidence(d.evidence, s.seams, s.msorder, d.mask, d.mscuts, c.capture);
         }
         Furniture.fuFind(d.fw, d.fl, d.et, d.gl, d.mk, m.pages, np, d.txt, d.md, d.lb, trust, c.furn, s.cd, s.sl, s.gr, s.ford, s.tx, s.bh, s.fo, s.fp, s.ft, s.pl);
         if (c.tabl == 1) {
-            Tscore.tsBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+            Tscore.tsBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.msorder, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
         } else {
-            Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+            Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.msorder, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
         }
+        Table.tbSeamGaps(s.tb, s.seams);
         if (c.keep != 0) {
             if ((kind == 0) && (emon.Port.cellsLen(s.tv) > 0)) {
                 emon.Port.textAscii(d.evidence, ",\"tb\":");
@@ -622,7 +631,7 @@ public final class Engine {
         if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, enOeMode(c), s.s0) < 0) {
             return 2;
         }
-        Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
+        Para.paBuild(d.fw, d.et, np, s.msorder, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
         if (kind == 0) {
             enFigures(m, s, d, c.level);
         }

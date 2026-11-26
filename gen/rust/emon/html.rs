@@ -1120,6 +1120,9 @@ pub(crate) fn h_block(mut t: &mut String, o: i32, nodes: &mut crate::port::Cells
         h_align_attr(t, o, nodes, attrs, n);
         h_common(t, o, nodes, regions, pages, layout, n);
         crate::port::text_ascii(t, ">");
+        if (node_flags(nodes, n) & fl_seam_gap()) != 0 {
+            crate::port::text_ascii(t, "<span data-emon-seam-gap=\"true\">[unread]</span>");
+        }
         hb = h_body(t, o, nodes, attrs, regions, pages, layout, text, assets, uses, abytes, prefix, n, d + 1);
         if hb > 0 {
             h_nl(t, o, d);

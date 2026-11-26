@@ -1,0 +1,60 @@
+name: Multi-photo receipt qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'kin/**'
+      - 'gen/rust/**'
+      - 'host/rust/**'
+      - 'test/driver/rust/**'
+      - 'tools/multishot/**'
+      - 'tools/oracle/multishot/**'
+      - '.github/workflows/multishot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tesseract:
+    if: github.event_name != 'push' || vars.EMON_VERIFY_ON_PUSH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: emon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: emon
+      - uses: ./emon/.github/actions/babashka
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Tesseract and the crop generator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libtesseract-dev libleptonica-dev tesseract-ocr-eng tesseract-ocr-osd
+          echo "EMON_TESS_LIB=$(pkg-config --variable=libdir tesseract)" >> "$GITHUB_ENV"
+          python -m pip install -r tools/oracle/multishot/requirements.txt
+      - name: Fetch receipt images and gold
+        env:
+          EMON_S3_ENDPOINT: ${{ secrets.EMON_S3_ENDPOINT }}
+          EMON_S3_REGION: ${{ secrets.EMON_S3_REGION }}
+          EMON_S3_BUCKET: ${{ secrets.EMON_S3_BUCKET }}
+          EMON_S3_PREFIX: ${{ secrets.EMON_S3_PREFIX }}
+          EMON_S3_ACCESS_KEY_ID: ${{ secrets.EMON_S3_ACCESS_KEY_ID }}
+          EMON_S3_SECRET_ACCESS_KEY: ${{ secrets.EMON_S3_SECRET_ACCESS_KEY }}
+          EMON_S3_PATH_STYLE: ${{ secrets.EMON_S3_PATH_STYLE }}
+        run: bb corpus-pull financial _gold
+      - name: Run the fixed seed
+        run: bb multishot --ci --ocr-engine tesseract
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multishot-tesseract
+          path: emon/.cache/scratch/multishot/report.json

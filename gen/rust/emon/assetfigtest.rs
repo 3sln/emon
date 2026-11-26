@@ -178,7 +178,7 @@ pub(crate) fn af_raster(mut res: &mut crate::port::Cells, stage: i32) -> i32 {
         an_decode(ans, au_id(au_decode()), 306, 396, 3, 3600, 0, 1);
         af_fill(crate::port::bms_put(bms, au_id(au_decode()), 306, 396, 3), 306, 396, 3);
     }
-    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, afm_png(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, afm_png(), &mut crate::port::Cells::new(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
     crate::port::cells_drop(res, 0);
     crate::port::cells_push(res, crate::port::cells_len(rq));
     crate::port::cells_push(res, rec_count(rq));
@@ -325,7 +325,7 @@ pub(crate) fn af_pdf(mut res: &mut crate::port::Cells, stage: i32, dpi: i32, max
     if stage == 2 {
         an_fail(ans, pk_crop(), au_id(n), ps_unsupported());
     }
-    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, dpi, maxpix, 3, 1234, 0, &mut crate::port::Cells::new(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
     crate::port::cells_drop(res, 0);
     crate::port::cells_push(res, rec_count(rq));
     if crate::port::cells_len(rq) > 0 {
@@ -501,7 +501,7 @@ pub(crate) fn af_source(mut res: &mut crate::port::Cells, which: i32) -> i32 {
     }
     node_set_attr_int(nodes, attrs, n, fk_image(), 0);
     af_boxcells(r#box);
-    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, &mut crate::port::Cells::new(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
     crate::port::cells_drop(res, 0);
     crate::port::cells_push(res, rec_count(rq));
     crate::port::cells_push(res, node_attr_int_or(nodes, attrs, n, fk_noasset(), -1));
@@ -568,7 +568,7 @@ pub(crate) fn af_caption_only(mut res: &mut crate::port::Cells) -> i32 {
     f2 = af_node(nodes, regions, 0, nk_figure(), fg_unknown(), 1, 7200, 10000, 30000, 30000);
     af_node(nodes, regions, f2, nk_caption(), 0, 1, 7200, 32000, 20000, 34000);
     af_boxcells(r#box);
-    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, &mut crate::port::Cells::new(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
     crate::port::cells_drop(res, 0);
     crate::port::cells_push(res, rec_count(rq));
     crate::port::cells_push(res, rec_id(rq, 0));
@@ -623,7 +623,7 @@ pub(crate) fn af_reuse(mut res: &mut crate::port::Cells) -> i32 {
     af_fill(crate::port::bms_put(bms, au_id(b), 105, 105, 3), 105, 105, 3);
     an_render(ans, au_id(d), 110, 110, 3, 150);
     af_fill(crate::port::bms_put(bms, au_id(d), 110, 110, 3), 110, 110, 3);
-    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, ans, rq, bms, ws, z, rows, tmp, rec, r#box);
+    as_run_figures(nodes, attrs, regions, pages, cand, cbytes, assets, uses, abytes, 4194304, 33554432, 0, 150, 4194304, 3, 1234, 0, &mut crate::port::Cells::new(), ans, rq, bms, ws, z, rows, tmp, rec, r#box);
     crate::port::cells_drop(res, 0);
     crate::port::cells_push(res, crate::port::cells_len(rq));
     crate::port::cells_push(res, asset_count(assets));

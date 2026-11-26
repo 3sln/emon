@@ -552,7 +552,7 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 	var kind int32 = 0
 	var conf int32 = 0
 	var rgb int32 = 0
-	var ln int32 = 0
+	var ln int64 = int64(0)
 	var r int32 = 0
 	var g int32 = 0
 	var b int32 = 0
@@ -584,14 +584,14 @@ func spJudge(page1 int32, views *port.Cells, srcview int32, owords *port.Cells, 
 	if swc > SpPen() {
 		return 0
 	}
-	if (ink * 100) > ((wpx * hpx) * SpCover()) {
+	if (int64(ink) * 100) > ((int64(wpx) * int64(hpx)) * int64(SpCover())) {
 		return 0
 	}
 	if spRuledInk(mask, zw, zh, wpx, ink) == 1 {
 		return 0
 	}
-	ln = ink / sw
-	if (((ln * ln) / 4) * 100) < ((((wpx * wpx) + (hpx * hpx)) / 4) * sigmark.SgTort()) {
+	ln = int64(ink / sw)
+	if (((ln * ln) / 4) * 100) < ((((int64(wpx) * int64(wpx)) + (int64(hpx) * int64(hpx))) / 4) * int64(sigmark.SgTort())) {
 		return 0
 	}
 	if (w <= sigmark.SgIniW()) && (h <= sigmark.SgIniH()) {

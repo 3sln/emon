@@ -2803,6 +2803,37 @@ func ScClipEdge(top int32, bottom int32, left int32, right int32, height int32, 
 	return 0
 }
 
+func scMarkClipped(olines *port.Cells, owords *port.Cells, line int32) int32 {
+	var w int32 = evidence.OlGet(olines, line, evidence.LhFirst())
+	var end int32 = w + evidence.OlGet(olines, line, evidence.LhCount())
+	evidence.OlSet(olines, line, evidence.OlfConf(), evidence.EvClippedConf())
+	for (w >= 0) && (w < end) {
+		scFlag(owords, w, evidence.OeClipped())
+		w += 1
+	}
+	return 0
+}
+
+func ScSetAsideCutInk(olines *port.Cells, owords *port.Cells, scr *port.Cells, n int32, cuts *port.Cells) int32 {
+	if port.CellsLen(cuts) != n {
+		return n
+	}
+	var i int32 = 0
+	var kept int32 = 0
+	var line int32 = 0
+	for i < n {
+		line = port.CellsAt(scr, ScSelBase()+i)
+		if port.CellsAt(cuts, i) == 1 {
+			scMarkClipped(olines, owords, line)
+		} else {
+			ScSelSet(scr, kept, line)
+			kept += 1
+		}
+		i += 1
+	}
+	return kept
+}
+
 func ScSetAsideClips(olines *port.Cells, owords *port.Cells, etext *port.Cells, scr *port.Cells, n int32, x0 int32, y0 int32, x1 int32, y1 int32, fourpx int32, photos int32) int32 {
 	// Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
 	// leave only complete lines in the selection consumed by structure and table recovery.
@@ -2851,12 +2882,7 @@ func ScSetAsideClips(olines *port.Cells, owords *port.Cells, etext *port.Cells, 
 			ScSelSet(scr, kept, line)
 			kept += 1
 		} else {
-			evidence.OlSet(olines, line, evidence.OlfConf(), evidence.EvClippedConf())
-			w = first
-			for w < end {
-				scFlag(owords, w, evidence.OeClipped())
-				w += 1
-			}
+			scMarkClipped(olines, owords, line)
 		}
 		i += 1
 	}

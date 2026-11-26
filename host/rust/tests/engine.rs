@@ -366,6 +366,23 @@ fn stage_zero_of_an_image_reads_no_pixels() {
 }
 
 #[test]
+fn separate_image_sources_make_one_document() {
+    let bytes = || Input::images([
+        Input::bytes(image("png-phys300.png")),
+        Input::bytes(image("jpeg-420.jpg")),
+    ]).unwrap();
+    let engine = Engine::new(Config::default());
+    let intake = engine.intake(bytes()).unwrap();
+    assert_eq!((intake[0].format, intake[0].pages), ("images", 2));
+    let model = engine.convert(bytes(), &Options::default()).unwrap();
+    assert_eq!(model.pages().iter().map(|page| page.number).collect::<Vec<_>>(), vec![1, 2]);
+    let streamed = async_engine(512).convert(bytes(), &Options::default()).unwrap();
+    assert_eq!(json(&model), json(&streamed));
+    let multi_frame = Input::images([Input::bytes(image("tiff-multi3-rgb-lzw.tif"))]).unwrap();
+    assert!(engine.convert(multi_frame, &Options::default()).is_err());
+}
+
+#[test]
 fn an_image_records_its_pixels_and_replays_without_a_codec() {
     let e = Engine::new(Config::default());
     let o = Options::default();

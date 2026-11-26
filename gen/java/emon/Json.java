@@ -280,6 +280,10 @@ public final class Json {
             }
             b += 1;
         }
+        if ((bits & Model.flSeamGap()) != 0) {
+            jsFsep(t, pr, k);
+            emon.Port.textAscii(t, "\"seam-gap\"");
+        }
         emon.Port.textAscii(t, "]");
         return 0;
     }

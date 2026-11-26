@@ -994,6 +994,9 @@ public final class Model {
     public static int flUncalibratedEngine() {
         return 2048;
     }
+    public static int flSeamGap() {
+        return 4096;
+    }
     public static int flEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "low-conf");
@@ -1041,6 +1044,10 @@ public final class Model {
         }
         if (code == 2048) {
             emon.Port.textAscii(t, "uncalibrated-engine");
+            return 1;
+        }
+        if (code == 4096) {
+            emon.Port.textAscii(t, "seam-gap");
             return 1;
         }
         return 0;

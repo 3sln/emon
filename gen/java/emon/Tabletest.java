@@ -329,12 +329,12 @@ public final class Tabletest {
             Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, emon.Port.newCells(), tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.lcCopy(ln, lt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        Para.paBuild(wd, et, np, emon.Port.newCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -418,12 +418,12 @@ public final class Tabletest {
             Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.tbBuild(wd, ln, et, grl, gfl, np, emon.Port.newCells(), tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.lcCopy(ln, lt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        Para.paBuild(wd, et, np, emon.Port.newCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         ttBrief(t, nodes, attrs, text);
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return -1;
@@ -2131,7 +2131,7 @@ public final class Tabletest {
         Para.paPages(pg, pages);
         int np = emon.Port.cellsLen(pages) / 16;
         Gfuse.gfDoc(pa, pts, mk, im, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, grl, gfl, np, emon.Port.newCells(), tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.newCells());
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
@@ -2139,7 +2139,7 @@ public final class Tabletest {
         Columns.lcCopy(ln, lt);
         Initial.inDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.hdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        Para.paBuild(wd, et, np, emon.Port.newCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         if (Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }
@@ -2305,7 +2305,7 @@ public final class Tabletest {
         ttAt(wd, ln, et, emon.Testport.textBlob("100.00"), 40500, 16400, 0, 1);
         ttAt(wd, ln, et, emon.Testport.textBlob("Total"), 7600, 18000, 1, 0);
         ttAt(wd, ln, et, emon.Testport.textBlob("1,111.00"), 40500, 18000, 1, 1);
-        emon.Testport.assertEq(Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), tbk, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "the amounts make one table");
+        emon.Testport.assertEq(Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, emon.Port.newCells(), tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), tbk, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 1, "the amounts make one table");
         emon.Testport.assertEq(ttBodyAudit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership");
         emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
         emon.Testport.assertEq(Table.tbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
@@ -2390,7 +2390,7 @@ public final class Tabletest {
     public static int ttOwnBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbo) {
         emon.Port.Cells pages = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
-        Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbo, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, emon.Port.newCells(), emon.Port.newCells(), 1, emon.Port.newCells(), tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), tbo, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -2778,7 +2778,7 @@ public final class Tabletest {
         emon.Port.Cells gfl = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Gfuse.gfDoc(pa, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 1, Gfuse.gfxMode(), grl, gfl, emon.Port.newCells(), emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
+        Table.tbBuild(wd, ln, et, grl, gfl, 1, emon.Port.newCells(), tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -4862,7 +4862,7 @@ public final class Tabletest {
         emon.Port.Cells gfl = emon.Port.newCells();
         Model.pageNew(pages, 1, 61200, 79200, 0, Model.pkVector());
         Gfuse.gfDoc(pa, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), 1, Gfuse.gfxMode(), grl, gfl, emon.Port.newCells(), emon.Port.newCells());
-        Table.tbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), an);
+        Table.tbBuild(wd, ln, et, grl, gfl, 1, emon.Port.newCells(), tb, tc, tw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), pages, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), an);
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -5536,12 +5536,12 @@ public final class Tabletest {
             Model.pageNew(pages, 2, 61200, 79200, 0, Model.pkVector());
         }
         Gfuse.gfDoc(pa, gpts, gmk, gim, np, Gfuse.gfxMode(), grl, gfl, cand, emon.Port.newCells());
-        Table.tbScored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.tbScored(wd, ln, et, grl, gfl, np, emon.Port.newCells(), tb, tc, tw, tq, tx, emon.Port.newCells(), emon.Port.newCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (ttBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.lcCopy(ln, lt);
-        Para.paBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        Para.paBuild(wd, et, np, emon.Port.newCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         ttBrief(t, nodes, attrs, text);
         return Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
