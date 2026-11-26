@@ -56,7 +56,7 @@ func lawSeam(emonT *testing.T, capture int32, born int32, strong int32, middle i
 		evidence.OlSet(ol, r, evidence.OlfConf(), 300)
 	}
 	lawLine(fl, fw, et, 2, 400, 82)
-	port.AssertEq(emonT, seams.MsRun(2, capture, mask, pages, ol, et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), ledger, text, decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expectedDrop, "rows dropped")
+	port.AssertEq(emonT, seams.MsRun(2, capture, mask, pages, ol, et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), ledger, text, decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expectedDrop, "rows dropped")
 	port.AssertEq(emonT, model.LedgerCount(ledger), expectedDrop, "dropped rows retained in ledger")
 	if expectedKind == 0 {
 		port.AssertEq(emonT, port.CellsLen(decisions), 0, "no seam on an ordinary break")
@@ -156,7 +156,7 @@ func TestReversedPhotosUseTheUniqueAnchoredOrder(emonT *testing.T) {
 	}
 	lawLine(fl, fw, et, 2, 50, 91)
 	lawLine(fl, fw, et, 1, 450, 92)
-	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells()), 4, "remove the leading duplicate lines of the later photo")
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 4, "remove the leading duplicate lines of the later photo")
 	port.AssertEq(emonT, port.CellsAt(order, 0), 2, "source page two starts the document")
 	port.AssertEq(emonT, port.CellsAt(order, 1), 1, "source page one follows")
 	port.AssertEq(emonT, port.CellsAt(decisions, 0), 2, "the seam preserves upload provenance")
@@ -225,8 +225,75 @@ func TestAnOcrVariantNeedsContextBeforeDeduplication(emonT *testing.T) {
 	lawBandLine(fl, fw, et, 1, 900, 3)
 	lawBandLine(fl, fw, et, 2, 50, 4)
 	lawLine(fl, fw, et, 2, 500, 92)
-	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own")
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own")
 	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate")
+}
+
+func lawWordSeam(emonT *testing.T, variant int32, expectedDrop int32, expectedKind int32) int32 {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var i int32 = 0
+	var word int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 50, 91)
+	for i < 8 {
+		lawLine(fl, fw, et, 1, 700+(i*25), 65+i)
+		i += 1
+	}
+	i = 0
+	for i < 8 {
+		word = evidence.WdNew(fw, 2, 50, 40+(i*13), 90, 53+(i*13), 50, 53, 90, 53, 0, 0, port.CellsLen(et), 1, evidence.LnCount(fl), 900, -1)
+		port.CellsPush(et, 65+i)
+		evidence.WdNew(fw, 2, 100, 40+(i*13), 140, 53+(i*13), 100, 53, 140, 53, 0, 0, port.CellsLen(et), 1, evidence.LnCount(fl), 900, -1)
+		port.CellsPush(et, 66+i)
+		if ((i == 2) || (i == 4)) && (variant == 1) {
+			port.CellsSet(et, port.CellsLen(et)-1, 88)
+		}
+		evidence.LnNew(fl, 2, 50, 40+(i*13), 140, 53+(i*13), 50, 53, 140, 53, 0, 0, word, 2)
+		i += 2
+	}
+	lawLine(fl, fw, et, 2, 450, 89)
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expectedDrop, "only a fully preserved word sequence can remove the later rows")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), expectedKind, "split and merged OCR lines share the same word band")
+	return 0
+}
+
+func TestAnchoredWordAlignmentAcrossDifferentLineBreaks(emonT *testing.T) {
+	lawWordSeam(emonT, 0, 4, 1)
+	lawWordSeam(emonT, 1, 0, 2)
+}
+
+func TestReversedCutsCanReportAGapWithoutChangingUploadOrder(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var order *port.Cells = port.NewCells()
+	var cuts *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	port.CellsPush(cuts, 1)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, 1)
+	lawLine(fl, fw, et, 1, 140, 66)
+	lawLine(fl, fw, et, 2, 320, 65)
+	seams.MsRun(2, 0, mask, pages, port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), cuts, port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	port.AssertEq(emonT, port.CellsLen(order), 0, "unconfirmed order stays as uploaded")
+	port.AssertEq(emonT, port.CellsAt(decisions, 0), 2, "first physical edge comes from source two")
+	port.AssertEq(emonT, port.CellsAt(decisions, 1), 1, "second physical edge comes from source one")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 3, "two opposing cut edges give gap evidence")
 }
 
 func TestPixelCorrelationNeedsContrastAndPositiveCovariance(emonT *testing.T) {

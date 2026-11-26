@@ -455,7 +455,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let trust: i32 = tg_trust(&mut d.ss);
     let mut pending: i32 = 0;
     let mut w: i32 = 0;
-    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut d.mscuts, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords, &mut s.msorder, &mut s.msincoming, &mut s.msoutgoing);
+    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut d.mscuts, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords, &mut s.msorder, &mut s.msincoming, &mut s.msoutgoing, &mut s.msaw, &mut s.msbw, &mut s.mswordrow);
     if c.keep != 0 {
         ms_evidence(&mut d.evidence, &mut s.seams, &mut s.msorder, &mut d.mask, &mut d.mscuts, c.capture);
     }

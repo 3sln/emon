@@ -415,7 +415,7 @@ public static class Engine {
         int trust = Pdfstruct.TgTrust(d.Ss);
         int pending = 0;
         int w = 0;
-        Seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing);
+        Seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing, s.Msaw, s.Msbw, s.Mswordrow);
         if (c.Keep != 0) {
             Seams.MsEvidence(d.Evidence, s.Seams, s.Msorder, d.Mask, d.Mscuts, c.Capture);
         }

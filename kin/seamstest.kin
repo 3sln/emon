@@ -7,7 +7,7 @@
                                 node-count node-kind node-flags nk-row nk-cell fl-seam-gap]]
             [emon.seams :refer [ms-run ms-ncc ms-sample-cut]]
             [emon.table :refer [tb-seam-gaps tb-emit]]
-            [kin.lang :refer [defn let if do set while return + - * < ==]]))
+            [kin.lang :refer [defn let if do set while return + - * < == and or]]))
 
 (defn ^I32 law-line [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 y ^I32 cp]
   (let [^I32 start (cells-len et)
@@ -43,6 +43,7 @@
     (law-line fl fw et 2 400 82)
     (assert-eq (ms-run 2 capture mask pages ol et fl fw (new-cells) (new-cells) (new-cells) ledger text decisions
                        (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)) expected-drop "rows dropped")
     (assert-eq (ledger-count ledger) expected-drop "dropped rows retained in ledger")
@@ -117,7 +118,8 @@
     (law-line fl fw et 1 450 92)
     (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells))
+                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
                4 "remove the leading duplicate lines of the later photo")
     (assert-eq (cells-at order 0) 2 "source page two starts the document")
     (assert-eq (cells-at order 1) 1 "source page one follows")
@@ -166,9 +168,67 @@
     (law-line fl fw et 2 500 92)
     (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells))
+                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
                0 "punctuation and an extra tail token do not prove an overlap on their own")
     (assert-eq (cells-at decisions 2) 2 "the OCR variant is still reported as a possible duplicate")))
+
+(defn ^I32 law-word-seam [^TestT emon-t ^I32 variant ^I32 expected-drop ^I32 expected-kind]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 word 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 50 91)
+    (while (< i 8)
+      (do (law-line fl fw et 1 (+ 700 (* i 25)) (+ 65 i))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 8)
+      (do (set word (wd-new fw 2 50 (+ 40 (* i 13)) 90 (+ 53 (* i 13))
+                            50 53 90 53 0 0 (cells-len et) 1 (ln-count fl) 900 -1))
+          (cells-push et (+ 65 i))
+          (wd-new fw 2 100 (+ 40 (* i 13)) 140 (+ 53 (* i 13))
+                  100 53 140 53 0 0 (cells-len et) 1 (ln-count fl) 900 -1)
+          (cells-push et (+ 66 i))
+          (if (and (or (== i 2) (== i 4)) (== variant 1))
+            (cells-set et (- (cells-len et) 1) 88))
+          (ln-new fl 2 50 (+ 40 (* i 13)) 140 (+ 53 (* i 13)) 50 53 140 53 0 0 word 2)
+          (set i (+ i 2))))
+    (law-line fl fw et 2 450 89)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               expected-drop "only a fully preserved word sequence can remove the later rows")
+    (assert-eq (cells-at decisions 2) expected-kind "split and merged OCR lines share the same word band")
+    (return 0)))
+
+(deftest test-anchored-word-alignment-across-different-line-breaks
+  (law-word-seam (test-t) 0 4 1)
+  (law-word-seam (test-t) 1 0 2))
+
+(deftest test-reversed-cuts-can-report-a-gap-without-changing-upload-order
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells order (new-cells) ^Cells cuts (new-cells)]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (cells-push cuts 1) (cells-push cuts 0) (cells-push cuts 0) (cells-push cuts 1)
+    (law-line fl fw et 1 140 66)
+    (law-line fl fw et 2 320 65)
+    (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) cuts
+            (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells))
+    (assert-eq (cells-len order) 0 "unconfirmed order stays as uploaded")
+    (assert-eq (cells-at decisions 0) 2 "first physical edge comes from source two")
+    (assert-eq (cells-at decisions 1) 1 "second physical edge comes from source one")
+    (assert-eq (cells-at decisions 2) 3 "two opposing cut edges give gap evidence")))
 
 (deftest test-pixel-correlation-needs-contrast-and-positive-covariance
   (let [^Cells pixels (new-cells)]

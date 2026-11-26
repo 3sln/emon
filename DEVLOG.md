@@ -14998,3 +14998,15 @@ In the direct-image seed 917 run, the evidence-supported order removed the four 
 Tesseract sweep 920 completed 200 receipts and six traps without driver errors. Across 470 seams, duplicates went from 220 in concatenation to 201 after joining, including 160 unflagged. The sweep flagged 168 of 216 lost seams and raised 121 spurious gaps. It counted one false merge at the 97% visibility threshold. The retained copy had the same word sequence as the dropped copy. Word precision and recall were 0.724204 and 0.736301 against 0.722748 and 0.736341 for concatenation. The sweep failed acceptance. Its measured ratchet reference is `tools/multishot/tesseract-sweep-920.json`.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Align words across raster seam line breaks
+
+An anchored seam can align the words of the earlier photo's final lines with the words of the later photo's first lines across different OCR line breaks. The alignment tolerates small word edits and unmatched words inside the edge lines. It never skips an entire complete edge line. A word alignment can remove the later rows when both bands contain at least four distinct content lines and the earlier band preserves the entire word sequence. Weaker word alignments retain both copies and emit `possible-duplicate`. The existing pixel corroboration still applies to short line matches.
+
+A corroborated reverse overlap rules out a gap claim based on the other ends of that pair. When the upload order is uncertain and the forward direction has no cut evidence, independently sampled cut ink on both reverse edges can report a gap in that direction. This evidence keeps the original source page IDs and can be reported without changing reading order.
+
+The seed 920 replay confirmed all 329 unflagged duplicates, missed gaps and spurious gaps from the previous round. Forty-four of the unflagged duplicates intersected OCR lines segmented differently around the same gold row. Thirty-nine missed gaps had neighbors outside physical order. One hundred and one spurious gaps had a projected cut despite there being no lost gold row at the scorer's visibility cutoff. The primary sweep metrics retain their original thresholds.
+
+On the paired Tesseract sweep, 200 receipts and six traps produced 470 seams. Unflagged duplicates fell from 160 to 95, lost seams flagged rose from 168 to 173 of 216, and spurious gaps fell from 121 to 106. Total duplicates stayed at 201. The single scored false merge was again the case at the visibility cutoff described in the preceding decision. Recall was 0.736301 against 0.736341 for concatenation. The sweep still fails acceptance and its ratchet reports one additional spurious flag in the abut bucket. P13.23 and P13.24 stay open.
+
+- [ ] **Signed off** (maintainer)

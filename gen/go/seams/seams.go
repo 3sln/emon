@@ -113,16 +113,11 @@ func msEqual(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
 	return 1
 }
 
-func msOneEdit(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32 {
-	// Allow one OCR edit on a substantial line.
-	var na int32 = msKey(keys, a, 1)
-	var nb int32 = msKey(keys, b, 1)
-	var sa int32 = msKey(keys, a, 0)
-	var sb int32 = msKey(keys, b, 0)
+func msOneEdit(codepoints *port.Cells, sa int32, na int32, sb int32, nb int32, minSize int32) int32 {
 	var i int32 = 0
 	var j int32 = 0
 	var edits int32 = 0
-	if (na < 8) || (nb < 8) || (na > (nb + 1)) || (nb > (na + 1)) {
+	if (na < minSize) || (nb < minSize) || (na > (nb + 1)) || (nb > (na + 1)) {
 		return 0
 	}
 	for (i < na) && (j < nb) {
@@ -223,10 +218,213 @@ func msVariant(keys *port.Cells, codepoints *port.Cells, a int32, b int32) int32
 	if (msKey(keys, a, 2) != 2) || (msKey(keys, b, 2) != 2) {
 		return 0
 	}
-	if msOneEdit(keys, codepoints, a, b) == 1 {
+	if msOneEdit(codepoints, msKey(keys, a, 0), msKey(keys, a, 1), msKey(keys, b, 0), msKey(keys, b, 1), 8) == 1 {
 		return 1
 	}
 	return msTokenBand(keys, codepoints, a, b)
+}
+
+func msWordLimit() int32 {
+	return 160
+}
+
+func msWordCandidate() int32 {
+	return 32768
+}
+
+func msWordConfirmed() int32 {
+	return 65536
+}
+
+func msWordStream(keys *port.Cells, codepoints *port.Cells, edge *port.Cells, bottom int32, words *port.Cells) int32 {
+	// Retain the OCR word boundaries, including numeric punctuation. Each word records its edge
+	// line and its position in that line. The bottom band is traversed in reading order.
+	port.CellsDrop(words, 0)
+	var count int32 = port.CellsLen(edge)
+	var i int32 = 0
+	var rank int32 = 0
+	var line int32 = 0
+	var pos int32 = 0
+	var end int32 = 0
+	var first int32 = 0
+	var index int32 = 0
+	for i < count {
+		rank = i
+		if bottom == 1 {
+			rank = count - i - 1
+		}
+		line = port.CellsAt(edge, rank)
+		pos = msKey(keys, line, 0)
+		end = pos + msKey(keys, line, 1)
+		index = 0
+		if msKey(keys, line, 2) == 1 {
+			port.CellsPush(words, pos)
+			port.CellsPush(words, 0)
+			port.CellsPush(words, rank)
+			port.CellsPush(words, 0)
+		} else {
+			for pos < end {
+				if port.CellsAt(codepoints, pos) == 32 {
+					pos += 1
+				} else {
+					first = pos
+					for (pos < end) && (port.CellsAt(codepoints, pos) != 32) {
+						pos += 1
+					}
+					port.CellsPush(words, first)
+					port.CellsPush(words, pos-first)
+					port.CellsPush(words, rank)
+					port.CellsPush(words, index)
+					index += 1
+				}
+				if port.CellsLen(words) > (4 * msWordLimit()) {
+					return 0
+				}
+			}
+		}
+		i += 1
+	}
+	return port.CellsLen(words) / 4
+}
+
+func msWordScore(codepoints *port.Cells, a *port.Cells, b *port.Cells, i int32, j int32) int32 {
+	var sa int32 = port.CellsAt(a, i*4)
+	var sb int32 = port.CellsAt(b, j*4)
+	var na int32 = port.CellsAt(a, (i*4)+1)
+	var nb int32 = port.CellsAt(b, (j*4)+1)
+	var k int32 = 0
+	if na == nb {
+		for (k < na) && (port.CellsAt(codepoints, sa+k) == port.CellsAt(codepoints, sb+k)) {
+			k += 1
+		}
+		if k == na {
+			return 4
+		}
+	}
+	if msOneEdit(codepoints, sa, na, sb, nb, 4) == 1 {
+		return 3
+	}
+	return -4
+}
+
+func msWordEnd(words *port.Cells, n int32, at int32) int32 {
+	// An imperfect edge word may be omitted. No complete edge line may be skipped.
+	var next int32 = at + 1
+	if (next == n) || (port.CellsAt(words, (next*4)+3) == 0) {
+		return next
+	}
+	if ((next + 1) == n) || (port.CellsAt(words, ((next+1)*4)+3) == 0) {
+		return next + 1
+	}
+	return 0
+}
+
+func msContentLines(keys *port.Cells, codepoints *port.Cells, edge *port.Cells, n int32) int32 {
+	var i int32 = 0
+	var line int32 = 0
+	var previous int32 = -1
+	var count int32 = 0
+	for i < n {
+		line = port.CellsAt(edge, i)
+		if (msKey(keys, line, 2) == 2) && ((previous < 0) || (msEqual(keys, codepoints, previous, line) == 0)) {
+			count += 1
+			previous = line
+		}
+		i += 1
+	}
+	return count
+}
+
+func msWordAlign(keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, aw *port.Cells, bw *port.Cells, row *port.Cells) int32 {
+	// Align a suffix and prefix of the edge word streams. A rolling edit-distance row carries
+	// the score and the starting word of the earlier photo. Cuts can change the OCR line breaks.
+	var na int32 = msWordStream(keys, codepoints, a, 1, aw)
+	var nb int32 = msWordStream(keys, codepoints, b, 0, bw)
+	var i int32 = 0
+	var j int32 = 0
+	var prev int32 = 0
+	var up int32 = 0
+	var left int32 = 0
+	var word int32 = 0
+	var diag int32 = 0
+	var score int32 = 0
+	var start int32 = 0
+	var end int32 = 0
+	var before int32 = 0
+	var quality int32 = 0
+	var best int32 = 0
+	var bestQuality int32 = 0
+	var an int32 = 0
+	var bn int32 = 0
+	var lines int32 = 0
+	var other int32 = 0
+	if (na == 0) || (nb == 0) {
+		return 0
+	}
+	port.CellsDrop(row, 0)
+	for j <= nb {
+		port.CellsPush(row, 0)
+		j += 1
+	}
+	for i < na {
+		prev = 0
+		j = 0
+		before = port.CellsAt(aw, (i*4)+3)
+		for j < nb {
+			up = port.CellsAt(row, j+1)
+			left = port.CellsAt(row, j)
+			word = msWordScore(codepoints, aw, bw, i, j)
+			diag = 0
+			if (prev > 0) && ((prev + (word * 256)) >= 256) {
+				diag = prev + (word * 256)
+			}
+			if (word > 0) && (before <= 1) && (j <= 1) && (port.CellsAt(bw, (j*4)+3) == j) {
+				score = (word * 256) + (i - before)
+				if score > diag {
+					diag = score
+				}
+			}
+			score = diag
+			if up >= 1280 {
+				if (up - 1024) > score {
+					score = up - 1024
+				}
+			}
+			if left >= 1280 {
+				if (left - 1024) > score {
+					score = left - 1024
+				}
+			}
+			port.CellsSet(row, j+1, score)
+			prev = up
+			if (word > 0) && (diag > 0) && (msWordEnd(aw, na, i) == na) {
+				quality = diag / 256
+				start = diag % 256
+				end = msWordEnd(bw, nb, j)
+				// An exact word adds four and an edit subtracts four. Half of the maximum
+				// score therefore requires at least three quarters of the words to agree.
+				if (quality > bestQuality) && (end >= 2) && (quality >= (2 * (na - start))) && (quality >= (2 * end)) {
+					an = port.CellsAt(aw, (start*4)+2) + 1
+					bn = port.CellsAt(bw, ((end-1)*4)+2) + 1
+					lines = msContentLines(keys, codepoints, a, an)
+					other = msContentLines(keys, codepoints, b, bn)
+					if other < lines {
+						lines = other
+					}
+					if lines > 0 {
+						bestQuality = quality
+						best = msWordCandidate() + (lines * 32) + bn
+						if (lines >= 4) && (quality == (4 * end)) && (end == (na - start)) {
+							best = msWordConfirmed() + (lines * 32) + bn
+						}
+					}
+				}
+			}
+			j += 1
+		}
+		i += 1
+	}
+	return best
 }
 
 func msY(fl *port.Cells, line int32) int32 {
@@ -539,8 +737,16 @@ func msRunScore(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 	return votes
 }
 
+func msCut(cuts *port.Cells, page int32, bottom int32) int32 {
+	var index int32 = ((page - 1) * 2) + bottom
+	if index < port.CellsLen(cuts) {
+		return port.CellsAt(cuts, index)
+	}
+	return 0
+}
+
 func msGap(ol *port.Cells, pages *port.Cells, cuts *port.Cells, left int32, right int32) int32 {
-	if ((((left * 2) - 1) < port.CellsLen(cuts)) && (port.CellsAt(cuts, (left*2)-1) == 1)) || ((((right * 2) - 2) < port.CellsLen(cuts)) && (port.CellsAt(cuts, (right*2)-2) == 1)) {
+	if (msCut(cuts, left, 1) == 1) || (msCut(cuts, right, 0) == 1) {
 		return 1
 	}
 	var i int32 = 0
@@ -633,7 +839,7 @@ func msPageEdge(fl *port.Cells, keys *port.Cells, page int32, bottom int32, band
 	return 0
 }
 
-func msPair(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells) int32 {
+func msPair(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells, aw *port.Cells, bw *port.Cells, wordRow *port.Cells) int32 {
 	msPageEdge(fl, keys, left, 1, a)
 	msPageEdge(fl, keys, right, 0, b)
 	var n int32 = 1
@@ -646,10 +852,23 @@ func msPair(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, left int32
 		}
 		n += 1
 	}
+	if (best / 1024) >= 4 {
+		return best
+	}
+	var band int32 = msWordAlign(keys, codepoints, a, b, aw, bw, wordRow)
+	if (best == 0) || ((band >= msWordConfirmed()) && ((band % 32) >= (best % 32))) {
+		return band
+	}
 	return best
 }
 
 func msAccepted(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, offsets *port.Cells, pixels *port.Cells, match int32) int32 {
+	if match >= msWordConfirmed() {
+		return 1
+	}
+	if match >= msWordCandidate() {
+		return 0
+	}
 	var score int32 = match / 32
 	var n int32 = match % 32
 	var exact int32 = score / 32
@@ -660,7 +879,7 @@ func msAccepted(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 	return 0
 }
 
-func msOrder(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, first int32, end int32, order *port.Cells, incoming *port.Cells, outgoing *port.Cells, a *port.Cells, b *port.Cells) int32 {
+func msOrder(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, first int32, end int32, order *port.Cells, incoming *port.Cells, outgoing *port.Cells, a *port.Cells, b *port.Cells, aw *port.Cells, bw *port.Cells, wordRow *port.Cells) int32 {
 	// Recover a unique complete chain of corroborated, directional joins. Preserve upload order if
 	// the evidence leaves a missing link, branching chain, or cycle. Limit all-pairs work per run.
 	if ((end - first) < 2) || ((end - first) > 16) {
@@ -683,7 +902,7 @@ func msOrder(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *
 		right = first
 		for right < end {
 			if left != right {
-				match = msPair(fl, keys, codepoints, left, right, a, b)
+				match = msPair(fl, keys, codepoints, left, right, a, b, aw, bw, wordRow)
 				if msAccepted(fl, a, b, keys, offsets, pixels, match) == 1 {
 					if port.CellsAt(outgoing, left-first) != 0 {
 						return 0
@@ -733,11 +952,11 @@ func msMark(seams *port.Cells, left int32, right int32, kind int32, match int32)
 	port.CellsPush(seams, right)
 	port.CellsPush(seams, kind)
 	port.CellsPush(seams, match%32)
-	port.CellsPush(seams, (match/1024)+((match/32)%32))
+	port.CellsPush(seams, ((match/1024)%32)+((match/32)%32))
 	return 0
 }
 
-func msAmbiguousSkips(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, first int32, end int32, a *port.Cells, b *port.Cells, seams *port.Cells) int32 {
+func msAmbiguousSkips(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, first int32, end int32, a *port.Cells, b *port.Cells, seams *port.Cells, aw *port.Cells, bw *port.Cells, wordRow *port.Cells) int32 {
 	// Report nonadjacent candidates when multiple photos were uploaded but no full order is supported.
 	if (end - first) > 16 {
 		return 0
@@ -748,11 +967,11 @@ func msAmbiguousSkips(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, 
 	for (left + 2) < end {
 		right = left + 2
 		for right < end {
-			match = msPair(fl, keys, codepoints, left, right, a, b)
+			match = msPair(fl, keys, codepoints, left, right, a, b, aw, bw, wordRow)
 			if match > 0 {
 				msMark(seams, left, right, 2, match)
 			}
-			match = msPair(fl, keys, codepoints, right, left, a, b)
+			match = msPair(fl, keys, codepoints, right, left, a, b, aw, bw, wordRow)
 			if match > 0 {
 				msMark(seams, right, left, 2, match)
 			}
@@ -763,7 +982,7 @@ func msAmbiguousSkips(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, 
 	return 0
 }
 
-func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, offsets *port.Cells, pixels *port.Cells, cuts *port.Cells, ledger *port.Cells, modelText *port.Cells, seams *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, dropped *port.Cells, newLines *port.Cells, newWords *port.Cells, order *port.Cells, incoming *port.Cells, outgoing *port.Cells) int32 {
+func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, offsets *port.Cells, pixels *port.Cells, cuts *port.Cells, ledger *port.Cells, modelText *port.Cells, seams *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, dropped *port.Cells, newLines *port.Cells, newWords *port.Cells, order *port.Cells, incoming *port.Cells, outgoing *port.Cells, aw *port.Cells, bw *port.Cells, wordRow *port.Cells) int32 {
 	port.CellsDrop(seams, 0)
 	port.CellsDrop(keys, 0)
 	port.CellsDrop(codepoints, 0)
@@ -808,16 +1027,16 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 				end += 1
 			}
 		}
-		ordered = msOrder(fl, keys, codepoints, offsets, pixels, page, end, order, incoming, outgoing, a, b)
+		ordered = msOrder(fl, keys, codepoints, offsets, pixels, page, end, order, incoming, outgoing, a, b, aw, bw, wordRow)
 		if ordered == 0 {
-			msAmbiguousSkips(fl, keys, codepoints, page, end, a, b, seams)
+			msAmbiguousSkips(fl, keys, codepoints, page, end, a, b, seams, aw, bw, wordRow)
 		}
 		for (page + 1) < end {
 			left = port.CellsAt(order, page-1)
 			right = port.CellsAt(order, page)
-			reverse = msPair(fl, keys, codepoints, right, left, a, b)
+			reverse = msPair(fl, keys, codepoints, right, left, a, b, aw, bw, wordRow)
 			reverseAccepted = msAccepted(fl, a, b, keys, offsets, pixels, reverse)
-			forward = msPair(fl, keys, codepoints, left, right, a, b)
+			forward = msPair(fl, keys, codepoints, left, right, a, b, aw, bw, wordRow)
 			accepted = msAccepted(fl, a, b, keys, offsets, pixels, forward)
 			if (accepted == 1) && (reverseAccepted == 0) {
 				i = 0
@@ -838,8 +1057,12 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 				if (ordered == 0) && (reverse > 0) {
 					msMark(seams, right, left, 2, reverse)
 				}
-				if (forward == 0) && (msGap(ol, pages, cuts, left, right) == 1) {
-					msMark(seams, left, right, 3, 0)
+				if (reverseAccepted == 0) && ((forward == 0) || ((forward >= msWordCandidate()) && (((forward / 32) % 32) == 1))) {
+					if msGap(ol, pages, cuts, left, right) == 1 {
+						msMark(seams, left, right, 3, 0)
+					} else if (ordered == 0) && (reverse == 0) && (msCut(cuts, right, 1) == 1) && (msCut(cuts, left, 0) == 1) {
+						msMark(seams, right, left, 3, 0)
+					}
 				}
 			}
 			page += 1

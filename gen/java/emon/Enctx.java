@@ -463,6 +463,9 @@ public final class Enctx {
         public emon.Port.Cells msorder = emon.Port.newCells();
         public emon.Port.Cells msincoming = emon.Port.newCells();
         public emon.Port.Cells msoutgoing = emon.Port.newCells();
+        public emon.Port.Cells msaw = emon.Port.newCells();
+        public emon.Port.Cells msbw = emon.Port.newCells();
+        public emon.Port.Cells mswordrow = emon.Port.newCells();
         public emon.Port.Cells cd = emon.Port.newCells();
         public emon.Port.Cells sl = emon.Port.newCells();
         public emon.Port.Cells gr = emon.Port.newCells();
@@ -617,6 +620,9 @@ public final class Enctx {
             emon.Port.cellsCopyInto(c.msorder, this.msorder);
             emon.Port.cellsCopyInto(c.msincoming, this.msincoming);
             emon.Port.cellsCopyInto(c.msoutgoing, this.msoutgoing);
+            emon.Port.cellsCopyInto(c.msaw, this.msaw);
+            emon.Port.cellsCopyInto(c.msbw, this.msbw);
+            emon.Port.cellsCopyInto(c.mswordrow, this.mswordrow);
             emon.Port.cellsCopyInto(c.cd, this.cd);
             emon.Port.cellsCopyInto(c.sl, this.sl);
             emon.Port.cellsCopyInto(c.gr, this.gr);
