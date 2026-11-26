@@ -14925,3 +14925,15 @@ Evidence: at e6555a7a (the parent of D907) the predictor gives `1181 metrics, no
 Ruling (ratchet authority, stale baseline, a directed change by D907): the entry is deleted and re-recorded with `--update` against current main, as the baseline of the fallback turnkey. Vision alone remains measurable as `emon-live-vision-alone` (no entry). This is not used to hide a regression: the old and new numbers are different predictors, and D907's report holds the pre-registered comparison.
 
 - [ ] **Signed off** (maintainer)
+
+### D919 — Restore the PP-OCR qualification replay shard
+
+ORTPIN's surviving manifest fixes the original 198 cases at 120 fixed receipts, 54 controls and 24 fresh receipts. The 225 live Rust bitmap answers at `dfeace9e528d640fd2eb965288963f3b5eac0b97` have SHA-256 `01a0e28839733ab36543c9a233f251ff260585947d4019b6d68c89fe3e42f327`. Every answer differs from D906's reference only in the two policy identity cells. The current policy is `ppocr5-en-78a0bc6470aff8a019b9df062b038a1f68192946792e331dad6460a9079df0ab`.
+
+The macOS arm64 qualification uses Microsoft's NuGet ONNX Runtime 1.22.0 package and extracted library, verified against `tools/ppocr/runtimes.edn`. The PDFium library matches the historical renderer SHA-256. The original transcripts were lost. The current recordings captured 78 successful renders across 11 controls. All 198 new transcripts and compressed reference bundles are present, and the regenerated manifest matches the frozen one.
+
+`chartqa-test-400`, `katanaml-invoices`, `fintabnet-otsl`, `xfund` and `ctdar-test` matched their registry digests in the isolated scratch corpus and were pruned after qualification. The cTDaR importer needed empty training directories to regenerate the test-only gold files. The mounted corpus retains `rvl-cdip-small`. The completed artifact lives at `$EMON_SCRATCH/ppocr-qual`.
+
+The full `bb ppocr-hosts --qualification "$EMON_SCRATCH/ppocr-qual"` run passed with Rust release optimization level 1, `EMON_PACK_CACHE=$EMON_SCRATCH/transport-packs` and `EMON_PACKS_FETCH=never`. The writable cache lets the C/pod native probe stage verified pack views in the sandbox. All six live transports matched 225 answers each, Rust matched all 2,025 answers in its 3×3 determinism check, and the integrated stage passed 18 dependency refusals, 35 live Models and 30 fixture replays. All 1,188 document replays matched exactly across six drivers with the model and runtime paths disabled. The 60+60 fixed receipts passed the D864 tolerance. Word precision and recall were 0.701172 and 0.756572 for SROIE, and 0.471007 and 0.696764 for CORD. Provenance records the command, runtime pins and `:complete true`.
+
+- [ ] **Signed off** (maintainer)
