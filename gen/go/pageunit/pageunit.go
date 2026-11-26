@@ -700,6 +700,20 @@ func PuScanCore(i int32, input int32, fuse int32, did int32, ad int32, dpi100 in
 	}
 	retarget.RtUpright(rtp, run, epages, i+1)
 	rotmed = evidence.EvRotMedian(olines, l0, nl)
+	var turns int32 = port.CellsAt(rtp, retarget.RtpQ())
+	var fourpx int32 = 2880000 / rdpi
+	var photos int32 = (fuse & 32) / 32
+	var clipW int32 = bx1 - bx0
+	var clipH int32 = by1 - by0
+	if (port.CellsAt(rtp, retarget.RtpPrimary()) != run) && (turns != 0) {
+		if (turns % 2) == 1 {
+			nsel = scan.ScSetAsideClips(olines, owords, etext, scr, nsel, 0, 0, clipH, clipW, fourpx, photos)
+		} else {
+			nsel = scan.ScSetAsideClips(olines, owords, etext, scr, nsel, 0, 0, clipW, clipH, fourpx, photos)
+		}
+	} else {
+		nsel = scan.ScSetAsideClips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos)
+	}
 	scan.ScEmitSel(olines, owords, osyms, nsel, i+1, rotmed, scr, words, lines, etext, rules, comps, inks)
 	if (port.CellsAt(rtp, retarget.RtpPrimary()) != run) && (port.CellsAt(rtp, retarget.RtpQ()) != 0) {
 		mv += 8

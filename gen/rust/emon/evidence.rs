@@ -538,6 +538,9 @@ pub fn oe_corrected() -> i32 {
 pub fn oe_uncalibrated() -> i32 {
     return 64;
 }
+pub fn oe_clipped() -> i32 {
+    return 128;
+}
 pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "dictionary");
@@ -565,6 +568,10 @@ pub fn oe_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 64 {
         crate::port::text_ascii(t, "uncalibrated");
+        return 1;
+    }
+    if code == 128 {
+        crate::port::text_ascii(t, "clipped");
         return 1;
     }
     return 0;
@@ -3804,6 +3811,9 @@ pub fn olf_run() -> i32 {
 pub fn olf_conf() -> i32 {
     return 15;
 }
+pub fn ev_clipped_conf() -> i32 {
+    return 300;
+}
 pub fn olf_xheight() -> i32 {
     return 16;
 }
@@ -6082,14 +6092,17 @@ pub fn owf_alts() -> i32 {
     return 31;
 }
 pub fn ow_confidence(c: &mut crate::port::Cells, word: i32) -> i32 {
-    if (ow_get(c, word, owf_flags()) & oe_uncalibrated()) != 0 {
-        return 500;
+    let flags: i32 = ow_get(c, word, owf_flags());
+    let mut p: i32 = ow_get(c, word, owf_pcal());
+    if (flags & oe_uncalibrated()) != 0 {
+        p = 500;
+    } else if p < 0 {
+        p = ow_get(c, word, hd_conf());
     }
-    let p: i32 = ow_get(c, word, owf_pcal());
-    if p >= 0 {
-        return p;
+    if ((flags & oe_clipped()) != 0) && (p > ev_clipped_conf()) {
+        return ev_clipped_conf();
     }
-    return ow_get(c, word, hd_conf());
+    return p;
 }
 pub fn or_granularity(c: &mut crate::port::Cells, run: i32) -> i32 {
     return (or_get(c, run, orf_flags()) / 256) % 256;
@@ -6763,6 +6776,10 @@ pub fn ev_row(mut t: &mut String, pr: i32, d: i32, ea: i32, c: &mut crate::port:
         if ((or_get(c, row, orf_flags()) / 4) % 2) == 1 {
             s = ev_emit_ocr_model(t, pr, d, s, 1);
         }
+    }
+    if (ea == 16) && (ol_get(c, row, olf_conf()) >= 0) {
+        s = ev_begin(t, pr, d, s, ek_flags());
+        crate::port::text_ascii(t, "[\"clipped\"]");
     }
     js_close(t, pr, d, s);
     return 0;

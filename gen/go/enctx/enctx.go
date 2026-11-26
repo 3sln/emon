@@ -156,6 +156,7 @@ type Cfg struct {
 	Jsrender int32
 	Tabl     int32
 	Oengine  int32
+	Capture  int32
 }
 
 func NewCfg() *Cfg {
@@ -187,6 +188,7 @@ func NewCfg() *Cfg {
 		Jsrender: 0,
 		Tabl:     0,
 		Oengine:  0,
+		Capture:  0,
 	}
 }
 func (d *Cfg) Clone() *Cfg {
@@ -218,6 +220,7 @@ func (d *Cfg) Clone() *Cfg {
 	c.Jsrender = d.Jsrender
 	c.Tabl = d.Tabl
 	c.Oengine = d.Oengine
+	c.Capture = d.Capture
 	return c
 }
 
@@ -290,6 +293,8 @@ type Doc struct {
 	Fcode    int32
 	Fnode    int32
 	Pscr     *port.Cells
+	Mspatch  *port.Cells
+	Mspixel  *port.Cells
 	Kind     int32
 	Ifmt     int32
 	Ipages   int32
@@ -369,6 +374,8 @@ func NewDoc() *Doc {
 		Fcode:    0,
 		Fnode:    0,
 		Pscr:     port.NewCells(),
+		Mspatch:  port.NewCells(),
+		Mspixel:  port.NewCells(),
 		Kind:     0,
 		Ifmt:     0,
 		Ipages:   0,
@@ -448,6 +455,8 @@ func (d *Doc) Clone() *Doc {
 	c.Fcode = d.Fcode
 	c.Fnode = d.Fnode
 	port.CellsCopyInto(c.Pscr, d.Pscr)
+	port.CellsCopyInto(c.Mspatch, d.Mspatch)
+	port.CellsCopyInto(c.Mspixel, d.Mspixel)
 	c.Kind = d.Kind
 	c.Ifmt = d.Ifmt
 	c.Ipages = d.Ipages
@@ -657,6 +666,14 @@ func (d *Pass) Clone() *Pass {
 }
 
 type Scratch struct {
+	Seams    *port.Cells
+	Mskeys   *port.Cells
+	Mscode   *port.Cells
+	Msa      *port.Cells
+	Msb      *port.Cells
+	Msdrop   *port.Cells
+	Mslines  *port.Cells
+	Mswords  *port.Cells
 	Cd       *port.Cells
 	Sl       *port.Cells
 	Gr       *port.Cells
@@ -799,6 +816,14 @@ type Scratch struct {
 
 func NewScratch() *Scratch {
 	return &Scratch{
+		Seams:    port.NewCells(),
+		Mskeys:   port.NewCells(),
+		Mscode:   port.NewCells(),
+		Msa:      port.NewCells(),
+		Msb:      port.NewCells(),
+		Msdrop:   port.NewCells(),
+		Mslines:  port.NewCells(),
+		Mswords:  port.NewCells(),
 		Cd:       port.NewCells(),
 		Sl:       port.NewCells(),
 		Gr:       port.NewCells(),
@@ -941,6 +966,14 @@ func NewScratch() *Scratch {
 }
 func (d *Scratch) Clone() *Scratch {
 	c := NewScratch()
+	port.CellsCopyInto(c.Seams, d.Seams)
+	port.CellsCopyInto(c.Mskeys, d.Mskeys)
+	port.CellsCopyInto(c.Mscode, d.Mscode)
+	port.CellsCopyInto(c.Msa, d.Msa)
+	port.CellsCopyInto(c.Msb, d.Msb)
+	port.CellsCopyInto(c.Msdrop, d.Msdrop)
+	port.CellsCopyInto(c.Mslines, d.Mslines)
+	port.CellsCopyInto(c.Mswords, d.Mswords)
 	port.CellsCopyInto(c.Cd, d.Cd)
 	port.CellsCopyInto(c.Sl, d.Sl)
 	port.CellsCopyInto(c.Gr, d.Gr)

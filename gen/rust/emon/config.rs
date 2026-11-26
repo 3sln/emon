@@ -3,7 +3,7 @@
 
 use crate::emon::limits::*;
 
-pub static CK_CHARS: [i32; 193] = [
+pub static CK_CHARS: [i32; 200] = [
     108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
     114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
     105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -16,9 +16,9 @@ pub static CK_CHARS: [i32; 193] = [
     107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
     112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
     114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
-    101
+    101, 99, 97, 112, 116, 117, 114, 101
 ];
-pub static CK_ROWS: [i32; 110] = [
+pub static CK_ROWS: [i32; 115] = [
     0, 0, 0, 0, 6,
     2, 0, 0, 6, 3,
     2, 0, 0, 9, 9,
@@ -40,9 +40,10 @@ pub static CK_ROWS: [i32; 110] = [
     1, 1, 2147483647, 160, 8,
     3, 0, 0, 168, 9,
     2, 0, 0, 177, 6,
-    2, 0, 0, 183, 10
+    2, 0, 0, 183, 10,
+    2, 0, 0, 193, 7
 ];
-pub static CV_CHARS: [i32; 138] = [
+pub static CV_CHARS: [i32; 148] = [
     97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
     111, 108, 105, 99, 121, 107, 101, 101, 112, 100, 114, 111, 112, 110, 111, 110,
     101, 105, 109, 97, 103, 101, 115, 102, 105, 103, 117, 114, 101, 115, 111, 110,
@@ -51,9 +52,10 @@ pub static CV_CHARS: [i32; 138] = [
     97, 99, 116, 112, 112, 111, 99, 114, 112, 112, 111, 99, 114, 45, 97, 108,
     111, 110, 101, 97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 119,
     105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99, 114,
-    109, 108, 107, 105, 116, 45, 116, 101, 120, 116
+    109, 108, 107, 105, 116, 45, 116, 101, 120, 116, 115, 99, 97, 110, 112, 104,
+    111, 116, 111, 115
 ];
-pub static CV_ROWS: [i32; 84] = [
+pub static CV_ROWS: [i32; 96] = [
     1, 2, 0, 6,
     1, 1, 6, 4,
     1, 0, 10, 5,
@@ -74,7 +76,10 @@ pub static CV_ROWS: [i32; 84] = [
     21, 2, 88, 11,
     21, 3, 99, 12,
     21, 4, 111, 17,
-    21, 5, 128, 10
+    21, 5, 128, 10,
+    22, 0, 6, 4,
+    22, 1, 138, 4,
+    22, 2, 142, 6
 ];
 pub(crate) const K_LOCALE: i32 = 0;
 pub(crate) const K_OCR: i32 = 1;
@@ -96,6 +101,7 @@ pub(crate) const K_PAR: i32 = 18;
 pub(crate) const K_JSRENDER: i32 = 19;
 pub(crate) const K_TABLES: i32 = 20;
 pub(crate) const K_OENGINE: i32 = 21;
+pub(crate) const K_CAPTURE: i32 = 22;
 pub(crate) const SH_STR: i32 = 0;
 pub(crate) const SH_NUM: i32 = 1;
 pub(crate) const SH_ENUM: i32 = 2;
@@ -124,6 +130,7 @@ pub fn cf_defaults(c: &mut crate::emon::enctx::Cfg) -> i32 {
     c.jsrender = 0;
     c.tabl = 0;
     c.oengine = 0;
+    c.capture = 0;
     c.par = 1;
     c.dry = 0;
     return 0;
@@ -151,7 +158,7 @@ pub(crate) fn cf_key_is(t: &mut crate::port::Cells, from: i32, to: i32, k: i32) 
 pub fn cf_key_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The key t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 22 {
+    while k < 23 {
         if cf_key_is(t, from, to, k) == 1 {
             return k;
         }
@@ -189,7 +196,7 @@ pub fn cf_limit_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
 pub(crate) fn cf_word(t: &mut crate::port::Cells, from: i32, to: i32, key: i32) -> i32 {
     // The code of the word t[from, to) is for enum key `key`, or -1.
     let mut r: i32 = 0;
-    while r < 21 {
+    while r < 24 {
         if CV_ROWS[(r * 4 + 0) as usize] == key {
             let nl: i32 = CV_ROWS[(r * 4 + 3) as usize];
             let off: i32 = CV_ROWS[(r * 4 + 2) as usize];
@@ -282,14 +289,14 @@ pub(crate) fn cf_fail_enum(k: i32, c: &mut crate::emon::enctx::Cfg) -> i32 {
     let mut m: i32 = 0;
     let mut seen: i32 = 0;
     let mut r: i32 = 0;
-    while r < 21 {
+    while r < 24 {
         if CV_ROWS[(r * 4 + 0) as usize] == k {
             m += 1;
         }
         r += 1;
     }
     r = 0;
-    while r < 21 {
+    while r < 24 {
         if CV_ROWS[(r * 4 + 0) as usize] == k {
             if seen > 0 {
                 if seen == (m - 1) {
@@ -370,6 +377,9 @@ pub(crate) fn cf_set_word(c: &mut crate::emon::enctx::Cfg, k: i32, v: i32) -> i3
     }
     if k == K_OENGINE {
         c.oengine = v;
+    }
+    if k == K_CAPTURE {
+        c.capture = v;
     }
     return 0;
 }

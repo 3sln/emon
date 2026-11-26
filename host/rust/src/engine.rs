@@ -266,6 +266,7 @@ impl Furniture {
 // What a conversion is asked to do. `Default` is SPEC 13's defaults.
 #[derive(Debug, Clone)]
 pub struct Options {
+    pub capture: Capture,
     // A BCP 47 hint, written to the Model's `settings.locale`; none by default. It decides nothing yet.
     pub locale: Option<String>,
     pub ocr: OcrPolicy,
@@ -295,6 +296,24 @@ pub struct Options {
     // Experimental comparison-driver option state, outside the stable typed API.
     #[cfg(feature = "__test_hooks")]
     pub tables_scored: bool,
+}
+
+/// Capture mode for raster pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capture {
+    Auto,
+    Scan,
+    Photos,
+}
+
+impl Capture {
+    fn from_code(code: i32) -> Self {
+        match code {
+            1 => Self::Scan,
+            2 => Self::Photos,
+            _ => Self::Auto,
+        }
+    }
 }
 
 // SPEC 13's defaults are kin's (`emon.config`'s `cf-defaults`): the default Options are the parse of the empty text.
@@ -410,6 +429,7 @@ fn parse_cfg(text: &str) -> Result<Cfg, String> {
 
 fn options_of(c: &Cfg) -> Options {
     Options {
+        capture: Capture::from_code(c.capture),
         locale: if c.haveloc == 1 { Some(string_of_cells(&c.lcl, 0, cells_len(&c.lcl))) } else { None },
         ocr: OcrPolicy::from_code(c.ocr),
         ocr_engine: OcrEngine::from_code(c.oengine),
@@ -1137,6 +1157,7 @@ fn cfg_of(opts: &Options) -> Cfg {
     let mut c = Cfg::new();
     c.ocr = opts.ocr.code();
     c.oengine = opts.ocr_engine.code();
+    c.capture = opts.capture as i32;
     c.scope = opts.ocr_scope.code();
     c.furn = opts.furniture.mode();
     c.level = opts.assets.level();

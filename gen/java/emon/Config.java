@@ -18,7 +18,7 @@ public final class Config {
         107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
         112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
         114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
-        101
+        101, 99, 97, 112, 116, 117, 114, 101
     };
     public static final int[] CK_ROWS = {
         0, 0, 0, 0, 6,
@@ -42,7 +42,8 @@ public final class Config {
         1, 1, 2147483647, 160, 8,
         3, 0, 0, 168, 9,
         2, 0, 0, 177, 6,
-        2, 0, 0, 183, 10
+        2, 0, 0, 183, 10,
+        2, 0, 0, 193, 7
     };
     public static final int[] CV_CHARS = {
         97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -53,7 +54,8 @@ public final class Config {
         97, 99, 116, 112, 112, 111, 99, 114, 112, 112, 111, 99, 114, 45, 97, 108,
         111, 110, 101, 97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 119,
         105, 110, 100, 111, 119, 115, 45, 109, 101, 100, 105, 97, 45, 111, 99, 114,
-        109, 108, 107, 105, 116, 45, 116, 101, 120, 116
+        109, 108, 107, 105, 116, 45, 116, 101, 120, 116, 115, 99, 97, 110, 112, 104,
+        111, 116, 111, 115
     };
     public static final int[] CV_ROWS = {
         1, 2, 0, 6,
@@ -76,7 +78,10 @@ public final class Config {
         21, 2, 88, 11,
         21, 3, 99, 12,
         21, 4, 111, 17,
-        21, 5, 128, 10
+        21, 5, 128, 10,
+        22, 0, 6, 4,
+        22, 1, 138, 4,
+        22, 2, 142, 6
     };
     public static final int K_LOCALE = 0;
     public static final int K_OCR = 1;
@@ -98,6 +103,7 @@ public final class Config {
     public static final int K_JSRENDER = 19;
     public static final int K_TABLES = 20;
     public static final int K_OENGINE = 21;
+    public static final int K_CAPTURE = 22;
     public static final int SH_STR = 0;
     public static final int SH_NUM = 1;
     public static final int SH_ENUM = 2;
@@ -126,6 +132,7 @@ public final class Config {
         c.jsrender = 0;
         c.tabl = 0;
         c.oengine = 0;
+        c.capture = 0;
         c.par = 1;
         c.dry = 0;
         return 0;
@@ -153,7 +160,7 @@ public final class Config {
     public static int cfKeyFind(emon.Port.Cells t, int from, int to) {
         // The key t[from, to) names, or -1.
         int k = 0;
-        while (k < 22) {
+        while (k < 23) {
             if (cfKeyIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -191,7 +198,7 @@ public final class Config {
     public static int cfWord(emon.Port.Cells t, int from, int to, int key) {
         // The code of the word t[from, to) is for enum key `key`, or -1.
         int r = 0;
-        while (r < 21) {
+        while (r < 24) {
             if (CV_ROWS[r * 4 + 0] == key) {
                 int nl = CV_ROWS[r * 4 + 3];
                 int off = CV_ROWS[r * 4 + 2];
@@ -284,14 +291,14 @@ public final class Config {
         int m = 0;
         int seen = 0;
         int r = 0;
-        while (r < 21) {
+        while (r < 24) {
             if (CV_ROWS[r * 4 + 0] == k) {
                 m += 1;
             }
             r += 1;
         }
         r = 0;
-        while (r < 21) {
+        while (r < 24) {
             if (CV_ROWS[r * 4 + 0] == k) {
                 if (seen > 0) {
                     if (seen == (m - 1)) {
@@ -372,6 +379,9 @@ public final class Config {
         }
         if (k == K_OENGINE) {
             c.oengine = v;
+        }
+        if (k == K_CAPTURE) {
+            c.capture = v;
         }
         return 0;
     }

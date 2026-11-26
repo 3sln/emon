@@ -23,7 +23,7 @@
 ;; `par` is the `parallel` option (P10.2) and `dry` a HIDDEN setting like `nort` (not a key): a host sets it on the `Cfg` of a DRY page attempt (`pu-dry`).
 ;; `tabl` is the experimental tables option: 0 legacy (default), 1 scored; evidence only, outside Model settings.
 (defctx ^:pub Cfg [^I32 ocr ^I32 scope ^I32 furn ^I32 level ^I32 dpi ^I32 pixels ^I32 abyte ^I32 tbyte ^I32 sigs ^I32 keep ^I32 haveloc ^Cells lcl
-      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg ^I32 nort ^I32 par ^I32 dry ^I32 jsrender ^I32 tabl ^I32 oengine])
+      ^I32 chunk ^I32 maxr ^I32 fetchr ^I32 rec ^I32 jsocr ^I32 num ^Cells lims ^Cells prod ^Text msg ^I32 nort ^I32 par ^I32 dry ^I32 jsrender ^I32 tabl ^I32 oengine ^I32 capture])
 
 ;; the document pass's arenas, the page units' scratch (`xs`: the alignment's, `ys`: the ink stage's and the targeted passes') and the unit's answer
 (defctx ^:pub Doc [^Cells et ^Cells gl ^Cells mk ^Cells fnt ^Cells wd ^Cells ln ^Cells fw ^Cells fl
@@ -35,7 +35,7 @@
       ^Cells ys13 ^Cells ys14 ^Cells ys15 ^Cells ys16 ^Cells ys17 ^Cells ys18 ^Cells snapg ^Cells snapk
       ^Cells snapf ^Cells cand ^Cells aim ^Cells fi ^Buf cbytes ^Text evidence ^I32 nl0 ^I32 fused ^I32 hassnap
       ^I32 fcode ^I32 fnode
-      ^Cells pscr ^I32 kind ^I32 ifmt ^I32 ipages ^I32 imajor ^I32 iminor ^I32 ienc ^I32 rfrom])
+      ^Cells pscr ^Cells mspatch ^Cells mspixel ^I32 kind ^I32 ifmt ^I32 ipages ^I32 imajor ^I32 iminor ^I32 ienc ^I32 rfrom])
 
 ;; THE DOCUMENT PASS'S SCRATCH (P10.6 S3, D485): what `en-attempt` (the PDF document pass and the raster one) and `en-asset-unit` open, read and write that is
 ;; NOT the unit's own (`Doc`'s): the opened document's tables, the content interpreter's, the catalogue's and the tagged tree's, the asset unit's. One field a
@@ -49,7 +49,8 @@
       ^Cells glob ^Cells words ^Cells hs
       ^Cells fz0 ^Cells fz1 ^Cells fz2 ^Cells fz3 ^Cells fz4 ^Buf zb])
 
-(defctx ^:pub Scratch [^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
+(defctx ^:pub Scratch [^Cells seams ^Cells mskeys ^Cells mscode ^Cells msa ^Cells msb ^Cells msdrop ^Cells mslines ^Cells mswords
+                        ^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
       ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^Cells tbx ^Cells tbk ^Cells tbo ^Cells s0 ^Cells s1 ^Cells s2 ^Cells s3 ^Cells s4
       ^Cells s5 ^Cells s6 ^Cells s7 ^Cells s8 ^Cells s9 ^Cells s10 ^Cells s11 ^Cells s12 ^Cells s13 ^Cells s14
       ^Cells s15 ^Cells s16 ^Cells s17 ^Cells s18 ^Cells ta0 ^Cells g0 ^Cells g1 ^Cells g2 ^Cells g3 ^Cells g4

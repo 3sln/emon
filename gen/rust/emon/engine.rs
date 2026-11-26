@@ -29,6 +29,7 @@ use crate::emon::pdfdoc::*;
 use crate::emon::pdfmeta::*;
 use crate::emon::pdfstruct::*;
 use crate::emon::pdfx::*;
+use crate::emon::plan::*;
 use crate::emon::planloop::*;
 use crate::emon::player::*;
 use crate::emon::rasterin::*;
@@ -37,6 +38,7 @@ use crate::emon::restruct::*;
 use crate::emon::scan::*;
 use crate::emon::scriptcheck::*;
 use crate::emon::sealmark::*;
+use crate::emon::seams::*;
 use crate::emon::sigmark::*;
 use crate::emon::table::*;
 use crate::emon::tagtable::*;
@@ -258,6 +260,12 @@ pub(crate) fn en_fallback(c: &mut crate::emon::enctx::Cfg) -> i32 {
     }
     return 0;
 }
+pub(crate) fn en_photo_lines(c: &mut crate::emon::enctx::Cfg) -> i32 {
+    if c.capture == 2 {
+        return 32;
+    }
+    return 0;
+}
 pub(crate) fn en_routed(c: &mut crate::emon::enctx::Cfg, ans: &mut crate::port::Cells, i: i32) -> i32 {
     // 1 when page `i` is Tesseract's: its fallback was asked and read, or the one asked beside a doubtful reading named a script Vision cannot read (`emon.ofall`'s `fb-taken-id`).
     // Every request of the page is then Tesseract's.
@@ -296,9 +304,9 @@ pub(crate) fn en_page_inner(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon
     // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
     crate::port::cells_drop(&mut d.pscr, 0);
     if d.kind == en_kind_pdf() {
-        return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, (((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c)), &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
+        return pu_run_pdf(i, idx, c.ocr, &mut d.plan, ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, ((((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c))) + en_photo_lines(c), &mut d.fw, &mut d.fl, &mut d.hl, &mut ev.refs, &mut d.cg, &mut ev.tlines, &mut d.xs0, &mut d.xs1, &mut d.xs2, &mut d.xs3, &mut d.xs4, &mut d.xs5, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys1, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
     }
-    return rs_page(i, idx, nbytes, c.ocr, (((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c)), ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
+    return rs_page(i, idx, nbytes, c.ocr, ((((2 * c.nort) + (4 * c.dry)) + (8 * en_hybrid(c))) + (16 * en_fallback(c))) + en_photo_lines(c), ans, rq, &mut d.loc, bms, &mut d.mask, &mut d.pscr, &mut ev.epages, &mut ev.views, &mut d.et, &mut ev.feats, &mut ev.images, &mut ev.oruns, &mut ev.oblocks, &mut ev.olines, &mut ev.owords, &mut ev.osyms, &mut ev.oalts, &mut d.wd, &mut d.ln, &mut ev.refs, &mut ev.tlines, &mut d.cg, &mut ev.inks, &mut ev.comps, &mut ev.rules, &mut ev.prims, &mut ev.pts, &mut d.ys0, &mut d.ys2, &mut d.ys3, &mut d.ys4, &mut d.ys5, &mut d.ys6, &mut d.ys7, &mut d.ys8, &mut d.ys9, &mut d.ys10, &mut d.ys11, &mut d.ys12, &mut d.ys13, &mut d.ys14, &mut d.ys15, &mut d.ys16, &mut d.ys17, &mut d.ys18, &mut ev.ofuse, &mut ev.oarb);
 }
 pub(crate) fn en_ocr_planned(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc) -> i32 {
     if c.ocr == 0 {
@@ -329,6 +337,13 @@ pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc,
     if status == 0 {
         // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
         or_assemble(&mut ev.oruns, r0, &mut ev.rules, i + 1, &mut d.ln, l0, &mut d.wd, w0, &mut d.pscr);
+        if (c.dry == 0) && (c.capture != 1) && (d.ipages > 1) && (ln_count(&mut d.ln) > l0) && ((crate::port::cells_at(&mut d.mask, i) & 8) == 0) {
+            let id: i32 = pu_id(i, pi_decode());
+            let ep: i32 = ev_page_row(&mut ev.epages, i + 1);
+            if (ep >= 0) && (crate::port::bms_has(bms, id) == 1) {
+                ms_sample(crate::port::bms_get(bms, id), &mut d.ln, l0, ep_get(&mut ev.epages, ep, epf_width()), ep_get(&mut ev.epages, ep, epf_height()), &mut d.mspatch, &mut d.mspixel, &mut d.ys0, &mut d.ys1);
+            }
+        }
         if oxs_collect(ans, &mut ev.views, &mut ev.oruns, &mut ev.olines, &mut ev.oxs) < 0 {
             return 2;
         }
@@ -432,6 +447,10 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let trust: i32 = tg_trust(&mut d.ss);
     let mut pending: i32 = 0;
     let mut w: i32 = 0;
+    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords);
+    if c.keep != 0 {
+        ms_evidence(&mut d.evidence, &mut s.seams);
+    }
     fu_find(&mut d.fw, &mut d.fl, &mut d.et, &mut d.gl, &mut d.mk, &mut m.pages, np, &mut d.txt, &mut d.md, &mut d.lb, trust, c.furn, &mut s.cd, &mut s.sl, &mut s.gr, &mut s.ford, &mut s.tx, &mut s.bh, &mut s.fo, &mut s.fp, &mut s.ft, &mut s.pl);
     if c.tabl == 1 {
         ts_build(&mut d.fw, &mut d.fl, &mut d.et, &mut d.grl, &mut d.gfl, np, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut s.tbx, &mut s.tbk, &mut s.tbo, &mut s.s0, &mut s.s1, &mut s.s2, &mut s.s3, &mut s.s4, &mut s.s5, &mut s.s6, &mut s.s7, &mut s.s8, &mut s.s9, &mut s.s10, &mut s.s11, &mut s.s12, &mut s.s13, &mut s.s14, &mut s.s15, &mut s.s16, &mut s.s17, &mut s.s18, &mut m.pages, &mut d.gl, &mut d.mk, &mut d.se, &mut d.sc, &mut d.ss, &mut s.ta0, &mut s.g0, &mut s.g1, &mut s.g2, &mut s.g3, &mut s.g4, &mut s.g5, &mut s.tv, &mut d.an);

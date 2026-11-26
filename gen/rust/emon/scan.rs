@@ -2640,6 +2640,142 @@ pub fn sc_sel_set(mut scr: &mut crate::port::Cells, k: i32, row: i32) -> i32 {
     crate::port::cells_set(scr, sc_sel_base() + k, row);
     return 0;
 }
+pub(crate) fn sc_clip_height(olines: &mut crate::port::Cells, line: i32) -> i32 {
+    return ol_get(olines, line, lh_y1()) - ol_get(olines, line, lh_y0());
+}
+pub(crate) fn sc_clip_confidence(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, line: i32) -> i32 {
+    let first: i32 = ol_get(olines, line, lh_first());
+    let count: i32 = ol_get(olines, line, lh_count());
+    let mut i: i32 = 0;
+    let mut total: i32 = 0;
+    let mut known: i32 = 0;
+    let mut c: i32 = 0;
+    while i < count {
+        c = ow_confidence(owords, first + i);
+        if c >= 0 {
+            total += c;
+            known += 1;
+        }
+        i += 1;
+    }
+    if known > 0 {
+        return total / known;
+    }
+    return -1;
+}
+pub(crate) fn sc_clip_median(olines: &mut crate::port::Cells, owords: &mut crate::port::Cells, scr: &mut crate::port::Cells, n: i32, upper: i32, confidence: i32) -> i32 {
+    let mut lo: i32 = 0;
+    let mut hi: i32 = upper;
+    let mut mid: i32 = 0;
+    let mut count: i32 = 0;
+    let mut i: i32 = 0;
+    let mut v: i32 = 0;
+    let mut line: i32 = 0;
+    while lo < hi {
+        mid = lo + ((hi - lo) / 2);
+        i = 0;
+        count = 0;
+        while i < n {
+            line = crate::port::cells_at(scr, sc_sel_base() + i);
+            if confidence == 1 {
+                v = sc_clip_confidence(olines, owords, line);
+            } else {
+                v = sc_clip_height(olines, line);
+            }
+            if (v > 0) && (v <= mid) {
+                count += 1;
+            }
+            i += 1;
+        }
+        if count > ((n - 1) / 2) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    if lo == upper {
+        return 0;
+    }
+    return lo;
+}
+pub fn sc_clip_edge(top: i32, bottom: i32, left: i32, right: i32, height: i32, typical: i32, confidence: i32, typical_conf: i32, odd: i32, chars: i32, fourpx: i32, photos: i32) -> i32 {
+    // The nearest vertical edge needs independent evidence of a truncated reading. Side proximity alone
+    // is useful only in photo mode. Distances and heights are in the same units.
+    let near: i32 = sc_mx(fourpx, (typical * 35) / 100);
+    let edge: i32 = sc_mn(top, bottom);
+    if (edge >= (0 - near)) && (edge <= near) && (chars > 0) && (((100 * height) < (85 * typical)) || ((confidence >= 0) && ((100 * confidence) < (75 * typical_conf))) || ((odd * 100) > (chars * 12)) || (chars <= 2)) {
+        if top <= bottom {
+            return 1;
+        }
+        return 2;
+    }
+    if (photos == 1) && (chars > 0) && (sc_mn(left, right) >= (0 - near)) && (sc_mn(left, right) <= near) {
+        if left <= right {
+            return 3;
+        }
+        return 4;
+    }
+    return 0;
+}
+pub fn sc_set_aside_clips(mut olines: &mut crate::port::Cells, mut owords: &mut crate::port::Cells, etext: &mut crate::port::Cells, mut scr: &mut crate::port::Cells, n: i32, x0: i32, y0: i32, x1: i32, y1: i32, fourpx: i32, photos: i32) -> i32 {
+    // Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
+    // leave only complete lines in the selection consumed by structure and table recovery.
+    if n < 3 {
+        return n;
+    }
+    let typical: i32 = sc_clip_median(olines, owords, scr, n, y1 - y0, 0);
+    let conf: i32 = sc_clip_median(olines, owords, scr, n, 1001, 1);
+    let near: i32 = sc_mx(fourpx, (typical * 35) / 100);
+    let mut i: i32 = 0;
+    let mut kept: i32 = 0;
+    let mut line: i32 = 0;
+    let mut top: i32 = 0;
+    let mut bottom: i32 = 0;
+    let mut left: i32 = 0;
+    let mut right: i32 = 0;
+    let mut edge: i32 = 0;
+    let mut first: i32 = 0;
+    let mut end: i32 = 0;
+    let mut w: i32 = 0;
+    let mut chars: i32 = 0;
+    let mut odd: i32 = 0;
+    let mut word_size: i32 = 0;
+    while i < n {
+        line = crate::port::cells_at(scr, sc_sel_base() + i);
+        top = ol_get(olines, line, lh_y0()) - y0;
+        bottom = y1 - ol_get(olines, line, lh_y1());
+        left = ol_get(olines, line, lh_x0()) - x0;
+        right = x1 - ol_get(olines, line, lh_x1());
+        edge = 0;
+        first = ol_get(olines, line, lh_first());
+        end = first + ol_get(olines, line, lh_count());
+        if (first >= 0) && ((sc_mn(top, bottom) <= near) || ((photos == 1) && (sc_mn(left, right) <= near))) {
+            w = first;
+            chars = 0;
+            odd = 0;
+            while w < end {
+                word_size = ow_get(owords, w, hd_tlen());
+                chars += word_size;
+                odd += sc_count_class(etext, ow_get(owords, w, hd_tstart()), word_size, 2);
+                w += 1;
+            }
+            edge = sc_clip_edge(top, bottom, left, right, sc_clip_height(olines, line), typical, sc_clip_confidence(olines, owords, line), conf, odd, chars, fourpx, photos);
+        }
+        if edge == 0 {
+            sc_sel_set(scr, kept, line);
+            kept += 1;
+        } else {
+            ol_set(olines, line, olf_conf(), ev_clipped_conf());
+            w = first;
+            while w < end {
+                sc_flag(owords, w, oe_clipped());
+                w += 1;
+            }
+        }
+        i += 1;
+    }
+    return kept;
+}
 pub fn sc_page_view(mut epages: &mut crate::port::Cells, mut views: &mut crate::port::Cells, mut images: &mut crate::port::Cells, page: i32, decreq: i32, wcpt: i32, hcpt: i32, pxw: i32, pxh: i32, dpi100: i32, cropx: i32, cropy: i32, obj: i32, ix0: i32, iy0: i32, ix1: i32, iy1: i32) -> i32 {
     // The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that
     // is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)
@@ -2683,7 +2819,16 @@ pub fn sc_page(an: &mut crate::port::Cells, at: i32, page: i32, request: i32, de
     sc_page_evidence(an, at, page, request, vdec, dpi100, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
     let nl: i32 = ol_count(olines) - l0;
     let rotmed: i32 = ev_rot_median(olines, l0, nl);
-    return sc_emit_lines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines);
+    let mut i: i32 = 0;
+    if nl > sc_sel_max() {
+        return sc_emit_lines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines);
+    }
+    while i < nl {
+        sc_sel_set(scr, i, l0 + i);
+        i += 1;
+    }
+    i = sc_set_aside_clips(olines, owords, etext, scr, nl, ix0, iy0, ix1, iy1, 2880000 / dpi100, 0);
+    return sc_emit_core(olines, owords, osyms, l0, i, page, rotmed, scr, words, lines, 1);
 }
 pub(crate) fn sc_node_page(nodes: &mut crate::port::Cells, regions: &mut crate::port::Cells, n: i32) -> i32 {
     // The page of node `n`'s first region, or its nearest ancestor's that has one; -1 when none has.

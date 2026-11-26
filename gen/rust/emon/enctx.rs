@@ -122,6 +122,7 @@ pub struct Cfg {
     pub jsrender: i32,
     pub tabl: i32,
     pub oengine: i32,
+    pub capture: i32,
 }
 impl Cfg {
     pub fn new() -> Cfg {
@@ -153,6 +154,7 @@ impl Cfg {
             jsrender: 0,
             tabl: 0,
             oengine: 0,
+            capture: 0,
         }
     }
 }
@@ -231,6 +233,8 @@ pub struct Doc {
     pub fcode: i32,
     pub fnode: i32,
     pub pscr: crate::port::Cells,
+    pub mspatch: crate::port::Cells,
+    pub mspixel: crate::port::Cells,
     pub kind: i32,
     pub ifmt: i32,
     pub ipages: i32,
@@ -310,6 +314,8 @@ impl Doc {
             fcode: 0,
             fnode: 0,
             pscr: crate::port::Cells::new(),
+            mspatch: crate::port::Cells::new(),
+            mspixel: crate::port::Cells::new(),
             kind: 0,
             ifmt: 0,
             ipages: 0,
@@ -465,6 +471,14 @@ impl Default for Pass {
 }
 #[derive(Clone)]
 pub struct Scratch {
+    pub seams: crate::port::Cells,
+    pub mskeys: crate::port::Cells,
+    pub mscode: crate::port::Cells,
+    pub msa: crate::port::Cells,
+    pub msb: crate::port::Cells,
+    pub msdrop: crate::port::Cells,
+    pub mslines: crate::port::Cells,
+    pub mswords: crate::port::Cells,
     pub cd: crate::port::Cells,
     pub sl: crate::port::Cells,
     pub gr: crate::port::Cells,
@@ -607,6 +621,14 @@ pub struct Scratch {
 impl Scratch {
     pub fn new() -> Scratch {
         Scratch {
+            seams: crate::port::Cells::new(),
+            mskeys: crate::port::Cells::new(),
+            mscode: crate::port::Cells::new(),
+            msa: crate::port::Cells::new(),
+            msb: crate::port::Cells::new(),
+            msdrop: crate::port::Cells::new(),
+            mslines: crate::port::Cells::new(),
+            mswords: crate::port::Cells::new(),
             cd: crate::port::Cells::new(),
             sl: crate::port::Cells::new(),
             gr: crate::port::Cells::new(),

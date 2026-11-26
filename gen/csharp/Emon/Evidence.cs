@@ -538,6 +538,9 @@ public static class Evidence {
     public static int OeUncalibrated() {
         return 64;
     }
+    public static int OeClipped() {
+        return 128;
+    }
     public static int OeEmitName(System.Text.StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.TextAscii(t, "dictionary");
@@ -565,6 +568,10 @@ public static class Evidence {
         }
         if (code == 64) {
             emon.Port.TextAscii(t, "uncalibrated");
+            return 1;
+        }
+        if (code == 128) {
+            emon.Port.TextAscii(t, "clipped");
             return 1;
         }
         return 0;
@@ -3804,6 +3811,9 @@ public static class Evidence {
     public static int OlfConf() {
         return 15;
     }
+    public static int EvClippedConf() {
+        return 300;
+    }
     public static int OlfXheight() {
         return 16;
     }
@@ -6082,14 +6092,17 @@ public static class Evidence {
         return 31;
     }
     public static int OwConfidence(emon.Port.Cells c, int word) {
-        if ((OwGet(c, word, OwfFlags()) & OeUncalibrated()) != 0) {
-            return 500;
-        }
+        int flags = OwGet(c, word, OwfFlags());
         int p = OwGet(c, word, OwfPcal());
-        if (p >= 0) {
-            return p;
+        if ((flags & OeUncalibrated()) != 0) {
+            p = 500;
+        } else if (p < 0) {
+            p = OwGet(c, word, HdConf());
         }
-        return OwGet(c, word, HdConf());
+        if (((flags & OeClipped()) != 0) && (p > EvClippedConf())) {
+            return EvClippedConf();
+        }
+        return p;
     }
     public static int OrGranularity(emon.Port.Cells c, int run) {
         return (OrGet(c, run, OrfFlags()) / 256) % 256;
@@ -6763,6 +6776,10 @@ public static class Evidence {
             if (((OrGet(c, row, OrfFlags()) / 4) % 2) == 1) {
                 s = EvEmitOcrModel(t, pr, d, s, 1);
             }
+        }
+        if ((ea == 16) && (OlGet(c, row, OlfConf()) >= 0)) {
+            s = EvBegin(t, pr, d, s, EkFlags());
+            emon.Port.TextAscii(t, "[\"clipped\"]");
         }
         Json.JsClose(t, pr, d, s);
         return 0;

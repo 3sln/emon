@@ -130,7 +130,7 @@ ships to fill it.
   it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the csharp host: 367 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the csharp host: 372 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -332,6 +332,11 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Options.AssetsLevel.Figures` | `const` |
 | `emon.Api.Options.AssetsLevel.Images` | `const` |
 | `emon.Api.Options.AssetsLevel.None` | `const` |
+| `emon.Api.Options.Capture` | `CaptureMode` |
+| `emon.Api.Options.CaptureMode` | `enum` |
+| `emon.Api.Options.CaptureMode.Auto` | `const` |
+| `emon.Api.Options.CaptureMode.Photos` | `const` |
+| `emon.Api.Options.CaptureMode.Scan` | `const` |
 | `emon.Api.Options.Config` | `sealed class` |
 | `emon.Api.Options.Config#Defaults()` | `static Config` |
 | `emon.Api.Options.Config.ChunkSize` | `int` |

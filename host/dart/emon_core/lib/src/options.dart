@@ -56,6 +56,7 @@ class ConvertOptions {
     this.assetsBytes,
     this.assetSignatures,
     this.ocrScope,
+    this.capture,
     this.keepEvidence = false,
     this.maxRounds,
     this.fetchRounds,
@@ -90,6 +91,7 @@ class ConvertOptions {
 
   /// `full` or `witness`.
   final String? ocrScope;
+  final String? capture;
 
   /// Keep the text layer's evidence dump ([Model.evidence]).
   final bool keepEvidence;
@@ -137,6 +139,7 @@ class ConvertOptions {
     if (assetSignatures != null) put('asset-signatures', assetSignatures! ? 'on' : 'off');
     if (keepEvidence) put('keep-evidence', 1);
     put('ocr-scope', ocrScope);
+    put('capture', capture);
     put('max-rounds', maxRounds);
     put('fetch-rounds', fetchRounds);
     for (final k in limits.keys.toList()..sort()) {
@@ -164,6 +167,7 @@ class ConvertOptions {
         assetsBytes: assetsBytes,
         assetSignatures: assetSignatures,
         ocrScope: ocrScope,
+        capture: capture,
         keepEvidence: keepEvidence,
         maxRounds: maxRounds,
         fetchRounds: fetchRounds,

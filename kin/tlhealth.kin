@@ -36,7 +36,7 @@
                                    gf-bx0 gf-by0 gf-bx1 gf-by1 gf-how gf-font gf-size gf-mode gf-fill gf-falpha gf-salpha gf-vis gf-vby
                                    wf-gfirst wf-gcount wf-font wf-src wf-size
                                    mf-page mf-x0 mf-y0 mf-x1 mf-y1 mf-z
-                                   ow-get ow-count owf-flags oe-garbage oe-rule-ghost
+                                   ow-get ow-count owf-flags oe-garbage oe-rule-ghost oe-clipped ev-clipped-conf
                                    fnf-space epf-page epf-width epf-height eg-text-layer ea-words
                                    xt-trust xt-bad-cp xt-overlap xt-gap-anomaly xt-vis xt-mode-class xt-alpha xt-contrast xt-font-health
                                    xt-in-artifact xt-rel-height xt-angle xt-base-dev xt-spacing xt-length xt-edge
@@ -660,6 +660,7 @@
   (comment "The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader")
   (comment "an `ocr-ghost`; 0 for a word that was kept.")
   (let [^I32 fl (ow-get owords i (owf-flags))]
+    (if (!= (bit-and fl (oe-clipped)) 0) (return (dr-clipped)))
     (if (!= (bit-and fl (oe-rule-ghost)) 0) (return (dr-rule-ghost)))
     (if (!= (bit-and fl (oe-garbage)) 0) (return (dr-ocr-ghost)))
     (return 0)))
@@ -709,7 +710,9 @@
                         (do (cells-push tt (cells-at et s))
                             (set s (+ s 1))))
                       (set k (+ k 1))))
-                (set lr (ledger-add ledger reason (ow-get owords i (hd-page)) x0 y0 x1 y1 700 (sr-ocr)))
+                (let [^:mut ^I32 conf 700]
+                  (if (== reason (dr-clipped)) (set conf (ev-clipped-conf)))
+                  (set lr (ledger-add ledger reason (ow-get owords i (hd-page)) x0 y0 x1 y1 conf (sr-ocr))))
                 (set t0 (cells-len text))
                 (nz-nfc tt 0 (cells-len tt) text tmp (+ (nz-flag-ligatures) (nz-flag-radicals)))
                 (ledger-set-text ledger lr t0 (- (cells-len text) t0))

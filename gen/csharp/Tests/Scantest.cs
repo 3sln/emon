@@ -5,6 +5,50 @@ namespace emon;
 
 
 public static class Scantest {
+    [Xunit.Fact]
+    public static void TestClippedEdgeRequiresTruncation() {
+        emon.Testport.AssertEq(Scan.ScClipEdge(1, 400, 30, 30, 12, 20, 950, 950, 0, 8, 4, 0), 1, "short top line");
+        emon.Testport.AssertEq(Scan.ScClipEdge(400, 1, 30, 30, 20, 20, 420, 950, 0, 8, 4, 0), 2, "weak bottom reading");
+        emon.Testport.AssertEq(Scan.ScClipEdge(400, 1, 30, 30, 20, 20, 950, 950, 2, 8, 4, 0), 2, "implausible bottom reading");
+        emon.Testport.AssertEq(Scan.ScClipEdge(1, 400, 30, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "complete line on a tight crop");
+        emon.Testport.AssertEq(Scan.ScClipEdge(40, 400, 30, 30, 12, 20, 100, 950, 2, 8, 4, 1), 0, "weak interior reading");
+        emon.Testport.AssertEq(Scan.ScClipEdge(400, -200, 30, 30, 12, 20, 100, 950, 2, 8, 4, 0), 0, "far outside the bitmap is not an observed edge fragment");
+        emon.Testport.AssertEq(Scan.ScClipEdge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "scan side margin");
+        emon.Testport.AssertEq(Scan.ScClipEdge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 1), 3, "photo left edge");
+        emon.Testport.AssertEq(Scan.ScClipEdge(40, 400, 30, 1, 20, 20, 950, 950, 0, 8, 4, 1), 4, "photo right edge");
+    }
+    [Xunit.Fact]
+    public static void TestClippedReadingIsCappedAndExcludedFromTheFlow() {
+        emon.Port.Cells ol = emon.Port.NewCells();
+        emon.Port.Cells ow = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells scr = emon.Port.NewCells();
+        int i = 0;
+        int y = 0;
+        int height = 0;
+        emon.Port.CellsPush(et, 49);
+        emon.Port.CellsPush(et, 50);
+        emon.Port.CellsPush(et, 51);
+        Scan.ScPrep(scr);
+        while (i < 3) {
+            y = i * 40;
+            height = 20;
+            if (i == 0) {
+                height = 7;
+            }
+            Evidence.OwNew(ow, 1, 50, y, 90, y + height, 50, y + height, 90, y + height, 0, 0, 0, 3, i, 940, -1);
+            Evidence.OlNew(ol, 1, 50, y, 90, y + height, 50, y + height, 90, y + height, 0, 0, i, 1);
+            Scan.ScSelSet(scr, i, i);
+            i += 1;
+        }
+        emon.Testport.AssertEq(Scan.ScSetAsideClips(ol, ow, et, scr, 3, 0, 0, 300, 300, 4, 0), 2, "only two readings remain selected");
+        emon.Testport.AssertEq(emon.Port.CellsAt(scr, Scan.ScSelBase()), 1, "the first full line anchors the selection");
+        emon.Testport.AssertEq(Evidence.OlGet(ol, 0, Evidence.OlfConf()), 300, "clipped line confidence");
+        emon.Testport.AssertEq(Evidence.OwGet(ow, 0, Evidence.OwfFlags()) & Evidence.OeClipped(), Evidence.OeClipped(), "clipped evidence");
+        emon.Testport.AssertEq(Evidence.OwConfidence(ow, 0), 300, "the effective reading confidence is capped");
+        emon.Testport.AssertEq(Evidence.OwGet(ow, 0, Evidence.HdConf()), 940, "native confidence survives");
+        emon.Testport.AssertEq(Evidence.OwCount(ow), 3, "every reading remains in evidence");
+    }
     internal static int LangOf(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
         // The language of the locale spelled by these code points; a 0 ends the spelling.
         emon.Port.Cells loc = emon.Port.NewCells();

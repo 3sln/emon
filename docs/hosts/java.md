@@ -149,7 +149,7 @@ ships to fill it.
   cannot hide a package; `api/surface.edn` lists it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the java host: 388 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the java host: 393 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -458,6 +458,10 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Options.Assets.FIGURES` | `const` |
 | `emon.api.Options.Assets.IMAGES` | `const` |
 | `emon.api.Options.Assets.NONE` | `const` |
+| `emon.api.Options.Capture` | `enum` |
+| `emon.api.Options.Capture.AUTO` | `const` |
+| `emon.api.Options.Capture.PHOTOS` | `const` |
+| `emon.api.Options.Capture.SCAN` | `const` |
 | `emon.api.Options.Config` | `static final class` |
 | `emon.api.Options.Config#defaults()` | `static Config` |
 | `emon.api.Options.Config.chunkSize` | `int` |
@@ -522,6 +526,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Options.assetSignatures` | `boolean` |
 | `emon.api.Options.assets` | `Assets` |
 | `emon.api.Options.assetsBytes` | `int` |
+| `emon.api.Options.capture` | `Capture` |
 | `emon.api.Options.furniture` | `Furniture` |
 | `emon.api.Options.keepEvidence` | `boolean` |
 | `emon.api.Options.locale` | `String` |

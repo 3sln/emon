@@ -3479,6 +3479,7 @@ Settings (all named, all with defaults, all in the Model header):
 | `ocr-engine` | Optional reference OCR port: `tesseract` / `ppocr` / `ppocr-alone` (D843, D900). PP-OCR is an explicitly loaded optional adapter across the native transports and a separately qualified web runtime, carries pinned request/producer identity, adds a guarded candidate only on image inputs or scans with no kept text layer, and uses held-out calibrated CTC word scores. An unavailable adapter is reported by name. Default-engine acceptance is separate. `ppocr-alone` (D900) has PP-OCR read every request, with no Tesseract reading beside it; its detector segments are joined into rows by kin before the paragraph, table and column stages. | `tesseract` |
 | `tables` | Experimental comparison-driver engine selection through option text and `--tables=legacy|scored`; recorded only in evidence | `legacy` |
 | `ocr-scope` | `full` / `witness`: what `ocr: always` reads of a born-digital page (§8.3, §9.8, D200); written to the Model's `settings` only when not `full` | `full` |
+| `capture` | `auto` / `scan` / `photos`. Affects raster OCR and seam evidence. `scan` disables seam matching. `photos` includes left and right edge clipping. | `auto` |
 | `sources` | subset of text/ocr/trace | all available |
 | `dpi` | OCR render resolution | 300 |
 | `detail` | `blocks` / `lines` / `words` | `blocks` |

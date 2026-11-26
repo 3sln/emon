@@ -73,6 +73,9 @@ public final class Options {
     /** Keeps the text layer's evidence dump (`Model.evidence()`): a test and debugging aid. */
     public boolean keepEvidence;
     public OcrScope ocrScope = OcrScope.FULL;
+    /** Capture mode for raster pages. */
+    public enum Capture { AUTO, SCAN, PHOTOS }
+    public Capture capture = Capture.AUTO;
     /** A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D542): package-private; the gates' driver
      *  reaches it through `emon.api.TestHooks` (test/driver/java/emon/api/TestHooks.java), which is not part of the published jar. */
     boolean noRetarget;
@@ -100,6 +103,7 @@ public final class Options {
         o.furniture = furniture;
         o.keepEvidence = keepEvidence;
         o.ocrScope = ocrScope;
+        o.capture = capture;
         o.ppOcr = ppOcr;
         o.ocrEngine = ocrEngine;
         o.noRetarget = noRetarget;
@@ -277,6 +281,7 @@ public final class Options {
         o.furniture = Furniture.values()[c.furn];
         o.keepEvidence = c.keep != 0;
         o.ocrScope = OcrScope.values()[c.scope];
+        o.capture = Capture.values()[c.capture];
         o.tablesScored = c.tabl == 1;
         if (c.haveloc == 1) {
             o.locale = stringOf(c.lcl, 0, Port.cellsLen(c.lcl));

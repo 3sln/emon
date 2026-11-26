@@ -556,6 +556,9 @@ func OeCorrected() int32 {
 func OeUncalibrated() int32 {
 	return 64
 }
+func OeClipped() int32 {
+	return 128
+}
 func OeEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "dictionary")
@@ -583,6 +586,10 @@ func OeEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 64 {
 		port.TextAscii(t, "uncalibrated")
+		return 1
+	}
+	if code == 128 {
+		port.TextAscii(t, "clipped")
 		return 1
 	}
 	return 0
@@ -4105,6 +4112,10 @@ func OlfConf() int32 {
 	return 15
 }
 
+func EvClippedConf() int32 {
+	return 300
+}
+
 func OlfXheight() int32 {
 	return 16
 }
@@ -6641,14 +6652,17 @@ func OwfAlts() int32 {
 }
 
 func OwConfidence(c *port.Cells, word int32) int32 {
-	if (OwGet(c, word, OwfFlags()) & OeUncalibrated()) != 0 {
-		return 500
-	}
+	var flags int32 = OwGet(c, word, OwfFlags())
 	var p int32 = OwGet(c, word, OwfPcal())
-	if p >= 0 {
-		return p
+	if (flags & OeUncalibrated()) != 0 {
+		p = 500
+	} else if p < 0 {
+		p = OwGet(c, word, HdConf())
 	}
-	return OwGet(c, word, HdConf())
+	if ((flags & OeClipped()) != 0) && (p > EvClippedConf()) {
+		return EvClippedConf()
+	}
+	return p
 }
 
 func OrGranularity(c *port.Cells, run int32) int32 {
@@ -7344,6 +7358,10 @@ func EvRow(t *strings.Builder, pr int32, d int32, ea int32, c *port.Cells, etext
 		if ((OrGet(c, row, OrfFlags()) / 4) % 2) == 1 {
 			s = EvEmitOcrModel(t, pr, d, s, 1)
 		}
+	}
+	if (ea == 16) && (OlGet(c, row, OlfConf()) >= 0) {
+		s = EvBegin(t, pr, d, s, EkFlags())
+		port.TextAscii(t, "[\"clipped\"]")
 	}
 	json.JsClose(t, pr, d, s)
 	return 0

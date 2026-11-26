@@ -1,0 +1,76 @@
+(ns emon.seamstest
+  (:require [emon.lang :refer [I32 Cells]]
+            [emon.test :refer [deftest assert-eq new-cells TestT test-t]]
+            [emon.port :refer [cells-push cells-at cells-len]]
+            [emon.evidence :refer [ln-new ln-count wd-new ol-new ol-set olf-conf]]
+            [emon.model :refer [page-new pk-image ledger-count]]
+            [emon.seams :refer [ms-run ms-ncc]]
+            [kin.lang :refer [defn let if do set while return + - * < ==]]))
+
+(defn ^I32 law-line [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 y ^I32 cp]
+  (let [^I32 start (cells-len et)
+        ^I32 line (ln-count fl)
+        ^I32 word (wd-new fw page 50 y 400 (+ y 12) 50 (+ y 12) 400 (+ y 12) 0 0 start 1 line 900 -1)]
+    (cells-push et cp)
+    (ln-new fl page 50 y 400 (+ y 12) 50 (+ y 12) 400 (+ y 12) 0 0 word 1)
+    (return 0)))
+
+(defn ^I32 law-seam [^TestT emon-t ^I32 capture ^I32 born ^I32 strong ^I32 middle ^I32 clip
+                    ^I32 expected-drop ^I32 expected-kind]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells ol (new-cells)
+        ^Cells decisions (new-cells) ^Cells ledger (new-cells) ^Cells text (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 r 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1)
+    (cells-push mask (- 1 born))
+    (law-line fl fw et 1 400 81)
+    (law-line fl fw et 2 295 32)
+    (while (< i strong)
+      (do (if (== i 2)
+            (do (law-line fl fw et 1 (+ 500 (* 20 i)) 45)
+                (law-line fl fw et 2 (+ 300 (* 20 i)) 61)))
+          (law-line fl fw et 1 (+ 507 (* 20 i)) (+ 65 i))
+          (law-line fl fw et 2 (+ 307 (* 20 i)) (+ 65 i))
+          (set i (+ i 1))))
+    (if (== middle 1) (law-line fl fw et 1 600 90))
+    (if (== clip 1)
+      (do (set r (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 -1 0))
+          (ol-set ol r (olf-conf) 300)))
+    (law-line fl fw et 2 400 82)
+    (assert-eq (ms-run 2 capture mask pages ol et fl fw (new-cells) (new-cells) ledger text decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)) expected-drop "rows dropped")
+    (assert-eq (ledger-count ledger) expected-drop "dropped rows retained in ledger")
+    (if (== expected-kind 0)
+      (assert-eq (cells-len decisions) 0 "no seam on an ordinary break")
+      (assert-eq (cells-at decisions 2) expected-kind "expected seam decision"))
+    (return 0)))
+
+(deftest test-strong-anchored-seam-ignores-whitespace-and-deduplicates-separators
+  (law-seam (test-t) 0 0 4 0 0 5 1))
+
+(deftest test-interior-match-is-not-a-seam
+  (law-seam (test-t) 2 0 4 1 0 0 0))
+
+(deftest test-single-copy-match-is-ambiguous
+  (law-seam (test-t) 2 0 1 0 0 0 2))
+
+(deftest test-clean-break-and-clipped-gap
+  (law-seam (test-t) 2 0 0 0 0 0 0)
+  (law-seam (test-t) 2 0 0 0 1 0 3))
+
+(deftest test-scan-mode-and-born-digital-pass-through
+  (law-seam (test-t) 1 0 4 0 0 0 0)
+  (law-seam (test-t) 2 1 4 0 0 0 0))
+
+(deftest test-pixel-correlation-needs-contrast-and-positive-covariance
+  (let [^Cells pixels (new-cells)]
+    (cells-push pixels 0) (cells-push pixels 128) (cells-push pixels 255)
+    (cells-push pixels 60) (cells-push pixels 124) (cells-push pixels 188)
+    (cells-push pixels 255) (cells-push pixels 128) (cells-push pixels 0)
+    (cells-push pixels 180) (cells-push pixels 180) (cells-push pixels 180)
+    (assert-eq (ms-ncc pixels 0 3 3) 1 "same signal with different exposure")
+    (assert-eq (ms-ncc pixels 0 6 3) 0 "opposite signal")
+    (assert-eq (ms-ncc pixels 0 9 3) 0 "flat area cannot corroborate")))

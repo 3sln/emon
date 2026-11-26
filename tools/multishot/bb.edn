@@ -1,0 +1,2 @@
+;; The measurement harness uses only Babashka’s bundled libraries.
+{}

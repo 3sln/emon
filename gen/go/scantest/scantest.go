@@ -16,6 +16,50 @@ import (
 	"testing"
 )
 
+func TestClippedEdgeRequiresTruncation(emonT *testing.T) {
+	port.AssertEq(emonT, scan.ScClipEdge(1, 400, 30, 30, 12, 20, 950, 950, 0, 8, 4, 0), 1, "short top line")
+	port.AssertEq(emonT, scan.ScClipEdge(400, 1, 30, 30, 20, 20, 420, 950, 0, 8, 4, 0), 2, "weak bottom reading")
+	port.AssertEq(emonT, scan.ScClipEdge(400, 1, 30, 30, 20, 20, 950, 950, 2, 8, 4, 0), 2, "implausible bottom reading")
+	port.AssertEq(emonT, scan.ScClipEdge(1, 400, 30, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "complete line on a tight crop")
+	port.AssertEq(emonT, scan.ScClipEdge(40, 400, 30, 30, 12, 20, 100, 950, 2, 8, 4, 1), 0, "weak interior reading")
+	port.AssertEq(emonT, scan.ScClipEdge(400, -200, 30, 30, 12, 20, 100, 950, 2, 8, 4, 0), 0, "far outside the bitmap is not an observed edge fragment")
+	port.AssertEq(emonT, scan.ScClipEdge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "scan side margin")
+	port.AssertEq(emonT, scan.ScClipEdge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 1), 3, "photo left edge")
+	port.AssertEq(emonT, scan.ScClipEdge(40, 400, 30, 1, 20, 20, 950, 950, 0, 8, 4, 1), 4, "photo right edge")
+}
+
+func TestClippedReadingIsCappedAndExcludedFromTheFlow(emonT *testing.T) {
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var scr *port.Cells = port.NewCells()
+	var i int32 = 0
+	var y int32 = 0
+	var height int32 = 0
+	port.CellsPush(et, 49)
+	port.CellsPush(et, 50)
+	port.CellsPush(et, 51)
+	scan.ScPrep(scr)
+	for i < 3 {
+		y = i * 40
+		height = 20
+		if i == 0 {
+			height = 7
+		}
+		evidence.OwNew(ow, 1, 50, y, 90, y+height, 50, y+height, 90, y+height, 0, 0, 0, 3, i, 940, -1)
+		evidence.OlNew(ol, 1, 50, y, 90, y+height, 50, y+height, 90, y+height, 0, 0, i, 1)
+		scan.ScSelSet(scr, i, i)
+		i += 1
+	}
+	port.AssertEq(emonT, scan.ScSetAsideClips(ol, ow, et, scr, 3, 0, 0, 300, 300, 4, 0), 2, "only two readings remain selected")
+	port.AssertEq(emonT, port.CellsAt(scr, scan.ScSelBase()), 1, "the first full line anchors the selection")
+	port.AssertEq(emonT, evidence.OlGet(ol, 0, evidence.OlfConf()), 300, "clipped line confidence")
+	port.AssertEq(emonT, evidence.OwGet(ow, 0, evidence.OwfFlags())&evidence.OeClipped(), evidence.OeClipped(), "clipped evidence")
+	port.AssertEq(emonT, evidence.OwConfidence(ow, 0), 300, "the effective reading confidence is capped")
+	port.AssertEq(emonT, evidence.OwGet(ow, 0, evidence.HdConf()), 940, "native confidence survives")
+	port.AssertEq(emonT, evidence.OwCount(ow), 3, "every reading remains in evidence")
+}
+
 func langOf(a int32, b int32, c int32, d int32, e int32, f int32, g int32, h int32, i int32, j int32) int32 {
 	// The language of the locale spelled by these code points; a 0 ends the spelling.
 	var loc *port.Cells = port.NewCells()

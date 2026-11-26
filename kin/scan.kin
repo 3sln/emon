@@ -57,12 +57,12 @@
                                    epf-flags epf-dpi
                                    rl-count rl-get rlf-page rlf-lx0 rlf-ly0 rlf-lx1 rlf-ly1 rlf-thick
                                    co-count co-get cf-page cf-x0 cf-y0 cf-x1 cf-y1 cf-conf cf-ink ik-get ikf-role ir-body
-                                   oe-uncalibrated oe-garbage oe-rule-ghost oe-corrected
+                                   oe-uncalibrated oe-garbage oe-rule-ghost oe-corrected oe-clipped ev-clipped-conf
                                    orf-observed-hi orf-observed-lo orf-page orf-engine orf-eix orf-caps orf-native orf-request orf-round orf-pass orf-psm orf-orient orf-wdir orf-lorder orf-deskew
                                    orf-osd orf-script orf-sconf orf-oconf orf-flags orf-bfirst orf-bcount orf-bview
                                    orf-lfirst orf-lcount orf-wfirst orf-wcount orf-lang orf-langlen
                                    obf-btype obf-orient obf-wdir obf-first obf-count obf-x0 obf-y0 obf-x1 obf-y1
-                                   olf-retry-gap olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph
+                                   olf-retry-gap olf-par olf-run olf-xheight olf-asc olf-desc olf-px olf-py olf-pw olf-ph olf-conf
                                    owf-pcal owf-style owf-run owf-sfirst owf-scount owf-lang owf-flags owf-psize
                                    owf-px owf-py owf-pw owf-ph owf-from
                                    osf-conf osf-afirst osf-acount osf-px osf-py osf-pw osf-ph
@@ -1962,6 +1962,95 @@
   (cells-set scr (+ (sc-sel-base) k) row)
   (return 0))
 
+(defn ^I32 sc-clip-height [^Cells olines ^I32 line]
+  (return (- (ol-get olines line (lh-y1)) (ol-get olines line (lh-y0)))))
+
+(defn ^I32 sc-clip-confidence [^Cells olines ^Cells owords ^I32 line]
+  (let [^I32 first (ol-get olines line (lh-first))
+        ^I32 count (ol-get olines line (lh-count))
+        ^:mut ^I32 i 0 ^:mut ^I32 total 0 ^:mut ^I32 known 0 ^:mut ^I32 c 0]
+    (while (< i count)
+      (do (set c (ow-confidence owords (+ first i)))
+          (if (>= c 0) (do (set total (+ total c)) (set known (+ known 1))))
+          (set i (+ i 1))))
+    (if (> known 0) (return (quot total known)))
+    (return -1)))
+
+(defn ^I32 sc-clip-median [^Cells olines ^Cells owords ^Cells scr ^I32 n ^I32 upper ^I32 confidence]
+  (let [^:mut ^I32 lo 0 ^:mut ^I32 hi upper ^:mut ^I32 mid 0
+        ^:mut ^I32 count 0 ^:mut ^I32 i 0 ^:mut ^I32 v 0 ^:mut ^I32 line 0]
+    (while (< lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2)))
+          (set i 0) (set count 0)
+          (while (< i n)
+            (do (set line (cells-at scr (+ (sc-sel-base) i)))
+                (if (== confidence 1)
+                  (set v (sc-clip-confidence olines owords line))
+                  (set v (sc-clip-height olines line)))
+                (if (and (> v 0) (<= v mid)) (set count (+ count 1)))
+                (set i (+ i 1))))
+          (if (> count (quot (- n 1) 2)) (set hi mid) (set lo (+ mid 1)))))
+    (if (== lo upper) (return 0))
+    (return lo)))
+
+(defn ^:pub ^I32 sc-clip-edge [^I32 top ^I32 bottom ^I32 left ^I32 right
+                             ^I32 height ^I32 typical ^I32 confidence ^I32 typical-conf
+                             ^I32 odd ^I32 chars ^I32 fourpx ^I32 photos]
+  (comment "The nearest vertical edge needs independent evidence of a truncated reading. Side proximity alone")
+  (comment "is useful only in photo mode. Distances and heights are in the same units.")
+  (let [^I32 near (sc-mx fourpx (quot (* typical 35) 100))
+        ^I32 edge (sc-mn top bottom)]
+    (if (and (>= edge (- 0 near)) (<= edge near) (> chars 0)
+             (or (< (* 100 height) (* 85 typical))
+                 (and (>= confidence 0) (< (* 100 confidence) (* 75 typical-conf)))
+                 (> (* odd 100) (* chars 12))
+                 (<= chars 2)))
+      (do (if (<= top bottom) (return 1)) (return 2)))
+    (if (and (== photos 1) (> chars 0) (>= (sc-mn left right) (- 0 near)) (<= (sc-mn left right) near))
+      (do (if (<= left right) (return 3)) (return 4)))
+    (return 0)))
+
+(defn ^:pub ^I32 sc-set-aside-clips [^:mut ^Cells olines ^:mut ^Cells owords ^Cells etext ^:mut ^Cells scr
+                                     ^I32 n ^I32 x0 ^I32 y0 ^I32 x1 ^I32 y1 ^I32 fourpx ^I32 photos]
+  (comment "Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and")
+  (comment "leave only complete lines in the selection consumed by structure and table recovery.")
+  (if (< n 3) (return n))
+  (let [^I32 typical (sc-clip-median olines owords scr n (- y1 y0) 0)
+        ^I32 conf (sc-clip-median olines owords scr n 1001 1)
+        ^I32 near (sc-mx fourpx (quot (* typical 35) 100))
+        ^:mut ^I32 i 0 ^:mut ^I32 kept 0 ^:mut ^I32 line 0
+        ^:mut ^I32 top 0 ^:mut ^I32 bottom 0 ^:mut ^I32 left 0 ^:mut ^I32 right 0
+        ^:mut ^I32 edge 0 ^:mut ^I32 first 0 ^:mut ^I32 end 0
+        ^:mut ^I32 w 0 ^:mut ^I32 chars 0 ^:mut ^I32 odd 0 ^:mut ^I32 word-size 0]
+    (while (< i n)
+      (do (set line (cells-at scr (+ (sc-sel-base) i)))
+          (set top (- (ol-get olines line (lh-y0)) y0))
+          (set bottom (- y1 (ol-get olines line (lh-y1))))
+          (set left (- (ol-get olines line (lh-x0)) x0))
+          (set right (- x1 (ol-get olines line (lh-x1))))
+          (set edge 0)
+          (set first (ol-get olines line (lh-first)))
+          (set end (+ first (ol-get olines line (lh-count))))
+          (if (and (>= first 0) (or (<= (sc-mn top bottom) near)
+                                    (and (== photos 1) (<= (sc-mn left right) near))))
+            (do (set w first) (set chars 0) (set odd 0)
+                (while (< w end)
+                  (do (set word-size (ow-get owords w (hd-tlen)))
+                      (set chars (+ chars word-size))
+                      (set odd (+ odd (sc-count-class etext (ow-get owords w (hd-tstart)) word-size 2)))
+                      (set w (+ w 1))))
+                (set edge (sc-clip-edge top bottom left right (sc-clip-height olines line) typical
+                                        (sc-clip-confidence olines owords line) conf odd chars fourpx photos))))
+          (if (== edge 0)
+            (do (sc-sel-set scr kept line) (set kept (+ kept 1)))
+            (do (ol-set olines line (olf-conf) (ev-clipped-conf))
+                (set w first)
+                (while (< w end)
+                  (do (sc-flag owords w (oe-clipped))
+                      (set w (+ w 1))))))
+          (set i (+ i 1))))
+    (return kept)))
+
 (defn ^:pub ^I32 sc-page-view [^:mut ^Cells epages ^:mut ^Cells views ^:mut ^Cells images ^I32 page ^I32 decreq
                               ^I32 wcpt ^I32 hcpt ^I32 pxw ^I32 pxh ^I32 dpi100
                               ^I32 cropx ^I32 cropy ^I32 obj ^I32 ix0 ^I32 iy0 ^I32 ix1 ^I32 iy1]
@@ -2013,8 +2102,13 @@
         ^I32 l0 (ol-count olines)]
     (sc-page-evidence an at page request vdec dpi100 lang views epages etext oruns oblocks olines owords osyms oalts feats)
     (let [^I32 nl (- (ol-count olines) l0)
-          ^I32 rotmed (ev-rot-median olines l0 nl)]
-      (return (sc-emit-lines olines owords osyms l0 nl page rotmed scr words lines)))))
+          ^I32 rotmed (ev-rot-median olines l0 nl)
+          ^:mut ^I32 i 0]
+      (if (> nl (sc-sel-max)) (return (sc-emit-lines olines owords osyms l0 nl page rotmed scr words lines)))
+      (while (< i nl)
+        (do (sc-sel-set scr i (+ l0 i)) (set i (+ i 1))))
+      (set i (sc-set-aside-clips olines owords etext scr nl ix0 iy0 ix1 iy1 (quot 2880000 dpi100) 0))
+      (return (sc-emit-core olines owords osyms l0 i page rotmed scr words lines 1)))))
 
 ;; ================================================================== the Model
 

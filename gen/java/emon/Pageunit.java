@@ -661,6 +661,20 @@ public final class Pageunit {
         }
         Retarget.rtUpright(rtp, run, epages, i + 1);
         rotmed = Evidence.evRotMedian(olines, l0, nl);
+        int turns = emon.Port.cellsAt(rtp, Retarget.rtpQ());
+        int fourpx = 2880000 / rdpi;
+        int photos = (fuse & 32) / 32;
+        int clipW = bx1 - bx0;
+        int clipH = by1 - by0;
+        if ((emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != run) && (turns != 0)) {
+            if ((turns % 2) == 1) {
+                nsel = Scan.scSetAsideClips(olines, owords, etext, scr, nsel, 0, 0, clipH, clipW, fourpx, photos);
+            } else {
+                nsel = Scan.scSetAsideClips(olines, owords, etext, scr, nsel, 0, 0, clipW, clipH, fourpx, photos);
+            }
+        } else {
+            nsel = Scan.scSetAsideClips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos);
+        }
         Scan.scEmitSel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
         if ((emon.Port.cellsAt(rtp, Retarget.rtpPrimary()) != run) && (emon.Port.cellsAt(rtp, Retarget.rtpQ()) != 0)) {
             mv += 8;

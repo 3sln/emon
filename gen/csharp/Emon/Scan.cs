@@ -2632,6 +2632,142 @@ public static class Scan {
         emon.Port.CellsSet(scr, ScSelBase() + k, row);
         return 0;
     }
+    internal static int ScClipHeight(emon.Port.Cells olines, int line) {
+        return Evidence.OlGet(olines, line, Evidence.LhY1()) - Evidence.OlGet(olines, line, Evidence.LhY0());
+    }
+    internal static int ScClipConfidence(emon.Port.Cells olines, emon.Port.Cells owords, int line) {
+        int first = Evidence.OlGet(olines, line, Evidence.LhFirst());
+        int count = Evidence.OlGet(olines, line, Evidence.LhCount());
+        int i = 0;
+        int total = 0;
+        int known = 0;
+        int c = 0;
+        while (i < count) {
+            c = Evidence.OwConfidence(owords, first + i);
+            if (c >= 0) {
+                total += c;
+                known += 1;
+            }
+            i += 1;
+        }
+        if (known > 0) {
+            return total / known;
+        }
+        return -1;
+    }
+    internal static int ScClipMedian(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells scr, int n, int upper, int confidence) {
+        int lo = 0;
+        int hi = upper;
+        int mid = 0;
+        int count = 0;
+        int i = 0;
+        int v = 0;
+        int line = 0;
+        while (lo < hi) {
+            mid = lo + ((hi - lo) / 2);
+            i = 0;
+            count = 0;
+            while (i < n) {
+                line = emon.Port.CellsAt(scr, ScSelBase() + i);
+                if (confidence == 1) {
+                    v = ScClipConfidence(olines, owords, line);
+                } else {
+                    v = ScClipHeight(olines, line);
+                }
+                if ((v > 0) && (v <= mid)) {
+                    count += 1;
+                }
+                i += 1;
+            }
+            if (count > ((n - 1) / 2)) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        if (lo == upper) {
+            return 0;
+        }
+        return lo;
+    }
+    public static int ScClipEdge(int top, int bottom, int left, int right, int height, int typical, int confidence, int typicalConf, int odd, int chars, int fourpx, int photos) {
+        // The nearest vertical edge needs independent evidence of a truncated reading. Side proximity alone
+        // is useful only in photo mode. Distances and heights are in the same units.
+        int near = ScMx(fourpx, (typical * 35) / 100);
+        int edge = ScMn(top, bottom);
+        if ((edge >= (0 - near)) && (edge <= near) && (chars > 0) && (((100 * height) < (85 * typical)) || ((confidence >= 0) && ((100 * confidence) < (75 * typicalConf))) || ((odd * 100) > (chars * 12)) || (chars <= 2))) {
+            if (top <= bottom) {
+                return 1;
+            }
+            return 2;
+        }
+        if ((photos == 1) && (chars > 0) && (ScMn(left, right) >= (0 - near)) && (ScMn(left, right) <= near)) {
+            if (left <= right) {
+                return 3;
+            }
+            return 4;
+        }
+        return 0;
+    }
+    public static int ScSetAsideClips(emon.Port.Cells olines, emon.Port.Cells owords, emon.Port.Cells etext, emon.Port.Cells scr, int n, int x0, int y0, int x1, int y1, int fourpx, int photos) {
+        // Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
+        // leave only complete lines in the selection consumed by structure and table recovery.
+        if (n < 3) {
+            return n;
+        }
+        int typical = ScClipMedian(olines, owords, scr, n, y1 - y0, 0);
+        int conf = ScClipMedian(olines, owords, scr, n, 1001, 1);
+        int near = ScMx(fourpx, (typical * 35) / 100);
+        int i = 0;
+        int kept = 0;
+        int line = 0;
+        int top = 0;
+        int bottom = 0;
+        int left = 0;
+        int right = 0;
+        int edge = 0;
+        int first = 0;
+        int end = 0;
+        int w = 0;
+        int chars = 0;
+        int odd = 0;
+        int wordSize = 0;
+        while (i < n) {
+            line = emon.Port.CellsAt(scr, ScSelBase() + i);
+            top = Evidence.OlGet(olines, line, Evidence.LhY0()) - y0;
+            bottom = y1 - Evidence.OlGet(olines, line, Evidence.LhY1());
+            left = Evidence.OlGet(olines, line, Evidence.LhX0()) - x0;
+            right = x1 - Evidence.OlGet(olines, line, Evidence.LhX1());
+            edge = 0;
+            first = Evidence.OlGet(olines, line, Evidence.LhFirst());
+            end = first + Evidence.OlGet(olines, line, Evidence.LhCount());
+            if ((first >= 0) && ((ScMn(top, bottom) <= near) || ((photos == 1) && (ScMn(left, right) <= near)))) {
+                w = first;
+                chars = 0;
+                odd = 0;
+                while (w < end) {
+                    wordSize = Evidence.OwGet(owords, w, Evidence.HdTlen());
+                    chars += wordSize;
+                    odd += ScCountClass(etext, Evidence.OwGet(owords, w, Evidence.HdTstart()), wordSize, 2);
+                    w += 1;
+                }
+                edge = ScClipEdge(top, bottom, left, right, ScClipHeight(olines, line), typical, ScClipConfidence(olines, owords, line), conf, odd, chars, fourpx, photos);
+            }
+            if (edge == 0) {
+                ScSelSet(scr, kept, line);
+                kept += 1;
+            } else {
+                Evidence.OlSet(olines, line, Evidence.OlfConf(), Evidence.EvClippedConf());
+                w = first;
+                while (w < end) {
+                    ScFlag(owords, w, Evidence.OeClipped());
+                    w += 1;
+                }
+            }
+            i += 1;
+        }
+        return kept;
+    }
     public static int ScPageView(emon.Port.Cells epages, emon.Port.Cells views, emon.Port.Cells images, int page, int decreq, int wcpt, int hcpt, int pxw, int pxh, int dpi100, int cropx, int cropy, int obj, int ix0, int iy0, int ix1, int iy1) {
         // The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that
         // is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)
@@ -2675,7 +2811,16 @@ public static class Scan {
         ScPageEvidence(an, at, page, request, vdec, dpi100, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats);
         int nl = Evidence.OlCount(olines) - l0;
         int rotmed = Evidence.EvRotMedian(olines, l0, nl);
-        return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines);
+        int i = 0;
+        if (nl > ScSelMax()) {
+            return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines);
+        }
+        while (i < nl) {
+            ScSelSet(scr, i, l0 + i);
+            i += 1;
+        }
+        i = ScSetAsideClips(olines, owords, etext, scr, nl, ix0, iy0, ix1, iy1, 2880000 / dpi100, 0);
+        return ScEmitCore(olines, owords, osyms, l0, i, page, rotmed, scr, words, lines, 1);
     }
     internal static int ScNodePage(emon.Port.Cells nodes, emon.Port.Cells regions, int n) {
         // The page of node `n`'s first region, or its nearest ancestor's that has one; -1 when none has.

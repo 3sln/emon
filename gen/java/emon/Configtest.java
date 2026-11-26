@@ -126,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 22) {
+        while (i < 23) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -190,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(22, 22, "twenty-two keys");
+        emon.Testport.assertEq(23, 23, "twenty-three keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -213,9 +213,10 @@ public final class Configtest {
         tKeyName(0, 19, "js-render");
         tKeyName(0, 20, "tables");
         tKeyName(0, 21, "ocr-engine");
+        tKeyName(0, 22, "capture");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
-        emon.Testport.assertEq(21, 21, "twenty-one words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr; K7: mlkit-text: the engines of `ocr-engine`)");
+        emon.Testport.assertEq(24, 24, "twenty-four words");
         tWordName(0, 0, 1, 2, "always");
         tWordName(0, 1, 1, 1, "auto");
         tWordName(0, 2, 1, 0, "never");
@@ -237,6 +238,9 @@ public final class Configtest {
         tWordName(0, 18, 21, 3, "apple-vision");
         tWordName(0, 19, 21, 4, "windows-media-ocr");
         tWordName(0, 20, 21, 5, "mlkit-text");
+        tWordName(0, 21, 22, 0, "auto");
+        tWordName(0, 22, 22, 1, "scan");
+        tWordName(0, 23, 22, 2, "photos");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");
@@ -463,5 +467,16 @@ public final class Configtest {
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=mlkit-text")), 0, "ML Kit parses (K7)");
         emon.Testport.assertEq(c.oengine, 5, "code 5");
         tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text");
+    }
+    public static void testCaptureOption() {
+        emon.Enctx.Cfg c = new emon.Enctx.Cfg();
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("")), 0, "defaults parse");
+        emon.Testport.assertEq(c.capture, 0, "automatic capture is default");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("capture=scan")), 0, "scan mode parses");
+        emon.Testport.assertEq(c.capture, 1, "scan mode");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("capture=photos")), 0, "photos mode parses");
+        emon.Testport.assertEq(c.capture, 2, "photos mode");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("capture=auto")), 0, "automatic mode parses");
+        emon.Testport.assertEq(c.capture, 0, "automatic mode");
     }
 }

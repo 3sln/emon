@@ -2722,6 +2722,147 @@ func ScSelSet(scr *port.Cells, k int32, row int32) int32 {
 	return 0
 }
 
+func scClipHeight(olines *port.Cells, line int32) int32 {
+	return evidence.OlGet(olines, line, evidence.LhY1()) - evidence.OlGet(olines, line, evidence.LhY0())
+}
+
+func scClipConfidence(olines *port.Cells, owords *port.Cells, line int32) int32 {
+	var first int32 = evidence.OlGet(olines, line, evidence.LhFirst())
+	var count int32 = evidence.OlGet(olines, line, evidence.LhCount())
+	var i int32 = 0
+	var total int32 = 0
+	var known int32 = 0
+	var c int32 = 0
+	for i < count {
+		c = evidence.OwConfidence(owords, first+i)
+		if c >= 0 {
+			total += c
+			known += 1
+		}
+		i += 1
+	}
+	if known > 0 {
+		return total / known
+	}
+	return -1
+}
+
+func scClipMedian(olines *port.Cells, owords *port.Cells, scr *port.Cells, n int32, upper int32, confidence int32) int32 {
+	var lo int32 = 0
+	var hi int32 = upper
+	var mid int32 = 0
+	var count int32 = 0
+	var i int32 = 0
+	var v int32 = 0
+	var line int32 = 0
+	for lo < hi {
+		mid = lo + ((hi - lo) / 2)
+		i = 0
+		count = 0
+		for i < n {
+			line = port.CellsAt(scr, ScSelBase()+i)
+			if confidence == 1 {
+				v = scClipConfidence(olines, owords, line)
+			} else {
+				v = scClipHeight(olines, line)
+			}
+			if (v > 0) && (v <= mid) {
+				count += 1
+			}
+			i += 1
+		}
+		if count > ((n - 1) / 2) {
+			hi = mid
+		} else {
+			lo = mid + 1
+		}
+	}
+	if lo == upper {
+		return 0
+	}
+	return lo
+}
+
+func ScClipEdge(top int32, bottom int32, left int32, right int32, height int32, typical int32, confidence int32, typicalConf int32, odd int32, chars int32, fourpx int32, photos int32) int32 {
+	// The nearest vertical edge needs independent evidence of a truncated reading. Side proximity alone
+	// is useful only in photo mode. Distances and heights are in the same units.
+	var near int32 = scMx(fourpx, (typical*35)/100)
+	var edge int32 = scMn(top, bottom)
+	if (edge >= (0 - near)) && (edge <= near) && (chars > 0) && (((100 * height) < (85 * typical)) || ((confidence >= 0) && ((100 * confidence) < (75 * typicalConf))) || ((odd * 100) > (chars * 12)) || (chars <= 2)) {
+		if top <= bottom {
+			return 1
+		}
+		return 2
+	}
+	if (photos == 1) && (chars > 0) && (scMn(left, right) >= (0 - near)) && (scMn(left, right) <= near) {
+		if left <= right {
+			return 3
+		}
+		return 4
+	}
+	return 0
+}
+
+func ScSetAsideClips(olines *port.Cells, owords *port.Cells, etext *port.Cells, scr *port.Cells, n int32, x0 int32, y0 int32, x1 int32, y1 int32, fourpx int32, photos int32) int32 {
+	// Use the chosen OIL lines after same-page OCR arbitration. Keep their reading in evidence and
+	// leave only complete lines in the selection consumed by structure and table recovery.
+	if n < 3 {
+		return n
+	}
+	var typical int32 = scClipMedian(olines, owords, scr, n, y1-y0, 0)
+	var conf int32 = scClipMedian(olines, owords, scr, n, 1001, 1)
+	var near int32 = scMx(fourpx, (typical*35)/100)
+	var i int32 = 0
+	var kept int32 = 0
+	var line int32 = 0
+	var top int32 = 0
+	var bottom int32 = 0
+	var left int32 = 0
+	var right int32 = 0
+	var edge int32 = 0
+	var first int32 = 0
+	var end int32 = 0
+	var w int32 = 0
+	var chars int32 = 0
+	var odd int32 = 0
+	var wordSize int32 = 0
+	for i < n {
+		line = port.CellsAt(scr, ScSelBase()+i)
+		top = evidence.OlGet(olines, line, evidence.LhY0()) - y0
+		bottom = y1 - evidence.OlGet(olines, line, evidence.LhY1())
+		left = evidence.OlGet(olines, line, evidence.LhX0()) - x0
+		right = x1 - evidence.OlGet(olines, line, evidence.LhX1())
+		edge = 0
+		first = evidence.OlGet(olines, line, evidence.LhFirst())
+		end = first + evidence.OlGet(olines, line, evidence.LhCount())
+		if (first >= 0) && ((scMn(top, bottom) <= near) || ((photos == 1) && (scMn(left, right) <= near))) {
+			w = first
+			chars = 0
+			odd = 0
+			for w < end {
+				wordSize = evidence.OwGet(owords, w, evidence.HdTlen())
+				chars += wordSize
+				odd += scCountClass(etext, evidence.OwGet(owords, w, evidence.HdTstart()), wordSize, 2)
+				w += 1
+			}
+			edge = ScClipEdge(top, bottom, left, right, scClipHeight(olines, line), typical, scClipConfidence(olines, owords, line), conf, odd, chars, fourpx, photos)
+		}
+		if edge == 0 {
+			ScSelSet(scr, kept, line)
+			kept += 1
+		} else {
+			evidence.OlSet(olines, line, evidence.OlfConf(), evidence.EvClippedConf())
+			w = first
+			for w < end {
+				scFlag(owords, w, evidence.OeClipped())
+				w += 1
+			}
+		}
+		i += 1
+	}
+	return kept
+}
+
 func ScPageView(epages *port.Cells, views *port.Cells, images *port.Cells, page int32, decreq int32, wcpt int32, hcpt int32, pxw int32, pxh int32, dpi100 int32, cropx int32, cropy int32, obj int32, ix0 int32, iy0 int32, ix1 int32, iy1 int32) int32 {
 	// The first half of a page of OCR: the image's placement, the page's `epages` row and the `views` row of the raster that
 	// is read (a decode, `decreq` its request, `pxw x pxh` pixels at `dpi100`, its top-left corner at (`cropx`, `cropy`)
@@ -2767,7 +2908,16 @@ func ScPage(an *port.Cells, at int32, page int32, request int32, decreq int32, w
 	ScPageEvidence(an, at, page, request, vdec, dpi100, lang, views, epages, etext, oruns, oblocks, olines, owords, osyms, oalts, feats)
 	var nl int32 = evidence.OlCount(olines) - l0
 	var rotmed int32 = evidence.EvRotMedian(olines, l0, nl)
-	return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines)
+	var i int32 = 0
+	if nl > ScSelMax() {
+		return ScEmitLines(olines, owords, osyms, l0, nl, page, rotmed, scr, words, lines)
+	}
+	for i < nl {
+		ScSelSet(scr, i, l0+i)
+		i += 1
+	}
+	i = ScSetAsideClips(olines, owords, etext, scr, nl, ix0, iy0, ix1, iy1, 2880000/dpi100, 0)
+	return scEmitCore(olines, owords, osyms, l0, i, page, rotmed, scr, words, lines, 1)
 }
 
 func scNodePage(nodes *port.Cells, regions *port.Cells, n int32) int32 {

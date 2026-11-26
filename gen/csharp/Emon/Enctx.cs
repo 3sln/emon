@@ -112,6 +112,7 @@ public static class Enctx {
         public int Jsrender = 0;
         public int Tabl = 0;
         public int Oengine = 0;
+        public int Capture = 0;
         public Cfg() {
         }
         public Cfg Clone() {
@@ -143,6 +144,7 @@ public static class Enctx {
             c.Jsrender = this.Jsrender;
             c.Tabl = this.Tabl;
             c.Oengine = this.Oengine;
+            c.Capture = this.Capture;
             return c;
         }
     }
@@ -215,6 +217,8 @@ public static class Enctx {
         public int Fcode = 0;
         public int Fnode = 0;
         public emon.Port.Cells Pscr = emon.Port.NewCells();
+        public emon.Port.Cells Mspatch = emon.Port.NewCells();
+        public emon.Port.Cells Mspixel = emon.Port.NewCells();
         public int Kind = 0;
         public int Ifmt = 0;
         public int Ipages = 0;
@@ -294,6 +298,8 @@ public static class Enctx {
             c.Fcode = this.Fcode;
             c.Fnode = this.Fnode;
             emon.Port.CellsCopyInto(c.Pscr, this.Pscr);
+            emon.Port.CellsCopyInto(c.Mspatch, this.Mspatch);
+            emon.Port.CellsCopyInto(c.Mspixel, this.Mspixel);
             c.Kind = this.Kind;
             c.Ifmt = this.Ifmt;
             c.Ipages = this.Ipages;
@@ -437,6 +443,14 @@ public static class Enctx {
         }
     }
     public sealed class Scratch {
+        public emon.Port.Cells Seams = emon.Port.NewCells();
+        public emon.Port.Cells Mskeys = emon.Port.NewCells();
+        public emon.Port.Cells Mscode = emon.Port.NewCells();
+        public emon.Port.Cells Msa = emon.Port.NewCells();
+        public emon.Port.Cells Msb = emon.Port.NewCells();
+        public emon.Port.Cells Msdrop = emon.Port.NewCells();
+        public emon.Port.Cells Mslines = emon.Port.NewCells();
+        public emon.Port.Cells Mswords = emon.Port.NewCells();
         public emon.Port.Cells Cd = emon.Port.NewCells();
         public emon.Port.Cells Sl = emon.Port.NewCells();
         public emon.Port.Cells Gr = emon.Port.NewCells();
@@ -579,6 +593,14 @@ public static class Enctx {
         }
         public Scratch Clone() {
             Scratch c = new Scratch();
+            emon.Port.CellsCopyInto(c.Seams, this.Seams);
+            emon.Port.CellsCopyInto(c.Mskeys, this.Mskeys);
+            emon.Port.CellsCopyInto(c.Mscode, this.Mscode);
+            emon.Port.CellsCopyInto(c.Msa, this.Msa);
+            emon.Port.CellsCopyInto(c.Msb, this.Msb);
+            emon.Port.CellsCopyInto(c.Msdrop, this.Msdrop);
+            emon.Port.CellsCopyInto(c.Mslines, this.Mslines);
+            emon.Port.CellsCopyInto(c.Mswords, this.Mswords);
             emon.Port.CellsCopyInto(c.Cd, this.Cd);
             emon.Port.CellsCopyInto(c.Sl, this.Sl);
             emon.Port.CellsCopyInto(c.Gr, this.Gr);

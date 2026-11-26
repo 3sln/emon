@@ -175,7 +175,8 @@
    [oe-garbage 8 "garbage"]
    [oe-rule-ghost 16 "rule-ghost"]
    [oe-corrected 32 "corrected"]
-   [oe-uncalibrated 64 "uncalibrated"]])
+   [oe-uncalibrated 64 "uncalibrated"]
+   [oe-clipped 128 "clipped"]])
 
 (defenum ^:pub os
   [[os-superscript 1 "superscript"]
@@ -868,6 +869,7 @@
 (defn ^:pub ^I32 olf-par [] (return 13))
 (defn ^:pub ^I32 olf-run [] (return 14))
 (defn ^:pub ^I32 olf-conf [] (return 15))
+(defn ^:pub ^I32 ev-clipped-conf [] (return 300))
 (defn ^:pub ^I32 olf-xheight [] (return 16))
 (defn ^:pub ^I32 olf-asc [] (return 17))
 (defn ^:pub ^I32 olf-desc [] (return 18))
@@ -2507,10 +2509,14 @@
 (defn ^:pub ^I32 owf-alts [] (return 31))
 
 (defn ^:pub ^I32 ow-confidence [^Cells c ^I32 word]
-  (if (!= (bit-and (ow-get c word (owf-flags)) (oe-uncalibrated)) 0) (return 500))
-  (let [^I32 p (ow-get c word (owf-pcal))]
-    (if (>= p 0) (return p))
-    (return (ow-get c word (hd-conf)))))
+  (let [^I32 flags (ow-get c word (owf-flags))
+        ^:mut ^I32 p (ow-get c word (owf-pcal))]
+    (if (!= (bit-and flags (oe-uncalibrated)) 0)
+      (set p 500)
+      (if (< p 0) (set p (ow-get c word (hd-conf)))))
+    (if (and (!= (bit-and flags (oe-clipped)) 0) (> p (ev-clipped-conf)))
+      (return (ev-clipped-conf)))
+    (return p)))
 
 ;; The request flags retain their low byte. Run granularity and confidence kind
 ;; occupy separate upper bytes so the engine-table index remains an index.
@@ -3014,6 +3020,9 @@
     (if (== ea 14)
       (if (== (rem (quot (or-get c row (orf-flags)) 4) 2) 1)
         (set s (ev-emit-ocr-model t pr d s 1))))
+    (if (and (== ea 16) (>= (ol-get c row (olf-conf)) 0))
+      (do (set s (ev-begin t pr d s (ek-flags)))
+          (emit-ascii t "[\"clipped\"]")))
     (js-close t pr d s)
     (return 0)))
 

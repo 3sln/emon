@@ -100,6 +100,7 @@ export interface ConvertOptions {
   assetsBytes?: number;
   assetSignatures?: boolean | 'on' | 'off';
   ocrScope?: 'full' | 'witness' | string;
+  capture?: 'auto' | 'scan' | 'photos';
   keepEvidence?: boolean;
   maxRounds?: number;
   fetchRounds?: number;

@@ -1,0 +1,31 @@
+# Multi-photo receipt qualification
+
+The benchmark reads SROIE and CORD gold and source images from `corpus/`.
+Set `EMON_MULTISHOT_CORPUS` to use a different corpus root. It generates crops
+with pinned Pillow and NumPy versions from
+`tools/oracle/multishot/requirements.txt`. Set `EMON_MULTISHOT_PYTHON` to
+the interpreter in the environment that has those packages. The local runs
+used Python 3.12.
+
+`bb multishot --ci --baseline` measures separate pieces concatenated in upload
+order and their full-image controls. `bb multishot --ci` also runs a single
+document conversion over the crops in a multi-frame TIFF and applies the
+acceptance checks. Both commands default to seed 917 and Tesseract, with
+12 SROIE receipts, 4 CORD receipts and six explicit trap cases. The clean-cut
+and distinct-page controls compare canonical Models from the same input under
+automatic and scan capture.
+
+`bb multishot --sweep` draws a fresh seed and selects 200 receipts.
+An explicit `--seed` reproduces the crop design. Pass `--ocr-engine` to select
+Tesseract, Apple Vision or PP-OCR, and `--bin` to use an existing Rust
+reference driver. The all-engine selection includes Tesseract, Apple Vision
+on macOS and PP-OCR when `EMON_PPOCR_LIB` is set.
+
+`bb multishot --clipped` cuts text at all four image edges and reports
+clipping precision and recall. It also reports the flag rate on tight and
+full-image controls. Use the same seed and set when comparing engines.
+
+`bb multishot --report` shows the last report under
+`${EMON_SCRATCH:-.cache/scratch}/multishot/`. The report holds the seed,
+case identifiers, piece hashes and aggregate scores. Generated crops are
+removed at the end of the run unless `--keep` is supplied.

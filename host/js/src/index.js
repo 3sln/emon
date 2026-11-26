@@ -53,6 +53,7 @@ const optionLines = (o, chunk, record) => {
   if (o.assetSignatures !== undefined) put('asset-signatures', o.assetSignatures === true || o.assetSignatures === 'on' ? 'on' : 'off');
   if (o.keepEvidence) put('keep-evidence', 1);
   put('ocr-scope', o.ocrScope);
+  put('capture', o.capture);
   put('max-rounds', o.maxRounds);
   put('fetch-rounds', o.fetchRounds);
   for (const [k, v] of Object.entries(o.limits || {})) put(`limit.${k}`, v);

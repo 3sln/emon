@@ -242,7 +242,17 @@ const (
 func (f Furniture) mode() int32 { return int32(f) }
 
 // Options is what a conversion is asked to do. DefaultOptions is SPEC 13's defaults.
+// Capture is the capture mode for raster pages.
+type Capture int
+
+const (
+	CaptureAuto Capture = iota
+	CaptureScan
+	CapturePhotos
+)
+
 type Options struct {
+	Capture Capture
 	// PpOcr selects the experimental additive PP reading when true.
 	PpOcr bool
 	// OcrEngine is kin's code of the `ocr-engine` option (K8, D901): 0 tesseract, 1 ppocr, 2 ppocr-alone (PpOcr says either), 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text. The platform engines read alone and
@@ -380,6 +390,7 @@ func ocrPolicyOf(code int32) OcrPolicy {
 
 func optionsOf(c *enctx.Cfg) Options {
 	o := Options{
+		Capture:         Capture(c.Capture),
 		Ocr:             ocrPolicyOf(c.Ocr),
 		PpOcr:           c.Oengine == 1 || c.Oengine == 2,
 		OcrEngine:       c.Oengine,
@@ -1070,6 +1081,7 @@ func cfgOf(opts Options) *enctx.Cfg {
 	c.Keep = boolInt(opts.KeepEvidence)
 	c.Nort = boolInt(opts.noRetarget)
 	c.Tabl = boolInt(opts.tablesScored)
+	c.Capture = int32(opts.Capture)
 	if opts.Locale != "" {
 		c.Haveloc = 1
 		c.Lcl = localeCells(opts)

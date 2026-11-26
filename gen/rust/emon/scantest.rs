@@ -10,6 +10,50 @@ use crate::emon::pdfdoc::*;
 use crate::emon::plan::*;
 use crate::emon::scan::*;
 
+#[test]
+fn test_clipped_edge_requires_truncation() {
+    crate::testport::assert_eq(sc_clip_edge(1, 400, 30, 30, 12, 20, 950, 950, 0, 8, 4, 0), 1, "short top line");
+    crate::testport::assert_eq(sc_clip_edge(400, 1, 30, 30, 20, 20, 420, 950, 0, 8, 4, 0), 2, "weak bottom reading");
+    crate::testport::assert_eq(sc_clip_edge(400, 1, 30, 30, 20, 20, 950, 950, 2, 8, 4, 0), 2, "implausible bottom reading");
+    crate::testport::assert_eq(sc_clip_edge(1, 400, 30, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "complete line on a tight crop");
+    crate::testport::assert_eq(sc_clip_edge(40, 400, 30, 30, 12, 20, 100, 950, 2, 8, 4, 1), 0, "weak interior reading");
+    crate::testport::assert_eq(sc_clip_edge(400, -200, 30, 30, 12, 20, 100, 950, 2, 8, 4, 0), 0, "far outside the bitmap is not an observed edge fragment");
+    crate::testport::assert_eq(sc_clip_edge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 0), 0, "scan side margin");
+    crate::testport::assert_eq(sc_clip_edge(40, 400, 1, 30, 20, 20, 950, 950, 0, 8, 4, 1), 3, "photo left edge");
+    crate::testport::assert_eq(sc_clip_edge(40, 400, 30, 1, 20, 20, 950, 950, 0, 8, 4, 1), 4, "photo right edge");
+}
+#[test]
+fn test_clipped_reading_is_capped_and_excluded_from_the_flow() {
+    let ol: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let ow: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let scr: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    let mut y: i32 = 0;
+    let mut height: i32 = 0;
+    crate::port::cells_push(et, 49);
+    crate::port::cells_push(et, 50);
+    crate::port::cells_push(et, 51);
+    sc_prep(scr);
+    while i < 3 {
+        y = i * 40;
+        height = 20;
+        if i == 0 {
+            height = 7;
+        }
+        ow_new(ow, 1, 50, y, 90, y + height, 50, y + height, 90, y + height, 0, 0, 0, 3, i, 940, -1);
+        ol_new(ol, 1, 50, y, 90, y + height, 50, y + height, 90, y + height, 0, 0, i, 1);
+        sc_sel_set(scr, i, i);
+        i += 1;
+    }
+    crate::testport::assert_eq(sc_set_aside_clips(ol, ow, et, scr, 3, 0, 0, 300, 300, 4, 0), 2, "only two readings remain selected");
+    crate::testport::assert_eq(crate::port::cells_at(scr, sc_sel_base()), 1, "the first full line anchors the selection");
+    crate::testport::assert_eq(ol_get(ol, 0, olf_conf()), 300, "clipped line confidence");
+    crate::testport::assert_eq(ow_get(ow, 0, owf_flags()) & oe_clipped(), oe_clipped(), "clipped evidence");
+    crate::testport::assert_eq(ow_confidence(ow, 0), 300, "the effective reading confidence is capped");
+    crate::testport::assert_eq(ow_get(ow, 0, hd_conf()), 940, "native confidence survives");
+    crate::testport::assert_eq(ow_count(ow), 3, "every reading remains in evidence");
+}
 pub(crate) fn lang_of(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32, j: i32) -> i32 {
     // The language of the locale spelled by these code points; a 0 ends the spelling.
     let loc: &mut crate::port::Cells = &mut crate::port::Cells::new();

@@ -47,14 +47,14 @@
                                      ri-escalate ri-witness ri-none]]
             [emon.player :refer [cg-count]]
             [emon.pdfdoc :refer [pd-pg-count pd-pg-crop pd-pg-rotate]]
-            [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-emit-sel sc-prep sc-lang sc-answer]]
+            [emon.scan :refer [sc-eligible sc-dct-span sc-mask-unread sc-request sc-request-view sc-page sc-page-view sc-page-evidence sc-set-aside-clips sc-emit-sel sc-prep sc-lang sc-answer]]
             [emon.pageink :refer [pn-has pn-mark pn-undo pn-ink pn-features pn-k-text pn-k-clean]]
             [emon.sealpx :refer [sx-find sx-plan sx-record sx-drop-lines]]
             [emon.sigpx :refer [sp-find-without sp-find sp-record sp-drop-lines]]
             [emon.xalign :refer [xa-page]]
             [emon.health :refer [hl-page-fw]]
             [kin.lang :refer [defn return let set while if do comment
-                              + - * < > <= >= == != and or quot bit-and]]))
+                              + - * < > <= >= == != and or quot rem bit-and]]))
 
 ;; The resolution of a born-digital page's rasters (D199).
 (defn ^:pub ^I32 pu-dpi [] (return 300))
@@ -595,6 +595,16 @@
                            s1 s2 s3 s4 s5 s6 rn ri cs vr aux oaz))))
     (rt-upright rtp run epages (+ i 1))
     (set rotmed (ev-rot-median olines l0 nl))
+    (let [^I32 turns (cells-at rtp (rtp-q))
+          ^I32 fourpx (quot 2880000 rdpi)
+          ^I32 photos (quot (bit-and fuse 32) 32)
+          ^I32 clip-w (- bx1 bx0)
+          ^I32 clip-h (- by1 by0)]
+      (if (and (!= (cells-at rtp (rtp-primary)) run) (!= turns 0))
+        (if (== (rem turns 2) 1)
+          (set nsel (sc-set-aside-clips olines owords etext scr nsel 0 0 clip-h clip-w fourpx photos))
+          (set nsel (sc-set-aside-clips olines owords etext scr nsel 0 0 clip-w clip-h fourpx photos)))
+        (set nsel (sc-set-aside-clips olines owords etext scr nsel bx0 by0 bx1 by1 fourpx photos))))
     (sc-emit-sel olines owords osyms nsel (+ i 1) rotmed scr words lines etext rules comps inks)
     (if (and (!= (cells-at rtp (rtp-primary)) run) (!= (cells-at rtp (rtp-q)) 0)) (set mv (+ mv 8)))
     (cells-set mask i mv)

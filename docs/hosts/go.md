@@ -192,7 +192,7 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 361 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 366 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -243,6 +243,10 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.BytesSource.AsSlice` | `ptr () []byte` |
 | `emon.BytesSource.ReadAt` | `ptr (p []byte, off int64) (int, error)` |
 | `emon.BytesSource.Size` | `ptr () int64` |
+| `emon.Capture` | `type int` |
+| `emon.CaptureAuto` | `const Capture = iota` |
+| `emon.CapturePhotos` | `const [iota+2]` |
+| `emon.CaptureScan` | `const [iota+1]` |
 | `emon.Config` | `struct` |
 | `emon.Config.ChunkSize` | `field int` |
 | `emon.Config.FetchRounds` | `field int32` |
@@ -386,6 +390,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Options.AssetSignatures` | `field bool` |
 | `emon.Options.Assets` | `field Assets` |
 | `emon.Options.AssetsBytes` | `field int32` |
+| `emon.Options.Capture` | `field Capture` |
 | `emon.Options.Furniture` | `field Furniture` |
 | `emon.Options.KeepEvidence` | `field bool` |
 | `emon.Options.Locale` | `field string` |

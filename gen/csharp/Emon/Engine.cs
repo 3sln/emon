@@ -220,6 +220,12 @@ public static class Engine {
         }
         return 0;
     }
+    internal static int EnPhotoLines(emon.Enctx.Cfg c) {
+        if (c.Capture == 2) {
+            return 32;
+        }
+        return 0;
+    }
     internal static int EnRouted(emon.Enctx.Cfg c, emon.Port.Cells ans, int i) {
         // 1 when page `i` is Tesseract's: its fallback was asked and read, or the one asked beside a doubtful reading named a script Vision cannot read (`emon.ofall`'s `fb-taken-id`).
         // Every request of the page is then Tesseract's.
@@ -258,9 +264,9 @@ public static class Engine {
         // on an earlier one, with nothing in `d` or `ev` changed (the scratch `pscr` aside).
         emon.Port.CellsDrop(d.Pscr, 0);
         if (d.Kind == EnKindPdf()) {
-            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, (((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c))) + (16 * EnFallback(c)), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+            return Pageunit.PuRunPdf(i, idx, c.Ocr, d.Plan, ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ((((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c))) + (16 * EnFallback(c))) + EnPhotoLines(c), d.Fw, d.Fl, d.Hl, ev.Refs, d.Cg, ev.Tlines, d.Xs0, d.Xs1, d.Xs2, d.Xs3, d.Xs4, d.Xs5, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys1, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
         }
-        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, (((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c))) + (16 * EnFallback(c)), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
+        return Rasterin.RsPage(i, idx, nbytes, c.Ocr, ((((2 * c.Nort) + (4 * c.Dry)) + (8 * EnHybrid(c))) + (16 * EnFallback(c))) + EnPhotoLines(c), ans, rq, d.Loc, bms, d.Mask, d.Pscr, ev.Epages, ev.Views, d.Et, ev.Feats, ev.Images, ev.Oruns, ev.Oblocks, ev.Olines, ev.Owords, ev.Osyms, ev.Oalts, d.Wd, d.Ln, ev.Refs, ev.Tlines, d.Cg, ev.Inks, ev.Comps, ev.Rules, ev.Prims, ev.Pts, d.Ys0, d.Ys2, d.Ys3, d.Ys4, d.Ys5, d.Ys6, d.Ys7, d.Ys8, d.Ys9, d.Ys10, d.Ys11, d.Ys12, d.Ys13, d.Ys14, d.Ys15, d.Ys16, d.Ys17, d.Ys18, ev.Ofuse, ev.Oarb);
     }
     internal static int EnOcrPlanned(emon.Enctx.Cfg c, emon.Enctx.Doc d) {
         if (c.Ocr == 0) {
@@ -291,6 +297,13 @@ public static class Engine {
         if (status == 0) {
             // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
             Oilrows.OrAssemble(ev.Oruns, r0, ev.Rules, i + 1, d.Ln, l0, d.Wd, w0, d.Pscr);
+            if ((c.Dry == 0) && (c.Capture != 1) && (d.Ipages > 1) && (Evidence.LnCount(d.Ln) > l0) && ((emon.Port.CellsAt(d.Mask, i) & 8) == 0)) {
+                int id = Plan.PuId(i, Plan.PiDecode());
+                int ep = Evidence.EvPageRow(ev.Epages, i + 1);
+                if ((ep >= 0) && (emon.Port.BmsHas(bms, id) == 1)) {
+                    Seams.MsSample(emon.Port.BmsGet(bms, id), d.Ln, l0, Evidence.EpGet(ev.Epages, ep, Evidence.EpfWidth()), Evidence.EpGet(ev.Epages, ep, Evidence.EpfHeight()), d.Mspatch, d.Mspixel, d.Ys0, d.Ys1);
+                }
+            }
             if (Oilsrc.OxsCollect(ans, ev.Views, ev.Oruns, ev.Olines, ev.Oxs) < 0) {
                 return 2;
             }
@@ -394,6 +407,10 @@ public static class Engine {
         int trust = Pdfstruct.TgTrust(d.Ss);
         int pending = 0;
         int w = 0;
+        Seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords);
+        if (c.Keep != 0) {
+            Seams.MsEvidence(d.Evidence, s.Seams);
+        }
         Furniture.FuFind(d.Fw, d.Fl, d.Et, d.Gl, d.Mk, m.Pages, np, d.Txt, d.Md, d.Lb, trust, c.Furn, s.Cd, s.Sl, s.Gr, s.Ford, s.Tx, s.Bh, s.Fo, s.Fp, s.Ft, s.Pl);
         if (c.Tabl == 1) {
             Tscore.TsBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An);

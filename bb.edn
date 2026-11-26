@@ -53,6 +53,8 @@
   receipts {:doc "Live receipt measurement (non-gate), including input views, OCR reads, child CPU and same-population baseline deltas. bb receipts [--n N] [--set sroie,cord] [--baseline FILE] [--replay-transcripts | --rescore] [--bounds] [--report]"
             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "receipts" *command-line-args*)
                    (apply shell "bb" "-cp" "tools:tools/lib" "tools/receipts/receipts.clj" *command-line-args*))}
+  multishot {:doc "Seeded multi-photo receipt stress test. bb multishot --help"
+             :task (apply shell "bb" "--config" "tools/multishot/bb.edn" "tools/multishot/multishot.clj" *command-line-args*)}
   ocr-live {:doc "RUST ONLY by design (a live recorder, P9.5): LIVE Tesseract over the 55 synthetic scans (the scoreboard's emon-live, ratcheted) and a sample of FUNSD, SROIE and CORD gold: NOT a gate (needs Tesseract, takes minutes; P6.5, D216).  bb ocr-live [--update] [--no-gold] [--gold-n N]"
             :task (do (apply shell "bb" "tools/corpus_link.clj" "--guard" "--task" "ocr-live" *command-line-args*)
                    (apply shell "bb" "tools/ocr/live.clj" *command-line-args*))}

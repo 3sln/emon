@@ -127,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 22 {
+    while i < 23 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -196,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(22, 22, "twenty-two keys");
+    crate::testport::assert_eq(23, 23, "twenty-three keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -219,10 +219,11 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 19, "js-render");
     t_key_name(0, 20, "tables");
     t_key_name(0, 21, "ocr-engine");
+    t_key_name(0, 22, "capture");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
-    crate::testport::assert_eq(21, 21, "twenty-one words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr; K7: mlkit-text: the engines of `ocr-engine`)");
+    crate::testport::assert_eq(24, 24, "twenty-four words");
     t_word_name(0, 0, 1, 2, "always");
     t_word_name(0, 1, 1, 1, "auto");
     t_word_name(0, 2, 1, 0, "never");
@@ -244,6 +245,9 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 18, 21, 3, "apple-vision");
     t_word_name(0, 19, 21, 4, "windows-media-ocr");
     t_word_name(0, 20, 21, 5, "mlkit-text");
+    t_word_name(0, 21, 22, 0, "auto");
+    t_word_name(0, 22, 22, 1, "scan");
+    t_word_name(0, 23, 22, 2, "photos");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
@@ -485,4 +489,16 @@ fn test_optional_ocr_engine_is_explicit_and_defaults_to_tesseract() {
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=mlkit-text")[..]), 0, "ML Kit parses (K7)");
     crate::testport::assert_eq(c.oengine, 5, "code 5");
     t_refused(0, &crate::testport::text_blob("ocr-engine=unknown")[..], "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text");
+}
+#[test]
+fn test_capture_option() {
+    let c: &mut crate::emon::enctx::Cfg = &mut crate::emon::enctx::Cfg::new();
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("")[..]), 0, "defaults parse");
+    crate::testport::assert_eq(c.capture, 0, "automatic capture is default");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("capture=scan")[..]), 0, "scan mode parses");
+    crate::testport::assert_eq(c.capture, 1, "scan mode");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("capture=photos")[..]), 0, "photos mode parses");
+    crate::testport::assert_eq(c.capture, 2, "photos mode");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("capture=auto")[..]), 0, "automatic mode parses");
+    crate::testport::assert_eq(c.capture, 0, "automatic mode");
 }

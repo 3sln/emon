@@ -811,6 +811,9 @@ public static class Tlhealth {
         // The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
         // an `ocr-ghost`; 0 for a word that was kept.
         int fl = Evidence.OwGet(owords, i, Evidence.OwfFlags());
+        if ((fl & Evidence.OeClipped()) != 0) {
+            return Model.DrClipped();
+        }
         if ((fl & Evidence.OeRuleGhost()) != 0) {
             return Model.DrRuleGhost();
         }
@@ -874,7 +877,11 @@ public static class Tlhealth {
                     }
                     k += 1;
                 }
-                lr = Model.LedgerAdd(ledger, reason, Evidence.OwGet(owords, i, Evidence.HdPage()), x0, y0, x1, y1, 700, Model.SrOcr());
+                int conf = 700;
+                if (reason == Model.DrClipped()) {
+                    conf = Evidence.EvClippedConf();
+                }
+                lr = Model.LedgerAdd(ledger, reason, Evidence.OwGet(owords, i, Evidence.HdPage()), x0, y0, x1, y1, conf, Model.SrOcr());
                 t0 = emon.Port.CellsLen(text);
                 Normalize.NzNfc(tt, 0, emon.Port.CellsLen(tt), text, tmp, Normalize.NzFlagLigatures() + Normalize.NzFlagRadicals());
                 Model.LedgerSetText(ledger, lr, t0, emon.Port.CellsLen(text) - t0);

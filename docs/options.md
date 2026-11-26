@@ -35,6 +35,7 @@ Defaults are what a conversion does when the text is empty.
 | `asset-signatures` | `on`, `off` | `off` | `on` keeps the pixels of handwritten signatures and initials as assets; `off` leaves them out. |
 | `assets` | `figures`, `images`, `none` | `none` | Pixels for figures, seals and signatures. `none`: no pixels. `images`: a figure or seal that is one embedded image gets it. `figures`: also the others, cropped from a render (needs a renderer). |
 | `assets-bytes` | integer 0..2147483647 | `33554432` | Most encoded bytes all the assets of a document may have (the default is 32 MiB). |
+| `capture` | `photos`, `scan`, `auto` | `auto` | Raster page capture mode. `auto` examines adjacent raster boundaries for overlap and clipped text. `scan` disables seam matching. `photos` also enables side-edge clipping. Born-digital pages are outside the seam candidates. |
 | `chunk` | integer 1..2147483647 | `65536` | Chunk size, in bytes, of the cache the engine reads a byte source through (it reads a source in aligned chunks, only the ones it touches). |
 | `fetch-rounds` | integer 0..2147483647 | `24` | Most rounds of range reads a unit may take on a source that answers asynchronously (a browser Blob, a URL). Reaching it is the error `fetch-rounds`. |
 | `furniture` | `drop`, `keep`, `policy` | `policy` | What to do with running headers, footers and page numbers. `policy`: drop what the output already says and keep the rest as asides. `keep`: leave all of it in the flow. `drop`: take all of it out (the ledger says what). |

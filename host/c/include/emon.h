@@ -29,7 +29,7 @@
  *
  * OPTIONS are one text, kin's grammar (emon.config): `key=value` lines separated by LF (spaces are not trimmed), the last line wins:
  *     locale ocr furniture assets asset-dpi asset-pixels asset-bytes assets-bytes asset-signatures keep-evidence ocr-scope
- *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel js-render ocr-engine
+ *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel js-render ocr-engine capture
  *     e.g. "ocr=never\nassets=images\nlimit.pages=50\n".
  * `parallel=N` (P10.2, SPEC 12.1) spreads the fulfilment of ONE conversion over N worker threads that emon starts and ends inside the call (limit.workers caps
  * it; 1, the default, starts none): the one-shot calls use it, with the engines you gave; the step API (emon_open / emon_step) answers its adapters' requests one at a time on

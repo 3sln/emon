@@ -114,6 +114,7 @@ public final class Enctx {
         public int jsrender = 0;
         public int tabl = 0;
         public int oengine = 0;
+        public int capture = 0;
         public Cfg() {
         }
         @Override
@@ -146,6 +147,7 @@ public final class Enctx {
             c.jsrender = this.jsrender;
             c.tabl = this.tabl;
             c.oengine = this.oengine;
+            c.capture = this.capture;
             return c;
         }
     }
@@ -218,6 +220,8 @@ public final class Enctx {
         public int fcode = 0;
         public int fnode = 0;
         public emon.Port.Cells pscr = emon.Port.newCells();
+        public emon.Port.Cells mspatch = emon.Port.newCells();
+        public emon.Port.Cells mspixel = emon.Port.newCells();
         public int kind = 0;
         public int ifmt = 0;
         public int ipages = 0;
@@ -298,6 +302,8 @@ public final class Enctx {
             c.fcode = this.fcode;
             c.fnode = this.fnode;
             emon.Port.cellsCopyInto(c.pscr, this.pscr);
+            emon.Port.cellsCopyInto(c.mspatch, this.mspatch);
+            emon.Port.cellsCopyInto(c.mspixel, this.mspixel);
             c.kind = this.kind;
             c.ifmt = this.ifmt;
             c.ipages = this.ipages;
@@ -442,6 +448,14 @@ public final class Enctx {
         }
     }
     public static final class Scratch {
+        public emon.Port.Cells seams = emon.Port.newCells();
+        public emon.Port.Cells mskeys = emon.Port.newCells();
+        public emon.Port.Cells mscode = emon.Port.newCells();
+        public emon.Port.Cells msa = emon.Port.newCells();
+        public emon.Port.Cells msb = emon.Port.newCells();
+        public emon.Port.Cells msdrop = emon.Port.newCells();
+        public emon.Port.Cells mslines = emon.Port.newCells();
+        public emon.Port.Cells mswords = emon.Port.newCells();
         public emon.Port.Cells cd = emon.Port.newCells();
         public emon.Port.Cells sl = emon.Port.newCells();
         public emon.Port.Cells gr = emon.Port.newCells();
@@ -585,6 +599,14 @@ public final class Enctx {
         @Override
         public Scratch clone() {
             Scratch c = new Scratch();
+            emon.Port.cellsCopyInto(c.seams, this.seams);
+            emon.Port.cellsCopyInto(c.mskeys, this.mskeys);
+            emon.Port.cellsCopyInto(c.mscode, this.mscode);
+            emon.Port.cellsCopyInto(c.msa, this.msa);
+            emon.Port.cellsCopyInto(c.msb, this.msb);
+            emon.Port.cellsCopyInto(c.msdrop, this.msdrop);
+            emon.Port.cellsCopyInto(c.mslines, this.mslines);
+            emon.Port.cellsCopyInto(c.mswords, this.mswords);
             emon.Port.cellsCopyInto(c.cd, this.cd);
             emon.Port.cellsCopyInto(c.sl, this.sl);
             emon.Port.cellsCopyInto(c.gr, this.gr);

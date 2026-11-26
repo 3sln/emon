@@ -132,7 +132,7 @@ implement `Renderer` (`render(source, password, &RenderRequest) -> Result<Bitmap
 - The `no_retarget` test setting of `Options` is not in the published crate (`bb package --check` proves it).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the rust host: 333 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the rust host: 338 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -176,6 +176,10 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::BytesSource` | `struct (Vec<u8>)` |
 | `emon::BytesSource::impl ByteSource` | `impl` |
 | `emon::BytesSource::new` | `fn (&[u8]) -> BytesSource` |
+| `emon::Capture` | `enum derive(Clone,Copy,Debug,Eq,PartialEq)` |
+| `emon::Capture::Auto` | `variant` |
+| `emon::Capture::Photos` | `variant` |
+| `emon::Capture::Scan` | `variant` |
 | `emon::Clip` | `struct derive(Clone,Copy,Debug,Eq,PartialEq)` |
 | `emon::Clip::h` | `field i32` |
 | `emon::Clip::w` | `field i32` |
@@ -339,6 +343,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::Options::asset_signatures` | `field bool` |
 | `emon::Options::assets` | `field Assets` |
 | `emon::Options::assets_bytes` | `field i32` |
+| `emon::Options::capture` | `field Capture` |
 | `emon::Options::furniture` | `field Furniture` |
 | `emon::Options::impl Default` | `impl` |
 | `emon::Options::keep_evidence` | `field bool` |
@@ -479,7 +484,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `mod par` | `pub mod #[cfg(not(target_arch = "wasm32"))]` |
 | `mod pdfcodecs` | `pub mod #[cfg(codecs)]` |
 | `mod pdfium` | `pub mod #[cfg(pdfium)]` |
-| `mod tess` | `pub mod #[cfg(feature = "tesseract")]` |
+| `mod tess` | `pub mod #[cfg(all(feature = "tesseract", not(target_arch = "wasm32")))]` |
 | `par::Exec` | `struct` |
 | `par::Exec::local` | `field Box<dyn Fn(&Request,&Bitmaps) -> Result<Answer,PlanError> + Send + Sync>` |
 | `par::Exec::ocr` | `field bool` |

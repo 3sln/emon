@@ -852,6 +852,9 @@ func thOcrReason(owords *port.Cells, i int32) int32 {
 	// The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
 	// an `ocr-ghost`; 0 for a word that was kept.
 	var fl int32 = evidence.OwGet(owords, i, evidence.OwfFlags())
+	if (fl & evidence.OeClipped()) != 0 {
+		return model.DrClipped()
+	}
 	if (fl & evidence.OeRuleGhost()) != 0 {
 		return model.DrRuleGhost()
 	}
@@ -916,7 +919,11 @@ func ThWriteOcr(owords *port.Cells, et *port.Cells, ledger *port.Cells, text *po
 				}
 				k += 1
 			}
-			lr = model.LedgerAdd(ledger, reason, evidence.OwGet(owords, i, evidence.HdPage()), x0, y0, x1, y1, 700, model.SrOcr())
+			var conf int32 = 700
+			if reason == model.DrClipped() {
+				conf = evidence.EvClippedConf()
+			}
+			lr = model.LedgerAdd(ledger, reason, evidence.OwGet(owords, i, evidence.HdPage()), x0, y0, x1, y1, conf, model.SrOcr())
 			t0 = port.CellsLen(text)
 			normalize.NzNfc(tt, 0, port.CellsLen(tt), text, tmp, normalize.NzFlagLigatures()+normalize.NzFlagRadicals())
 			model.LedgerSetText(ledger, lr, t0, port.CellsLen(text)-t0)

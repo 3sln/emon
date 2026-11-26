@@ -679,6 +679,20 @@ pub fn pu_scan_core(i: i32, input: i32, fuse: i32, did: i32, ad: i32, dpi100: i3
     }
     rt_upright(rtp, run, epages, i + 1);
     rotmed = ev_rot_median(olines, l0, nl);
+    let turns: i32 = crate::port::cells_at(rtp, rtp_q());
+    let fourpx: i32 = 2880000 / rdpi;
+    let photos: i32 = (fuse & 32) / 32;
+    let clip_w: i32 = bx1 - bx0;
+    let clip_h: i32 = by1 - by0;
+    if (crate::port::cells_at(rtp, rtp_primary()) != run) && (turns != 0) {
+        if (turns % 2) == 1 {
+            nsel = sc_set_aside_clips(olines, owords, etext, scr, nsel, 0, 0, clip_h, clip_w, fourpx, photos);
+        } else {
+            nsel = sc_set_aside_clips(olines, owords, etext, scr, nsel, 0, 0, clip_w, clip_h, fourpx, photos);
+        }
+    } else {
+        nsel = sc_set_aside_clips(olines, owords, etext, scr, nsel, bx0, by0, bx1, by1, fourpx, photos);
+    }
     sc_emit_sel(olines, owords, osyms, nsel, i + 1, rotmed, scr, words, lines, etext, rules, comps, inks);
     if (crate::port::cells_at(rtp, rtp_primary()) != run) && (crate::port::cells_at(rtp, rtp_q()) != 0) {
         mv += 8;

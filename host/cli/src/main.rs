@@ -45,6 +45,7 @@ INPUT is a PDF or an image file, or - for standard input. The result goes to FIL
   --format   html (the default), json (the Model, compact) or model (the Model, indented)
   --assets   omit: the figures are left out; inline: figures and seals as PNGs inside the HTML; dir: as files in FILE.assets/ (needs -o)
   --ocr      when to read pages with Tesseract (the engine's own default when omitted)
+  --capture  auto (default), scan (disable raster seam matching), or photos (also check the side edges)
   --ocr-engine tesseract (default), ppocr (experimental, separate add-on; docs/ppocr.md), apple-vision (macOS: Apple's Vision framework, with Tesseract as the fallback of the pages kin sends to it) or windows-media-ocr (Windows: Windows.Media.Ocr); the platform engines need no models and are explicit only (docs/platform-ocr.md)
   --lang     the Tesseract models to read with, joined by + (default: every model in the models directory)
   --tessdata the models directory (default: $EMON_TESSDATA, else ../share/emon/tessdata beside the executable)
@@ -190,6 +191,7 @@ fn convert(args: Vec<String>) {
             "--assets" => assets = Some(a.value("--assets", inline)),
             "--ocr" => ocr = Some(a.value("--ocr", inline)),
             "--ocr-engine" => kv.push(format!("ocr-engine={}", a.value("--ocr-engine", inline))),
+            "--capture" => kv.push(format!("capture={}", a.value("--capture", inline))),
             "--lang" => lang = Some(a.value("--lang", inline)),
             "--tessdata" => tessdata = Some(a.value("--tessdata", inline)),
             "--pdfium" => pdfium = Some(a.value("--pdfium", inline)),

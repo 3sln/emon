@@ -143,7 +143,7 @@ func tNegativeRows() int32 {
 	var n int32 = 0
 	var i int32 = 0
 	var k int32 = 0
-	for i < 22 {
+	for i < 23 {
 		if (config.CkRows[i*5+0] == 1) && (config.CkRows[i*5+1] < 0) {
 			n += 1
 		}
@@ -212,7 +212,7 @@ func TestTheSettingsHaveTheirNamesDefaultsAndRangesInKin(emonT *testing.T) {
 }
 
 func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 22, 22, "twenty-two keys")
+	port.AssertEq(emonT, 23, 23, "twenty-three keys")
 	tKeyName(emonT, 0, "locale")
 	tKeyName(emonT, 1, "ocr")
 	tKeyName(emonT, 2, "furniture")
@@ -235,10 +235,11 @@ func TestTheKeysHaveTheirNamesInKin(emonT *testing.T) {
 	tKeyName(emonT, 19, "js-render")
 	tKeyName(emonT, 20, "tables")
 	tKeyName(emonT, 21, "ocr-engine")
+	tKeyName(emonT, 22, "capture")
 }
 
 func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
-	port.AssertEq(emonT, 21, 21, "twenty-one words (ppocr-alone P13.4; K8: apple-vision and windows-media-ocr; K7: mlkit-text: the engines of `ocr-engine`)")
+	port.AssertEq(emonT, 24, 24, "twenty-four words")
 	tWordName(emonT, 0, 1, 2, "always")
 	tWordName(emonT, 1, 1, 1, "auto")
 	tWordName(emonT, 2, 1, 0, "never")
@@ -260,6 +261,9 @@ func TestTheWordsHaveTheirNamesAndCodesInKin(emonT *testing.T) {
 	tWordName(emonT, 18, 21, 3, "apple-vision")
 	tWordName(emonT, 19, 21, 4, "windows-media-ocr")
 	tWordName(emonT, 20, 21, 5, "mlkit-text")
+	tWordName(emonT, 21, 22, 0, "auto")
+	tWordName(emonT, 22, 22, 1, "scan")
+	tWordName(emonT, 23, 22, 2, "photos")
 }
 
 func TestAKeyIsFoundByItsWholeNameOrItsPrefix(emonT *testing.T) {
@@ -501,4 +505,16 @@ func TestOptionalOcrEngineIsExplicitAndDefaultsToTesseract(emonT *testing.T) {
 	port.AssertEq(emonT, tParse(c, port.TextBlob("ocr-engine=mlkit-text")), 0, "ML Kit parses (K7)")
 	port.AssertEq(emonT, c.Oengine, 5, "code 5")
 	tRefused(emonT, port.TextBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text")
+}
+
+func TestCaptureOption(emonT *testing.T) {
+	var c *enctx.Cfg = enctx.NewCfg()
+	port.AssertEq(emonT, tParse(c, port.TextBlob("")), 0, "defaults parse")
+	port.AssertEq(emonT, c.Capture, 0, "automatic capture is default")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("capture=scan")), 0, "scan mode parses")
+	port.AssertEq(emonT, c.Capture, 1, "scan mode")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("capture=photos")), 0, "photos mode parses")
+	port.AssertEq(emonT, c.Capture, 2, "photos mode")
+	port.AssertEq(emonT, tParse(c, port.TextBlob("capture=auto")), 0, "automatic mode parses")
+	port.AssertEq(emonT, c.Capture, 0, "automatic mode")
 }

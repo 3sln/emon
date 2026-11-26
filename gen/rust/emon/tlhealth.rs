@@ -813,6 +813,9 @@ pub(crate) fn th_ocr_reason(owords: &mut crate::port::Cells, i: i32) -> i32 {
     // The ledger reason of OCR word row `i` when the scan stage kept it out of the page's words (P12.6, `sc-fates`): a rule read as a character is a `rule-ghost`, garbage and a dot leader
     // an `ocr-ghost`; 0 for a word that was kept.
     let fl: i32 = ow_get(owords, i, owf_flags());
+    if (fl & oe_clipped()) != 0 {
+        return dr_clipped();
+    }
     if (fl & oe_rule_ghost()) != 0 {
         return dr_rule_ghost();
     }
@@ -876,7 +879,11 @@ pub fn th_write_ocr(owords: &mut crate::port::Cells, et: &mut crate::port::Cells
                 }
                 k += 1;
             }
-            lr = ledger_add(ledger, reason, ow_get(owords, i, hd_page()), x0, y0, x1, y1, 700, sr_ocr());
+            let mut conf: i32 = 700;
+            if reason == dr_clipped() {
+                conf = ev_clipped_conf();
+            }
+            lr = ledger_add(ledger, reason, ow_get(owords, i, hd_page()), x0, y0, x1, y1, conf, sr_ocr());
             t0 = crate::port::cells_len(text);
             nz_nfc(tt, 0, crate::port::cells_len(tt), text, tmp, nz_flag_ligatures() + nz_flag_radicals());
             ledger_set_text(ledger, lr, t0, crate::port::cells_len(text) - t0);

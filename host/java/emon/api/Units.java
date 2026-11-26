@@ -155,6 +155,7 @@ final class Units {
         c.keep = boolInt(opts.keepEvidence);
         c.nort = boolInt(opts.noRetarget);
         c.tabl = boolInt(opts.tablesScored);
+        c.capture = opts.capture.ordinal();
         if (!opts.locale.isEmpty()) {
             c.haveloc = 1;
             c.lcl = localeCells(opts);

@@ -1449,6 +1449,9 @@ pub fn dr_figure_signature_unmeasured() -> i32 {
 pub fn dr_ocr_unread_ink() -> i32 {
     return 17;
 }
+pub fn dr_seam_duplicate() -> i32 {
+    return 18;
+}
 pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "watermark");
@@ -1516,6 +1519,10 @@ pub fn dr_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 17 {
         crate::port::text_ascii(t, "ocr-unread-ink");
+        return 1;
+    }
+    if code == 18 {
+        crate::port::text_ascii(t, "seam-duplicate");
         return 1;
     }
     return 0;

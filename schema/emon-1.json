@@ -496,7 +496,8 @@
             "ocr-unrepresented",
             "figure-unmeasured",
             "figure-signature-unmeasured",
-            "ocr-unread-ink"
+            "ocr-unread-ink",
+            "seam-duplicate"
           ]
         },
         "page": {

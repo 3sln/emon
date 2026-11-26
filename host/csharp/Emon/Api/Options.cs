@@ -46,6 +46,9 @@ public sealed class Options {
     /// <summary>Keeps the text layer's evidence dump (`Model.Evidence()`): a test and debugging aid.</summary>
     public bool KeepEvidence;
     public OcrScopes OcrScope = OcrScopes.Full;
+    /// <summary>Capture mode for raster pages.</summary>
+    public enum CaptureMode { Auto, Scan, Photos }
+    public CaptureMode Capture = CaptureMode.Auto;
     /// <summary>A HIDDEN TEST SETTING (P7.4): leave every pixel unread by the page units. NOT PUBLIC API (P11.4, D542): internal; the gates'
     /// driver is compiled into the same assembly, the published package's is not.</summary>
     internal bool NoRetarget;
@@ -73,6 +76,7 @@ public sealed class Options {
         o.Furniture = Furniture;
         o.KeepEvidence = KeepEvidence;
         o.OcrScope = OcrScope;
+        o.Capture = Capture;
         o.PpOcr = PpOcr;
         o.OcrEngine = OcrEngine;
         o.NoRetarget = NoRetarget;
@@ -258,6 +262,7 @@ public sealed class Options {
         o.Furniture = (FurnitureMode) c.Furn;
         o.KeepEvidence = c.Keep != 0;
         o.OcrScope = (OcrScopes) c.Scope;
+        o.Capture = (CaptureMode) c.Capture;
         o.TablesScored = c.Tabl == 1;
         if (c.Haveloc == 1) {
             o.Locale = StringOf(c.Lcl, 0, emon.Port.CellsLen(c.Lcl));
