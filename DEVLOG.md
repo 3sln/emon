@@ -15020,3 +15020,17 @@ Confirmed seam matches keep the higher-confidence complete readings in a contigu
 P13.23 and P13.24 remain open pending qualification.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Rank anchored photo links and check gaps across unresolved order
+
+Score all directed pairs in a bounded raster run using edge-anchored text and the same pixel or fragment corroboration used for deduplication. Extend paths with the strongest mutual links and keep unresolved paths in upload order. Mutually unique opposing uncovered cuts can flag a gap between free path ends, including reversed and nonadjacent uploads. An anchored candidate facing the opposite direction vetoes that inference. The first sweep batches showed that flagging every plausible pairing of cuts introduced spurious gaps.
+
+The held-out seed exposed a three-line word band whose shorter copy omitted an item label. For weak word bands, pixel matches on neighboring lines now corroborate a drop only if the two bands contain the same number of OCR words.
+
+The Model scorer counts a gap mark between physical non-neighbors as spurious. This closes a hole in the previous metric, which examined marks only at physical seams. The output metric is now `model-v2` and needs a matching sweep reference.
+
+Rebase the seed 920 sweep reference on the hash-checked Round 3 outputs. The old OCR-evidence reference recorded 201 duplicates, 160 unflagged duplicates, 168 of 216 lost seams flagged, and 121 spurious gaps. The new Model reference records 236 duplicates, 120 unflagged duplicates, 188 of 210 lost seams flagged, and 176 spurious gaps. The case set, crop hashes and word recall of 0.736301 are unchanged.
+
+Round 4 keeps the same 236 output duplicates and flags 187 of 210 lost seams. It has zero scored false merges, and clean and repeat controls are byte-identical to their scan controls. Spurious gaps fall to 174 overall, while abut spurious gaps rise from 45 to 47 and fail the sweep ratchet. None of the 45 shuffled uploads are reordered correctly on this sweep. P13.23 and P13.24 remain open.
+
+- [ ] **Signed off** (maintainer)

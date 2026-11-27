@@ -33,12 +33,13 @@ completed case scores and any driver errors to `FILE.cases.jsonl` as it
 runs. Driver errors fail the sweep after the remaining cases have run.
 
 The seam metric version is recorded in each report. Ratchet comparisons
-require the same version. The historical seed 920 Tesseract reference covers
-181 SROIE receipts, 19 CORD receipts and six traps. It uses the earlier
-OCR-evidence metric. To measure that corpus with the Model metric, run
+require the same version. The seed 920 Tesseract reference covers 181 SROIE
+receipts, 19 CORD receipts and six traps. It uses the frozen Round 3 policy
+scored with the Model metric. To measure that corpus against the reference, run
 
 ```sh
-bb multishot --sweep --seed 920 --ocr-engine tesseract --output sweep-920.json
+bb multishot --sweep --ocr-engine tesseract \
+  --ratchet tools/multishot/tesseract-sweep-920.json --output sweep-920.json
 ```
 
 Reports include the following counts.
@@ -61,6 +62,8 @@ Reports include the following counts.
 - `spurious-gap` counts gap flags on seams with no lost output row.
   A clipped fragment with a complete copy in the neighboring crop does not
   justify a gap flag. Recovered text also does not justify a gap flag.
+  A gap flag between photos that are nonadjacent in the physical document
+  also counts, once per source pair regardless of where that pair was uploaded.
 - `evidence_dup` retains the historical count based on surviving OCR lines
   from both photos and requires at least 97% projected visibility in each.
   `evidence_missing` and `evidence_missing_concat` count rows absent from

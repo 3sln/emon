@@ -187,6 +187,44 @@ func TestAConfirmedLinkSurvivesADisconnectedUpload(emonT *testing.T) {
 	lawReversedLink(emonT, 3, 3)
 }
 
+func TestTheStrongerOfTwoAnchoredLinksResolvesTheOrder(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var order *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var i int32 = 0
+	for i < 3 {
+		model.PageNew(pages, i+1, 450, 1000, 0, model.PkImage())
+		port.CellsPush(mask, 1)
+		i += 1
+	}
+	i = 0
+	for i < 5 {
+		lawLine(fl, fw, et, 1, 50+(i*30), 65+i)
+		i += 1
+	}
+	lawLine(fl, fw, et, 1, 300, 90)
+	lawLine(fl, fw, et, 2, 50, 91)
+	i = 0
+	for i < 5 {
+		lawLine(fl, fw, et, 2, 750+(i*30), 65+i)
+		i += 1
+	}
+	i = 1
+	for i < 5 {
+		lawLine(fl, fw, et, 3, 50+(i*30), 65+i)
+		i += 1
+	}
+	lawLine(fl, fw, et, 3, 300, 92)
+	port.AssertEq(emonT, seams.MsRun(3, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 5, "the five-line link wins over the four-line candidate")
+	port.AssertEq(emonT, port.CellsAt(order, 0), 2, "the strongest link starts at photo two")
+	port.AssertEq(emonT, port.CellsAt(order, 1), 1, "the strongest link ends at photo one")
+	port.AssertEq(emonT, port.CellsAt(order, 2), 3, "leave the competing photo in the document")
+}
+
 func TestSeveralStrokesAtTheBitmapEdgeAreClippingEvidence(emonT *testing.T) {
 	var pixels *port.Bitmap = port.BmsPut(port.NewBitmapSet(), 1, 50, 12, 1)
 	var cuts *port.Cells = port.NewCells()
@@ -252,6 +290,52 @@ func TestAnOcrVariantNeedsContextBeforeDeduplication(emonT *testing.T) {
 	lawLine(fl, fw, et, 2, 500, 92)
 	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own")
 	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate")
+}
+
+func TestCorrelatedNeighborsCannotConfirmAShortenedWordBand(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var offsets *port.Cells = port.NewCells()
+	var pixels *port.Cells = port.NewCells()
+	var i int32 = 0
+	var first int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 50, 91)
+	first = evidence.WdCount(fw)
+	evidence.WdNew(fw, 1, 50, 870, 120, 882, 50, 882, 120, 882, 0, 0, port.CellsLen(et), 1, 1, 900, -1)
+	port.CellsPush(et, 86)
+	evidence.WdNew(fw, 1, 130, 870, 200, 882, 130, 882, 200, 882, 0, 0, port.CellsLen(et), 1, 1, 900, -1)
+	port.CellsPush(et, 87)
+	evidence.LnNew(fl, 1, 50, 870, 200, 882, 50, 882, 200, 882, 0, 0, first, 2)
+	lawLine(fl, fw, et, 1, 895, 88)
+	lawLine(fl, fw, et, 1, 920, 89)
+	lawLine(fl, fw, et, 2, 50, 87)
+	lawLine(fl, fw, et, 2, 75, 88)
+	lawLine(fl, fw, et, 2, 100, 89)
+	lawLine(fl, fw, et, 2, 500, 92)
+	for i < evidence.LnCount(fl) {
+		evidence.LnSet(fl, i, evidence.LfOrder(), i)
+		port.CellsPush(offsets, -1)
+		i += 1
+	}
+	port.CellsSet(offsets, 2, 0)
+	port.CellsSet(offsets, 5, 384)
+	port.CellsSet(offsets, 3, 0)
+	port.CellsSet(offsets, 6, 384)
+	i = 0
+	for i < 768 {
+		port.CellsPush(pixels, (i*17)%128)
+		i += 1
+	}
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, offsets, pixels, port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "correlated neighbors do not make up for a missing word")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "retain both copies of a shortened word band")
 }
 
 func lawCoveredFragment(emonT *testing.T, shared int32) int32 {
@@ -413,6 +497,47 @@ func TestReversedCutsCanReportAGapWithoutChangingUploadOrder(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(decisions, 0), 2, "first physical edge comes from source two")
 	port.AssertEq(emonT, port.CellsAt(decisions, 1), 1, "second physical edge comes from source one")
 	port.AssertEq(emonT, port.CellsAt(decisions, 2), 3, "two opposing cut edges give gap evidence")
+}
+
+func lawSkippedGap(emonT *testing.T, competing int32, left int32, right int32) int32 {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var order *port.Cells = port.NewCells()
+	var cuts *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 3, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	port.CellsPush(cuts, 1)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, competing)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, 1)
+	lawLine(fl, fw, et, 1, 140, 66)
+	lawLine(fl, fw, et, 2, 250, 67)
+	lawLine(fl, fw, et, 3, 320, 65)
+	seams.MsRun(3, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), cuts, port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), order, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells())
+	port.AssertEq(emonT, port.CellsLen(order), 0, "the cuts alone do not establish order")
+	port.AssertEq(emonT, port.CellsLen(decisions), 5, "only the opposing cuts give gap evidence")
+	port.AssertEq(emonT, port.CellsAt(decisions, 0), left, "the reported source end")
+	port.AssertEq(emonT, port.CellsAt(decisions, 1), right, "the reported source start")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 3, "a corroborated cut gets a gap flag")
+	return 0
+}
+
+func TestCutEdgesAreCheckedAcrossAnInterveningPhoto(emonT *testing.T) {
+	lawSkippedGap(emonT, 0, 3, 1)
+}
+
+func TestCompetingCutEdgesDoNotFlagEveryPair(emonT *testing.T) {
+	lawSkippedGap(emonT, 1, 1, 2)
 }
 
 func TestPixelCorrelationNeedsContrastAndPositiveCovariance(emonT *testing.T) {

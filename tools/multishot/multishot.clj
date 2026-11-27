@@ -8,7 +8,7 @@
 (def engines ["tesseract" "apple-vision" "ppocr"])
 (def buckets ["gap" "abut" "partial" "1" "2-3" "4+"])
 (def traps ["clean" "identical" "asymmetric" "repeat" "separator" "different-pages"])
-(def seam-metric "model-v1")
+(def seam-metric "model-v2")
 (def scratch (fs/path (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "multishot"))
 (def corpus (fs/path (or (System/getenv "EMON_MULTISHOT_CORPUS") "corpus")))
 (defn read-json [f] (json/parse-string (slurp (str f)) true))
@@ -369,6 +369,16 @@
               kind))
           seams)))
 
+(defn nonadjacent-gap-counts [order seams]
+  (->> seams
+       (keep (fn [{:keys [left right kind]}]
+               (when (#{"possible-gap" "seam-gap"} kind)
+                 (let [[a b :as pair] (sort [(order (dec left)) (order (dec right))])]
+                   (when (> (- b a) 1) pair)))))
+       distinct
+       (map first)
+       frequencies))
+
 (defn evidence-occurrences [case pieces reads]
   (into #{}
         (for [[i row] (map-indexed vector (:rows case))
@@ -427,6 +437,7 @@
                   (mapv #(get pages (inc (.indexOf order %))) (range (count pieces))))
                 before)
         seams (get-in actual [:evidence :seams])
+        nonadjacent-gaps (nonadjacent-gap-counts order seams)
         source-order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
         joined-order (mapv #(order (dec %)) source-order)
         concat-occ (output-occurrences (:rows case) physical-pieces
@@ -471,7 +482,8 @@
      :seams (mapv (fn [i left right]
                     {:bucket (if (:careful case) (:kind case) (:bucket (seam-gold left right)))
                      :concat (seam-score case pieces i before concat-occ (concat-dup i) [] order)
-                     :actual (seam-score case pieces i after actual-occ (actual-dup i) seams joined-order)})
+                     :actual (update (seam-score case pieces i after actual-occ (actual-dup i) seams joined-order)
+                                     :spurious-gap + (get nonadjacent-gaps i 0))})
                   (range) pieces (rest pieces))}))
 
 (defn run-case [bin engine mode case manifest tiff]

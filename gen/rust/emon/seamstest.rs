@@ -179,6 +179,44 @@ fn test_a_confirmed_link_survives_a_disconnected_upload() {
     law_reversed_link(0, 3, 3);
 }
 #[test]
+fn test_the_stronger_of_two_anchored_links_resolves_the_order() {
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    while i < 3 {
+        page_new(pages, i + 1, 450, 1000, 0, pk_image());
+        crate::port::cells_push(mask, 1);
+        i += 1;
+    }
+    i = 0;
+    while i < 5 {
+        law_line(fl, fw, et, 1, 50 + (i * 30), 65 + i);
+        i += 1;
+    }
+    law_line(fl, fw, et, 1, 300, 90);
+    law_line(fl, fw, et, 2, 50, 91);
+    i = 0;
+    while i < 5 {
+        law_line(fl, fw, et, 2, 750 + (i * 30), 65 + i);
+        i += 1;
+    }
+    i = 1;
+    while i < 5 {
+        law_line(fl, fw, et, 3, 50 + (i * 30), 65 + i);
+        i += 1;
+    }
+    law_line(fl, fw, et, 3, 300, 92);
+    crate::testport::assert_eq(ms_run(3, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 5, "the five-line link wins over the four-line candidate");
+    crate::testport::assert_eq(crate::port::cells_at(order, 0), 2, "the strongest link starts at photo two");
+    crate::testport::assert_eq(crate::port::cells_at(order, 1), 1, "the strongest link ends at photo one");
+    crate::testport::assert_eq(crate::port::cells_at(order, 2), 3, "leave the competing photo in the document");
+}
+#[test]
 fn test_several_strokes_at_the_bitmap_edge_are_clipping_evidence() {
     let pixels: &crate::port::Bitmap = crate::port::bms_put(&crate::port::BitmapSet::new(), 1, 50, 12, 1);
     let cuts: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -243,6 +281,52 @@ fn test_an_ocr_variant_needs_context_before_deduplication() {
     law_line(fl, fw, et, 2, 500, 92);
     crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate");
+}
+#[test]
+fn test_correlated_neighbors_cannot_confirm_a_shortened_word_band() {
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let offsets: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pixels: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    let mut first: i32 = 0;
+    page_new(pages, 1, 450, 1000, 0, pk_image());
+    page_new(pages, 2, 450, 1000, 0, pk_image());
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, 1);
+    law_line(fl, fw, et, 1, 50, 91);
+    first = wd_count(fw);
+    wd_new(fw, 1, 50, 870, 120, 882, 50, 882, 120, 882, 0, 0, crate::port::cells_len(et), 1, 1, 900, -1);
+    crate::port::cells_push(et, 86);
+    wd_new(fw, 1, 130, 870, 200, 882, 130, 882, 200, 882, 0, 0, crate::port::cells_len(et), 1, 1, 900, -1);
+    crate::port::cells_push(et, 87);
+    ln_new(fl, 1, 50, 870, 200, 882, 50, 882, 200, 882, 0, 0, first, 2);
+    law_line(fl, fw, et, 1, 895, 88);
+    law_line(fl, fw, et, 1, 920, 89);
+    law_line(fl, fw, et, 2, 50, 87);
+    law_line(fl, fw, et, 2, 75, 88);
+    law_line(fl, fw, et, 2, 100, 89);
+    law_line(fl, fw, et, 2, 500, 92);
+    while i < ln_count(fl) {
+        ln_set(fl, i, lf_order(), i);
+        crate::port::cells_push(offsets, -1);
+        i += 1;
+    }
+    crate::port::cells_set(offsets, 2, 0);
+    crate::port::cells_set(offsets, 5, 384);
+    crate::port::cells_set(offsets, 3, 0);
+    crate::port::cells_set(offsets, 6, 384);
+    i = 0;
+    while i < 768 {
+        crate::port::cells_push(pixels, (i * 17) % 128);
+        i += 1;
+    }
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "correlated neighbors do not make up for a missing word");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "retain both copies of a shortened word band");
 }
 pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -401,6 +485,46 @@ fn test_reversed_cuts_can_report_a_gap_without_changing_upload_order() {
     crate::testport::assert_eq(crate::port::cells_at(decisions, 0), 2, "first physical edge comes from source two");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 1), 1, "second physical edge comes from source one");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 3, "two opposing cut edges give gap evidence");
+}
+pub(crate) fn law_skipped_gap(emon_t: i32, competing: i32, left: i32, right: i32) -> i32 {
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let cuts: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    page_new(pages, 1, 450, 1000, 0, pk_image());
+    page_new(pages, 2, 450, 1000, 0, pk_image());
+    page_new(pages, 3, 450, 1000, 0, pk_image());
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(cuts, 1);
+    crate::port::cells_push(cuts, 0);
+    crate::port::cells_push(cuts, competing);
+    crate::port::cells_push(cuts, 0);
+    crate::port::cells_push(cuts, 0);
+    crate::port::cells_push(cuts, 1);
+    law_line(fl, fw, et, 1, 140, 66);
+    law_line(fl, fw, et, 2, 250, 67);
+    law_line(fl, fw, et, 3, 320, 65);
+    ms_run(3, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
+    crate::testport::assert_eq(crate::port::cells_len(order), 0, "the cuts alone do not establish order");
+    crate::testport::assert_eq(crate::port::cells_len(decisions), 5, "only the opposing cuts give gap evidence");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 0), left, "the reported source end");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 1), right, "the reported source start");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 3, "a corroborated cut gets a gap flag");
+    return 0;
+}
+#[test]
+fn test_cut_edges_are_checked_across_an_intervening_photo() {
+    law_skipped_gap(0, 0, 3, 1);
+}
+#[test]
+fn test_competing_cut_edges_do_not_flag_every_pair() {
+    law_skipped_gap(0, 1, 1, 2);
 }
 #[test]
 fn test_pixel_correlation_needs_contrast_and_positive_covariance() {

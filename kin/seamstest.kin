@@ -143,6 +143,38 @@
 (deftest test-a-confirmed-link-survives-a-disconnected-upload
   (law-reversed-link (test-t) 3 3))
 
+(deftest test-the-stronger-of-two-anchored-links-resolves-the-order
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells order (new-cells)
+        ^Cells decisions (new-cells) ^:mut ^I32 i 0]
+    (while (< i 3)
+      (do (page-new pages (+ i 1) 450 1000 0 (pk-image))
+          (cells-push mask 1)
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 5)
+      (do (law-line fl fw et 1 (+ 50 (* i 30)) (+ 65 i))
+          (set i (+ i 1))))
+    (law-line fl fw et 1 300 90)
+    (law-line fl fw et 2 50 91)
+    (set i 0)
+    (while (< i 5)
+      (do (law-line fl fw et 2 (+ 750 (* i 30)) (+ 65 i))
+          (set i (+ i 1))))
+    (set i 1)
+    (while (< i 5)
+      (do (law-line fl fw et 3 (+ 50 (* i 30)) (+ 65 i))
+          (set i (+ i 1))))
+    (law-line fl fw et 3 300 92)
+    (assert-eq (ms-run 3 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               5 "the five-line link wins over the four-line candidate")
+    (assert-eq (cells-at order 0) 2 "the strongest link starts at photo two")
+    (assert-eq (cells-at order 1) 1 "the strongest link ends at photo one")
+    (assert-eq (cells-at order 2) 3 "leave the competing photo in the document")))
+
 (deftest test-several-strokes-at-the-bitmap-edge-are-clipping-evidence
   (let [^Bitmap pixels (bms-put (new-bitmap-set) 1 50 12 1)
         ^Cells cuts (new-cells) ^:mut ^I32 x 0 ^:mut ^I32 y 0]
@@ -190,6 +222,48 @@
                        (new-cells) (new-cells) (new-cells))
                0 "punctuation and an extra tail token do not prove an overlap on their own")
     (assert-eq (cells-at decisions 2) 2 "the OCR variant is still reported as a possible duplicate")))
+
+(deftest test-correlated-neighbors-cannot-confirm-a-shortened-word-band
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells offsets (new-cells) ^Cells pixels (new-cells) ^:mut ^I32 i 0
+        ^:mut ^I32 first 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 50 91)
+    (set first (wd-count fw))
+    (wd-new fw 1 50 870 120 882 50 882 120 882 0 0 (cells-len et) 1 1 900 -1)
+    (cells-push et 86)
+    (wd-new fw 1 130 870 200 882 130 882 200 882 0 0 (cells-len et) 1 1 900 -1)
+    (cells-push et 87)
+    (ln-new fl 1 50 870 200 882 50 882 200 882 0 0 first 2)
+    (law-line fl fw et 1 895 88)
+    (law-line fl fw et 1 920 89)
+    (law-line fl fw et 2 50 87)
+    (law-line fl fw et 2 75 88)
+    (law-line fl fw et 2 100 89)
+    (law-line fl fw et 2 500 92)
+    (while (< i (ln-count fl))
+      (do (ln-set fl i (lf-order) i)
+          (cells-push offsets -1)
+          (set i (+ i 1))))
+    (cells-set offsets 2 0)
+    (cells-set offsets 5 384)
+    (cells-set offsets 3 0)
+    (cells-set offsets 6 384)
+    (set i 0)
+    (while (< i 768)
+      (do (cells-push pixels (rem (* i 17) 128))
+          (set i (+ i 1))))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels (new-cells)
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               0 "correlated neighbors do not make up for a missing word")
+    (assert-eq (cells-at decisions 2) 2 "retain both copies of a shortened word band")))
 
 (defn ^I32 law-covered-fragment [^TestT emon-t ^I32 shared]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
@@ -321,6 +395,37 @@
     (assert-eq (cells-at decisions 0) 2 "first physical edge comes from source two")
     (assert-eq (cells-at decisions 1) 1 "second physical edge comes from source one")
     (assert-eq (cells-at decisions 2) 3 "two opposing cut edges give gap evidence")))
+
+(defn ^I32 law-skipped-gap [^TestT emon-t ^I32 competing ^I32 left ^I32 right]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells order (new-cells) ^Cells cuts (new-cells)]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (page-new pages 3 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1) (cells-push mask 1)
+    (cells-push cuts 1) (cells-push cuts 0)
+    (cells-push cuts competing) (cells-push cuts 0)
+    (cells-push cuts 0) (cells-push cuts 1)
+    (law-line fl fw et 1 140 66)
+    (law-line fl fw et 2 250 67)
+    (law-line fl fw et 3 320 65)
+    (ms-run 3 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) cuts
+            (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
+            (new-cells) (new-cells) (new-cells))
+    (assert-eq (cells-len order) 0 "the cuts alone do not establish order")
+    (assert-eq (cells-len decisions) 5 "only the opposing cuts give gap evidence")
+    (assert-eq (cells-at decisions 0) left "the reported source end")
+    (assert-eq (cells-at decisions 1) right "the reported source start")
+    (assert-eq (cells-at decisions 2) 3 "a corroborated cut gets a gap flag")
+    (return 0)))
+
+(deftest test-cut-edges-are-checked-across-an-intervening-photo
+  (law-skipped-gap (test-t) 0 3 1))
+
+(deftest test-competing-cut-edges-do-not-flag-every-pair
+  (law-skipped-gap (test-t) 1 1 2))
 
 (deftest test-pixel-correlation-needs-contrast-and-positive-covariance
   (let [^Cells pixels (new-cells)]

@@ -178,6 +178,44 @@ public static class Seamstest {
         LawReversedLink(0, 3, 3);
     }
     [Xunit.Fact]
+    public static void TestTheStrongerOfTwoAnchoredLinksResolvesTheOrder() {
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        emon.Port.Cells order = emon.Port.NewCells();
+        emon.Port.Cells decisions = emon.Port.NewCells();
+        int i = 0;
+        while (i < 3) {
+            Model.PageNew(pages, i + 1, 450, 1000, 0, Model.PkImage());
+            emon.Port.CellsPush(mask, 1);
+            i += 1;
+        }
+        i = 0;
+        while (i < 5) {
+            LawLine(fl, fw, et, 1, 50 + (i * 30), 65 + i);
+            i += 1;
+        }
+        LawLine(fl, fw, et, 1, 300, 90);
+        LawLine(fl, fw, et, 2, 50, 91);
+        i = 0;
+        while (i < 5) {
+            LawLine(fl, fw, et, 2, 750 + (i * 30), 65 + i);
+            i += 1;
+        }
+        i = 1;
+        while (i < 5) {
+            LawLine(fl, fw, et, 3, 50 + (i * 30), 65 + i);
+            i += 1;
+        }
+        LawLine(fl, fw, et, 3, 300, 92);
+        emon.Testport.AssertEq(Seams.MsRun(3, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), order, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 5, "the five-line link wins over the four-line candidate");
+        emon.Testport.AssertEq(emon.Port.CellsAt(order, 0), 2, "the strongest link starts at photo two");
+        emon.Testport.AssertEq(emon.Port.CellsAt(order, 1), 1, "the strongest link ends at photo one");
+        emon.Testport.AssertEq(emon.Port.CellsAt(order, 2), 3, "leave the competing photo in the document");
+    }
+    [Xunit.Fact]
     public static void TestSeveralStrokesAtTheBitmapEdgeAreClippingEvidence() {
         emon.Port.Bitmap pixels = emon.Port.BmsPut(emon.Port.NewBitmapSet(), 1, 50, 12, 1);
         emon.Port.Cells cuts = emon.Port.NewCells();
@@ -242,6 +280,52 @@ public static class Seamstest {
         LawLine(fl, fw, et, 2, 500, 92);
         emon.Testport.AssertEq(Seams.MsRun(2, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate");
+    }
+    [Xunit.Fact]
+    public static void TestCorrelatedNeighborsCannotConfirmAShortenedWordBand() {
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        emon.Port.Cells decisions = emon.Port.NewCells();
+        emon.Port.Cells offsets = emon.Port.NewCells();
+        emon.Port.Cells pixels = emon.Port.NewCells();
+        int i = 0;
+        int first = 0;
+        Model.PageNew(pages, 1, 450, 1000, 0, Model.PkImage());
+        Model.PageNew(pages, 2, 450, 1000, 0, Model.PkImage());
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(mask, 1);
+        LawLine(fl, fw, et, 1, 50, 91);
+        first = Evidence.WdCount(fw);
+        Evidence.WdNew(fw, 1, 50, 870, 120, 882, 50, 882, 120, 882, 0, 0, emon.Port.CellsLen(et), 1, 1, 900, -1);
+        emon.Port.CellsPush(et, 86);
+        Evidence.WdNew(fw, 1, 130, 870, 200, 882, 130, 882, 200, 882, 0, 0, emon.Port.CellsLen(et), 1, 1, 900, -1);
+        emon.Port.CellsPush(et, 87);
+        Evidence.LnNew(fl, 1, 50, 870, 200, 882, 50, 882, 200, 882, 0, 0, first, 2);
+        LawLine(fl, fw, et, 1, 895, 88);
+        LawLine(fl, fw, et, 1, 920, 89);
+        LawLine(fl, fw, et, 2, 50, 87);
+        LawLine(fl, fw, et, 2, 75, 88);
+        LawLine(fl, fw, et, 2, 100, 89);
+        LawLine(fl, fw, et, 2, 500, 92);
+        while (i < Evidence.LnCount(fl)) {
+            Evidence.LnSet(fl, i, Evidence.LfOrder(), i);
+            emon.Port.CellsPush(offsets, -1);
+            i += 1;
+        }
+        emon.Port.CellsSet(offsets, 2, 0);
+        emon.Port.CellsSet(offsets, 5, 384);
+        emon.Port.CellsSet(offsets, 3, 0);
+        emon.Port.CellsSet(offsets, 6, 384);
+        i = 0;
+        while (i < 768) {
+            emon.Port.CellsPush(pixels, (i * 17) % 128);
+            i += 1;
+        }
+        emon.Testport.AssertEq(Seams.MsRun(2, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, offsets, pixels, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "correlated neighbors do not make up for a missing word");
+        emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 2, "retain both copies of a shortened word band");
     }
     internal static int LawCoveredFragment(int emonT, int shared) {
         emon.Port.Cells fl = emon.Port.NewCells();
@@ -400,6 +484,46 @@ public static class Seamstest {
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 0), 2, "first physical edge comes from source two");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 1), 1, "second physical edge comes from source one");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 3, "two opposing cut edges give gap evidence");
+    }
+    internal static int LawSkippedGap(int emonT, int competing, int left, int right) {
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        emon.Port.Cells decisions = emon.Port.NewCells();
+        emon.Port.Cells order = emon.Port.NewCells();
+        emon.Port.Cells cuts = emon.Port.NewCells();
+        Model.PageNew(pages, 1, 450, 1000, 0, Model.PkImage());
+        Model.PageNew(pages, 2, 450, 1000, 0, Model.PkImage());
+        Model.PageNew(pages, 3, 450, 1000, 0, Model.PkImage());
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(cuts, 1);
+        emon.Port.CellsPush(cuts, 0);
+        emon.Port.CellsPush(cuts, competing);
+        emon.Port.CellsPush(cuts, 0);
+        emon.Port.CellsPush(cuts, 0);
+        emon.Port.CellsPush(cuts, 1);
+        LawLine(fl, fw, et, 1, 140, 66);
+        LawLine(fl, fw, et, 2, 250, 67);
+        LawLine(fl, fw, et, 3, 320, 65);
+        Seams.MsRun(3, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, emon.Port.NewCells(), emon.Port.NewCells(), cuts, emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), order, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        emon.Testport.AssertEq(emon.Port.CellsLen(order), 0, "the cuts alone do not establish order");
+        emon.Testport.AssertEq(emon.Port.CellsLen(decisions), 5, "only the opposing cuts give gap evidence");
+        emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 0), left, "the reported source end");
+        emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 1), right, "the reported source start");
+        emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 3, "a corroborated cut gets a gap flag");
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestCutEdgesAreCheckedAcrossAnInterveningPhoto() {
+        LawSkippedGap(0, 0, 3, 1);
+    }
+    [Xunit.Fact]
+    public static void TestCompetingCutEdgesDoNotFlagEveryPair() {
+        LawSkippedGap(0, 1, 1, 2);
     }
     [Xunit.Fact]
     public static void TestPixelCorrelationNeedsContrastAndPositiveCovariance() {
