@@ -1,5 +1,5 @@
 (ns emon.seamstest
-  (:require [emon.lang :refer [I32 Cells Bitmap]]
+  (:require [emon.lang :refer [I32 Cells Bitmap BitmapSet]]
             [emon.test :refer [deftest assert-eq new-cells new-bitmap-set TestT test-t]]
             [emon.port :refer [cells-push cells-at cells-set cells-len bms-put bitmap-set-u8]]
             [emon.evidence :refer [ln-new ln-count ln-set lf-order wd-new wd-get wd-set wd-count hd-conf hd-tstart
@@ -64,7 +64,7 @@
   (law-seam (test-t) 2 0 1 0 0 0 2))
 
 (deftest test-a-linked-table-gap-emits-an-unread-row
-  (let [^Cells tables (new-cells) ^Cells seams (new-cells) ^Cells empty (new-cells)
+  (let [^Cells tables (new-cells) ^Cells seams (new-cells)
         ^Cells nodes (new-cells) ^Cells attrs (new-cells) ^Cells regions (new-cells)
         ^Cells text (new-cells) ^Cells pages (new-cells) ^Cells ledger (new-cells)
         ^Cells layout (new-cells) ^:mut ^I32 i 0]
@@ -87,7 +87,7 @@
     (cells-push seams 1) (cells-push seams 2) (cells-push seams 3)
     (cells-push seams 0) (cells-push seams 0)
     (tb-seam-gaps tables seams)
-    (tb-emit tables 0 0 empty empty empty empty empty empty nodes attrs regions text
+    (tb-emit tables 0 0 (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) nodes attrs regions text
              (new-cells) (new-cells) ledger)
     (assert-eq (model-check nodes attrs regions text pages ledger layout (new-cells)) 0 "the unread row is a valid Model")
     (assert-eq (node-count nodes) 6 "one row with two cells")
@@ -140,7 +140,8 @@
   (law-seam (test-t) 2 1 4 0 0 0 0))
 
 (deftest test-several-strokes-at-the-bitmap-edge-are-clipping-evidence
-  (let [^Bitmap pixels (bms-put (new-bitmap-set) 1 50 12 1)
+  (let [^BitmapSet bms (new-bitmap-set)
+        ^Bitmap pixels (bms-put bms 1 50 12 1)
         ^Cells cuts (new-cells) ^:mut ^I32 x 0 ^:mut ^I32 y 0]
     (while (< y 12)
       (do (set x 0)

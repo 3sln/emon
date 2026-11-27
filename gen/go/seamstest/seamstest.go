@@ -85,7 +85,6 @@ func TestSingleCopyMatchIsAmbiguous(emonT *testing.T) {
 func TestALinkedTableGapEmitsAnUnreadRow(emonT *testing.T) {
 	var tables *port.Cells = port.NewCells()
 	var seams *port.Cells = port.NewCells()
-	var empty *port.Cells = port.NewCells()
 	var nodes *port.Cells = port.NewCells()
 	var attrs *port.Cells = port.NewCells()
 	var regions *port.Cells = port.NewCells()
@@ -120,7 +119,7 @@ func TestALinkedTableGapEmitsAnUnreadRow(emonT *testing.T) {
 	port.CellsPush(seams, 0)
 	port.CellsPush(seams, 0)
 	table.TbSeamGaps(tables, seams)
-	table.TbEmit(tables, 0, 0, empty, empty, empty, empty, empty, empty, nodes, attrs, regions, text, port.NewCells(), port.NewCells(), ledger)
+	table.TbEmit(tables, 0, 0, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), nodes, attrs, regions, text, port.NewCells(), port.NewCells(), ledger)
 	port.AssertEq(emonT, model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, port.NewCells()), 0, "the unread row is a valid Model")
 	port.AssertEq(emonT, model.NodeCount(nodes), 6, "one row with two cells")
 	port.AssertEq(emonT, model.NodeKind(nodes, 3), model.NkRow(), "the gap belongs to the table body")
@@ -186,7 +185,8 @@ func TestScanModeAndBornDigitalPassThrough(emonT *testing.T) {
 }
 
 func TestSeveralStrokesAtTheBitmapEdgeAreClippingEvidence(emonT *testing.T) {
-	var pixels *port.Bitmap = port.BmsPut(port.NewBitmapSet(), 1, 50, 12, 1)
+	var bms *port.BitmapSet = port.NewBitmapSet()
+	var pixels *port.Bitmap = port.BmsPut(bms, 1, 50, 12, 1)
 	var cuts *port.Cells = port.NewCells()
 	var x int32 = 0
 	var y int32 = 0

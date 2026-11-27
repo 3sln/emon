@@ -197,7 +197,7 @@ public static class Configtest {
     }
     [Xunit.Fact]
     public static void TestTheKeysHaveTheirNamesInKin() {
-        emon.Testport.AssertEq(24, 23, "twenty-three keys");
+        emon.Testport.AssertEq(24, 24, "twenty-four keys");
         TKeyName(0, 0, "locale");
         TKeyName(0, 1, "ocr");
         TKeyName(0, 2, "furniture");

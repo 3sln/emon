@@ -190,7 +190,7 @@
 ;; ------------------------------------------------------------------ the grammar's tables
 
 (deftest test-the-keys-have-their-names-in-kin
-  (assert-eq (ck-row-count 0) 23 "twenty-three keys")
+  (assert-eq (ck-row-count 0) 24 "twenty-four keys")
   (t-key-name (test-t) 0 "locale")
   (t-key-name (test-t) 1 "ocr")
   (t-key-name (test-t) 2 "furniture")

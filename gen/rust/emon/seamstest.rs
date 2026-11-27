@@ -78,7 +78,6 @@ fn test_single_copy_match_is_ambiguous() {
 fn test_a_linked_table_gap_emits_an_unread_row() {
     let tables: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let seams: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let empty: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let nodes: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let attrs: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let regions: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -113,7 +112,7 @@ fn test_a_linked_table_gap_emits_an_unread_row() {
     crate::port::cells_push(seams, 0);
     crate::port::cells_push(seams, 0);
     tb_seam_gaps(tables, seams);
-    tb_emit(tables, 0, 0, empty, empty, empty, empty, empty, empty, nodes, attrs, regions, text, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger);
+    tb_emit(tables, 0, 0, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), nodes, attrs, regions, text, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger);
     crate::testport::assert_eq(model_check(nodes, attrs, regions, text, pages, ledger, layout, &mut crate::port::Cells::new()), 0, "the unread row is a valid Model");
     crate::testport::assert_eq(node_count(nodes), 6, "one row with two cells");
     crate::testport::assert_eq(node_kind(nodes, 3), nk_row(), "the gap belongs to the table body");
@@ -178,7 +177,8 @@ fn test_scan_mode_and_born_digital_pass_through() {
 }
 #[test]
 fn test_several_strokes_at_the_bitmap_edge_are_clipping_evidence() {
-    let pixels: &crate::port::Bitmap = crate::port::bms_put(&crate::port::BitmapSet::new(), 1, 50, 12, 1);
+    let bms: &crate::port::BitmapSet = &crate::port::BitmapSet::new();
+    let pixels: &crate::port::Bitmap = crate::port::bms_put(bms, 1, 50, 12, 1);
     let cuts: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let mut x: i32 = 0;
     let mut y: i32 = 0;

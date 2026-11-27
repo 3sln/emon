@@ -72,7 +72,6 @@ public final class Seamstest {
     public static void testALinkedTableGapEmitsAnUnreadRow() {
         emon.Port.Cells tables = emon.Port.newCells();
         emon.Port.Cells seams = emon.Port.newCells();
-        emon.Port.Cells empty = emon.Port.newCells();
         emon.Port.Cells nodes = emon.Port.newCells();
         emon.Port.Cells attrs = emon.Port.newCells();
         emon.Port.Cells regions = emon.Port.newCells();
@@ -107,7 +106,7 @@ public final class Seamstest {
         emon.Port.cellsPush(seams, 0);
         emon.Port.cellsPush(seams, 0);
         Table.tbSeamGaps(tables, seams);
-        Table.tbEmit(tables, 0, 0, empty, empty, empty, empty, empty, empty, nodes, attrs, regions, text, emon.Port.newCells(), emon.Port.newCells(), ledger);
+        Table.tbEmit(tables, 0, 0, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), nodes, attrs, regions, text, emon.Port.newCells(), emon.Port.newCells(), ledger);
         emon.Testport.assertEq(Model.modelCheck(nodes, attrs, regions, text, pages, ledger, layout, emon.Port.newCells()), 0, "the unread row is a valid Model");
         emon.Testport.assertEq(Model.nodeCount(nodes), 6, "one row with two cells");
         emon.Testport.assertEq(Model.nodeKind(nodes, 3), Model.nkRow(), "the gap belongs to the table body");
@@ -167,7 +166,8 @@ public final class Seamstest {
         lawSeam(0, 2, 1, 4, 0, 0, 0, 0);
     }
     public static void testSeveralStrokesAtTheBitmapEdgeAreClippingEvidence() {
-        emon.Port.Bitmap pixels = emon.Port.bmsPut(emon.Port.newBitmapSet(), 1, 50, 12, 1);
+        emon.Port.BitmapSet bms = emon.Port.newBitmapSet();
+        emon.Port.Bitmap pixels = emon.Port.bmsPut(bms, 1, 50, 12, 1);
         emon.Port.Cells cuts = emon.Port.newCells();
         int x = 0;
         int y = 0;
