@@ -4,6 +4,7 @@
 use crate::emon::evidence::*;
 use crate::emon::model::*;
 use crate::emon::player::*;
+use crate::emon::scan::*;
 
 pub(crate) fn ms_band() -> i32 {
     return 16;
@@ -14,22 +15,76 @@ pub(crate) fn ms_rule_cp(cp: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn ms_index(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, np: i32, mut keys: &mut crate::port::Cells, mut codepoints: &mut crate::port::Cells) -> i32 {
-    // Each flow line has a normalized text span and a kind: blank 0, separator 1, or content 2.
-    let mut line: i32 = 0;
+pub(crate) fn ms_stride() -> i32 {
+    return 9;
+}
+pub(crate) fn ms_key(keys: &mut crate::port::Cells, line: i32, field: i32) -> i32 {
+    return crate::port::cells_at(keys, (line * ms_stride()) + field);
+}
+pub(crate) fn ms_set_key(mut keys: &mut crate::port::Cells, line: i32, field: i32, value: i32) -> i32 {
+    crate::port::cells_set(keys, (line * ms_stride()) + field, value);
+    return 0;
+}
+pub(crate) fn ms_height(fl: &mut crate::port::Cells, line: i32) -> i32 {
+    return ln_get(fl, line, lh_y1()) - ln_get(fl, line, lh_y0());
+}
+pub(crate) fn ms_rectified_y(x: i32, y: i32, sine: i64, cosine: i64) -> i32 {
+    return (((y as i64).wrapping_mul(cosine) + (x as i64).wrapping_mul(sine)) / (65536 as i64)) as i32;
+}
+pub(crate) fn ms_page_angle(fw: &mut crate::port::Cells, page: i32, first: i32, end: i32) -> i32 {
+    // Word angles use a y-up convention. Find the signed median without sorting the words.
+    let mut lo: i32 = -2500;
+    let mut hi: i32 = 2500;
+    let mut mid: i32 = 0;
+    let mut word: i32 = 0;
+    let mut rot: i32 = 0;
+    let mut below: i32 = 0;
+    let mut count: i32 = 0;
+    if first >= end {
+        return 0;
+    }
+    while lo < hi {
+        mid = lo + ((hi - lo) / 2);
+        word = first;
+        below = 0;
+        count = 0;
+        while word < end {
+            if wd_get(fw, word, hd_page()) == page {
+                rot = (wd_get(fw, word, hd_rot()) + 18000) % 36000;
+                rot -= 18000;
+                if (rot < -2500) || (rot > 2500) {
+                    rot = 0;
+                }
+                if rot <= mid {
+                    below += 1;
+                }
+                count += 1;
+            }
+            word += 1;
+        }
+        if count == 0 {
+            return 0;
+        }
+        if (below * 2) > (count - 1) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+pub(crate) fn ms_row_text(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, line: i32, mut keys: &mut crate::port::Cells, mut codepoints: &mut crate::port::Cells) -> i32 {
+    let start: i32 = crate::port::cells_len(codepoints);
+    let mut segment: i32 = line;
     let mut word: i32 = 0;
     let mut stop: i32 = 0;
-    let mut start: i32 = 0;
     let mut pos: i32 = 0;
     let mut end: i32 = 0;
     let mut cp: i32 = 0;
     let mut kind: i32 = 0;
-    let mut at: i32 = 0;
-    while line < ln_count(fl) {
-        start = crate::port::cells_len(codepoints);
-        kind = 0;
-        word = ln_get(fl, line, lh_first());
-        stop = word + ln_get(fl, line, lh_count());
+    while segment >= 0 {
+        word = ln_get(fl, segment, lh_first());
+        stop = word + ln_get(fl, segment, lh_count());
         while word < stop {
             pos = wd_get(fw, word, hd_tstart());
             end = pos + wd_get(fw, word, hd_tlen());
@@ -54,29 +109,282 @@ pub(crate) fn ms_index(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells,
             }
             word += 1;
         }
-        crate::port::cells_push(keys, start);
-        crate::port::cells_push(keys, crate::port::cells_len(codepoints) - start);
-        crate::port::cells_push(keys, kind);
+        segment = ms_key(keys, segment, 3);
+    }
+    ms_set_key(keys, line, 0, start);
+    ms_set_key(keys, line, 1, crate::port::cells_len(codepoints) - start);
+    ms_set_key(keys, line, 2, kind);
+    return 0;
+}
+pub(crate) fn ms_row_page(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, page: i32, first: i32, end: i32, mut keys: &mut crate::port::Cells, mut sorted: &mut crate::port::Cells) -> i32 {
+    // Match visual rows, retaining each segment's original line and words for the ledger and rebuild.
+    let w0: i32 = ln_get(fl, first, lh_first());
+    let w1: i32 = ln_get(fl, end - 1, lh_first()) + ln_get(fl, end - 1, lh_count());
+    let angle: i32 = ms_page_angle(fw, page, w0, w1);
+    let sine: i64 = ev_sin(angle) as i64;
+    let cosine: i64 = ev_cos(angle) as i64;
+    let mut line: i32 = first;
+    let mut j: i32 = 0;
+    let mut other: i32 = 0;
+    let mut x: i32 = 0;
+    let mut y: i32 = 0;
+    let mut h: i32 = 0;
+    let mut parent: i32 = 0;
+    let mut tail: i32 = 0;
+    let mut best: i32 = 0;
+    let mut delta: i32 = 0;
+    let mut quality: i32 = 0;
+    crate::port::cells_drop(sorted, 0);
+    while line < end {
+        if ln_get(fl, line, hd_page()) == page {
+            x = ln_get(fl, line, lh_x0()) + ln_get(fl, line, lh_x1());
+            y = ln_get(fl, line, lh_y0()) + ln_get(fl, line, lh_y1());
+            ms_set_key(keys, line, 4, ms_rectified_y(x, y, sine, cosine));
+            j = crate::port::cells_len(sorted);
+            crate::port::cells_push(sorted, line);
+            if (end - first) <= 1500 {
+                while (j > 0) && (ln_get(fl, crate::port::cells_at(sorted, j - 1), lh_x0()) > ln_get(fl, line, lh_x0())) {
+                    crate::port::cells_set(sorted, j, crate::port::cells_at(sorted, j - 1));
+                    j -= 1;
+                }
+            }
+            crate::port::cells_set(sorted, j, line);
+        }
         line += 1;
     }
-    while at < np {
-        crate::port::cells_push(keys, line);
-        crate::port::cells_push(keys, 0);
+    j = 0;
+    while j < crate::port::cells_len(sorted) {
+        line = crate::port::cells_at(sorted, j);
+        y = ms_key(keys, line, 4);
+        x = ln_get(fl, line, lh_x0());
+        h = ms_height(fl, line);
+        best = -1;
+        quality = 2147483647;
+        other = 0;
+        if ((end - first) <= 1500) && (h > 0) && (ln_get(fl, line, lh_count()) > 0) {
+            while other < j {
+                parent = crate::port::cells_at(sorted, other);
+                tail = ms_key(keys, parent, 6);
+                if (tail >= 0) && (ln_get(fl, parent, lh_count()) > 0) && (x >= ln_get(fl, tail, lh_x1())) {
+                    delta = y - ms_key(keys, parent, 4);
+                    if delta < 0 {
+                        delta = 0 - delta;
+                    }
+                    if (delta < quality) && ((10 * delta) < (11 * h)) && ((10 * delta) < (11 * ms_height(fl, parent))) {
+                        best = parent;
+                        quality = delta;
+                    }
+                }
+                other += 1;
+            }
+        }
+        if best >= 0 {
+            tail = ms_key(keys, best, 6);
+            ms_set_key(keys, tail, 3, line);
+            ms_set_key(keys, best, 6, line);
+            ms_set_key(keys, line, 5, best);
+        } else {
+            ms_set_key(keys, line, 6, line);
+        }
+        j += 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_line_confidence(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, line: i32) -> i32 {
+    let first: i32 = ln_get(fl, line, lh_first());
+    let count: i32 = ln_get(fl, line, lh_count());
+    let mut word: i32 = first;
+    let mut conf: i32 = 0;
+    let mut p: i32 = 0;
+    while word < (first + count) {
+        p = wd_get(fw, word, hd_conf());
+        if p > 0 {
+            conf += p;
+        }
+        word += 1;
+    }
+    if count == 0 {
+        return 0;
+    }
+    return conf / count;
+}
+pub(crate) fn ms_page_median(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, page: i32, first: i32, end: i32, confidence: i32) -> i32 {
+    let mut lo: i32 = 1;
+    let mut hi: i32 = 1;
+    let mut mid: i32 = 0;
+    let mut n: i32 = 0;
+    let mut i: i32 = first;
+    let mut value: i32 = 0;
+    let mut count: i32 = 0;
+    while i < end {
+        if (ln_get(fl, i, hd_page()) == page) && (ms_key(keys, i, 2) == 2) {
+            value = ms_height(fl, i);
+            if confidence == 1 {
+                value = ms_line_confidence(fl, fw, i);
+            }
+            if value > 0 {
+                n += 1;
+            }
+            if value > hi {
+                hi = value;
+            }
+        }
+        i += 1;
+    }
+    if n == 0 {
+        return 0;
+    }
+    while lo < hi {
+        mid = lo + ((hi - lo) / 2);
+        count = 0;
+        i = first;
+        while i < end {
+            if (ln_get(fl, i, hd_page()) == page) && (ms_key(keys, i, 2) == 2) {
+                value = ms_height(fl, i);
+                if confidence == 1 {
+                    value = ms_line_confidence(fl, fw, i);
+                }
+                if (value > 0) && (value <= mid) {
+                    count += 1;
+                }
+            }
+            i += 1;
+        }
+        if (count * 2) > (n - 1) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+pub(crate) fn ms_row_noise(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, line: i32, typical: i32, conf: i32) -> i32 {
+    let first: i32 = ms_key(keys, line, 0);
+    let size: i32 = ms_key(keys, line, 1);
+    let current: i32 = ms_line_confidence(fl, fw, line);
+    let mut at: i32 = first;
+    let mut chars: i32 = 0;
+    if (2 * ms_height(fl, line)) < typical {
+        return 1;
+    }
+    if (current > 0) && ((5 * current) < (3 * conf)) {
+        return 1;
+    }
+    while at < (first + size) {
+        if crate::port::cells_at(codepoints, at) != 32 {
+            chars += 1;
+        }
         at += 1;
     }
+    if (100 * sc_count_class(codepoints, first, size, 2)) > (12 * chars) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_page_noise(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, text: &mut crate::port::Cells, mut keys: &mut crate::port::Cells, page: i32, first: i32, end: i32) -> i32 {
+    let typical: i32 = ms_page_median(fl, fw, keys, page, first, end, 0);
+    let conf: i32 = ms_page_median(fl, fw, keys, page, first, end, 1);
+    let mut line: i32 = first;
+    while line < end {
+        if (ln_get(fl, line, hd_page()) == page) && (ms_key(keys, line, 2) == 2) {
+            let noise: i32 = ms_row_noise(fl, fw, keys, text, line, typical, conf);
+            ms_set_key(keys, line, 7, noise);
+        }
+        line += 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_page_siblings(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, ol: &mut crate::port::Cells, mut keys: &mut crate::port::Cells, page: i32, first: i32, end: i32) -> i32 {
+    // A short surviving segment beside clipped text can be the remainder of that same row.
+    let w0: i32 = ln_get(fl, first, lh_first());
+    let w1: i32 = ln_get(fl, end - 1, lh_first()) + ln_get(fl, end - 1, lh_count());
+    let angle: i32 = ms_page_angle(fw, page, w0, w1);
+    let sine: i64 = ev_sin(angle) as i64;
+    let cosine: i64 = ev_cos(angle) as i64;
+    let mut clip: i32 = 0;
+    let mut x0: i32 = 0;
+    let mut x1: i32 = 0;
+    let mut y: i32 = 0;
+    let mut line: i32 = first;
+    let mut distance: i32 = 0;
+    while clip < ol_count(ol) {
+        if (ol_get(ol, clip, hd_page()) == page) && (ol_get(ol, clip, olf_conf()) == ev_clipped_conf()) && (ol_get(ol, clip, lh_count()) > 0) {
+            x0 = ol_get(ol, clip, lh_x0());
+            x1 = ol_get(ol, clip, lh_x1());
+            y = ms_rectified_y(x0 + x1, ol_get(ol, clip, lh_y0()) + ol_get(ol, clip, lh_y1()), sine, cosine);
+            line = first;
+            while line < end {
+                if (ln_get(fl, line, hd_page()) == page) && (ms_key(keys, line, 2) == 2) && (ms_key(keys, line, 3) == -1) && (ms_key(keys, line, 1) >= 4) && (ms_key(keys, line, 1) <= 24) && ((ln_get(fl, line, lh_x1()) <= x0) || (ln_get(fl, line, lh_x0()) >= x1)) {
+                    distance = ms_key(keys, line, 4) - y;
+                    if distance < 0 {
+                        distance = 0 - distance;
+                    }
+                    if distance <= ms_height(fl, line) {
+                        ms_set_key(keys, line, 8, 1);
+                    }
+                }
+                line += 1;
+            }
+        }
+        clip += 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_index(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, ol: &mut crate::port::Cells, et: &mut crate::port::Cells, np: i32, mut keys: &mut crate::port::Cells, mut codepoints: &mut crate::port::Cells, mut sorted: &mut crate::port::Cells) -> i32 {
+    // A row key stores text offset, size, kind, next segment, corrected y, parent, tail, edge noise, and clipped sibling.
+    let n: i32 = ln_count(fl);
+    let base: i32 = n * ms_stride();
+    let mut line: i32 = 0;
+    let mut page: i32 = 1;
+    let mut start: i32 = 0;
+    let mut end: i32 = 0;
+    let mut at: i32 = 0;
+    while line < n {
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, -1);
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, -1);
+        crate::port::cells_push(keys, -1);
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, 0);
+        line += 1;
+    }
+    while page <= np {
+        crate::port::cells_push(keys, 0);
+        crate::port::cells_push(keys, 0);
+        page += 1;
+    }
     line = 0;
-    while line < ln_count(fl) {
-        at = (ln_count(fl) * 3) + ((ln_get(fl, line, hd_page()) - 1) * 2);
+    while line < n {
+        at = base + ((ln_get(fl, line, hd_page()) - 1) * 2);
         if crate::port::cells_at(keys, at + 1) == 0 {
             crate::port::cells_set(keys, at, line);
         }
         crate::port::cells_set(keys, at + 1, line + 1);
         line += 1;
     }
-    return line;
-}
-pub(crate) fn ms_key(keys: &mut crate::port::Cells, line: i32, field: i32) -> i32 {
-    return crate::port::cells_at(keys, (line * 3) + field);
+    page = 1;
+    while page <= np {
+        at = base + ((page - 1) * 2);
+        start = crate::port::cells_at(keys, at);
+        end = crate::port::cells_at(keys, at + 1);
+        if end > start {
+            ms_row_page(fl, fw, page, start, end, keys, sorted);
+            at = start;
+            while at < end {
+                if (ln_get(fl, at, hd_page()) == page) && (ms_key(keys, at, 5) < 0) {
+                    ms_row_text(fl, fw, et, at, keys, codepoints);
+                }
+                at += 1;
+            }
+            ms_page_noise(fl, fw, codepoints, keys, page, start, end);
+            ms_page_siblings(fl, fw, ol, keys, page, start, end);
+        }
+        page += 1;
+    }
+    return 0;
 }
 pub(crate) fn ms_equal(keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
     let na: i32 = ms_key(keys, a, 1);
@@ -102,6 +410,12 @@ pub(crate) fn ms_equal(keys: &mut crate::port::Cells, codepoints: &mut crate::po
     }
     return 1;
 }
+pub(crate) fn ms_fold(cp: i32) -> i32 {
+    if (cp >= 65) && (cp <= 90) {
+        return cp + 32;
+    }
+    return cp;
+}
 pub(crate) fn ms_one_edit(codepoints: &mut crate::port::Cells, sa: i32, na: i32, sb: i32, nb: i32, min_size: i32) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -110,7 +424,7 @@ pub(crate) fn ms_one_edit(codepoints: &mut crate::port::Cells, sa: i32, na: i32,
         return 0;
     }
     while (i < na) && (j < nb) {
-        if crate::port::cells_at(codepoints, sa + i) == crate::port::cells_at(codepoints, sb + j) {
+        if ms_fold(crate::port::cells_at(codepoints, sa + i)) == ms_fold(crate::port::cells_at(codepoints, sb + j)) {
             i += 1;
             j += 1;
         } else {
@@ -131,83 +445,65 @@ pub(crate) fn ms_one_edit(codepoints: &mut crate::port::Cells, sa: i32, na: i32,
     }
     return 1;
 }
-pub(crate) fn ms_next_token_char(text: &mut crate::port::Cells, at: i32, end: i32) -> i32 {
-    let mut i: i32 = at;
-    let mut cp: i32 = 0;
-    while i < end {
-        cp = crate::port::cells_at(text, i);
-        if (cp == 32) || ((cp >= 48) && (cp <= 57)) || ((cp >= 97) && (cp <= 122)) || (cp >= 128) {
-            return i;
-        }
-        i += 1;
+pub(crate) fn ms_min(a: i32, b: i32) -> i32 {
+    if a < b {
+        return a;
     }
-    return i;
+    return b;
 }
-pub(crate) fn ms_token_band(keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
-    // A substantially identical word band may have punctuation variants or one extra final token.
-    let mut i: i32 = ms_key(keys, a, 0);
-    let mut j: i32 = ms_key(keys, b, 0);
-    let ea: i32 = i + ms_key(keys, a, 1);
-    let eb: i32 = j + ms_key(keys, b, 1);
-    let mut words: i32 = 0;
-    let mut chars: i32 = 0;
-    i = ms_next_token_char(codepoints, i, ea);
-    j = ms_next_token_char(codepoints, j, eb);
-    while (i < ea) && (j < eb) && (crate::port::cells_at(codepoints, i) == crate::port::cells_at(codepoints, j)) {
-        if crate::port::cells_at(codepoints, i) == 32 {
-            if chars > 0 {
-                words += 1;
-            }
-            chars = 0;
-        } else {
-            chars += 1;
-        }
-        i = ms_next_token_char(codepoints, i + 1, ea);
-        j = ms_next_token_char(codepoints, j + 1, eb);
+pub(crate) fn ms_max(a: i32, b: i32) -> i32 {
+    if a > b {
+        return a;
     }
-    if (i < ea) && (j < eb) {
+    return b;
+}
+pub fn ms_similarity(text: &mut crate::port::Cells, a: i32, na: i32, b: i32, nb: i32, mut row: &mut crate::port::Cells) -> i32 {
+    // Levenshtein similarity in per mille. Bound the work for exceptionally long OCR lines.
+    let size: i32 = ms_max(na, nb);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut prev: i32 = 0;
+    let mut up: i32 = 0;
+    let mut cost: i32 = 0;
+    let mut cp: i32 = 0;
+    if (na == 0) || (nb == 0) {
         return 0;
     }
-    if chars > 0 {
-        words += 1;
-    }
-    if words < 3 {
-        return 0;
-    }
-    if i < ea {
-        if crate::port::cells_at(codepoints, i) != 32 {
-            return 0;
-        }
-        i += 1;
-        while i < ea {
-            if crate::port::cells_at(codepoints, i) == 32 {
-                return 0;
-            }
+    if na == nb {
+        while (i < na) && (crate::port::cells_at(text, a + i) == crate::port::cells_at(text, b + i)) {
             i += 1;
         }
-    }
-    if j < eb {
-        if crate::port::cells_at(codepoints, j) != 32 {
-            return 0;
-        }
-        j += 1;
-        while j < eb {
-            if crate::port::cells_at(codepoints, j) == 32 {
-                return 0;
-            }
-            j += 1;
+        if i == na {
+            return 1000;
         }
     }
-    return 1;
-}
-pub(crate) fn ms_variant(keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
-    if (ms_key(keys, a, 2) != 2) || (ms_key(keys, b, 2) != 2) {
+    if (size > 256) || ((100 * ms_min(na, nb)) < (45 * size)) {
         return 0;
     }
-    if ms_one_edit(codepoints, ms_key(keys, a, 0), ms_key(keys, a, 1), ms_key(keys, b, 0), ms_key(keys, b, 1), 8) == 1 {
-        return 1;
+    crate::port::cells_drop(row, 0);
+    while j <= nb {
+        crate::port::cells_push(row, j);
+        j += 1;
     }
-    return ms_token_band(keys, codepoints, a, b);
+    i = 0;
+    while i < na {
+        cp = crate::port::cells_at(text, a + i);
+        prev = i;
+        crate::port::cells_set(row, 0, i + 1);
+        j = 0;
+        while j < nb {
+            up = crate::port::cells_at(row, j + 1);
+            cost = prev;
+            if cp != crate::port::cells_at(text, b + j) {
+                cost += 1;
+            }
+            crate::port::cells_set(row, j + 1, ms_min(cost, 1 + ms_min(up, crate::port::cells_at(row, j))));
+            prev = up;
+            j += 1;
+        }
+        i += 1;
+    }
+    return (1000 * (size - crate::port::cells_at(row, nb))) / size;
 }
 pub(crate) fn ms_word_limit() -> i32 {
     return 160;
@@ -215,18 +511,24 @@ pub(crate) fn ms_word_limit() -> i32 {
 pub(crate) fn ms_word_candidate() -> i32 {
     return 32768;
 }
-pub(crate) fn ms_word_confirmed() -> i32 {
+pub(crate) fn ms_word_open() -> i32 {
     return 65536;
+}
+pub(crate) fn ms_quality_code(quality: i32) -> i32 {
+    return (quality - 18) / 32;
 }
 pub(crate) fn ms_left_factor() -> i32 {
     return 131072;
+}
+pub(crate) fn ms_trimmed_factor() -> i32 {
+    return 4194304;
 }
 pub(crate) fn ms_match_kind(r#match: i32) -> i32 {
     return r#match % ms_left_factor();
 }
 pub(crate) fn ms_match_left(r#match: i32) -> i32 {
     if ms_match_kind(r#match) >= ms_word_candidate() {
-        return r#match / ms_left_factor();
+        return (r#match / ms_left_factor()) % 32;
     }
     return r#match % 32;
 }
@@ -283,9 +585,19 @@ pub(crate) fn ms_word_stream(keys: &mut crate::port::Cells, codepoints: &mut cra
 pub(crate) fn ms_word_score(codepoints: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, i: i32, j: i32) -> i32 {
     let sa: i32 = crate::port::cells_at(a, i * 4);
     let sb: i32 = crate::port::cells_at(b, j * 4);
-    let na: i32 = crate::port::cells_at(a, (i * 4) + 1);
-    let nb: i32 = crate::port::cells_at(b, (j * 4) + 1);
+    let mut na: i32 = crate::port::cells_at(a, (i * 4) + 1);
+    let mut nb: i32 = crate::port::cells_at(b, (j * 4) + 1);
     let mut k: i32 = 0;
+    if (na > 1) && (sc_cp_class(crate::port::cells_at(codepoints, sa)) <= 1) {
+        while (na > 1) && (sc_cp_class(crate::port::cells_at(codepoints, sa + na + -1)) >= 2) {
+            na -= 1;
+        }
+    }
+    if (nb > 1) && (sc_cp_class(crate::port::cells_at(codepoints, sb)) <= 1) {
+        while (nb > 1) && (sc_cp_class(crate::port::cells_at(codepoints, sb + nb + -1)) >= 2) {
+            nb -= 1;
+        }
+    }
     if na == nb {
         while (k < na) && (crate::port::cells_at(codepoints, sa + k) == crate::port::cells_at(codepoints, sb + k)) {
             k += 1;
@@ -297,7 +609,7 @@ pub(crate) fn ms_word_score(codepoints: &mut crate::port::Cells, a: &mut crate::
     if ms_one_edit(codepoints, sa, na, sb, nb, 4) == 1 {
         return 3;
     }
-    return -4;
+    return 0;
 }
 pub(crate) fn ms_word_end(words: &mut crate::port::Cells, n: i32, at: i32) -> i32 {
     // An imperfect edge word may be omitted. No complete edge line may be skipped.
@@ -342,8 +654,11 @@ pub(crate) fn ms_word_align(keys: &mut crate::port::Cells, codepoints: &mut crat
     let mut end: i32 = 0;
     let mut before: i32 = 0;
     let mut quality: i32 = 0;
+    let mut open: i32 = 0;
+    let mut dice: i32 = 0;
+    let mut rank: i32 = 0;
     let mut best: i32 = 0;
-    let mut best_quality: i32 = 0;
+    let mut best_rank: i32 = 0;
     let mut an: i32 = 0;
     let mut bn: i32 = 0;
     let mut lines: i32 = 0;
@@ -365,47 +680,44 @@ pub(crate) fn ms_word_align(keys: &mut crate::port::Cells, codepoints: &mut crat
             left = crate::port::cells_at(row, j);
             word = ms_word_score(codepoints, aw, bw, i, j);
             diag = 0;
-            if (prev > 0) && ((prev + (word * 256)) >= 256) {
-                diag = prev + (word * 256);
+            if (prev > 0) && ((prev + (word * 512)) >= 512) {
+                diag = prev + (word * 512);
             }
             if (word > 0) && (before <= 1) && (j <= 1) && (crate::port::cells_at(bw, (j * 4) + 3) == j) {
-                score = (word * 256) + (i - before);
+                score = (word * 512) + (2 * (i - before)) + ms_min(1, before + j);
                 if score > diag {
                     diag = score;
                 }
             }
             score = diag;
-            if up >= 1280 {
-                if (up - 1024) > score {
-                    score = up - 1024;
-                }
+            if up > score {
+                score = up;
             }
-            if left >= 1280 {
-                if (left - 1024) > score {
-                    score = left - 1024;
-                }
+            if left > score {
+                score = left;
             }
             crate::port::cells_set(row, j + 1, score);
             prev = up;
             if (word > 0) && (diag > 0) && (ms_word_end(aw, na, i) == na) {
-                quality = diag / 256;
-                start = diag % 256;
+                quality = diag / 512;
+                start = (diag % 512) / 2;
+                open = diag % 2;
                 end = ms_word_end(bw, nb, j);
-                // An exact word adds four and an edit subtracts four. Half of the maximum
-                // score therefore requires at least three quarters of the words to agree.
-                if (quality > best_quality) && (end >= 2) && (quality >= (2 * (na - start))) && (quality >= (2 * end)) {
-                    an = crate::port::cells_at(aw, (start * 4) + 2) + 1;
-                    bn = crate::port::cells_at(bw, ((end - 1) * 4) + 2) + 1;
-                    lines = ms_content_lines(keys, codepoints, a, an);
-                    other = ms_content_lines(keys, codepoints, b, bn);
-                    if other < lines {
-                        lines = other;
-                    }
-                    if lines > 0 {
-                        best_quality = quality;
-                        best = (an * ms_left_factor()) + ms_word_candidate() + (lines * 32) + bn;
-                        if (lines >= 4) && ((quality * 10) >= (36 * end)) && (end == (na - start)) {
-                            best = (an * ms_left_factor()) + ms_word_confirmed() + (lines * 32) + bn;
+                if ((i + 1) < na) || ((j + 1) < end) {
+                    open = 1;
+                }
+                if end >= 2 {
+                    dice = (quality * 500) / (end + (na - start));
+                    if dice >= 720 {
+                        an = crate::port::cells_at(aw, (start * 4) + 2) + 1;
+                        bn = crate::port::cells_at(bw, ((end - 1) * 4) + 2) + 1;
+                        lines = ms_content_lines(keys, codepoints, a, an);
+                        other = ms_content_lines(keys, codepoints, b, bn);
+                        lines = ms_min(lines, other);
+                        rank = (lines * 1024) + dice;
+                        if (lines > 0) && (rank > best_rank) {
+                            best_rank = rank;
+                            best = (an * ms_left_factor()) + ms_word_candidate() + (lines * 1024) + (ms_quality_code(dice) * 32) + bn + (open * ms_word_open());
                         }
                     }
                 }
@@ -548,7 +860,7 @@ pub(crate) fn ms_patch(bitmap: &crate::port::Bitmap, lines: &mut crate::port::Ce
     return 0;
 }
 pub fn ms_ncc(pixels: &mut crate::port::Cells, a: i32, b: i32, count: i32) -> i32 {
-    // Scaled integer Pearson correlation. Require positive covariance and reject near-flat crops.
+    // Scaled integer Pearson correlation. Require r >= 0.60 and reject near-flat crops.
     let mut i: i32 = 0;
     let mut x: i32 = 0;
     let mut y: i32 = 0;
@@ -574,7 +886,7 @@ pub fn ms_ncc(pixels: &mut crate::port::Cells, a: i32, b: i32, count: i32) -> i3
     vy = (((count as i64) * yy) - (sy * sy)) / (count as i64);
     covariance = (((count as i64) * xy) - (sx * sy)) / (count as i64);
     if (covariance > (0 as i64)) && (vx > (count as i64)) && (vy > (count as i64)) {
-        if ((covariance * covariance) * (100 as i64)) >= ((vx * vy) * (81 as i64)) {
+        if ((covariance * covariance) * (100 as i64)) >= ((vx * vy) * (36 as i64)) {
             return 1;
         }
     }
@@ -588,6 +900,38 @@ pub(crate) fn ms_edge_add(fl: &mut crate::port::Cells, mut edge: &mut crate::por
     let mut side: i32 = 0;
     while i < j {
         side = y - ms_y(fl, crate::port::cells_at(edge, i));
+        if bottom == 0 {
+            side = 0 - side;
+        }
+        if side > 0 {
+            j = i;
+        } else {
+            i += 1;
+        }
+    }
+    if i >= ms_band() {
+        return 0;
+    }
+    j = crate::port::cells_len(edge) - 1;
+    if crate::port::cells_len(edge) < ms_band() {
+        crate::port::cells_push(edge, 0);
+        j += 1;
+    }
+    while j > i {
+        crate::port::cells_set(edge, j, crate::port::cells_at(edge, j - 1));
+        j -= 1;
+    }
+    crate::port::cells_set(edge, i, line);
+    return 0;
+}
+pub(crate) fn ms_row_edge_add(keys: &mut crate::port::Cells, mut edge: &mut crate::port::Cells, line: i32, bottom: i32) -> i32 {
+    // Insert from the physical edge inward. Bound the band even on very long pages.
+    let y: i32 = ms_key(keys, line, 4);
+    let mut i: i32 = 0;
+    let mut j: i32 = crate::port::cells_len(edge);
+    let mut side: i32 = 0;
+    while i < j {
+        side = y - ms_key(keys, crate::port::cells_at(edge, i), 4);
         if bottom == 0 {
             side = 0 - side;
         }
@@ -646,74 +990,90 @@ pub fn ms_sample(bitmap: &crate::port::Bitmap, lines: &mut crate::port::Cells, f
     }
     return 0;
 }
+pub(crate) fn ms_pixel_pair(fl: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, la: i32, lb: i32) -> i32 {
+    let a: i32 = ln_get(fl, la, lf_order());
+    let b: i32 = ln_get(fl, lb, lf_order());
+    if (a < 0) || (a >= crate::port::cells_len(offsets)) || (b < 0) || (b >= crate::port::cells_len(offsets)) {
+        return 0;
+    }
+    let va: i32 = crate::port::cells_at(offsets, a);
+    let vb: i32 = crate::port::cells_at(offsets, b);
+    if (va < 0) || (vb < 0) {
+        return 0;
+    }
+    if (ms_ncc(pixels, va, vb, 384) == 1) || (ms_ncc(pixels, va + 32, vb, 352) == 1) || (ms_ncc(pixels, va, vb + 32, 352) == 1) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn ms_pixel_votes(fl: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, keys: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, n: i32) -> i32 {
     let mut i: i32 = 0;
     let mut la: i32 = 0;
     let mut lb: i32 = 0;
-    let mut va: i32 = 0;
-    let mut vb: i32 = 0;
     let mut votes: i32 = 0;
     while i < n {
-        la = crate::port::cells_at(a, (n - 1) - i);
+        la = crate::port::cells_at(a, n - 1 - i);
         lb = crate::port::cells_at(b, i);
-        if (ms_key(keys, la, 2) == 2) && (ln_get(fl, la, lf_order()) < crate::port::cells_len(offsets)) && (ln_get(fl, lb, lf_order()) < crate::port::cells_len(offsets)) && (ln_get(fl, la, lf_order()) >= 0) && (ln_get(fl, lb, lf_order()) >= 0) {
-            va = crate::port::cells_at(offsets, ln_get(fl, la, lf_order()));
-            vb = crate::port::cells_at(offsets, ln_get(fl, lb, lf_order()));
-            if (va >= 0) && (vb >= 0) {
-                if (ms_ncc(pixels, va, vb, 384) == 1) || (ms_ncc(pixels, va + 32, vb, 352) == 1) || (ms_ncc(pixels, va, vb + 32, 352) == 1) {
-                    votes += 1;
-                }
-            }
+        if (ms_key(keys, la, 2) == 2) && (ms_key(keys, la, 3) == -1) && (ms_key(keys, lb, 3) == -1) {
+            votes += ms_pixel_pair(fl, offsets, pixels, la, lb);
         }
         i += 1;
     }
     return votes;
 }
-pub(crate) fn ms_run_score(fl: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, n: i32) -> i32 {
-    // Compare a suffix of a with a prefix of b. Separator matches carry no content votes.
+pub(crate) fn ms_run_score(fl: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, n: i32, mut row: &mut crate::port::Cells) -> i32 {
+    // Separator matches carry no content votes. A long run can bridge one noisy OCR reading.
     let mut i: i32 = 0;
     let mut la: i32 = 0;
     let mut lb: i32 = 0;
     let mut prev_a: i32 = -1;
     let mut prev_b: i32 = -1;
-    let mut votes: i32 = 0;
+    let mut total: i32 = 0;
+    let mut rows: i32 = 0;
+    let mut bad: i32 = 0;
     let mut delta_a: i32 = 0;
     let mut delta_b: i32 = 0;
     let mut ha: i32 = 0;
     let mut hb: i32 = 0;
-    let mut exact: i32 = 0;
+    let mut sim: i32 = 0;
     while i < n {
-        la = crate::port::cells_at(a, (n - 1) - i);
+        la = crate::port::cells_at(a, n - 1 - i);
         lb = crate::port::cells_at(b, i);
-        exact = ms_equal(keys, codepoints, la, lb);
-        if (exact == 0) && (ms_variant(keys, codepoints, la, lb) == 0) {
+        if ms_key(keys, la, 2) != ms_key(keys, lb, 2) {
             return 0;
         }
-        if prev_a >= 0 {
-            delta_a = ms_y(fl, la) - ms_y(fl, prev_a);
-            delta_b = ms_y(fl, lb) - ms_y(fl, prev_b);
-            ha = ln_get(fl, la, lh_y1()) - ln_get(fl, la, lh_y0());
-            hb = ln_get(fl, lb, lh_y1()) - ln_get(fl, lb, lh_y0());
-            if (ha > 0) && (hb > 0) {
-                if ((delta_a / ha) > (2 + (delta_b / hb))) || ((delta_b / hb) > (2 + (delta_a / ha))) {
-                    return 0;
-                }
-            }
-        }
         if ms_key(keys, la, 2) == 2 {
-            if (prev_a < 0) || (ms_equal(keys, codepoints, la, prev_a) == 0) {
-                if exact == 1 {
-                    votes += 32;
-                } else {
-                    votes += 1;
+            sim = ms_similarity(codepoints, ms_key(keys, la, 0), ms_key(keys, la, 1), ms_key(keys, lb, 0), ms_key(keys, lb, 1), row);
+            if (sim < 450) || ((n == 1) && (sim < 850)) {
+                return 0;
+            }
+            if sim < 780 {
+                bad += 1;
+            }
+            if (prev_a < 0) || (ms_equal(keys, codepoints, la, prev_a) == 0) || (ms_equal(keys, codepoints, lb, prev_b) == 0) {
+                total += sim;
+                rows += 1;
+            }
+            if prev_a >= 0 {
+                delta_a = ms_key(keys, la, 4) - ms_key(keys, prev_a, 4);
+                delta_b = ms_key(keys, lb, 4) - ms_key(keys, prev_b, 4);
+                ha = ms_max(ms_height(fl, la), ms_height(fl, prev_a));
+                hb = ms_max(ms_height(fl, lb), ms_height(fl, prev_b));
+                if (ha > 0) && (hb > 0) {
+                    if ((delta_a / ha) > (2 + (delta_b / hb))) || ((delta_b / hb) > (2 + (delta_a / ha))) {
+                        return 0;
+                    }
                 }
             }
+            prev_a = la;
+            prev_b = lb;
         }
-        prev_a = la;
-        prev_b = lb;
         i += 1;
     }
-    return votes;
+    if (rows == 0) || (bad > 1) || ((rows < 3) && (bad > 0)) {
+        return 0;
+    }
+    return (rows * 32) + ms_quality_code(total / rows);
 }
 pub(crate) fn ms_cut(cuts: &mut crate::port::Cells, page: i32, bottom: i32) -> i32 {
     let index: i32 = ((page - 1) * 2) + bottom;
@@ -721,12 +1081,6 @@ pub(crate) fn ms_cut(cuts: &mut crate::port::Cells, page: i32, bottom: i32) -> i
         return crate::port::cells_at(cuts, index);
     }
     return 0;
-}
-pub(crate) fn ms_fold(cp: i32) -> i32 {
-    if (cp >= 65) && (cp <= 90) {
-        return cp + 32;
-    }
-    return cp;
 }
 pub(crate) fn ms_fragment_matches(et: &mut crate::port::Cells, ow: &mut crate::port::Cells, first: i32, count: i32, fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, line: i32) -> i32 {
     let full: i32 = ln_get(fl, line, lh_first());
@@ -770,7 +1124,74 @@ pub(crate) fn ms_fragment_matches(et: &mut crate::port::Cells, ow: &mut crate::p
     }
     return 0;
 }
-pub(crate) fn ms_gap_edge(ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, page: i32, bottom: i32, neighbor: &mut crate::port::Cells, first_neighbor: i32, dropped: &mut crate::port::Cells) -> i32 {
+pub(crate) fn ms_fragment_word(et: &mut crate::port::Cells, ow: &mut crate::port::Cells, fw: &mut crate::port::Cells, fragment: i32, full: i32) -> i32 {
+    let a: i32 = ow_get(ow, fragment, hd_tstart());
+    let na: i32 = ow_get(ow, fragment, hd_tlen());
+    let b: i32 = wd_get(fw, full, hd_tstart());
+    let nb: i32 = wd_get(fw, full, hd_tlen());
+    let mut i: i32 = 0;
+    if na == nb {
+        while (i < na) && (ms_fold(crate::port::cells_at(et, a + i)) == ms_fold(crate::port::cells_at(et, b + i))) {
+            i += 1;
+        }
+        if i == na {
+            return 10 * na;
+        }
+    }
+    if ms_one_edit(et, a, na, b, nb, 4) == 1 {
+        return (10 * na) - 10;
+    }
+    return 0;
+}
+pub(crate) fn ms_fragment_covered(et: &mut crate::port::Cells, ow: &mut crate::port::Cells, first: i32, count: i32, fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, line: i32) -> i32 {
+    // Find the fragment's words in order across all segments of the other visual row.
+    let mut start: i32 = 0;
+    let mut chars: i32 = 0;
+    let mut score: i32 = 0;
+    let mut hits: i32 = 0;
+    let mut next: i32 = 0;
+    let mut weight: i32 = 0;
+    let mut segment: i32 = 0;
+    let mut word: i32 = 0;
+    let mut end: i32 = 0;
+    if (count < 1) || (count > 32) {
+        return 0;
+    }
+    while start < count {
+        chars += ow_get(ow, first + start, hd_tlen());
+        start += 1;
+    }
+    if chars < 4 {
+        return 0;
+    }
+    start = 0;
+    while start < count {
+        next = start;
+        score = 0;
+        hits = 0;
+        segment = line;
+        while (segment >= 0) && (next < count) {
+            word = ln_get(fl, segment, lh_first());
+            end = word + ln_get(fl, segment, lh_count());
+            while (word < end) && (next < count) {
+                weight = ms_fragment_word(et, ow, fw, first + next, word);
+                if weight > 0 {
+                    hits += 1;
+                    score += weight;
+                    next += 1;
+                }
+                word += 1;
+            }
+            segment = ms_key(keys, segment, 3);
+        }
+        if (score >= (7 * chars)) && ((hits >= 2) || ((count == 1) && (chars >= 4))) {
+            return 1;
+        }
+        start += 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_gap_edge(ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, page: i32, bottom: i32, neighbor: &mut crate::port::Cells, first_neighbor: i32, last_neighbor: i32, dropped: &mut crate::port::Cells, context: i32) -> i32 {
     let height: i32 = page_h(pages, page - 1);
     let pixels: i32 = page_px_h(pages, page - 1);
     let mut i: i32 = 0;
@@ -793,13 +1214,17 @@ pub(crate) fn ms_gap_edge(ol: &mut crate::port::Cells, ow: &mut crate::port::Cel
             if ((edge == 0) || ((pixels > 0) && ((edge as i64).wrapping_mul(pixels as i64) <= (height as i64).wrapping_mul(4 as i64)) && ((edge as i64).wrapping_mul(pixels as i64) >= (height as i64).wrapping_mul(-4 as i64)))) && ((count == 0) || ((first >= 0) && ((ow_get(ow, first, owf_flags()) & oe_clipped()) != 0))) {
                 matches = 0;
                 j = first_neighbor;
-                while j < crate::port::cells_len(neighbor) {
+                while (j < last_neighbor) && (j < crate::port::cells_len(neighbor)) {
                     if crate::port::cells_at(dropped, crate::port::cells_at(neighbor, j)) == 0 {
-                        matches += ms_fragment_matches(et, ow, first, count, fl, fw, crate::port::cells_at(neighbor, j));
+                        if context == 1 {
+                            matches += ms_fragment_matches(et, ow, first, count, fl, fw, crate::port::cells_at(neighbor, j));
+                        } else {
+                            matches += ms_fragment_covered(et, ow, first, count, fl, fw, keys, crate::port::cells_at(neighbor, j));
+                        }
                     }
                     j += 1;
                 }
-                if matches == 1 {
+                if matches > 0 {
                     covered = 2;
                 } else {
                     uncovered = 1;
@@ -836,18 +1261,66 @@ pub(crate) fn ms_drop_line(fl: &mut crate::port::Cells, fw: &mut crate::port::Ce
     ledger_set_text(ledger, record, text_start, crate::port::cells_len(model_text) - text_start);
     return 0;
 }
+pub(crate) fn ms_word_same(fw: &mut crate::port::Cells, et: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    let n: i32 = wd_get(fw, a, hd_tlen());
+    let sa: i32 = wd_get(fw, a, hd_tstart());
+    let sb: i32 = wd_get(fw, b, hd_tstart());
+    let mut pos: i32 = 0;
+    if n != wd_get(fw, b, hd_tlen()) {
+        return 0;
+    }
+    while pos < n {
+        if ms_fold(crate::port::cells_at(et, sa + pos)) != ms_fold(crate::port::cells_at(et, sb + pos)) {
+            return 0;
+        }
+        pos += 1;
+    }
+    return 1;
+}
+pub(crate) fn ms_fuse_row(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, kept: i32, other: i32, mut edits: &mut crate::port::Cells) -> i32 {
+    // A confident alternative may repair a word when its neighbour is shared. Preserve the
+    // retained row's geometry, word gaps and page provenance.
+    let n: i32 = ln_get(fl, kept, lh_count());
+    let a: i32 = ln_get(fl, kept, lh_first());
+    let b: i32 = ln_get(fl, other, lh_first());
+    let base: i32 = ln_count(fl);
+    let mut i: i32 = 0;
+    let mut current: i32 = 0;
+    let mut donor: i32 = 0;
+    if (n < 2) || (n != ln_get(fl, other, lh_count())) {
+        return 0;
+    }
+    while i < n {
+        current = a + i;
+        donor = b + i;
+        if (wd_get(fw, donor, hd_conf()) > (150 + wd_get(fw, current, hd_conf()))) && (wd_get(fw, current, hd_conf()) < 750) && (wd_get(fw, donor, hd_conf()) >= 800) && (ms_word_same(fw, et, current, donor) == 0) && (((i > 0) && (ms_word_same(fw, et, current - 1, donor - 1) == 1)) || (((i + 1) < n) && (ms_word_same(fw, et, current + 1, donor + 1) == 1))) {
+            crate::port::cells_set(edits, base + current, donor);
+        }
+        i += 1;
+    }
+    return 0;
+}
 pub(crate) fn ms_rebuild(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, dropped: &mut crate::port::Cells, mut new_lines: &mut crate::port::Cells, mut new_words: &mut crate::port::Cells) -> i32 {
     let mut i: i32 = 0;
     let mut word: i32 = 0;
     let mut stop: i32 = 0;
     let mut first: i32 = 0;
+    let mut donor: i32 = 0;
+    let mut target: i32 = 0;
     while i < ln_count(fl) {
         if crate::port::cells_at(dropped, i) == 0 {
             word = ln_get(fl, i, lh_first());
             stop = word + ln_get(fl, i, lh_count());
             first = fw_count(new_words);
             while word < stop {
+                target = fw_count(new_words);
                 fw_copy_word(new_words, fw, word, ln_count(new_lines));
+                donor = crate::port::cells_at(dropped, ln_count(fl) + word);
+                if donor >= 0 {
+                    wd_set(new_words, target, hd_tstart(), wd_get(fw, donor, hd_tstart()));
+                    wd_set(new_words, target, hd_tlen(), wd_get(fw, donor, hd_tlen()));
+                    wd_set(new_words, target, hd_conf(), wd_get(fw, donor, hd_conf()));
+                }
                 word += 1;
             }
             let count: i32 = ln_get(fl, i, lh_count());
@@ -863,86 +1336,159 @@ pub(crate) fn ms_raster(mask: &mut crate::port::Cells, page: i32) -> i32 {
     return crate::port::cells_at(mask, page - 1) % 4;
 }
 pub(crate) fn ms_page_edge(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, page: i32, bottom: i32, mut band: &mut crate::port::Cells) -> i32 {
-    let at: i32 = (ln_count(fl) * 3) + ((page - 1) * 2);
+    let at: i32 = (ln_count(fl) * ms_stride()) + ((page - 1) * 2);
     let end: i32 = crate::port::cells_at(keys, at + 1);
     let mut i: i32 = crate::port::cells_at(keys, at);
     crate::port::cells_drop(band, 0);
     while i < end {
         if (ln_get(fl, i, hd_page()) == page) && (ms_key(keys, i, 2) > 0) {
-            ms_edge_add(fl, band, i, bottom);
+            ms_row_edge_add(keys, band, i, bottom);
         }
         i += 1;
     }
     return 0;
 }
-pub(crate) fn ms_pair(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, left: i32, right: i32, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut aw: &mut crate::port::Cells, mut bw: &mut crate::port::Cells, mut word_row: &mut crate::port::Cells) -> i32 {
-    ms_page_edge(fl, keys, left, 1, a);
-    ms_page_edge(fl, keys, right, 0, b);
+pub(crate) fn ms_trim_edge(keys: &mut crate::port::Cells, mut edge: &mut crate::port::Cells) -> i32 {
+    // Only an outer prefix of non-content may be transparent. Keep interior rows in the run.
+    let n: i32 = crate::port::cells_len(edge);
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    while (i < n) && ((ms_key(keys, crate::port::cells_at(edge, i), 2) == 1) || (ms_key(keys, crate::port::cells_at(edge, i), 7) == 1)) {
+        i += 1;
+    }
+    if i == 0 {
+        return 0;
+    }
+    while i < n {
+        crate::port::cells_set(edge, j, crate::port::cells_at(edge, i));
+        i += 1;
+        j += 1;
+    }
+    crate::port::cells_drop(edge, j);
+    return n - j;
+}
+pub(crate) fn ms_match_rows(r#match: i32) -> i32 {
+    return (r#match / 1024) % 32;
+}
+pub(crate) fn ms_match_quality(r#match: i32) -> i32 {
+    return (r#match / 32) % 32;
+}
+pub(crate) fn ms_link_score(r#match: i32) -> i32 {
+    // A direct anchor wins equally strong evidence that skipped an edge reading.
+    return ((32 * ms_match_rows(r#match)) + ms_match_quality(r#match)) - (r#match / ms_trimmed_factor());
+}
+pub(crate) fn ms_pair_match(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, mut aw: &mut crate::port::Cells, mut bw: &mut crate::port::Cells, mut word_row: &mut crate::port::Cells) -> i32 {
     let mut n: i32 = 1;
     let mut score: i32 = 0;
     let mut best: i32 = 0;
     while (n <= crate::port::cells_len(a)) && (n <= crate::port::cells_len(b)) {
-        score = ms_run_score(fl, a, b, keys, codepoints, n);
+        score = ms_run_score(fl, a, b, keys, codepoints, n, word_row);
         if (score > 0) && (((score * 32) + n) > best) {
             best = (score * 32) + n;
         }
         n += 1;
     }
-    if (best / 1024) >= 4 {
-        return best;
-    }
     let band: i32 = ms_word_align(keys, codepoints, a, b, aw, bw, word_row);
-    if (best == 0) || ((ms_match_kind(band) >= ms_word_confirmed()) && ((band % 32) >= (best % 32))) {
+    if (best == 0) || (((band / 32) % 1024) > ((best / 32) % 1024)) {
         return band;
     }
     return best;
 }
-pub(crate) fn ms_band_words(fl: &mut crate::port::Cells, band: &mut crate::port::Cells, count: i32) -> i32 {
+pub(crate) fn ms_row_subset(keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, fragment: i32, full: i32) -> i32 {
+    // Look for the complete short segment on word boundaries in the other reading.
+    let a: i32 = ms_key(keys, fragment, 0);
+    let na: i32 = ms_key(keys, fragment, 1);
+    let b: i32 = ms_key(keys, full, 0);
+    let nb: i32 = ms_key(keys, full, 1);
+    let mut start: i32 = 0;
     let mut i: i32 = 0;
-    let mut words: i32 = 0;
-    while i < count {
-        words += ln_get(fl, crate::port::cells_at(band, i), lh_count());
-        i += 1;
-    }
-    return words;
-}
-pub(crate) fn ms_accepted(fl: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, keys: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, r#match: i32) -> i32 {
-    let kind: i32 = ms_match_kind(r#match);
-    let n: i32 = r#match % 32;
-    let score: i32 = kind / 32;
-    let exact: i32 = score / 32;
-    let variant: i32 = score % 32;
-    if kind >= ms_word_confirmed() {
-        return 1;
-    }
-    if kind >= ms_word_candidate() {
-        if (variant >= 2) && (ms_match_left(r#match) == n) && (ms_band_words(fl, a, n) == ms_band_words(fl, b, n)) && (ms_pixel_votes(fl, a, b, keys, offsets, pixels, n) >= 2) {
-            return 1;
-        }
+    if na >= nb {
         return 0;
     }
-    if (exact >= 4) || ((exact >= 3) && (variant > 0) && (exact >= variant)) || ((exact >= 2) && (ms_pixel_votes(fl, a, b, keys, offsets, pixels, n) >= 1)) || (((exact + variant) >= 2) && (ms_pixel_votes(fl, a, b, keys, offsets, pixels, n) >= 2)) {
-        return 1;
+    while (start + na) <= nb {
+        if ((start == 0) || (crate::port::cells_at(codepoints, b + start + -1) == 32)) && (((start + na) == nb) || (crate::port::cells_at(codepoints, b + start + na) == 32)) {
+            i = 0;
+            while (i < na) && (crate::port::cells_at(codepoints, a + i) == crate::port::cells_at(codepoints, b + start + i)) {
+                i += 1;
+            }
+            if i == na {
+                return 1;
+            }
+        }
+        start += 1;
     }
     return 0;
 }
-pub(crate) fn ms_line_confidence(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, line: i32) -> i32 {
-    let first: i32 = ln_get(fl, line, lh_first());
-    let count: i32 = ln_get(fl, line, lh_count());
-    let mut word: i32 = first;
-    let mut conf: i32 = 0;
-    let mut p: i32 = 0;
-    while word < (first + count) {
-        p = wd_get(fw, word, hd_conf());
-        if p > 0 {
-            conf += p;
+pub(crate) fn ms_without_edge_row(mut edge: &mut crate::port::Cells) -> i32 {
+    let n: i32 = crate::port::cells_len(edge);
+    let mut i: i32 = 1;
+    while i < n {
+        crate::port::cells_set(edge, i - 1, crate::port::cells_at(edge, i));
+        i += 1;
+    }
+    crate::port::cells_drop(edge, n - 1);
+    return 0;
+}
+pub(crate) fn ms_restore_edge_row(mut edge: &mut crate::port::Cells, line: i32) -> i32 {
+    let mut i: i32 = crate::port::cells_len(edge);
+    crate::port::cells_push(edge, 0);
+    while i > 0 {
+        crate::port::cells_set(edge, i, crate::port::cells_at(edge, i - 1));
+        i -= 1;
+    }
+    crate::port::cells_set(edge, 0, line);
+    return 0;
+}
+pub(crate) fn ms_pair(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, left: i32, right: i32, mut a: &mut crate::port::Cells, mut b: &mut crate::port::Cells, mut aw: &mut crate::port::Cells, mut bw: &mut crate::port::Cells, mut word_row: &mut crate::port::Cells) -> i32 {
+    ms_page_edge(fl, keys, left, 1, a);
+    ms_page_edge(fl, keys, right, 0, b);
+    let raw: i32 = ms_pair_match(fl, keys, codepoints, a, b, aw, bw, word_row);
+    let trim_left: i32 = ms_trim_edge(keys, a);
+    let trim_right: i32 = ms_trim_edge(keys, b);
+    let mut r#match: i32 = raw;
+    let mut edge: i32 = -1;
+    let mut candidate: i32 = 0;
+    let mut count: i32 = 0;
+    if (trim_left + trim_right) > 0 {
+        candidate = ms_pair_match(fl, keys, codepoints, a, b, aw, bw, word_row);
+        if ms_link_score(candidate) > ms_link_score(raw) {
+            r#match = candidate + ms_trimmed_factor();
+        } else {
+            ms_page_edge(fl, keys, left, 1, a);
+            ms_page_edge(fl, keys, right, 0, b);
         }
-        word += 1;
     }
-    if count == 0 {
-        return 0;
+    if ms_match_rows(r#match) < 3 {
+        if (crate::port::cells_len(a) > 3) && (ms_key(keys, crate::port::cells_at(a, 0), 8) == 1) {
+            edge = crate::port::cells_at(a, 0);
+            ms_without_edge_row(a);
+            candidate = ms_pair_match(fl, keys, codepoints, a, b, aw, bw, word_row);
+            count = candidate % 32;
+            if (ms_match_rows(candidate) >= 3) && (count < crate::port::cells_len(b)) && (ms_row_subset(keys, codepoints, edge, crate::port::cells_at(b, count)) == 1) {
+                crate::port::cells_drop(aw, 0);
+                crate::port::cells_push(aw, edge);
+                crate::port::cells_drop(bw, 0);
+                return candidate + ms_trimmed_factor();
+            }
+            ms_restore_edge_row(a, edge);
+        }
+        if (crate::port::cells_len(b) > 3) && (ms_key(keys, crate::port::cells_at(b, 0), 8) == 1) {
+            edge = crate::port::cells_at(b, 0);
+            ms_without_edge_row(b);
+            candidate = ms_pair_match(fl, keys, codepoints, a, b, aw, bw, word_row);
+            count = ms_match_left(candidate);
+            if (ms_match_rows(candidate) >= 3) && (count < crate::port::cells_len(a)) && (ms_row_subset(keys, codepoints, edge, crate::port::cells_at(a, count)) == 1) {
+                crate::port::cells_drop(bw, 0);
+                crate::port::cells_push(bw, edge);
+                crate::port::cells_drop(aw, 0);
+                return candidate + ms_trimmed_factor();
+            }
+            ms_restore_edge_row(b, edge);
+        }
     }
-    return conf / count;
+    crate::port::cells_drop(aw, 0);
+    crate::port::cells_drop(bw, 0);
+    return r#match;
 }
 pub(crate) fn ms_band_confidence(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, band: &mut crate::port::Cells, n: i32) -> i32 {
     let mut i: i32 = 0;
@@ -978,30 +1524,54 @@ pub(crate) fn ms_copy_split(fl: &mut crate::port::Cells, fw: &mut crate::port::C
     }
     return split;
 }
-pub(crate) fn ms_confirm_pair(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, dropped: &mut crate::port::Cells, left: i32, right: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32) -> i32 {
-    if ms_accepted(fl, a, b, keys, offsets, pixels, r#match) == 1 {
-        return 1;
-    }
-    if (ms_match_left(r#match) != 1) || ((r#match % 32) != 1) {
-        return 0;
-    }
-    let bottom: i32 = ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 1, dropped);
-    let top: i32 = ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 1, dropped);
-    if ((r#match / 1024) == 1) && ((bottom >= 2) || (top >= 2)) {
-        return 1;
-    }
-    if (bottom > 0) && (top > 0) && (ms_pixel_votes(fl, a, b, keys, offsets, pixels, 1) == 1) {
-        return 1;
+pub(crate) fn ms_word_pixels(fl: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, na: i32, nb: i32) -> i32 {
+    // A word band can cross different OCR line boundaries. Compare only identifiable whole row pairs.
+    let mut i: i32 = 0;
+    let mut j: i32 = 0;
+    let mut la: i32 = 0;
+    let mut lb: i32 = 0;
+    while i < na {
+        la = crate::port::cells_at(a, i);
+        j = 0;
+        while j < nb {
+            lb = crate::port::cells_at(b, j);
+            if (ms_key(keys, la, 2) == 2) && (ms_equal(keys, codepoints, la, lb) == 1) && (ms_pixel_pair(fl, offsets, pixels, la, lb) == 1) {
+                return 1;
+            }
+            j += 1;
+        }
+        i += 1;
     }
     return 0;
 }
-pub(crate) fn ms_link_score(r#match: i32) -> i32 {
+pub(crate) fn ms_confirm_pair(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, dropped: &mut crate::port::Cells, left: i32, right: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32) -> i32 {
     let kind: i32 = ms_match_kind(r#match);
-    let votes: i32 = kind / 32;
-    if kind >= ms_word_candidate() {
-        return (votes % 32) * 32;
+    let rows: i32 = ms_match_rows(r#match);
+    let na: i32 = ms_match_left(r#match);
+    let nb: i32 = r#match % 32;
+    if rows == 0 {
+        return 0;
     }
-    return votes;
+    if (rows == 1) && ((na != 1) || (nb != 1) || (ms_equal(keys, codepoints, crate::port::cells_at(a, 0), crate::port::cells_at(b, 0)) == 0)) {
+        return 0;
+    }
+    if (rows >= 3) && (ms_match_quality(r#match) >= ms_quality_code(850)) && (kind < ms_word_open()) {
+        return 1;
+    }
+    if (rows >= 2) && (kind < ms_word_open()) {
+        if kind < ms_word_candidate() {
+            if ms_pixel_votes(fl, a, b, keys, offsets, pixels, na) > 0 {
+                return 1;
+            }
+        }
+        if (kind >= ms_word_candidate()) && (ms_word_pixels(fl, a, b, keys, codepoints, offsets, pixels, na, nb) == 1) {
+            return 1;
+        }
+    }
+    if (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2) {
+        return 1;
+    }
+    return 0;
 }
 pub(crate) fn ms_best_link(scores: &mut crate::port::Cells, taken: &mut crate::port::Cells, n: i32, at: i32, step: i32) -> i32 {
     let mut i: i32 = 0;
@@ -1090,7 +1660,7 @@ pub(crate) fn ms_order(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells,
                 if r#match > 0 {
                     score = -1;
                 }
-                if ms_confirm_pair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, r#match) == 1 {
+                if ms_confirm_pair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, r#match) == 1 {
                     score = ms_link_score(r#match);
                 }
             }
@@ -1124,7 +1694,7 @@ pub(crate) fn ms_mark(mut seams: &mut crate::port::Cells, left: i32, right: i32,
     crate::port::cells_push(seams, right);
     crate::port::cells_push(seams, kind);
     crate::port::cells_push(seams, r#match % 32);
-    crate::port::cells_push(seams, ((r#match / 1024) % 32) + ((r#match / 32) % 32));
+    crate::port::cells_push(seams, ((r#match / 1024) % 32) + 0);
     return 0;
 }
 pub(crate) fn ms_open_edge(links: &mut crate::port::Cells, first: i32, page: i32) -> i32 {
@@ -1204,7 +1774,7 @@ pub(crate) fn ms_skipped_gaps(fl: &mut crate::port::Cells, fw: &mut crate::port:
             candidate = 0;
             if (right != head) && (ms_open_edge(outgoing, first, left) == 1) && (ms_open_edge(incoming, first, right) == 1) && (crate::port::cells_at(scores, ((right - first) * n) + (left - first)) == 0) {
                 ms_page_edge(fl, keys, right, 0, b);
-                if ((ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 0, dropped) & 1) != 0) && ((ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 0, dropped) & 1) != 0) {
+                if ((ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, crate::port::cells_len(b), dropped, 0) & 1) != 0) && ((ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, crate::port::cells_len(a), dropped, 0) & 1) != 0) {
                     candidate = 1;
                 }
             }
@@ -1239,7 +1809,7 @@ pub fn ms_run(np: i32, capture: i32, mask: &mut crate::port::Cells, pages: &mut 
     if first_pair >= np {
         return 0;
     }
-    ms_index(fl, fw, et, np, keys, codepoints);
+    ms_index(fl, fw, ol, et, np, keys, codepoints, aw);
     let mut page: i32 = 1;
     let mut first: i32 = 1;
     let mut end: i32 = 1;
@@ -1263,6 +1833,11 @@ pub fn ms_run(np: i32, capture: i32, mask: &mut crate::port::Cells, pages: &mut 
         crate::port::cells_push(dropped, 0);
         i += 1;
     }
+    i = 0;
+    while i < fw_count(fw) {
+        crate::port::cells_push(dropped, -1);
+        i += 1;
+    }
     page = 1;
     while page <= np {
         end = page + 1;
@@ -1278,35 +1853,68 @@ pub fn ms_run(np: i32, capture: i32, mask: &mut crate::port::Cells, pages: &mut 
             left = crate::port::cells_at(order, page - 1);
             right = crate::port::cells_at(order, page);
             reverse = ms_pair(fl, keys, codepoints, right, left, a, b, aw, bw, word_row);
-            reverse_accepted = ms_confirm_pair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, right, left, a, b, reverse);
+            reverse_accepted = ms_confirm_pair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, right, left, a, b, reverse);
             forward = ms_pair(fl, keys, codepoints, left, right, a, b, aw, bw, word_row);
-            accepted = ms_confirm_pair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
+            accepted = ms_confirm_pair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
             if (accepted == 1) && (((crate::port::cells_len(outgoing) > 0) && (crate::port::cells_at(outgoing, left - first) == right)) || ((reverse_accepted == 0) && (ms_open_edge(outgoing, first, left) == 1) && (ms_open_edge(incoming, first, right) == 1))) {
                 left_count = ms_match_left(forward);
                 split = ms_copy_split(fl, fw, a, b, forward);
                 right_drop = split;
+                if ms_match_kind(forward) < ms_word_candidate() {
+                    i = 0;
+                    while i < left_count {
+                        if i < split {
+                            ms_fuse_row(fl, fw, et, crate::port::cells_at(a, left_count - i - 1), crate::port::cells_at(b, i), dropped);
+                        } else {
+                            ms_fuse_row(fl, fw, et, crate::port::cells_at(b, i), crate::port::cells_at(a, left_count - i - 1), dropped);
+                        }
+                        i += 1;
+                    }
+                }
                 if (split > 0) && (ms_match_kind(forward) >= ms_word_candidate()) {
                     right_drop = forward % 32;
                 }
                 i = 0;
                 while i < (left_count - split) {
                     line = crate::port::cells_at(a, i);
-                    if crate::port::cells_at(dropped, line) == 0 {
-                        ms_drop_line(fl, fw, et, line, ledger, model_text);
-                        crate::port::cells_set(dropped, line, 1);
-                        changes += 1;
+                    while line >= 0 {
+                        if crate::port::cells_at(dropped, line) == 0 {
+                            ms_drop_line(fl, fw, et, line, ledger, model_text);
+                            crate::port::cells_set(dropped, line, 1);
+                            changes += 1;
+                        }
+                        line = ms_key(keys, line, 3);
                     }
                     i += 1;
                 }
                 i = 0;
                 while i < right_drop {
                     line = crate::port::cells_at(b, i);
+                    while line >= 0 {
+                        if crate::port::cells_at(dropped, line) == 0 {
+                            ms_drop_line(fl, fw, et, line, ledger, model_text);
+                            crate::port::cells_set(dropped, line, 1);
+                            changes += 1;
+                        }
+                        line = ms_key(keys, line, 3);
+                    }
+                    i += 1;
+                }
+                if crate::port::cells_len(aw) > 0 {
+                    line = crate::port::cells_at(aw, 0);
                     if crate::port::cells_at(dropped, line) == 0 {
                         ms_drop_line(fl, fw, et, line, ledger, model_text);
                         crate::port::cells_set(dropped, line, 1);
                         changes += 1;
                     }
-                    i += 1;
+                }
+                if crate::port::cells_len(bw) > 0 {
+                    line = crate::port::cells_at(bw, 0);
+                    if crate::port::cells_at(dropped, line) == 0 {
+                        ms_drop_line(fl, fw, et, line, ledger, model_text);
+                        crate::port::cells_set(dropped, line, 1);
+                        changes += 1;
+                    }
                 }
                 ms_mark(seams, left, right, 1, forward);
             } else {
@@ -1316,8 +1924,8 @@ pub fn ms_run(np: i32, capture: i32, mask: &mut crate::port::Cells, pages: &mut 
                 if reverse > 0 {
                     ms_mark(seams, right, left, 2, reverse);
                 }
-                if (reverse_accepted == 0) && (ms_open_edge(outgoing, first, left) == 1) && (ms_open_edge(incoming, first, right) == 1) && ((forward == 0) || ((ms_match_kind(forward) >= ms_word_candidate()) && (((forward / 32) % 32) == 1))) {
-                    if ((ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 0, dropped) & 1) != 0) || ((ms_gap_edge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 0, dropped) & 1) != 0) {
+                if (reverse_accepted == 0) && (ms_open_edge(outgoing, first, left) == 1) && (ms_open_edge(incoming, first, right) == 1) && ((forward == 0) || ((ms_match_kind(forward) >= ms_word_candidate()) && (ms_match_rows(forward) == 1))) {
+                    if ((ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, crate::port::cells_len(b), dropped, 0) & 1) != 0) || ((ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, crate::port::cells_len(a), dropped, 0) & 1) != 0) {
                         ms_mark(seams, left, right, 3, 0);
                     } else if ((end - first) > 16) && (forward == 0) && (reverse == 0) && (ms_cut(cuts, right, 1) == 1) && (ms_cut(cuts, left, 0) == 1) {
                         ms_mark(seams, right, left, 3, 0);

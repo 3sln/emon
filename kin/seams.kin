@@ -1,12 +1,13 @@
 ;; Document-space seams between raster pages. The page units have already
 ;; withheld clipped OCR lines. Evidence uses original source page numbers.
 (ns emon.seams
-  (:require [emon.lang :refer [I32 I64 Cells Text Bitmap emit-ascii i64 i32 mul64]]
+  (:require [emon.scan :refer [sc-cp-class sc-count-class]]
+            [emon.lang :refer [I32 I64 Cells Text Bitmap emit-ascii i64 i32 mul64]]
             [emon.port :refer [cells-at cells-set cells-push cells-drop cells-len cells-swap text-i32
                                bitmap-w bitmap-h bitmap-channels bitmap-u8]]
-            [emon.evidence :refer [ln-count ln-get wd-get ol-count ol-get olf-conf lf-order
+            [emon.evidence :refer [ln-count ln-get wd-get wd-set ol-count ol-get olf-conf lf-order
                                    ow-get owf-flags oe-clipped ev-clipped-conf
-                                   hd-page hd-tstart hd-tlen hd-conf lh-first lh-count lh-x0 lh-x1 lh-y0 lh-y1]]
+                                   ev-sin ev-cos hd-rot hd-page hd-tstart hd-tlen hd-conf lh-first lh-count lh-x0 lh-x1 lh-y0 lh-y1]]
             [emon.model :refer [page-h page-px-h ledger-add ledger-set-text text-append-cp sr-ocr dr-seam-duplicate]]
             [emon.player :refer [fw-count fw-copy-word fl-copy-line]]
             [kin.lang :refer [defn return let set while if do comment + - * quot rem < > <= >= == != and or bit-and]]))
@@ -17,16 +18,47 @@
   (if (or (== cp 45) (== cp 42) (== cp 61) (== cp 95) (== cp 46) (== cp 8212)) (return 1))
   (return 0))
 
-(defn ^I32 ms-index [^Cells fl ^Cells fw ^Cells et ^I32 np ^:mut ^Cells keys ^:mut ^Cells codepoints]
-  (comment "Each flow line has a normalized text span and a kind: blank 0, separator 1, or content 2.")
-  (let [^:mut ^I32 line 0 ^:mut ^I32 word 0 ^:mut ^I32 stop 0
-        ^:mut ^I32 start 0 ^:mut ^I32 pos 0 ^:mut ^I32 end 0
-        ^:mut ^I32 cp 0 ^:mut ^I32 kind 0 ^:mut ^I32 at 0]
-    (while (< line (ln-count fl))
-      (do (set start (cells-len codepoints))
-          (set kind 0)
-          (set word (ln-get fl line (lh-first)))
-          (set stop (+ word (ln-get fl line (lh-count))))
+(defn ^I32 ms-stride [] (return 9))
+
+(defn ^I32 ms-key [^Cells keys ^I32 line ^I32 field]
+  (return (cells-at keys (+ (* line (ms-stride)) field))))
+
+(defn ^I32 ms-set-key [^:mut ^Cells keys ^I32 line ^I32 field ^I32 value]
+  (cells-set keys (+ (* line (ms-stride)) field) value)
+  (return 0))
+
+(defn ^I32 ms-height [^Cells fl ^I32 line]
+  (return (- (ln-get fl line (lh-y1)) (ln-get fl line (lh-y0)))))
+
+(defn ^I32 ms-rectified-y [^I32 x ^I32 y ^I64 sine ^I64 cosine]
+  (return (i32 (quot (+ (mul64 (i64 y) cosine) (mul64 (i64 x) sine)) (i64 65536)))))
+
+(defn ^I32 ms-page-angle [^Cells fw ^I32 page ^I32 first ^I32 end]
+  (comment "Word angles use a y-up convention. Find the signed median without sorting the words.")
+  (let [^:mut ^I32 lo -2500 ^:mut ^I32 hi 2500 ^:mut ^I32 mid 0
+        ^:mut ^I32 word 0 ^:mut ^I32 rot 0 ^:mut ^I32 below 0 ^:mut ^I32 count 0]
+    (if (>= first end) (return 0))
+    (while (< lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2))) (set word first) (set below 0) (set count 0)
+          (while (< word end)
+            (do (if (== (wd-get fw word (hd-page)) page)
+                  (do (set rot (rem (+ (wd-get fw word (hd-rot)) 18000) 36000))
+                      (set rot (- rot 18000))
+                      (if (or (< rot -2500) (> rot 2500)) (set rot 0))
+                      (if (<= rot mid) (set below (+ below 1)))
+                      (set count (+ count 1))))
+                (set word (+ word 1))))
+          (if (== count 0) (return 0))
+          (if (> (* below 2) (- count 1)) (set hi mid) (set lo (+ mid 1)))))
+    (return lo)))
+
+(defn ^I32 ms-row-text [^Cells fl ^Cells fw ^Cells et ^I32 line ^:mut ^Cells keys ^:mut ^Cells codepoints]
+  (let [^I32 start (cells-len codepoints)
+        ^:mut ^I32 segment line ^:mut ^I32 word 0 ^:mut ^I32 stop 0
+        ^:mut ^I32 pos 0 ^:mut ^I32 end 0 ^:mut ^I32 cp 0 ^:mut ^I32 kind 0]
+    (while (>= segment 0)
+      (do (set word (ln-get fl segment (lh-first)))
+          (set stop (+ word (ln-get fl segment (lh-count))))
           (while (< word stop)
             (do (set pos (wd-get fw word (hd-tstart)))
                 (set end (+ pos (wd-get fw word (hd-tlen))))
@@ -40,22 +72,181 @@
                             (if (== kind 0) (set kind 1))))
                       (set pos (+ pos 1))))
                 (set word (+ word 1))))
-          (cells-push keys start)
-          (cells-push keys (- (cells-len codepoints) start))
-          (cells-push keys kind)
+          (set segment (ms-key keys segment 3))))
+    (ms-set-key keys line 0 start)
+    (ms-set-key keys line 1 (- (cells-len codepoints) start))
+    (ms-set-key keys line 2 kind)
+    (return 0)))
+
+(defn ^I32 ms-row-page [^Cells fl ^Cells fw ^I32 page ^I32 first ^I32 end ^:mut ^Cells keys ^:mut ^Cells sorted]
+  (comment "Match visual rows, retaining each segment's original line and words for the ledger and rebuild.")
+  (let [^I32 w0 (ln-get fl first (lh-first))
+        ^I32 w1 (+ (ln-get fl (- end 1) (lh-first)) (ln-get fl (- end 1) (lh-count)))
+        ^I32 angle (ms-page-angle fw page w0 w1)
+        ^I64 sine (i64 (ev-sin angle)) ^I64 cosine (i64 (ev-cos angle))
+        ^:mut ^I32 line first ^:mut ^I32 j 0 ^:mut ^I32 other 0
+        ^:mut ^I32 x 0 ^:mut ^I32 y 0 ^:mut ^I32 h 0
+        ^:mut ^I32 parent 0 ^:mut ^I32 tail 0 ^:mut ^I32 best 0
+        ^:mut ^I32 delta 0 ^:mut ^I32 quality 0]
+    (cells-drop sorted 0)
+    (while (< line end)
+      (do (if (== (ln-get fl line (hd-page)) page)
+            (do (set x (+ (ln-get fl line (lh-x0)) (ln-get fl line (lh-x1))))
+                (set y (+ (ln-get fl line (lh-y0)) (ln-get fl line (lh-y1))))
+                (ms-set-key keys line 4 (ms-rectified-y x y sine cosine))
+                (set j (cells-len sorted))
+                (cells-push sorted line)
+                (if (<= (- end first) 1500)
+                  (while (and (> j 0) (> (ln-get fl (cells-at sorted (- j 1)) (lh-x0))
+                                         (ln-get fl line (lh-x0))))
+                    (do (cells-set sorted j (cells-at sorted (- j 1))) (set j (- j 1)))))
+                (cells-set sorted j line)))
           (set line (+ line 1))))
-    (while (< at np)
-      (do (cells-push keys line) (cells-push keys 0) (set at (+ at 1))))
+    (set j 0)
+    (while (< j (cells-len sorted))
+      (do (set line (cells-at sorted j))
+          (set y (ms-key keys line 4))
+          (set x (ln-get fl line (lh-x0)))
+          (set h (ms-height fl line))
+          (set best -1) (set quality 2147483647) (set other 0)
+          (if (and (<= (- end first) 1500) (> h 0) (> (ln-get fl line (lh-count)) 0))
+            (while (< other j)
+              (do (set parent (cells-at sorted other))
+                  (set tail (ms-key keys parent 6))
+                  (if (and (>= tail 0) (> (ln-get fl parent (lh-count)) 0)
+                           (>= x (ln-get fl tail (lh-x1))))
+                    (do (set delta (- y (ms-key keys parent 4)))
+                        (if (< delta 0) (set delta (- 0 delta)))
+                        (if (and (< delta quality) (< (* 10 delta) (* 11 h))
+                                 (< (* 10 delta) (* 11 (ms-height fl parent))))
+                          (do (set best parent) (set quality delta)))))
+                  (set other (+ other 1)))))
+          (if (>= best 0)
+            (do (set tail (ms-key keys best 6))
+                (ms-set-key keys tail 3 line)
+                (ms-set-key keys best 6 line)
+                (ms-set-key keys line 5 best))
+            (ms-set-key keys line 6 line))
+          (set j (+ j 1))))
+    (return 0)))
+
+(defn ^I32 ms-line-confidence [^Cells fl ^Cells fw ^I32 line]
+  (let [^I32 first (ln-get fl line (lh-first)) ^I32 count (ln-get fl line (lh-count))
+        ^:mut ^I32 word first ^:mut ^I32 conf 0 ^:mut ^I32 p 0]
+    (while (< word (+ first count))
+      (do (set p (wd-get fw word (hd-conf)))
+          (if (> p 0) (set conf (+ conf p)))
+          (set word (+ word 1))))
+    (if (== count 0) (return 0))
+    (return (quot conf count))))
+
+(defn ^I32 ms-page-median [^Cells fl ^Cells fw ^Cells keys ^I32 page ^I32 first ^I32 end ^I32 confidence]
+  (let [^:mut ^I32 lo 1 ^:mut ^I32 hi 1 ^:mut ^I32 mid 0 ^:mut ^I32 n 0
+        ^:mut ^I32 i first ^:mut ^I32 value 0 ^:mut ^I32 count 0]
+    (while (< i end)
+      (do (if (and (== (ln-get fl i (hd-page)) page) (== (ms-key keys i 2) 2))
+            (do (set value (ms-height fl i))
+                (if (== confidence 1) (set value (ms-line-confidence fl fw i)))
+                (if (> value 0) (set n (+ n 1)))
+                (if (> value hi) (set hi value))))
+          (set i (+ i 1))))
+    (if (== n 0) (return 0))
+    (while (< lo hi)
+      (do (set mid (+ lo (quot (- hi lo) 2))) (set count 0) (set i first)
+          (while (< i end)
+            (do (if (and (== (ln-get fl i (hd-page)) page) (== (ms-key keys i 2) 2))
+                  (do (set value (ms-height fl i))
+                      (if (== confidence 1) (set value (ms-line-confidence fl fw i)))
+                      (if (and (> value 0) (<= value mid)) (set count (+ count 1)))))
+                (set i (+ i 1))))
+          (if (> (* count 2) (- n 1)) (set hi mid) (set lo (+ mid 1)))))
+    (return lo)))
+
+(defn ^I32 ms-row-noise [^Cells fl ^Cells fw ^Cells keys ^Cells codepoints
+                         ^I32 line ^I32 typical ^I32 conf]
+  (let [^I32 first (ms-key keys line 0) ^I32 size (ms-key keys line 1)
+        ^I32 current (ms-line-confidence fl fw line)
+        ^:mut ^I32 at first ^:mut ^I32 chars 0]
+    (if (< (* 2 (ms-height fl line)) typical) (return 1))
+    (if (and (> current 0) (< (* 5 current) (* 3 conf))) (return 1))
+    (while (< at (+ first size))
+      (do (if (!= (cells-at codepoints at) 32) (set chars (+ chars 1)))
+          (set at (+ at 1))))
+    (if (> (* 100 (sc-count-class codepoints first size 2)) (* 12 chars)) (return 1))
+    (return 0)))
+
+(defn ^I32 ms-page-noise [^Cells fl ^Cells fw ^Cells text ^:mut ^Cells keys ^I32 page ^I32 first ^I32 end]
+  (let [^I32 typical (ms-page-median fl fw keys page first end 0)
+        ^I32 conf (ms-page-median fl fw keys page first end 1)
+        ^:mut ^I32 line first]
+    (while (< line end)
+      (do (if (and (== (ln-get fl line (hd-page)) page) (== (ms-key keys line 2) 2))
+            (let [^I32 noise (ms-row-noise fl fw keys text line typical conf)]
+              (ms-set-key keys line 7 noise)))
+          (set line (+ line 1))))
+    (return 0)))
+
+(defn ^I32 ms-page-siblings [^Cells fl ^Cells fw ^Cells ol ^:mut ^Cells keys ^I32 page ^I32 first ^I32 end]
+  (comment "A short surviving segment beside clipped text can be the remainder of that same row.")
+  (let [^I32 w0 (ln-get fl first (lh-first))
+        ^I32 w1 (+ (ln-get fl (- end 1) (lh-first)) (ln-get fl (- end 1) (lh-count)))
+        ^I32 angle (ms-page-angle fw page w0 w1)
+        ^I64 sine (i64 (ev-sin angle)) ^I64 cosine (i64 (ev-cos angle))
+        ^:mut ^I32 clip 0 ^:mut ^I32 x0 0 ^:mut ^I32 x1 0 ^:mut ^I32 y 0
+        ^:mut ^I32 line first ^:mut ^I32 distance 0]
+    (while (< clip (ol-count ol))
+      (do (if (and (== (ol-get ol clip (hd-page)) page)
+                   (== (ol-get ol clip (olf-conf)) (ev-clipped-conf))
+                   (> (ol-get ol clip (lh-count)) 0))
+            (do (set x0 (ol-get ol clip (lh-x0))) (set x1 (ol-get ol clip (lh-x1)))
+                (set y (ms-rectified-y (+ x0 x1)
+                                       (+ (ol-get ol clip (lh-y0)) (ol-get ol clip (lh-y1))) sine cosine))
+                (set line first)
+                (while (< line end)
+                  (do (if (and (== (ln-get fl line (hd-page)) page)
+                               (== (ms-key keys line 2) 2) (== (ms-key keys line 3) -1)
+                               (>= (ms-key keys line 1) 4) (<= (ms-key keys line 1) 24)
+                               (or (<= (ln-get fl line (lh-x1)) x0) (>= (ln-get fl line (lh-x0)) x1)))
+                        (do (set distance (- (ms-key keys line 4) y))
+                            (if (< distance 0) (set distance (- 0 distance)))
+                            (if (<= distance (ms-height fl line)) (ms-set-key keys line 8 1))))
+                      (set line (+ line 1))))))
+          (set clip (+ clip 1))))
+    (return 0)))
+
+(defn ^I32 ms-index [^Cells fl ^Cells fw ^Cells ol ^Cells et ^I32 np ^:mut ^Cells keys ^:mut ^Cells codepoints ^:mut ^Cells sorted]
+  (comment "A row key stores text offset, size, kind, next segment, corrected y, parent, tail, edge noise, and clipped sibling.")
+  (let [^I32 n (ln-count fl) ^I32 base (* n (ms-stride))
+        ^:mut ^I32 line 0 ^:mut ^I32 page 1
+        ^:mut ^I32 start 0 ^:mut ^I32 end 0 ^:mut ^I32 at 0]
+    (while (< line n)
+      (do (cells-push keys 0) (cells-push keys 0) (cells-push keys 0)
+          (cells-push keys -1) (cells-push keys 0) (cells-push keys -1) (cells-push keys -1) (cells-push keys 0) (cells-push keys 0)
+          (set line (+ line 1))))
+    (while (<= page np)
+      (do (cells-push keys 0) (cells-push keys 0) (set page (+ page 1))))
     (set line 0)
-    (while (< line (ln-count fl))
-      (do (set at (+ (* (ln-count fl) 3) (* (- (ln-get fl line (hd-page)) 1) 2)))
+    (while (< line n)
+      (do (set at (+ base (* (- (ln-get fl line (hd-page)) 1) 2)))
           (if (== (cells-at keys (+ at 1)) 0) (cells-set keys at line))
           (cells-set keys (+ at 1) (+ line 1))
           (set line (+ line 1))))
-    (return line)))
-
-(defn ^I32 ms-key [^Cells keys ^I32 line ^I32 field]
-  (return (cells-at keys (+ (* line 3) field))))
+    (set page 1)
+    (while (<= page np)
+      (do (set at (+ base (* (- page 1) 2)))
+          (set start (cells-at keys at))
+          (set end (cells-at keys (+ at 1)))
+          (if (> end start)
+            (do (ms-row-page fl fw page start end keys sorted)
+                (set at start)
+                (while (< at end)
+                  (do (if (and (== (ln-get fl at (hd-page)) page) (< (ms-key keys at 5) 0))
+                        (ms-row-text fl fw et at keys codepoints))
+                      (set at (+ at 1))))
+                (ms-page-noise fl fw codepoints keys page start end)
+                (ms-page-siblings fl fw ol keys page start end)))
+          (set page (+ page 1))))
+    (return 0)))
 
 (defn ^I32 ms-equal [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
   (let [^I32 na (ms-key keys a 1) ^I32 sa (ms-key keys a 0) ^I32 sb (ms-key keys b 0)
@@ -68,11 +259,15 @@
           (set i (+ i 1))))
     (return 1)))
 
+(defn ^I32 ms-fold [^I32 cp]
+  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
+  (return cp))
+
 (defn ^I32 ms-one-edit [^Cells codepoints ^I32 sa ^I32 na ^I32 sb ^I32 nb ^I32 min-size]
   (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 edits 0]
     (if (or (< na min-size) (< nb min-size) (> na (+ nb 1)) (> nb (+ na 1))) (return 0))
     (while (and (< i na) (< j nb))
-      (do (if (== (cells-at codepoints (+ sa i)) (cells-at codepoints (+ sb j)))
+      (do (if (== (ms-fold (cells-at codepoints (+ sa i))) (ms-fold (cells-at codepoints (+ sb j))))
             (do (set i (+ i 1)) (set j (+ j 1)))
             (do (if (> edits 0) (return 0))
                 (set edits 1)
@@ -81,62 +276,57 @@
     (if (> (+ edits (- na i) (- nb j)) 1) (return 0))
     (return 1)))
 
-(defn ^I32 ms-next-token-char [^Cells text ^I32 at ^I32 end]
-  (let [^:mut ^I32 i at ^:mut ^I32 cp 0]
-    (while (< i end)
-      (do (set cp (cells-at text i))
-          (if (or (== cp 32) (and (>= cp 48) (<= cp 57)) (and (>= cp 97) (<= cp 122)) (>= cp 128))
-            (return i))
+(defn ^I32 ms-min [^I32 a ^I32 b]
+  (if (< a b) (return a))
+  (return b))
+
+(defn ^I32 ms-max [^I32 a ^I32 b]
+  (if (> a b) (return a))
+  (return b))
+
+(defn ^:pub ^I32 ms-similarity [^Cells text ^I32 a ^I32 na ^I32 b ^I32 nb ^:mut ^Cells row]
+  (comment "Levenshtein similarity in per mille. Bound the work for exceptionally long OCR lines.")
+  (let [^I32 size (ms-max na nb) ^:mut ^I32 i 0 ^:mut ^I32 j 0
+        ^:mut ^I32 prev 0 ^:mut ^I32 up 0 ^:mut ^I32 cost 0 ^:mut ^I32 cp 0]
+    (if (or (== na 0) (== nb 0)) (return 0))
+    (if (== na nb)
+      (do (while (and (< i na) (== (cells-at text (+ a i)) (cells-at text (+ b i))))
+            (set i (+ i 1)))
+          (if (== i na) (return 1000))))
+    (if (or (> size 256) (< (* 100 (ms-min na nb)) (* 45 size))) (return 0))
+    (cells-drop row 0)
+    (while (<= j nb)
+      (do (cells-push row j) (set j (+ j 1))))
+    (set i 0)
+    (while (< i na)
+      (do (set cp (cells-at text (+ a i)))
+          (set prev i)
+          (cells-set row 0 (+ i 1))
+          (set j 0)
+          (while (< j nb)
+            (do (set up (cells-at row (+ j 1)))
+                (set cost prev)
+                (if (!= cp (cells-at text (+ b j))) (set cost (+ cost 1)))
+                (cells-set row (+ j 1)
+                           (ms-min cost (+ 1 (ms-min up (cells-at row j)))))
+                (set prev up)
+                (set j (+ j 1))))
           (set i (+ i 1))))
-    (return i)))
-
-(defn ^I32 ms-token-band [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
-  (comment "A substantially identical word band may have punctuation variants or one extra final token.")
-  (let [^:mut ^I32 i (ms-key keys a 0) ^:mut ^I32 j (ms-key keys b 0)
-        ^I32 ea (+ i (ms-key keys a 1)) ^I32 eb (+ j (ms-key keys b 1))
-        ^:mut ^I32 words 0 ^:mut ^I32 chars 0]
-    (set i (ms-next-token-char codepoints i ea))
-    (set j (ms-next-token-char codepoints j eb))
-    (while (and (< i ea) (< j eb) (== (cells-at codepoints i) (cells-at codepoints j)))
-      (do (if (== (cells-at codepoints i) 32)
-            (do (if (> chars 0) (set words (+ words 1))) (set chars 0))
-            (set chars (+ chars 1)))
-          (set i (ms-next-token-char codepoints (+ i 1) ea))
-          (set j (ms-next-token-char codepoints (+ j 1) eb))))
-    (if (and (< i ea) (< j eb)) (return 0))
-    (if (> chars 0) (set words (+ words 1)))
-    (if (< words 3) (return 0))
-    (if (< i ea)
-      (do (if (!= (cells-at codepoints i) 32) (return 0))
-          (set i (+ i 1))
-          (while (< i ea)
-            (do (if (== (cells-at codepoints i) 32) (return 0))
-                (set i (+ i 1))))))
-    (if (< j eb)
-      (do (if (!= (cells-at codepoints j) 32) (return 0))
-          (set j (+ j 1))
-          (while (< j eb)
-            (do (if (== (cells-at codepoints j) 32) (return 0))
-                (set j (+ j 1))))))
-    (return 1)))
-
-(defn ^I32 ms-variant [^Cells keys ^Cells codepoints ^I32 a ^I32 b]
-  (if (or (!= (ms-key keys a 2) 2) (!= (ms-key keys b 2) 2)) (return 0))
-  (if (== (ms-one-edit codepoints (ms-key keys a 0) (ms-key keys a 1)
-                       (ms-key keys b 0) (ms-key keys b 1) 8) 1) (return 1))
-  (return (ms-token-band keys codepoints a b)))
+    (return (quot (* 1000 (- size (cells-at row nb))) size))))
 
 (defn ^I32 ms-word-limit [] (return 160))
 (defn ^I32 ms-word-candidate [] (return 32768))
-(defn ^I32 ms-word-confirmed [] (return 65536))
+(defn ^I32 ms-word-open [] (return 65536))
+(defn ^I32 ms-quality-code [^I32 quality] (return (quot (- quality 18) 32)))
 (defn ^I32 ms-left-factor [] (return 131072))
+(defn ^I32 ms-trimmed-factor [] (return 4194304))
 
 (defn ^I32 ms-match-kind [^I32 match]
   (return (rem match (ms-left-factor))))
 
 (defn ^I32 ms-match-left [^I32 match]
   (if (>= (ms-match-kind match) (ms-word-candidate))
-    (return (quot match (ms-left-factor))))
+    (return (rem (quot match (ms-left-factor)) 32)))
   (return (rem match 32)))
 
 (defn ^I32 ms-word-stream [^Cells keys ^Cells codepoints ^Cells edge ^I32 bottom ^:mut ^Cells words]
@@ -171,14 +361,20 @@
 
 (defn ^I32 ms-word-score [^Cells codepoints ^Cells a ^Cells b ^I32 i ^I32 j]
   (let [^I32 sa (cells-at a (* i 4)) ^I32 sb (cells-at b (* j 4))
-        ^I32 na (cells-at a (+ (* i 4) 1)) ^I32 nb (cells-at b (+ (* j 4) 1))
+        ^:mut ^I32 na (cells-at a (+ (* i 4) 1)) ^:mut ^I32 nb (cells-at b (+ (* j 4) 1))
         ^:mut ^I32 k 0]
+    (if (and (> na 1) (<= (sc-cp-class (cells-at codepoints sa)) 1))
+      (while (and (> na 1) (>= (sc-cp-class (cells-at codepoints (+ sa na -1))) 2))
+        (set na (- na 1))))
+    (if (and (> nb 1) (<= (sc-cp-class (cells-at codepoints sb)) 1))
+      (while (and (> nb 1) (>= (sc-cp-class (cells-at codepoints (+ sb nb -1))) 2))
+        (set nb (- nb 1))))
     (if (== na nb)
       (do (while (and (< k na) (== (cells-at codepoints (+ sa k)) (cells-at codepoints (+ sb k))))
             (set k (+ k 1)))
           (if (== k na) (return 4))))
     (if (== (ms-one-edit codepoints sa na sb nb 4) 1) (return 3))
-    (return -4)))
+    (return 0)))
 
 (defn ^I32 ms-word-end [^Cells words ^I32 n ^I32 at]
   (comment "An imperfect edge word may be omitted. No complete edge line may be skipped.")
@@ -207,7 +403,7 @@
         ^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 prev 0 ^:mut ^I32 up 0 ^:mut ^I32 left 0
         ^:mut ^I32 word 0 ^:mut ^I32 diag 0 ^:mut ^I32 score 0
         ^:mut ^I32 start 0 ^:mut ^I32 end 0 ^:mut ^I32 before 0
-        ^:mut ^I32 quality 0 ^:mut ^I32 best 0 ^:mut ^I32 best-quality 0
+        ^:mut ^I32 quality 0 ^:mut ^I32 open 0 ^:mut ^I32 dice 0 ^:mut ^I32 rank 0 ^:mut ^I32 best 0 ^:mut ^I32 best-rank 0
         ^:mut ^I32 an 0 ^:mut ^I32 bn 0 ^:mut ^I32 lines 0 ^:mut ^I32 other 0]
     (if (or (== na 0) (== nb 0)) (return 0))
     (cells-drop row 0)
@@ -220,36 +416,37 @@
                 (set left (cells-at row j))
                 (set word (ms-word-score codepoints aw bw i j))
                 (set diag 0)
-                (if (and (> prev 0) (>= (+ prev (* word 256)) 256))
-                  (set diag (+ prev (* word 256))))
+                (if (and (> prev 0) (>= (+ prev (* word 512)) 512))
+                  (set diag (+ prev (* word 512))))
                 (if (and (> word 0) (<= before 1) (<= j 1)
                          (== (cells-at bw (+ (* j 4) 3)) j))
-                  (do (set score (+ (* word 256) (- i before)))
+                  (do (set score (+ (* word 512) (* 2 (- i before)) (ms-min 1 (+ before j))))
                       (if (> score diag) (set diag score))))
                 (set score diag)
-                (if (>= up 1280) (if (> (- up 1024) score) (set score (- up 1024))))
-                (if (>= left 1280) (if (> (- left 1024) score) (set score (- left 1024))))
+                (if (> up score) (set score up))
+                (if (> left score) (set score left))
                 (cells-set row (+ j 1) score)
                 (set prev up)
                 (if (and (> word 0) (> diag 0) (== (ms-word-end aw na i) na))
-                  (do (set quality (quot diag 256))
-                      (set start (rem diag 256))
+                  (do (set quality (quot diag 512))
+                      (set start (quot (rem diag 512) 2))
+                      (set open (rem diag 2))
                       (set end (ms-word-end bw nb j))
-                      (comment "An exact word adds four and an edit subtracts four. Half of the maximum")
-                      (comment "score therefore requires at least three quarters of the words to agree.")
-                      (if (and (> quality best-quality) (>= end 2)
-                               (>= quality (* 2 (- na start))) (>= quality (* 2 end)))
-                        (do (set an (+ (cells-at aw (+ (* start 4) 2)) 1))
-                            (set bn (+ (cells-at bw (+ (* (- end 1) 4) 2)) 1))
-                            (set lines (ms-content-lines keys codepoints a an))
-                            (set other (ms-content-lines keys codepoints b bn))
-                            (if (< other lines) (set lines other))
-                            (if (> lines 0)
-                              (do (set best-quality quality)
-                                  (set best (+ (* an (ms-left-factor)) (ms-word-candidate) (* lines 32) bn))
-                                  (if (and (>= lines 4) (>= (* quality 10) (* 36 end))
-                                           (== end (- na start)))
-                                    (set best (+ (* an (ms-left-factor)) (ms-word-confirmed) (* lines 32) bn)))))))))
+                      (if (or (< (+ i 1) na) (< (+ j 1) end)) (set open 1))
+                      (if (>= end 2)
+                        (do (set dice (quot (* quality 500) (+ end (- na start))))
+                            (if (>= dice 720)
+                              (do (set an (+ (cells-at aw (+ (* start 4) 2)) 1))
+                                  (set bn (+ (cells-at bw (+ (* (- end 1) 4) 2)) 1))
+                                  (set lines (ms-content-lines keys codepoints a an))
+                                  (set other (ms-content-lines keys codepoints b bn))
+                                  (set lines (ms-min lines other))
+                                  (set rank (+ (* lines 1024) dice))
+                                  (if (and (> lines 0) (> rank best-rank))
+                                    (do (set best-rank rank)
+                                        (set best (+ (* an (ms-left-factor)) (ms-word-candidate)
+                                                     (* lines 1024) (* (ms-quality-code dice) 32) bn
+                                                     (* open (ms-word-open))))))))))))
                 (set j (+ j 1))))
           (set i (+ i 1))))
     (return best)))
@@ -344,7 +541,7 @@
     (return 0)))
 
 (defn ^:pub ^I32 ms-ncc [^Cells pixels ^I32 a ^I32 b ^I32 count]
-  (comment "Scaled integer Pearson correlation. Require positive covariance and reject near-flat crops.")
+  (comment "Scaled integer Pearson correlation. Require r >= 0.60 and reject near-flat crops.")
   (let [^:mut ^I32 i 0 ^:mut ^I32 x 0 ^:mut ^I32 y 0
         ^:mut ^I64 sx (i64 0) ^:mut ^I64 sy (i64 0) ^:mut ^I64 xx (i64 0)
         ^:mut ^I64 yy (i64 0) ^:mut ^I64 xy (i64 0)
@@ -359,7 +556,7 @@
     (set vy (quot (- (* (i64 count) yy) (* sy sy)) (i64 count)))
     (set covariance (quot (- (* (i64 count) xy) (* sx sy)) (i64 count)))
     (if (and (> covariance (i64 0)) (> vx (i64 count)) (> vy (i64 count)))
-      (if (>= (* (* covariance covariance) (i64 100)) (* (* vx vy) (i64 81))) (return 1)))
+      (if (>= (* (* covariance covariance) (i64 100)) (* (* vx vy) (i64 36))) (return 1)))
     (return 0)))
 
 (defn ^I32 ms-edge-add [^Cells fl ^:mut ^Cells edge ^I32 line ^I32 bottom]
@@ -368,6 +565,22 @@
         ^:mut ^I32 side 0]
     (while (< i j)
       (do (set side (- y (ms-y fl (cells-at edge i))))
+          (if (== bottom 0) (set side (- 0 side)))
+          (if (> side 0) (set j i) (set i (+ i 1)))))
+    (if (>= i (ms-band)) (return 0))
+    (set j (- (cells-len edge) 1))
+    (if (< (cells-len edge) (ms-band)) (do (cells-push edge 0) (set j (+ j 1))))
+    (while (> j i)
+      (do (cells-set edge j (cells-at edge (- j 1))) (set j (- j 1))))
+    (cells-set edge i line)
+    (return 0)))
+
+(defn ^I32 ms-row-edge-add [^Cells keys ^:mut ^Cells edge ^I32 line ^I32 bottom]
+  (comment "Insert from the physical edge inward. Bound the band even on very long pages.")
+  (let [^I32 y (ms-key keys line 4) ^:mut ^I32 i 0 ^:mut ^I32 j (cells-len edge)
+        ^:mut ^I32 side 0]
+    (while (< i j)
+      (do (set side (- y (ms-key keys (cells-at edge i) 4)))
           (if (== bottom 0) (set side (- 0 side)))
           (if (> side 0) (set j i) (set i (+ i 1)))))
     (if (>= i (ms-band)) (return 0))
@@ -400,57 +613,61 @@
           (set j (+ j 1))))
     (return 0)))
 
+(defn ^I32 ms-pixel-pair [^Cells fl ^Cells offsets ^Cells pixels ^I32 la ^I32 lb]
+  (let [^I32 a (ln-get fl la (lf-order)) ^I32 b (ln-get fl lb (lf-order))]
+    (if (or (< a 0) (>= a (cells-len offsets)) (< b 0) (>= b (cells-len offsets))) (return 0))
+    (let [^I32 va (cells-at offsets a) ^I32 vb (cells-at offsets b)]
+      (if (or (< va 0) (< vb 0)) (return 0))
+      (if (or (== (ms-ncc pixels va vb 384) 1)
+              (== (ms-ncc pixels (+ va 32) vb 352) 1)
+              (== (ms-ncc pixels va (+ vb 32) 352) 1))
+        (return 1)))
+    (return 0)))
+
 (defn ^I32 ms-pixel-votes [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells offsets ^Cells pixels ^I32 n]
-  (let [^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 va 0 ^:mut ^I32 vb 0 ^:mut ^I32 votes 0]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 votes 0]
     (while (< i n)
-      (do (set la (cells-at a (- (- n 1) i))) (set lb (cells-at b i))
-          (if (and (== (ms-key keys la 2) 2)
-                   (< (ln-get fl la (lf-order)) (cells-len offsets)) (< (ln-get fl lb (lf-order)) (cells-len offsets))
-                   (>= (ln-get fl la (lf-order)) 0) (>= (ln-get fl lb (lf-order)) 0))
-            (do (set va (cells-at offsets (ln-get fl la (lf-order))))
-                (set vb (cells-at offsets (ln-get fl lb (lf-order))))
-                (if (and (>= va 0) (>= vb 0))
-                  (if (or (== (ms-ncc pixels va vb 384) 1)
-                          (== (ms-ncc pixels (+ va 32) vb 352) 1)
-                          (== (ms-ncc pixels va (+ vb 32) 352) 1))
-                    (set votes (+ votes 1))))))
+      (do (set la (cells-at a (- n 1 i))) (set lb (cells-at b i))
+          (if (and (== (ms-key keys la 2) 2) (== (ms-key keys la 3) -1) (== (ms-key keys lb 3) -1))
+            (set votes (+ votes (ms-pixel-pair fl offsets pixels la lb))))
           (set i (+ i 1))))
     (return votes)))
 
-(defn ^I32 ms-run-score [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells codepoints ^I32 n]
-  (comment "Compare a suffix of a with a prefix of b. Separator matches carry no content votes.")
+(defn ^I32 ms-run-score [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells codepoints ^I32 n ^:mut ^Cells row]
+  (comment "Separator matches carry no content votes. A long run can bridge one noisy OCR reading.")
   (let [^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 prev-a -1
-        ^:mut ^I32 prev-b -1 ^:mut ^I32 votes 0 ^:mut ^I32 delta-a 0 ^:mut ^I32 delta-b 0
-        ^:mut ^I32 ha 0 ^:mut ^I32 hb 0 ^:mut ^I32 exact 0]
+        ^:mut ^I32 prev-b -1 ^:mut ^I32 total 0 ^:mut ^I32 rows 0 ^:mut ^I32 bad 0
+        ^:mut ^I32 delta-a 0 ^:mut ^I32 delta-b 0 ^:mut ^I32 ha 0 ^:mut ^I32 hb 0 ^:mut ^I32 sim 0]
     (while (< i n)
-      (do (set la (cells-at a (- (- n 1) i)))
+      (do (set la (cells-at a (- n 1 i)))
           (set lb (cells-at b i))
-          (set exact (ms-equal keys codepoints la lb))
-          (if (and (== exact 0) (== (ms-variant keys codepoints la lb) 0)) (return 0))
-          (if (>= prev-a 0)
-            (do (set delta-a (- (ms-y fl la) (ms-y fl prev-a)))
-                (set delta-b (- (ms-y fl lb) (ms-y fl prev-b)))
-                (set ha (- (ln-get fl la (lh-y1)) (ln-get fl la (lh-y0))))
-                (set hb (- (ln-get fl lb (lh-y1)) (ln-get fl lb (lh-y0))))
-                (if (and (> ha 0) (> hb 0))
-                  (if (or (> (quot delta-a ha) (+ 2 (quot delta-b hb)))
-                          (> (quot delta-b hb) (+ 2 (quot delta-a ha))))
-                    (return 0)))))
+          (if (!= (ms-key keys la 2) (ms-key keys lb 2)) (return 0))
           (if (== (ms-key keys la 2) 2)
-            (if (or (< prev-a 0) (== (ms-equal keys codepoints la prev-a) 0))
-              (if (== exact 1) (set votes (+ votes 32)) (set votes (+ votes 1)))))
-          (set prev-a la) (set prev-b lb)
+            (do (set sim (ms-similarity codepoints (ms-key keys la 0) (ms-key keys la 1)
+                                       (ms-key keys lb 0) (ms-key keys lb 1) row))
+                (if (or (< sim 450) (and (== n 1) (< sim 850))) (return 0))
+                (if (< sim 780) (set bad (+ bad 1)))
+                (if (or (< prev-a 0) (== (ms-equal keys codepoints la prev-a) 0)
+                                     (== (ms-equal keys codepoints lb prev-b) 0))
+                  (do (set total (+ total sim)) (set rows (+ rows 1))))
+                (if (>= prev-a 0)
+                  (do (set delta-a (- (ms-key keys la 4) (ms-key keys prev-a 4)))
+                      (set delta-b (- (ms-key keys lb 4) (ms-key keys prev-b 4)))
+                      (set ha (ms-max (ms-height fl la) (ms-height fl prev-a)))
+                      (set hb (ms-max (ms-height fl lb) (ms-height fl prev-b)))
+                      (if (and (> ha 0) (> hb 0))
+                        (if (or (> (quot delta-a ha) (+ 2 (quot delta-b hb)))
+                                (> (quot delta-b hb) (+ 2 (quot delta-a ha))))
+                          (return 0)))))
+                (set prev-a la) (set prev-b lb)))
           (set i (+ i 1))))
-    (return votes)))
+    (if (or (== rows 0) (> bad 1) (and (< rows 3) (> bad 0))) (return 0))
+    (return (+ (* rows 32) (ms-quality-code (quot total rows))))))
 
 (defn ^I32 ms-cut [^Cells cuts ^I32 page ^I32 bottom]
   (let [^I32 index (+ (* (- page 1) 2) bottom)]
     (if (< index (cells-len cuts)) (return (cells-at cuts index)))
     (return 0)))
-
-(defn ^I32 ms-fold [^I32 cp]
-  (if (and (>= cp 65) (<= cp 90)) (return (+ cp 32)))
-  (return cp))
 
 (defn ^I32 ms-fragment-matches [^Cells et ^Cells ow ^I32 first ^I32 count
                                 ^Cells fl ^Cells fw ^I32 line]
@@ -476,8 +693,48 @@
           (set offset (+ offset 1))))
     (return 0)))
 
-(defn ^I32 ms-gap-edge [^Cells ol ^Cells ow ^Cells et ^Cells fl ^Cells fw ^Cells pages
-                       ^Cells cuts ^I32 page ^I32 bottom ^Cells neighbor ^I32 first-neighbor ^Cells dropped]
+(defn ^I32 ms-fragment-word [^Cells et ^Cells ow ^Cells fw ^I32 fragment ^I32 full]
+  (let [^I32 a (ow-get ow fragment (hd-tstart)) ^I32 na (ow-get ow fragment (hd-tlen))
+        ^I32 b (wd-get fw full (hd-tstart)) ^I32 nb (wd-get fw full (hd-tlen))
+        ^:mut ^I32 i 0]
+    (if (== na nb)
+      (do (while (and (< i na) (== (ms-fold (cells-at et (+ a i))) (ms-fold (cells-at et (+ b i)))))
+            (set i (+ i 1)))
+          (if (== i na) (return (* 10 na)))))
+    (if (== (ms-one-edit et a na b nb 4) 1) (return (- (* 10 na) 10)))
+    (return 0)))
+
+(defn ^I32 ms-fragment-covered [^Cells et ^Cells ow ^I32 first ^I32 count
+                                ^Cells fl ^Cells fw ^Cells keys ^I32 line]
+  (comment "Find the fragment's words in order across all segments of the other visual row.")
+  (let [^:mut ^I32 start 0 ^:mut ^I32 chars 0 ^:mut ^I32 score 0 ^:mut ^I32 hits 0
+        ^:mut ^I32 next 0 ^:mut ^I32 weight 0 ^:mut ^I32 segment 0
+        ^:mut ^I32 word 0 ^:mut ^I32 end 0]
+    (if (or (< count 1) (> count 32)) (return 0))
+    (while (< start count)
+      (do (set chars (+ chars (ow-get ow (+ first start) (hd-tlen))))
+          (set start (+ start 1))))
+    (if (< chars 4) (return 0))
+    (set start 0)
+    (while (< start count)
+      (do (set next start) (set score 0) (set hits 0) (set segment line)
+          (while (and (>= segment 0) (< next count))
+            (do (set word (ln-get fl segment (lh-first)))
+                (set end (+ word (ln-get fl segment (lh-count))))
+                (while (and (< word end) (< next count))
+                  (do (set weight (ms-fragment-word et ow fw (+ first next) word))
+                      (if (> weight 0)
+                        (do (set hits (+ hits 1)) (set score (+ score weight)) (set next (+ next 1))))
+                      (set word (+ word 1))))
+                (set segment (ms-key keys segment 3))))
+          (if (and (>= score (* 7 chars))
+                   (or (>= hits 2) (and (== count 1) (>= chars 4))))
+            (return 1))
+          (set start (+ start 1))))
+    (return 0)))
+
+(defn ^I32 ms-gap-edge [^Cells ol ^Cells ow ^Cells et ^Cells fl ^Cells fw ^Cells keys ^Cells pages
+                       ^Cells cuts ^I32 page ^I32 bottom ^Cells neighbor ^I32 first-neighbor ^I32 last-neighbor ^Cells dropped ^I32 context]
   (let [^I32 height (page-h pages (- page 1)) ^I32 pixels (page-px-h pages (- page 1))
         ^:mut ^I32 i 0 ^:mut ^I32 edge 0 ^:mut ^I32 covered 0 ^:mut ^I32 uncovered 0
         ^:mut ^I32 first 0 ^:mut ^I32 count 0 ^:mut ^I32 j 0 ^:mut ^I32 matches 0]
@@ -494,12 +751,15 @@
                          (or (== count 0)
                              (and (>= first 0) (!= (bit-and (ow-get ow first (owf-flags)) (oe-clipped)) 0))))
                   (do (set matches 0) (set j first-neighbor)
-                      (while (< j (cells-len neighbor))
+                      (while (and (< j last-neighbor) (< j (cells-len neighbor)))
                         (do (if (== (cells-at dropped (cells-at neighbor j)) 0)
-                              (set matches (+ matches (ms-fragment-matches et ow first count
-                                                                          fl fw (cells-at neighbor j)))))
+                              (do (if (== context 1)
+                                    (set matches (+ matches (ms-fragment-matches et ow first count
+                                                                                 fl fw (cells-at neighbor j))))
+                                    (set matches (+ matches (ms-fragment-covered et ow first count
+                                                                                 fl fw keys (cells-at neighbor j)))))))
                             (set j (+ j 1))))
-                      (if (== matches 1) (set covered 2) (set uncovered 1))))))
+                      (if (> matches 0) (set covered 2) (set uncovered 1))))))
           (set i (+ i 1))))
     (if (> (+ covered uncovered) 0) (return (+ covered uncovered)))
     (return (ms-cut cuts page bottom))))
@@ -522,15 +782,50 @@
     (ledger-set-text ledger record text-start (- (cells-len model-text) text-start))
     (return 0)))
 
+(defn ^I32 ms-word-same [^Cells fw ^Cells et ^I32 a ^I32 b]
+  (let [^I32 n (wd-get fw a (hd-tlen))
+        ^I32 sa (wd-get fw a (hd-tstart)) ^I32 sb (wd-get fw b (hd-tstart))
+        ^:mut ^I32 pos 0]
+    (if (!= n (wd-get fw b (hd-tlen))) (return 0))
+    (while (< pos n)
+      (do (if (!= (ms-fold (cells-at et (+ sa pos))) (ms-fold (cells-at et (+ sb pos)))) (return 0))
+          (set pos (+ pos 1))))
+    (return 1)))
+
+(defn ^I32 ms-fuse-row [^Cells fl ^Cells fw ^Cells et ^I32 kept ^I32 other ^:mut ^Cells edits]
+  (comment "A confident alternative may repair a word when its neighbour is shared. Preserve the")
+  (comment "retained row's geometry, word gaps and page provenance.")
+  (let [^I32 n (ln-get fl kept (lh-count)) ^I32 a (ln-get fl kept (lh-first))
+        ^I32 b (ln-get fl other (lh-first)) ^I32 base (ln-count fl)
+        ^:mut ^I32 i 0 ^:mut ^I32 current 0 ^:mut ^I32 donor 0]
+    (if (or (< n 2) (!= n (ln-get fl other (lh-count)))) (return 0))
+    (while (< i n)
+      (do (set current (+ a i)) (set donor (+ b i))
+          (if (and (> (wd-get fw donor (hd-conf)) (+ 150 (wd-get fw current (hd-conf))))
+                   (< (wd-get fw current (hd-conf)) 750)
+                   (>= (wd-get fw donor (hd-conf)) 800)
+                   (== (ms-word-same fw et current donor) 0)
+                   (or (and (> i 0) (== (ms-word-same fw et (- current 1) (- donor 1)) 1))
+                       (and (< (+ i 1) n) (== (ms-word-same fw et (+ current 1) (+ donor 1)) 1))))
+            (cells-set edits (+ base current) donor))
+          (set i (+ i 1))))
+    (return 0)))
+
 (defn ^I32 ms-rebuild [^:mut ^Cells fl ^:mut ^Cells fw ^Cells dropped ^:mut ^Cells new-lines ^:mut ^Cells new-words]
-  (let [^:mut ^I32 i 0 ^:mut ^I32 word 0 ^:mut ^I32 stop 0 ^:mut ^I32 first 0]
+  (let [^:mut ^I32 i 0 ^:mut ^I32 word 0 ^:mut ^I32 stop 0 ^:mut ^I32 first 0 ^:mut ^I32 donor 0 ^:mut ^I32 target 0]
     (while (< i (ln-count fl))
       (do (if (== (cells-at dropped i) 0)
             (do (set word (ln-get fl i (lh-first)))
                 (set stop (+ word (ln-get fl i (lh-count))))
                 (set first (fw-count new-words))
                 (while (< word stop)
-                  (do (fw-copy-word new-words fw word (ln-count new-lines))
+                  (do (set target (fw-count new-words))
+                      (fw-copy-word new-words fw word (ln-count new-lines))
+                      (set donor (cells-at dropped (+ (ln-count fl) word)))
+                      (if (>= donor 0)
+                        (do (wd-set new-words target (hd-tstart) (wd-get fw donor (hd-tstart)))
+                            (wd-set new-words target (hd-tlen) (wd-get fw donor (hd-tlen)))
+                            (wd-set new-words target (hd-conf) (wd-get fw donor (hd-conf)))))
                       (set word (+ word 1))))
                 (let [^I32 count (ln-get fl i (lh-count))]
                   (fl-copy-line new-lines fl i first count))))
@@ -543,66 +838,121 @@
   (return (rem (cells-at mask (- page 1)) 4)))
 
 (defn ^I32 ms-page-edge [^Cells fl ^Cells keys ^I32 page ^I32 bottom ^:mut ^Cells band]
-  (let [^I32 at (+ (* (ln-count fl) 3) (* (- page 1) 2))
+  (let [^I32 at (+ (* (ln-count fl) (ms-stride)) (* (- page 1) 2))
         ^I32 end (cells-at keys (+ at 1))
         ^:mut ^I32 i (cells-at keys at)]
     (cells-drop band 0)
     (while (< i end)
       (do (if (and (== (ln-get fl i (hd-page)) page) (> (ms-key keys i 2) 0))
-            (ms-edge-add fl band i bottom))
+            (ms-row-edge-add keys band i bottom))
           (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ms-trim-edge [^Cells keys ^:mut ^Cells edge]
+  (comment "Only an outer prefix of non-content may be transparent. Keep interior rows in the run.")
+  (let [^I32 n (cells-len edge) ^:mut ^I32 i 0 ^:mut ^I32 j 0]
+    (while (and (< i n) (or (== (ms-key keys (cells-at edge i) 2) 1)
+                            (== (ms-key keys (cells-at edge i) 7) 1)))
+      (set i (+ i 1)))
+    (if (== i 0) (return 0))
+    (while (< i n)
+      (do (cells-set edge j (cells-at edge i)) (set i (+ i 1)) (set j (+ j 1))))
+    (cells-drop edge j)
+    (return (- n j))))
+
+(defn ^I32 ms-match-rows [^I32 match]
+  (return (rem (quot match 1024) 32)))
+
+(defn ^I32 ms-match-quality [^I32 match]
+  (return (rem (quot match 32) 32)))
+
+(defn ^I32 ms-link-score [^I32 match]
+  (comment "A direct anchor wins equally strong evidence that skipped an edge reading.")
+  (return (- (+ (* 32 (ms-match-rows match)) (ms-match-quality match))
+             (quot match (ms-trimmed-factor)))))
+
+(defn ^I32 ms-pair-match [^Cells fl ^Cells keys ^Cells codepoints ^Cells a ^Cells b ^:mut ^Cells aw ^:mut ^Cells bw ^:mut ^Cells word-row]
+  (let [^:mut ^I32 n 1 ^:mut ^I32 score 0 ^:mut ^I32 best 0]
+    (while (and (<= n (cells-len a)) (<= n (cells-len b)))
+      (do (set score (ms-run-score fl a b keys codepoints n word-row))
+          (if (and (> score 0) (> (+ (* score 32) n) best))
+            (set best (+ (* score 32) n)))
+          (set n (+ n 1))))
+    (let [^I32 band (ms-word-align keys codepoints a b aw bw word-row)]
+      (if (or (== best 0) (> (rem (quot band 32) 1024) (rem (quot best 32) 1024)))
+        (return band))
+      (return best))))
+
+(defn ^I32 ms-row-subset [^Cells keys ^Cells codepoints ^I32 fragment ^I32 full]
+  (comment "Look for the complete short segment on word boundaries in the other reading.")
+  (let [^I32 a (ms-key keys fragment 0) ^I32 na (ms-key keys fragment 1)
+        ^I32 b (ms-key keys full 0) ^I32 nb (ms-key keys full 1)
+        ^:mut ^I32 start 0 ^:mut ^I32 i 0]
+    (if (>= na nb) (return 0))
+    (while (<= (+ start na) nb)
+      (do (if (and (or (== start 0) (== (cells-at codepoints (+ b start -1)) 32))
+                   (or (== (+ start na) nb) (== (cells-at codepoints (+ b start na)) 32)))
+            (do (set i 0)
+                (while (and (< i na) (== (cells-at codepoints (+ a i)) (cells-at codepoints (+ b start i))))
+                  (set i (+ i 1)))
+                (if (== i na) (return 1))))
+          (set start (+ start 1))))
+    (return 0)))
+
+(defn ^I32 ms-without-edge-row [^:mut ^Cells edge]
+  (let [^I32 n (cells-len edge) ^:mut ^I32 i 1]
+    (while (< i n)
+      (do (cells-set edge (- i 1) (cells-at edge i))
+          (set i (+ i 1))))
+    (cells-drop edge (- n 1))
+    (return 0)))
+
+(defn ^I32 ms-restore-edge-row [^:mut ^Cells edge ^I32 line]
+  (let [^:mut ^I32 i (cells-len edge)]
+    (cells-push edge 0)
+    (while (> i 0)
+      (do (cells-set edge i (cells-at edge (- i 1)))
+          (set i (- i 1))))
+    (cells-set edge 0 line)
     (return 0)))
 
 (defn ^I32 ms-pair [^Cells fl ^Cells keys ^Cells codepoints ^I32 left ^I32 right
                     ^:mut ^Cells a ^:mut ^Cells b ^:mut ^Cells aw ^:mut ^Cells bw ^:mut ^Cells word-row]
   (ms-page-edge fl keys left 1 a)
   (ms-page-edge fl keys right 0 b)
-  (let [^:mut ^I32 n 1 ^:mut ^I32 score 0 ^:mut ^I32 best 0]
-    (while (and (<= n (cells-len a)) (<= n (cells-len b)))
-      (do (set score (ms-run-score fl a b keys codepoints n))
-          (if (and (> score 0) (> (+ (* score 32) n) best))
-            (set best (+ (* score 32) n)))
-          (set n (+ n 1))))
-    (if (>= (quot best 1024) 4) (return best))
-    (let [^I32 band (ms-word-align keys codepoints a b aw bw word-row)]
-      (if (or (== best 0) (and (>= (ms-match-kind band) (ms-word-confirmed))
-                               (>= (rem band 32) (rem best 32))))
-        (return band))
-      (return best))))
-
-(defn ^I32 ms-band-words [^Cells fl ^Cells band ^I32 count]
-  (let [^:mut ^I32 i 0 ^:mut ^I32 words 0]
-    (while (< i count)
-      (do (set words (+ words (ln-get fl (cells-at band i) (lh-count))))
-          (set i (+ i 1))))
-    (return words)))
-
-(defn ^I32 ms-accepted [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells offsets ^Cells pixels ^I32 match]
-  (let [^I32 kind (ms-match-kind match) ^I32 n (rem match 32)
-        ^I32 score (quot kind 32)
-        ^I32 exact (quot score 32) ^I32 variant (rem score 32)]
-    (if (>= kind (ms-word-confirmed)) (return 1))
-    (if (>= kind (ms-word-candidate))
-      (do (if (and (>= variant 2) (== (ms-match-left match) n)
-                   (== (ms-band-words fl a n) (ms-band-words fl b n))
-                   (>= (ms-pixel-votes fl a b keys offsets pixels n) 2)) (return 1))
-          (return 0)))
-    (if (or (>= exact 4)
-            (and (>= exact 3) (> variant 0) (>= exact variant))
-            (and (>= exact 2) (>= (ms-pixel-votes fl a b keys offsets pixels n) 1))
-            (and (>= (+ exact variant) 2) (>= (ms-pixel-votes fl a b keys offsets pixels n) 2)))
-      (return 1))
-    (return 0)))
-
-(defn ^I32 ms-line-confidence [^Cells fl ^Cells fw ^I32 line]
-  (let [^I32 first (ln-get fl line (lh-first)) ^I32 count (ln-get fl line (lh-count))
-        ^:mut ^I32 word first ^:mut ^I32 conf 0 ^:mut ^I32 p 0]
-    (while (< word (+ first count))
-      (do (set p (wd-get fw word (hd-conf)))
-          (if (> p 0) (set conf (+ conf p)))
-          (set word (+ word 1))))
-    (if (== count 0) (return 0))
-    (return (quot conf count))))
+  (let [^I32 raw (ms-pair-match fl keys codepoints a b aw bw word-row)
+        ^I32 trim-left (ms-trim-edge keys a) ^I32 trim-right (ms-trim-edge keys b)
+        ^:mut ^I32 match raw
+        ^:mut ^I32 edge -1 ^:mut ^I32 candidate 0 ^:mut ^I32 count 0]
+    (if (> (+ trim-left trim-right) 0)
+      (do (set candidate (ms-pair-match fl keys codepoints a b aw bw word-row))
+          (if (> (ms-link-score candidate) (ms-link-score raw))
+            (set match (+ candidate (ms-trimmed-factor)))
+            (do (ms-page-edge fl keys left 1 a)
+                (ms-page-edge fl keys right 0 b)))))
+    (if (< (ms-match-rows match) 3)
+      (do (if (and (> (cells-len a) 3) (== (ms-key keys (cells-at a 0) 8) 1))
+            (do (set edge (cells-at a 0))
+                (ms-without-edge-row a)
+                (set candidate (ms-pair-match fl keys codepoints a b aw bw word-row))
+                (set count (rem candidate 32))
+                (if (and (>= (ms-match-rows candidate) 3) (< count (cells-len b))
+                         (== (ms-row-subset keys codepoints edge (cells-at b count)) 1))
+                  (do (cells-drop aw 0) (cells-push aw edge) (cells-drop bw 0)
+                      (return (+ candidate (ms-trimmed-factor)))))
+                (ms-restore-edge-row a edge)))
+          (if (and (> (cells-len b) 3) (== (ms-key keys (cells-at b 0) 8) 1))
+            (do (set edge (cells-at b 0))
+                (ms-without-edge-row b)
+                (set candidate (ms-pair-match fl keys codepoints a b aw bw word-row))
+                (set count (ms-match-left candidate))
+                (if (and (>= (ms-match-rows candidate) 3) (< count (cells-len a))
+                         (== (ms-row-subset keys codepoints edge (cells-at a count)) 1))
+                  (do (cells-drop bw 0) (cells-push bw edge) (cells-drop aw 0)
+                      (return (+ candidate (ms-trimmed-factor)))))
+                (ms-restore-edge-row b edge)))))
+    (cells-drop aw 0) (cells-drop bw 0)
+    (return match)))
 
 (defn ^I32 ms-band-confidence [^Cells fl ^Cells fw ^Cells band ^I32 n]
   (let [^:mut ^I32 i 0 ^:mut ^I32 sum 0]
@@ -627,23 +977,44 @@
           (if (>= advantage best) (do (set best advantage) (set split i)))))
     (return split)))
 
-(defn ^I32 ms-confirm-pair [^Cells fl ^Cells fw ^Cells keys ^Cells offsets ^Cells pixels
+(defn ^I32 ms-word-pixels [^Cells fl ^Cells a ^Cells b ^Cells keys ^Cells codepoints
+                            ^Cells offsets ^Cells pixels ^I32 na ^I32 nb]
+  (comment "A word band can cross different OCR line boundaries. Compare only identifiable whole row pairs.")
+  (let [^:mut ^I32 i 0 ^:mut ^I32 j 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0]
+    (while (< i na)
+      (do (set la (cells-at a i))
+          (set j 0)
+          (while (< j nb)
+            (do (set lb (cells-at b j))
+                (if (and (== (ms-key keys la 2) 2) (== (ms-equal keys codepoints la lb) 1)
+                         (== (ms-pixel-pair fl offsets pixels la lb) 1))
+                  (return 1))
+                (set j (+ j 1))))
+          (set i (+ i 1))))
+    (return 0)))
+
+(defn ^I32 ms-confirm-pair [^Cells fl ^Cells fw ^Cells keys ^Cells codepoints ^Cells offsets ^Cells pixels
                             ^Cells ol ^Cells ow ^Cells et ^Cells pages ^Cells cuts ^Cells dropped
                             ^I32 left ^I32 right ^Cells a ^Cells b ^I32 match]
-  (if (== (ms-accepted fl a b keys offsets pixels match) 1) (return 1))
-  (if (or (!= (ms-match-left match) 1) (!= (rem match 32) 1)) (return 0))
-  (let [^I32 bottom (ms-gap-edge ol ow et fl fw pages cuts left 1 b 1 dropped)
-        ^I32 top (ms-gap-edge ol ow et fl fw pages cuts right 0 a 1 dropped)]
-    (if (and (== (quot match 1024) 1) (or (>= bottom 2) (>= top 2))) (return 1))
-    (if (and (> bottom 0) (> top 0) (== (ms-pixel-votes fl a b keys offsets pixels 1) 1))
-      (return 1)))
-  (return 0))
-
-(defn ^I32 ms-link-score [^I32 match]
-  (let [^I32 kind (ms-match-kind match)
-        ^I32 votes (quot kind 32)]
-    (if (>= kind (ms-word-candidate)) (return (* (rem votes 32) 32)))
-    (return votes)))
+  (let [^I32 kind (ms-match-kind match) ^I32 rows (ms-match-rows match)
+        ^I32 na (ms-match-left match) ^I32 nb (rem match 32)]
+    (if (== rows 0) (return 0))
+    (if (and (== rows 1)
+             (or (!= na 1) (!= nb 1) (== (ms-equal keys codepoints (cells-at a 0) (cells-at b 0)) 0)))
+      (return 0))
+    (if (and (>= rows 3) (>= (ms-match-quality match) (ms-quality-code 850))
+             (< kind (ms-word-open)))
+      (return 1))
+    (if (and (>= rows 2) (< kind (ms-word-open)))
+      (do (if (< kind (ms-word-candidate))
+            (if (> (ms-pixel-votes fl a b keys offsets pixels na) 0) (return 1)))
+          (if (and (>= kind (ms-word-candidate))
+                   (== (ms-word-pixels fl a b keys codepoints offsets pixels na nb) 1))
+            (return 1))))
+    (if (or (== (ms-gap-edge ol ow et fl fw keys pages cuts left 1 b nb (+ nb 1) dropped 1) 2)
+            (== (ms-gap-edge ol ow et fl fw keys pages cuts right 0 a na (+ na 1) dropped 1) 2))
+      (return 1))
+    (return 0)))
 
 (defn ^I32 ms-best-link [^Cells scores ^Cells taken ^I32 n ^I32 at ^I32 step]
   (let [^:mut ^I32 i 0 ^:mut ^I32 score 0 ^:mut ^I32 best 0 ^:mut ^I32 pick -1]
@@ -702,7 +1073,7 @@
                 (if (!= left right)
                   (do (set match (ms-pair fl keys codepoints left right a b aw bw word-row))
                       (if (> match 0) (set score -1))
-                      (if (== (ms-confirm-pair fl fw keys offsets pixels ol ow et pages cuts dropped
+                      (if (== (ms-confirm-pair fl fw keys codepoints offsets pixels ol ow et pages cuts dropped
                                                 left right a b match) 1)
                         (set score (ms-link-score match)))))
                 (cells-push scores score)
@@ -727,7 +1098,7 @@
 (defn ^I32 ms-mark [^:mut ^Cells seams ^I32 left ^I32 right ^I32 kind ^I32 match]
   (cells-push seams left) (cells-push seams right) (cells-push seams kind)
   (cells-push seams (rem match 32))
-  (cells-push seams (+ (rem (quot match 1024) 32) (rem (quot match 32) 32)))
+  (cells-push seams (+ (rem (quot match 1024) 32) 0))
   (return 0))
 
 (defn ^I32 ms-open-edge [^Cells links ^I32 first ^I32 page]
@@ -789,8 +1160,8 @@
                          (== (ms-open-edge incoming first right) 1)
                          (== (cells-at scores (+ (* (- right first) n) (- left first))) 0))
                   (do (ms-page-edge fl keys right 0 b)
-                      (if (and (!= (bit-and (ms-gap-edge ol ow et fl fw pages cuts left 1 b 0 dropped) 1) 0)
-                               (!= (bit-and (ms-gap-edge ol ow et fl fw pages cuts right 0 a 0 dropped) 1) 0))
+                      (if (and (!= (bit-and (ms-gap-edge ol ow et fl fw keys pages cuts left 1 b 0 (cells-len b) dropped 0) 1) 0)
+                               (!= (bit-and (ms-gap-edge ol ow et fl fw keys pages cuts right 0 a 0 (cells-len a) dropped 0) 1) 0))
                         (set candidate 1))))
                 (cells-push gaps candidate)
                 (set j (+ j 1))))
@@ -818,7 +1189,7 @@
                 (or (== (ms-raster mask first-pair) 0) (== (ms-raster mask (+ first-pair 1)) 0)))
       (set first-pair (+ first-pair 1)))
     (if (>= first-pair np) (return 0)))
-  (ms-index fl fw et np keys codepoints)
+  (ms-index fl fw ol et np keys codepoints aw)
   (let [^:mut ^I32 page 1 ^:mut ^I32 first 1 ^:mut ^I32 end 1 ^:mut ^I32 i 0
         ^:mut ^I32 line 0 ^:mut ^I32 changes 0 ^:mut ^I32 left 0 ^:mut ^I32 right 0
         ^:mut ^I32 forward 0 ^:mut ^I32 reverse 0 ^:mut ^I32 accepted 0
@@ -828,6 +1199,9 @@
       (do (cells-push order page) (set page (+ page 1))))
     (while (< i (ln-count fl))
       (do (cells-push dropped 0) (set i (+ i 1))))
+    (set i 0)
+    (while (< i (fw-count fw))
+      (do (cells-push dropped -1) (set i (+ i 1))))
     (set page 1)
     (while (<= page np)
       (do (set end (+ page 1))
@@ -843,10 +1217,10 @@
                 (set right (cells-at order page))
                 (set reverse (ms-pair fl keys codepoints right left a b aw bw word-row))
                 (set reverse-accepted
-                     (ms-confirm-pair fl fw keys offsets pixels ol ow et pages cuts dropped right left a b reverse))
+                     (ms-confirm-pair fl fw keys codepoints offsets pixels ol ow et pages cuts dropped right left a b reverse))
                 (set forward (ms-pair fl keys codepoints left right a b aw bw word-row))
                 (set accepted
-                     (ms-confirm-pair fl fw keys offsets pixels ol ow et pages cuts dropped left right a b forward))
+                     (ms-confirm-pair fl fw keys codepoints offsets pixels ol ow et pages cuts dropped left right a b forward))
                 (if (and (== accepted 1)
                          (or (and (> (cells-len outgoing) 0) (== (cells-at outgoing (- left first)) right))
                              (and (== reverse-accepted 0) (== (ms-open-edge outgoing first left) 1)
@@ -854,24 +1228,45 @@
                   (do (set left-count (ms-match-left forward))
                       (set split (ms-copy-split fl fw a b forward))
                       (set right-drop split)
+                      (if (< (ms-match-kind forward) (ms-word-candidate))
+                        (do (set i 0)
+                            (while (< i left-count)
+                              (do (if (< i split)
+                                    (ms-fuse-row fl fw et (cells-at a (- left-count i 1)) (cells-at b i) dropped)
+                                    (ms-fuse-row fl fw et (cells-at b i) (cells-at a (- left-count i 1)) dropped))
+                                  (set i (+ i 1))))))
                       (if (and (> split 0) (>= (ms-match-kind forward) (ms-word-candidate)))
                         (set right-drop (rem forward 32)))
                       (set i 0)
                       (while (< i (- left-count split))
                         (do (set line (cells-at a i))
-                            (if (== (cells-at dropped line) 0)
-                              (do (ms-drop-line fl fw et line ledger model-text)
-                                  (cells-set dropped line 1)
-                                  (set changes (+ changes 1))))
+                            (while (>= line 0)
+                              (do (if (== (cells-at dropped line) 0)
+                                    (do (ms-drop-line fl fw et line ledger model-text)
+                                        (cells-set dropped line 1)
+                                        (set changes (+ changes 1))))
+                                  (set line (ms-key keys line 3))))
                             (set i (+ i 1))))
                       (set i 0)
                       (while (< i right-drop)
                         (do (set line (cells-at b i))
+                            (while (>= line 0)
+                              (do (if (== (cells-at dropped line) 0)
+                                    (do (ms-drop-line fl fw et line ledger model-text)
+                                        (cells-set dropped line 1)
+                                        (set changes (+ changes 1))))
+                                  (set line (ms-key keys line 3))))
+                            (set i (+ i 1))))
+                      (if (> (cells-len aw) 0)
+                        (do (set line (cells-at aw 0))
                             (if (== (cells-at dropped line) 0)
                               (do (ms-drop-line fl fw et line ledger model-text)
-                                  (cells-set dropped line 1)
-                                  (set changes (+ changes 1))))
-                            (set i (+ i 1))))
+                                  (cells-set dropped line 1) (set changes (+ changes 1))))))
+                      (if (> (cells-len bw) 0)
+                        (do (set line (cells-at bw 0))
+                            (if (== (cells-at dropped line) 0)
+                              (do (ms-drop-line fl fw et line ledger model-text)
+                                  (cells-set dropped line 1) (set changes (+ changes 1))))))
                       (ms-mark seams left right 1 forward))
                   (do (if (> forward 0) (ms-mark seams left right 2 forward))
                       (if (> reverse 0) (ms-mark seams right left 2 reverse))
@@ -880,9 +1275,9 @@
                                (== (ms-open-edge incoming first right) 1)
                                (or (== forward 0)
                                    (and (>= (ms-match-kind forward) (ms-word-candidate))
-                                        (== (rem (quot forward 32) 32) 1))))
-                        (if (or (!= (bit-and (ms-gap-edge ol ow et fl fw pages cuts left 1 b 0 dropped) 1) 0)
-                                (!= (bit-and (ms-gap-edge ol ow et fl fw pages cuts right 0 a 0 dropped) 1) 0))
+                                        (== (ms-match-rows forward) 1))))
+                        (if (or (!= (bit-and (ms-gap-edge ol ow et fl fw keys pages cuts left 1 b 0 (cells-len b) dropped 0) 1) 0)
+                                (!= (bit-and (ms-gap-edge ol ow et fl fw keys pages cuts right 0 a 0 (cells-len a) dropped 0) 1) 0))
                           (ms-mark seams left right 3 0)
                           (if (and (> (- end first) 16) (== forward 0) (== reverse 0)
                                    (== (ms-cut cuts right 1) 1) (== (ms-cut cuts left 0) 1))

@@ -18,8 +18,8 @@ transport with a multi-frame TIFF. The distinct-page control participates in
 seam checks. Word accuracy excludes it because only its first input has gold
 from the receipt being scored. The report also includes the historical
 word aggregate for comparison with earlier runs.
-Seed 917 requires zero output duplicates. Other seeds require every
-remaining output duplicate to carry a flag.
+All seeds require zero unflagged cross-photo duplicates. A flagged
+`possible-duplicate` is allowed only on a seam with one shared row.
 
 `bb multishot --sweep` draws a fresh seed and selects 200 receipts.
 An explicit `--seed` reproduces the crop design. Pass `--ocr-engine` to select
@@ -34,8 +34,9 @@ runs. Driver errors fail the sweep after the remaining cases have run.
 
 The seam metric version is recorded in each report. Ratchet comparisons
 require the same version. The seed 920 Tesseract reference covers 181 SROIE
-receipts, 19 CORD receipts and six traps. It uses the frozen Round 3 policy
-scored with the Model metric. To measure that corpus against the reference, run
+receipts, 19 CORD receipts and six traps. It uses the frozen Round 4 policy
+replayed with the `model-v3` scorer on the same crops. To measure that corpus
+against the reference, run
 
 ```sh
 bb multishot --sweep --ocr-engine tesseract \
@@ -44,11 +45,14 @@ bb multishot --sweep --ocr-engine tesseract \
 
 Reports include the following counts.
 
-- `dup` counts extra occurrences of each gold row in emitted Model text.
+- `dup` counts extra cross-photo occurrences of each gold row in emitted Model text.
   The matcher walks text in document order, including table cells, and uses
   Model source regions projected into each crop to distinguish genuine
   repeated rows. It allocates each token span once. A candidate needs at
   least 75% of the gold tokens and a word-overlap F1 of at least 0.80.
+  Rows whose complete word multiset also occurs in another gold row are
+  excluded from duplicate scoring. `same-photo-dup` records extra assigned
+  occurrences within one photo for diagnosis.
   `unflagged` counts extra copies whose source pair lacks a
   `possible-duplicate` mark. `matched-dup` counts extra copies on pairs with
   a confirmed overlap. The order diagnostics count unflagged extra copies
@@ -60,8 +64,8 @@ Reports include the following counts.
   loss and how many carry a gap flag. The geometry test uses the crop edge
   directly, including cuts above the 97% evidence visibility cutoff.
 - `spurious-gap` counts gap flags on seams with no lost output row.
-  A clipped fragment with a complete copy in the neighboring crop does not
-  justify a gap flag. Recovered text also does not justify a gap flag.
+  In the partial and gap buckets it requires a clipped row with a complete
+  copy in the neighboring crop.
   A gap flag between photos that are nonadjacent in the physical document
   also counts, once per source pair regardless of where that pair was uploaded.
 - `evidence_dup` retains the historical count based on surviving OCR lines

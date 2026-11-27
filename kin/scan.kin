@@ -913,7 +913,7 @@
   (if (> a b) (return a))
   (return b))
 
-(defn ^I32 sc-cp-class [^I32 c]
+(defn ^:pub ^I32 sc-cp-class [^I32 c]
   (comment "What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph")
   (comment "(one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered")
   (comment "signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.")
@@ -949,7 +949,7 @@
   (if (== c 65533) (return 2))
   (return 0))
 
-(defn ^I32 sc-count-class [^Cells etext ^I32 ts ^I32 n ^I32 cls]
+(defn ^:pub ^I32 sc-count-class [^Cells etext ^I32 ts ^I32 n ^I32 cls]
   (comment "How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).")
   (let [^:mut ^I32 i 0
         ^:mut ^I32 k 0]

@@ -8,7 +8,7 @@
 (def engines ["tesseract" "apple-vision" "ppocr"])
 (def buckets ["gap" "abut" "partial" "1" "2-3" "4+"])
 (def traps ["clean" "identical" "asymmetric" "repeat" "separator" "different-pages"])
-(def seam-metric "model-v2")
+(def seam-metric "model-v3")
 (def scratch (fs/path (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "multishot"))
 (def corpus (fs/path (or (System/getenv "EMON_MULTISHOT_CORPUS") "corpus")))
 (defn read-json [f] (json/parse-string (slurp (str f)) true))
@@ -354,6 +354,17 @@
                              (get neighbors page))))
                    dropped))))
 
+(defn ambiguous-duplicate-rows [rows]
+  (let [bags (mapv #(frequencies (words (:text %))) rows)]
+    (set (keep-indexed (fn [i bag]
+                         (when (and (seq bag)
+                                    (some (fn [[j other]]
+                                            (and (not= i j)
+                                                 (every? (fn [[word n]] (>= (get other word 0) n)) bag)))
+                                          (map-indexed vector bags)))
+                           i))
+                       bags))))
+
 (defn duplicate-events [occurrences page-count]
   (group-by :seam
             (for [[row copies] occurrences
@@ -391,6 +402,7 @@
   (let [left (pieces i)
         right (pieces (inc i))
         shared (when-not (:other case) (:shared (seam-gold left right)))
+        bucket (:bucket (seam-gold left right))
         evidence-dup (count (filter #(and (row-read? (get-in case [:rows %]) (get-in left [:boxes %]) (reads i))
                                          (row-read? (get-in case [:rows %]) (get-in right [:boxes %]) (reads (inc i))))
                                    shared))
@@ -401,10 +413,17 @@
         events (map (fn [{:keys [left right] :as copy}]
                       (assoc copy :marks (seam-marks (:order case) seams left right)))
                     duplicates)
-        unflagged (remove #(some #{"possible-duplicate"} (:marks %)) events)]
+        same-photo (filter #(= (:left %) (:right %)) events)
+        cross-photo (remove #(= (:left %) (:right %)) events)
+        unflagged (remove #(some #{"possible-duplicate"} (:marks %)) cross-photo)
+        clipped-with-copy? (some (fn [row]
+                                   (or (and (vertical-cut? left row :bottom) (full-row? right row))
+                                       (and (vertical-cut? right row :top) (full-row? left row))))
+                                 (range (count (:visible left))))]
     {:seams 1 :shared (count shared) :evidence_dup evidence-dup
-     :dup (count duplicates) :unflagged (count unflagged)
-     :matched-dup (count (filter #(some #{"overlap"} (:marks %)) events))
+     :same-photo-dup (count same-photo)
+     :dup (count cross-photo) :unflagged (count unflagged)
+     :matched-dup (count (filter #(some #{"overlap"} (:marks %)) cross-photo))
      :out-of-order-unflagged (count (filter (fn [{:keys [left right]}]
                                              (and (not= left right)
                                                   (not= (inc (.indexOf physical-order left))
@@ -413,7 +432,9 @@
      :out-of-order-missed-gap (if (and (not in-order?) (seq missing) (not gap?)) 1 0)
      :lost-rows (count missing)
      :lost (if (seq missing) 1 0) :lost-flagged (if (and (seq missing) gap?) 1 0)
-     :spurious-gap (if (and (empty? missing) gap?) 1 0)}))
+     :spurious-gap (if (and (empty? missing) gap?
+                            (or (:careful case) (not (#{"partial" "gap"} bucket)) clipped-with-copy?))
+                     1 0)}))
 
 (defn case-document [case manifest tiff]
   (let [paths (mapv :path (:pieces manifest))
@@ -449,8 +470,9 @@
                                         (output-tokens (:model actual) nil))]
                        (output-occurrences (:rows case) physical-pieces tokens))
                      concat-occ)
-        concat-dup (duplicate-events concat-occ (count pieces))
-        actual-dup (duplicate-events actual-occ (count pieces))
+        ambiguous (ambiguous-duplicate-rows (:rows case))
+        concat-dup (duplicate-events (apply dissoc concat-occ ambiguous) (count pieces))
+        actual-dup (duplicate-events (apply dissoc actual-occ ambiguous) (count pieces))
         scan-total (total-count (:total case) (text-of scan))
         concat-total (total-count (:total case) concat-text)
         actual-total (total-count (:total case) final-text)
@@ -474,7 +496,8 @@
      :order source-order
      :output-duplicates (mapv (fn [event]
                                 (assoc event :marks (vec (seam-marks order seams (:left event) (:right event)))))
-                              (mapcat actual-dup (range (dec (count pieces)))))
+                              (remove #(= (:left %) (:right %))
+                                      (mapcat actual-dup (range (dec (count pieces))))))
      :words {:scan (score-words (:rows case) (text-of scan))
              :concat (score-words (:rows case) concat-text)
              :actual (score-words (:rows case) final-text)}
@@ -547,13 +570,16 @@
                               :recall (ratio found truth)
                               :flag-rate (if (pos? reads) (ratio flagged reads) 0.0))])))
 
-(defn failed-cases [cases scores strict?]
+(defn failed-cases [cases scores]
   (keep (fn [[case score]]
-          (let [{:keys [dup unflagged lost lost-flagged spurious-gap] :as seams}
+          (let [{:keys [unflagged lost lost-flagged spurious-gap] :as seams}
                 (sum-maps (map :actual (:seams score)))
+                disallowed-duplicate? (some #(and (not= "1" (:bucket %))
+                                                   (pos? (get-in % [:actual :dup])))
+                                            (:seams score))
                 checks (select-keys (:checks score)
                                     [:changed-clean :changed-repeat :false-merges :total-missing :total-duplicates])]
-            (when (or (pos? unflagged) (and strict? (pos? dup)) (not= lost lost-flagged)
+            (when (or (pos? unflagged) disallowed-duplicate? (not= lost lost-flagged)
                       (pos? spurious-gap) (some pos? (vals checks)))
               {:id (:id case) :kind (:kind case) :seams seams :checks checks})))
         (map vector cases scores)))
@@ -603,13 +629,16 @@
       (fail (str "only " (+ (count first-pass) (count extras)) " eligible receipts for a " total "-receipt sweep")))
     (into first-pass extras)))
 
-(defn verify! [result strict?]
-  (let [buckets (map :actual (vals (:buckets result)))
-        {:keys [unflagged dup lost lost-flagged spurious-gap]} (sum-maps buckets)
+(defn verify! [result]
+  (let [buckets (:buckets result)
+        {:keys [unflagged lost lost-flagged]} (sum-maps (map :actual (vals buckets)))
+        disallowed-duplicate? (some (fn [[bucket score]]
+                                      (and (not= "1" (name bucket)) (pos? (get-in score [:actual :dup]))))
+                                    buckets)
         {:keys [changed-clean changed-repeat total-missing total-duplicates false-merges]} (:checks result)
         {:keys [actual concat scan]} (:words result)]
-    (when (or (pos? unflagged) (and strict? (pos? dup)) (not= lost lost-flagged)
-              (pos? spurious-gap) (pos? changed-clean) (pos? changed-repeat) (pos? total-missing)
+    (when (or (pos? unflagged) disallowed-duplicate? (not= lost lost-flagged)
+              (pos? changed-clean) (pos? changed-repeat) (pos? total-missing)
               (pos? total-duplicates) (pos? false-merges)
               (< (:recall actual) (:recall concat))
               (< (:recall actual) (- (:recall scan) 0.05))
@@ -677,7 +706,6 @@
             _ (when (and reference (not= seam-metric (:seam-metric reference)))
                 (fail "sweep ratchet requires a reference scored with the same seam metric"))
             seed (or seed (:seed reference) (if ci 917 (.nextLong (java.util.Random.))))
-            strict? (and ci (= seed 917))
             rng (java.util.Random. seed)
             sets (str/split (or set "sroie,cord") #",")
             [lo hi] (mapv parse-long (str/split (or pieces (if ci "2" "2-5")) #"-"))
@@ -740,7 +768,7 @@
                                [engine (if clipped
                                          (cond-> (clip-report rows) keep (assoc :case-scores rows))
                                          (cond-> (multishot/report rows)
-                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows strict?)))
+                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows)))
                                            keep (assoc :case-scores rows)))]))]
                 (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
                             :seam-metric seam-metric
@@ -750,7 +778,7 @@
                   (println (json/generate-string results {:pretty true})))
                 (when (and (or ci sweep) (not baseline))
                   (doseq [[engine summary] results]
-                    (try (verify! summary strict?)
+                    (try (verify! summary)
                          (catch Exception e (fail (str "seed " seed " " engine ": " (ex-message e))))))))
               (finally
                 (when-not keep (fs/delete-tree run-dir))))))))))

@@ -1177,7 +1177,7 @@ pub(crate) fn sc_mx(a: i32, b: i32) -> i32 {
     }
     return b;
 }
-pub(crate) fn sc_cp_class(c: i32) -> i32 {
+pub fn sc_cp_class(c: i32) -> i32 {
     // What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
     // (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
     // signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
@@ -1264,7 +1264,7 @@ pub(crate) fn sc_cp_class(c: i32) -> i32 {
     }
     return 0;
 }
-pub(crate) fn sc_count_class(etext: &mut crate::port::Cells, ts: i32, n: i32, cls: i32) -> i32 {
+pub fn sc_count_class(etext: &mut crate::port::Cells, ts: i32, n: i32, cls: i32) -> i32 {
     // How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
     let mut i: i32 = 0;
     let mut k: i32 = 0;

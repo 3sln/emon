@@ -15034,3 +15034,17 @@ Rebase the seed 920 sweep reference on the hash-checked Round 3 outputs. The old
 Round 4 keeps the same 236 output duplicates and flags 187 of 210 lost seams. It has zero scored false merges, and clean and repeat controls are byte-identical to their scan controls. Spurious gaps fall to 174 overall, while abut spurious gaps rise from 45 to 47 and fail the sweep ratchet. None of the 45 shuffled uploads are reordered correctly on this sweep. P13.23 and P13.24 remain open.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Match visual rows at anchored photo seams
+
+The seam matcher groups OCR segments in tilt-corrected visual rows for matching. The ledger and document rebuild still use the original flow lines and source geometry. The matcher checks a boundary row run with graded edit distance and falls back to aligned tokens when OCR line boundaries differ. Text runs with at least three distinct content rows and mean similarity of at least 0.85 can confirm an overlap. A weaker run needs pixel correlation or continuity from a clipped fragment. A single shared row needs textual fragment continuity before the matcher removes a copy.
+
+The Tesseract review measured median correlation of 0.70 over 19 true row pairs and a maximum of 0.47 over 810 other pairs with the same patch sampler. The corroboration threshold is 0.60. The matcher can share a higher-confidence word between aligned rows when a neighboring word agrees, while keeping the retained word geometry. For gap coverage, a clipped reading can match a word subsequence of a neighboring row, including a single word of at least four characters. Capture margins remain a document-level signal.
+
+The output gate distinguishes same-photo assignments from cross-photo copies and excludes ambiguous gold rows from duplicate counts. It accepts flagged duplicates in the one-row overlap bucket. The Tesseract sweep ratchet moves from the archived Round 3 `model-v2` scores to the paired Round 4 `model-v3` scores because the duplicate and gap definitions changed. All 206 crop hashes and all Round 4 word counts match the archived Round 4 replay. The old reference counted 220 concatenation duplicates and 201 Round 3 output duplicates. The new reference counts 220 concatenation duplicates and 204 Round 4 output duplicates.
+
+On 470 sweep seams, Round 5 reduces cross-photo duplicates from 204 to 101, unflagged copies from 95 to 35, and spurious gaps from 173 to 140. It flags 187 of 210 lost seams and recovers two of 45 shuffled uploads. The output scorer reports 62 false merges and 71 duplicates in overlaps of two or more rows. Word precision rises from 0.724289 to 0.742742. Word recall falls from 0.736301 to 0.731897 against 0.736341 for concatenation, so the sweep fails both the ratchet and acceptance. Clean, repeat and distinct-page Models remain byte-identical to the scan controls. The sweep's clean trap still emits one gap flag.
+
+With the same policy on the held-out seeds, 921 has three flagged copies and three scored false merges. Seed 922 has no scored duplicates or false merges and flags all nine lost seams. Both fall below concatenation recall. P13.23 and P13.24 remain open.
+
+- [ ] **Signed off** (maintainer)

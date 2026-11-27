@@ -1169,7 +1169,7 @@ public static class Scan {
         }
         return b;
     }
-    internal static int ScCpClass(int c) {
+    public static int ScCpClass(int c) {
         // What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
         // (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
         // signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
@@ -1256,7 +1256,7 @@ public static class Scan {
         }
         return 0;
     }
-    internal static int ScCountClass(emon.Port.Cells etext, int ts, int n, int cls) {
+    public static int ScCountClass(emon.Port.Cells etext, int ts, int n, int cls) {
         // How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
         int i = 0;
         int k = 0;

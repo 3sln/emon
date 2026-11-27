@@ -63,6 +63,10 @@ fn test_strong_anchored_seam_ignores_whitespace_and_deduplicates_separators() {
     law_seam(0, 0, 0, 4, 0, 0, 5, 1);
 }
 #[test]
+fn test_three_anchored_content_rows_are_strong() {
+    law_seam(0, 0, 0, 3, 0, 0, 4, 1);
+}
+#[test]
 fn test_interior_match_is_not_a_seam() {
     law_seam(0, 2, 0, 4, 1, 0, 0, 0);
 }
@@ -328,6 +332,20 @@ fn test_correlated_neighbors_cannot_confirm_a_shortened_word_band() {
     crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "correlated neighbors do not make up for a missing word");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "retain both copies of a shortened word band");
 }
+pub(crate) fn law_fragment_anchor(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, last: i32) -> i32 {
+    let start: i32 = crate::port::cells_len(et);
+    let line: i32 = ln_count(fl);
+    let mut i: i32 = 0;
+    let mut word: i32 = 0;
+    while i < 7 {
+        crate::port::cells_push(et, 65 + i);
+        i += 1;
+    }
+    crate::port::cells_push(et, last);
+    word = wd_new(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1);
+    ln_new(fl, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, word, 1);
+    return 0;
+}
 pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -341,6 +359,7 @@ pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
     let mut i: i32 = 0;
     let mut w: i32 = 0;
     let mut first: i32 = 0;
+    let mut expected: i32 = 0;
     page_new(pages, 1, 450, 1000, 0, pk_image());
     page_new(pages, 2, 450, 1000, 0, pk_image());
     crate::port::cells_push(mask, 1);
@@ -353,6 +372,11 @@ pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
     if shared == 1 {
         law_line(fl, fw, et, 1, 957, 88);
         law_line(fl, fw, et, 2, 50, 88);
+        expected = 1;
+    }
+    if shared == 2 {
+        law_fragment_anchor(fl, fw, et, 1, 957, 88);
+        law_fragment_anchor(fl, fw, et, 2, 50, 89);
     }
     first = wd_count(fw);
     law_band_line(fl, fw, et, 2, 80, 5);
@@ -363,10 +387,12 @@ pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
         ow_set(ow, w, owf_flags(), oe_clipped());
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), shared, "the full copy of the fragment corroborates a shared edge line");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the full copy of the fragment corroborates an exact shared edge line");
     crate::testport::assert_eq(ln_count(fl), 2 + shared, "keep every distinct complete line");
     if shared == 1 {
         crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 1, "report the confirmed overlap");
+    } else if shared == 2 {
+        crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "a single fuzzy row remains ambiguous");
     } else {
         crate::testport::assert_eq(crate::port::cells_len(decisions), 0, "the full line covers the fragment");
     }
@@ -379,6 +405,10 @@ fn test_a_complete_neighboring_copy_covers_a_clipped_fragment() {
 #[test]
 fn test_a_covered_fragment_corroborates_a_single_line_overlap() {
     law_covered_fragment(0, 1);
+}
+#[test]
+fn test_a_covered_fragment_keeps_a_single_fuzzy_match_ambiguous() {
+    law_covered_fragment(0, 2);
 }
 pub(crate) fn law_cut_and_pixel(emon_t: i32, cut: i32) -> i32 {
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -411,8 +441,8 @@ pub(crate) fn law_cut_and_pixel(emon_t: i32, cut: i32) -> i32 {
         crate::port::cells_push(pixels, (i * 17) % 128);
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), cut, "the identical strip needs opposing cut fragments");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2 - cut, "corroboration controls the seam decision");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "matching pixels and raster cuts do not prove single-row continuity");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "keep a single-row candidate without textual continuity");
     return 0;
 }
 #[test]
@@ -459,6 +489,92 @@ pub(crate) fn law_word_seam(emon_t: i32, variant: i32, expected_drop: i32, expec
 fn test_anchored_word_alignment_across_different_line_breaks() {
     law_word_seam(0, 0, 4, 1);
     law_word_seam(0, 1, 0, 2);
+}
+#[test]
+fn test_row_similarity_counts_more_than_one_edit() {
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(et, 97);
+    crate::port::cells_push(et, 98);
+    crate::port::cells_push(et, 99);
+    crate::port::cells_push(et, 100);
+    crate::port::cells_push(et, 101);
+    crate::port::cells_push(et, 102);
+    crate::port::cells_push(et, 97);
+    crate::port::cells_push(et, 98);
+    crate::port::cells_push(et, 104);
+    crate::port::cells_push(et, 100);
+    crate::port::cells_push(et, 101);
+    crate::port::cells_push(et, 103);
+    crate::testport::assert_eq(ms_similarity(et, 0, 6, 6, 6, &mut crate::port::Cells::new()), 666, "substitutions are graded");
+    crate::testport::assert_eq(ms_similarity(et, 0, 6, 0, 5, &mut crate::port::Cells::new()), 833, "one missing character is an edit");
+}
+pub(crate) fn law_priced_row(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, item: i32) -> i32 {
+    let line: i32 = ln_count(fl);
+    let first: i32 = wd_count(fw);
+    let mut price_y: i32 = y;
+    let mut rot: i32 = 0;
+    if page == 2 {
+        price_y = y + 24;
+        rot = 35500;
+    }
+    wd_new(fw, page, 50, y, 90, y + 12, 50, y, 90, y, rot, 0, crate::port::cells_len(et), 1, line, 900, -1);
+    crate::port::cells_push(et, item);
+    if page == 2 {
+        ln_new(fl, page, 50, y, 90, y + 12, 50, y, 90, y, rot, 0, first, 1);
+    }
+    wd_new(fw, page, 320, price_y, 360, price_y + 12, 320, price_y, 360, price_y, rot, 0, crate::port::cells_len(et), 1, ln_count(fl), 900, -1);
+    crate::port::cells_push(et, 53);
+    if page == 2 {
+        ln_new(fl, page, 320, price_y, 360, price_y + 12, 320, price_y, 360, price_y, rot, 0, first + 1, 1);
+    } else {
+        ln_new(fl, page, 50, y, 360, y + 12, 50, y, 360, y, rot, 0, first, 2);
+    }
+    return 0;
+}
+#[test]
+fn test_tilt_aware_rows_join_item_and_price_segments_for_seam_matching() {
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    page_new(pages, 1, 450, 1000, 0, pk_image());
+    page_new(pages, 2, 450, 1000, 0, pk_image());
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, 1);
+    law_line(fl, fw, et, 1, 600, 90);
+    while i < 3 {
+        law_priced_row(fl, fw, et, 1, 700 + (i * 40), 65 + i);
+        i += 1;
+    }
+    i = 0;
+    while i < 3 {
+        law_priced_row(fl, fw, et, 2, 40 + (i * 40), 65 + i);
+        i += 1;
+    }
+    law_line(fl, fw, et, 2, 350, 81);
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 6, "drop the matching visual rows, including both segments on the later photo");
+    crate::testport::assert_eq(ln_count(fl), 5, "each surviving item and price remains one original flow line");
+}
+#[test]
+fn test_correlation_threshold_separates_moderate_from_weak_agreement() {
+    let pixels: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::port::cells_push(pixels, 0);
+    crate::port::cells_push(pixels, 0);
+    crate::port::cells_push(pixels, 100);
+    crate::port::cells_push(pixels, 100);
+    crate::port::cells_push(pixels, 0);
+    crate::port::cells_push(pixels, 50);
+    crate::port::cells_push(pixels, 50);
+    crate::port::cells_push(pixels, 100);
+    crate::port::cells_push(pixels, 0);
+    crate::port::cells_push(pixels, 100);
+    crate::port::cells_push(pixels, 100);
+    crate::port::cells_push(pixels, 100);
+    crate::testport::assert_eq(ms_ncc(pixels, 0, 4, 4), 1, "correlation about .71 corroborates");
+    crate::testport::assert_eq(ms_ncc(pixels, 0, 8, 4), 0, "correlation about .58 is too weak");
 }
 #[test]
 fn test_reversed_cuts_can_report_a_gap_without_changing_upload_order() {

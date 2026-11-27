@@ -1224,7 +1224,7 @@ func scMx(a int32, b int32) int32 {
 	return b
 }
 
-func scCpClass(c int32) int32 {
+func ScCpClass(c int32) int32 {
 	// What a code point is to a word's plausibility: 1 a digit, 0 a letter (ASCII, Latin-1 and Latin Extended, and every script above them up to the private use area), 2 an ODD glyph
 	// (one an engine invents over ink that is no text: the vertical bar, tilde, caret, grave, backslash, angle brackets, braces and square brackets, the section sign, copyright and registered
 	// signs and the like of Latin-1, daggers, arrows and shapes, the private use area, the replacement character), 3 any other punctuation, currency sign or mark.
@@ -1312,12 +1312,12 @@ func scCpClass(c int32) int32 {
 	return 0
 }
 
-func scCountClass(etext *port.Cells, ts int32, n int32, cls int32) int32 {
+func ScCountClass(etext *port.Cells, ts int32, n int32, cls int32) int32 {
 	// How many of the word's `n` code points (from `ts` in the shared text) are of the class `cls` (`sc-cp-class`).
 	var i int32 = 0
 	var k int32 = 0
 	for i < n {
-		if scCpClass(port.CellsAt(etext, ts+i)) == cls {
+		if ScCpClass(port.CellsAt(etext, ts+i)) == cls {
 			k += 1
 		}
 		i += 1
@@ -1355,9 +1355,9 @@ func scDistinct(etext *port.Cells, ts int32, n int32) int32 {
 func ScImplausible(etext *port.Cells, ts int32, n int32) int32 {
 	// 1 when a word's characters are not those of a word: a single glyph that is no letter or digit; two odd glyphs (`sc-cp-class`); letters, digits and an odd glyph together; an odd glyph among five characters or more;
 	// four or more characters and not one a letter or a digit; eight or more of which a quarter or fewer differ (`Petetetdedtededededet`). Else 0.
-	var nl int32 = scCountClass(etext, ts, n, 0)
-	var nd int32 = scCountClass(etext, ts, n, 1)
-	var no int32 = scCountClass(etext, ts, n, 2)
+	var nl int32 = ScCountClass(etext, ts, n, 0)
+	var nd int32 = ScCountClass(etext, ts, n, 1)
+	var no int32 = ScCountClass(etext, ts, n, 2)
 	if n <= 0 {
 		return 0
 	}
@@ -1587,7 +1587,7 @@ func ScXtraOk(owords *port.Cells, etext *port.Cells, w0 int32, cnt int32, xw int
 	if evidence.OwConfidence(owords, xw) < scXtraConf() {
 		return 0
 	}
-	var letters int32 = scCountClass(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen()), 0)
+	var letters int32 = ScCountClass(etext, evidence.OwGet(owords, xw, evidence.HdTstart()), evidence.OwGet(owords, xw, evidence.HdTlen()), 0)
 	if letters > 0 {
 		if (letters < scXtraTextLetters()) || (evidence.OwConfidence(owords, xw) < scXtraTextConf()) {
 			return 0
@@ -2873,7 +2873,7 @@ func ScSetAsideClips(olines *port.Cells, owords *port.Cells, etext *port.Cells, 
 			for w < end {
 				wordSize = evidence.OwGet(owords, w, evidence.HdTlen())
 				chars += wordSize
-				odd += scCountClass(etext, evidence.OwGet(owords, w, evidence.HdTstart()), wordSize, 2)
+				odd += ScCountClass(etext, evidence.OwGet(owords, w, evidence.HdTstart()), wordSize, 2)
 				w += 1
 			}
 			edge = ScClipEdge(top, bottom, left, right, scClipHeight(olines, line), typical, scClipConfidence(olines, owords, line), conf, odd, chars, fourpx, photos)
@@ -3308,7 +3308,7 @@ func scWordBase(owords *port.Cells, etext *port.Cells, w int32) int32 {
 		if ((cp >= 65) && (cp <= 90)) || ((cp >= 97) && (cp <= 122)) {
 			latin += 1
 		}
-		if (cp == 65533) || (scCpClass(cp) == 2) {
+		if (cp == 65533) || (ScCpClass(cp) == 2) {
 			rejected += 1
 		}
 		i += 1

@@ -6,7 +6,7 @@
                                    ol-new ol-set olf-conf ow-new ow-set owf-flags oe-clipped]]
             [emon.model :refer [page-new pk-image ledger-count ledger-page model-init model-check
                                 node-count node-kind node-flags nk-row nk-cell fl-seam-gap]]
-            [emon.seams :refer [ms-run ms-ncc ms-sample-cut]]
+            [emon.seams :refer [ms-run ms-ncc ms-sample-cut ms-similarity]]
             [emon.table :refer [tb-seam-gaps tb-emit]]
             [kin.lang :refer [defn let if do set while return + - * rem < == and or]]))
 
@@ -55,6 +55,9 @@
 
 (deftest test-strong-anchored-seam-ignores-whitespace-and-deduplicates-separators
   (law-seam (test-t) 0 0 4 0 0 5 1))
+
+(deftest test-three-anchored-content-rows-are-strong
+  (law-seam (test-t) 0 0 3 0 0 4 1))
 
 (deftest test-interior-match-is-not-a-seam
   (law-seam (test-t) 2 0 4 1 0 0 0))
@@ -265,11 +268,23 @@
                0 "correlated neighbors do not make up for a missing word")
     (assert-eq (cells-at decisions 2) 2 "retain both copies of a shortened word band")))
 
+(defn ^I32 law-fragment-anchor [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et
+                                ^I32 page ^I32 y ^I32 last]
+  (let [^I32 start (cells-len et) ^I32 line (ln-count fl)
+        ^:mut ^I32 i 0 ^:mut ^I32 word 0]
+    (while (< i 7)
+      (do (cells-push et (+ 65 i))
+          (set i (+ i 1))))
+    (cells-push et last)
+    (set word (wd-new fw page 50 y 400 (+ y 12) 50 y 400 y 0 0 start 8 line 900 -1))
+    (ln-new fl page 50 y 400 (+ y 12) 50 y 400 y 0 0 word 1)
+    (return 0)))
+
 (defn ^I32 law-covered-fragment [^TestT emon-t ^I32 shared]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
         ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
         ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells cuts (new-cells)
-        ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 first 0]
+        ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 first 0 ^:mut ^I32 expected 0]
     (page-new pages 1 450 1000 0 (pk-image))
     (page-new pages 2 450 1000 0 (pk-image))
     (cells-push mask 1) (cells-push mask 1)
@@ -277,7 +292,11 @@
     (law-line fl fw et 1 50 91)
     (if (== shared 1)
       (do (law-line fl fw et 1 957 88)
-          (law-line fl fw et 2 50 88)))
+          (law-line fl fw et 2 50 88)
+          (set expected 1)))
+    (if (== shared 2)
+      (do (law-fragment-anchor fl fw et 1 957 88)
+          (law-fragment-anchor fl fw et 2 50 89)))
     (set first (wd-count fw))
     (law-band-line fl fw et 2 80 5)
     (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 0 4)
@@ -293,11 +312,13 @@
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells))
-               shared "the full copy of the fragment corroborates a shared edge line")
+               expected "the full copy of the fragment corroborates an exact shared edge line")
     (assert-eq (ln-count fl) (+ 2 shared) "keep every distinct complete line")
     (if (== shared 1)
       (assert-eq (cells-at decisions 2) 1 "report the confirmed overlap")
-      (assert-eq (cells-len decisions) 0 "the full line covers the fragment"))
+      (if (== shared 2)
+        (assert-eq (cells-at decisions 2) 2 "a single fuzzy row remains ambiguous")
+        (assert-eq (cells-len decisions) 0 "the full line covers the fragment")))
     (return 0)))
 
 (deftest test-a-complete-neighboring-copy-covers-a-clipped-fragment
@@ -305,6 +326,9 @@
 
 (deftest test-a-covered-fragment-corroborates-a-single-line-overlap
   (law-covered-fragment (test-t) 1))
+
+(deftest test-a-covered-fragment-keeps-a-single-fuzzy-match-ambiguous
+  (law-covered-fragment (test-t) 2))
 
 (defn ^I32 law-cut-and-pixel [^TestT emon-t ^I32 cut]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
@@ -331,8 +355,8 @@
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells))
-               cut "the identical strip needs opposing cut fragments")
-    (assert-eq (cells-at decisions 2) (- 2 cut) "corroboration controls the seam decision")
+               0 "matching pixels and raster cuts do not prove single-row continuity")
+    (assert-eq (cells-at decisions 2) 2 "keep a single-row candidate without textual continuity")
     (return 0)))
 
 (deftest test-pixel-confirmation-of-a-single-line-needs-cut-context
@@ -376,6 +400,63 @@
 (deftest test-anchored-word-alignment-across-different-line-breaks
   (law-word-seam (test-t) 0 4 1)
   (law-word-seam (test-t) 1 0 2))
+
+(deftest test-row-similarity-counts-more-than-one-edit
+  (let [^Cells et (new-cells)]
+    (cells-push et 97) (cells-push et 98) (cells-push et 99)
+    (cells-push et 100) (cells-push et 101) (cells-push et 102)
+    (cells-push et 97) (cells-push et 98) (cells-push et 104)
+    (cells-push et 100) (cells-push et 101) (cells-push et 103)
+    (assert-eq (ms-similarity et 0 6 6 6 (new-cells)) 666 "substitutions are graded")
+    (assert-eq (ms-similarity et 0 6 0 5 (new-cells)) 833 "one missing character is an edit")))
+
+(defn ^I32 law-priced-row [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et
+                            ^I32 page ^I32 y ^I32 item]
+  (let [^I32 line (ln-count fl) ^I32 first (wd-count fw)
+        ^:mut ^I32 price-y y ^:mut ^I32 rot 0]
+    (if (== page 2) (do (set price-y (+ y 24)) (set rot 35500)))
+    (wd-new fw page 50 y 90 (+ y 12) 50 y 90 y rot 0 (cells-len et) 1 line 900 -1)
+    (cells-push et item)
+    (if (== page 2)
+      (ln-new fl page 50 y 90 (+ y 12) 50 y 90 y rot 0 first 1))
+    (wd-new fw page 320 price-y 360 (+ price-y 12) 320 price-y 360 price-y
+                rot 0 (cells-len et) 1 (ln-count fl) 900 -1)
+    (cells-push et 53)
+    (if (== page 2)
+      (ln-new fl page 320 price-y 360 (+ price-y 12) 320 price-y 360 price-y rot 0 (+ first 1) 1)
+      (ln-new fl page 50 y 360 (+ y 12) 50 y 360 y rot 0 first 2))
+    (return 0)))
+
+(deftest test-tilt-aware-rows-join-item-and-price-segments-for-seam-matching
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^:mut ^I32 i 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 600 90)
+    (while (< i 3)
+      (do (law-priced-row fl fw et 1 (+ 700 (* i 40)) (+ 65 i))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 3)
+      (do (law-priced-row fl fw et 2 (+ 40 (* i 40)) (+ 65 i))
+          (set i (+ i 1))))
+    (law-line fl fw et 2 350 81)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells) (new-cells))
+               6 "drop the matching visual rows, including both segments on the later photo")
+    (assert-eq (ln-count fl) 5 "each surviving item and price remains one original flow line")))
+
+(deftest test-correlation-threshold-separates-moderate-from-weak-agreement
+  (let [^Cells pixels (new-cells)]
+    (cells-push pixels 0) (cells-push pixels 0) (cells-push pixels 100) (cells-push pixels 100)
+    (cells-push pixels 0) (cells-push pixels 50) (cells-push pixels 50) (cells-push pixels 100)
+    (cells-push pixels 0) (cells-push pixels 100) (cells-push pixels 100) (cells-push pixels 100)
+    (assert-eq (ms-ncc pixels 0 4 4) 1 "correlation about .71 corroborates")
+    (assert-eq (ms-ncc pixels 0 8 4) 0 "correlation about .58 is too weak")))
 
 (deftest test-reversed-cuts-can-report-a-gap-without-changing-upload-order
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)

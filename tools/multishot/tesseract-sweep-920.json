@@ -1,8 +1,8 @@
 {
   "seed" : 920,
-  "mode" : "gate",
   "input" : "images",
-  "seam-metric" : "model-v2",
+  "mode" : "gate",
+  "seam-metric" : "model-v3",
   "cases" : [ {
     "id" : "sroie-test-sroie_00139",
     "kind" : "1",
@@ -1046,7 +1046,7 @@
           "recall" : 0.7363409117962147
         },
         "actual" : {
-          "precision" : 0.7242038713705901,
+          "precision" : 0.7242886694508411,
           "recall" : 0.7363012339800817
         }
       },
@@ -1060,61 +1060,127 @@
           "recall" : 0.7368046495077689
         },
         "actual" : {
-          "precision" : 0.720957249070632,
+          "precision" : 0.7210410131288486,
           "recall" : 0.736092990155379
         }
       },
       "checks" : {
         "total-before" : 344,
-        "missing-output" : 2320,
+        "missing-output" : 2321,
         "evidence_missing" : 2323,
         "missing-concat" : 2319,
         "changed-repeat" : 0,
         "evidence_missing_concat" : 2323,
         "total-missing" : 25,
-        "total-after" : 335,
+        "total-after" : 336,
         "changed-clean" : 0,
         "scan-total" : 151,
         "total-duplicates" : 57,
         "false-merges" : 0
       },
       "buckets" : {
-        "different-pages" : {
+        "1" : {
           "concat" : {
-            "dup" : 0,
-            "lost" : 0,
-            "evidence_dup" : 0,
-            "unflagged" : 0,
+            "dup" : 25,
+            "lost" : 2,
+            "evidence_dup" : 21,
+            "unflagged" : 25,
             "lost-flagged" : 0,
-            "seams" : 1,
-            "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 0,
-            "shared" : 0,
+            "seams" : 66,
+            "out-of-order-unflagged" : 7,
+            "out-of-order-missed-gap" : 1,
+            "shared" : 66,
             "matched-dup" : 0,
-            "lost-rows" : 0,
+            "lost-rows" : 3,
+            "same-photo-dup" : 3,
             "spurious-gap" : 0
           },
           "actual" : {
-            "dup" : 0,
-            "lost" : 0,
-            "evidence_dup" : 0,
-            "unflagged" : 0,
-            "lost-flagged" : 0,
-            "seams" : 1,
-            "out-of-order-unflagged" : 0,
+            "dup" : 26,
+            "lost" : 2,
+            "evidence_dup" : 21,
+            "unflagged" : 5,
+            "lost-flagged" : 2,
+            "seams" : 66,
+            "out-of-order-unflagged" : 3,
             "out-of-order-missed-gap" : 0,
-            "shared" : 0,
+            "shared" : 66,
             "matched-dup" : 0,
-            "lost-rows" : 0,
+            "lost-rows" : 3,
+            "same-photo-dup" : 2,
+            "spurious-gap" : 39
+          }
+        },
+        "2-3" : {
+          "concat" : {
+            "dup" : 94,
+            "lost" : 3,
+            "evidence_dup" : 91,
+            "unflagged" : 94,
+            "lost-flagged" : 0,
+            "seams" : 79,
+            "out-of-order-unflagged" : 16,
+            "out-of-order-missed-gap" : 1,
+            "shared" : 204,
+            "matched-dup" : 0,
+            "lost-rows" : 4,
+            "same-photo-dup" : 7,
             "spurious-gap" : 0
+          },
+          "actual" : {
+            "dup" : 90,
+            "lost" : 3,
+            "evidence_dup" : 87,
+            "unflagged" : 50,
+            "lost-flagged" : 2,
+            "seams" : 79,
+            "out-of-order-unflagged" : 10,
+            "out-of-order-missed-gap" : 1,
+            "shared" : 204,
+            "matched-dup" : 0,
+            "lost-rows" : 4,
+            "same-photo-dup" : 6,
+            "spurious-gap" : 42
+          }
+        },
+        "4+" : {
+          "concat" : {
+            "dup" : 95,
+            "lost" : 1,
+            "evidence_dup" : 107,
+            "unflagged" : 95,
+            "lost-flagged" : 0,
+            "seams" : 45,
+            "out-of-order-unflagged" : 21,
+            "out-of-order-missed-gap" : 0,
+            "shared" : 193,
+            "matched-dup" : 0,
+            "lost-rows" : 1,
+            "same-photo-dup" : 1,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "dup" : 82,
+            "lost" : 1,
+            "evidence_dup" : 91,
+            "unflagged" : 38,
+            "lost-flagged" : 1,
+            "seams" : 45,
+            "out-of-order-unflagged" : 11,
+            "out-of-order-missed-gap" : 0,
+            "shared" : 193,
+            "matched-dup" : 0,
+            "lost-rows" : 1,
+            "same-photo-dup" : 1,
+            "spurious-gap" : 22
           }
         },
         "abut" : {
           "concat" : {
-            "dup" : 7,
+            "dup" : 4,
             "lost" : 7,
             "evidence_dup" : 0,
-            "unflagged" : 7,
+            "unflagged" : 4,
             "lost-flagged" : 0,
             "seams" : 67,
             "out-of-order-unflagged" : 2,
@@ -1122,21 +1188,23 @@
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 8,
+            "same-photo-dup" : 2,
             "spurious-gap" : 0
           },
           "actual" : {
-            "dup" : 8,
+            "dup" : 4,
             "lost" : 7,
             "evidence_dup" : 0,
-            "unflagged" : 5,
-            "lost-flagged" : 5,
+            "unflagged" : 1,
+            "lost-flagged" : 4,
             "seams" : 67,
             "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 1,
+            "out-of-order-missed-gap" : 2,
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 8,
-            "spurious-gap" : 45
+            "same-photo-dup" : 3,
+            "spurious-gap" : 47
           }
         },
         "asymmetric" : {
@@ -1152,6 +1220,7 @@
             "shared" : 1,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           },
           "actual" : {
@@ -1166,67 +1235,104 @@
             "shared" : 1,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 1
           }
         },
-        "1" : {
+        "clean" : {
           "concat" : {
-            "dup" : 30,
-            "lost" : 2,
-            "evidence_dup" : 21,
-            "unflagged" : 30,
+            "dup" : 0,
+            "lost" : 0,
+            "evidence_dup" : 0,
+            "unflagged" : 0,
             "lost-flagged" : 0,
-            "seams" : 66,
-            "out-of-order-unflagged" : 7,
-            "out-of-order-missed-gap" : 1,
-            "shared" : 66,
+            "seams" : 1,
+            "out-of-order-unflagged" : 0,
+            "out-of-order-missed-gap" : 0,
+            "shared" : 0,
             "matched-dup" : 0,
-            "lost-rows" : 3,
+            "lost-rows" : 0,
+            "same-photo-dup" : 1,
             "spurious-gap" : 0
           },
           "actual" : {
-            "dup" : 30,
-            "lost" : 2,
-            "evidence_dup" : 21,
-            "unflagged" : 7,
-            "lost-flagged" : 2,
-            "seams" : 66,
-            "out-of-order-unflagged" : 3,
+            "dup" : 0,
+            "lost" : 0,
+            "evidence_dup" : 0,
+            "unflagged" : 0,
+            "lost-flagged" : 0,
+            "seams" : 1,
+            "out-of-order-unflagged" : 0,
             "out-of-order-missed-gap" : 0,
-            "shared" : 66,
+            "shared" : 0,
             "matched-dup" : 0,
-            "lost-rows" : 3,
-            "spurious-gap" : 42
+            "lost-rows" : 0,
+            "same-photo-dup" : 1,
+            "spurious-gap" : 1
           }
         },
-        "partial" : {
+        "different-pages" : {
           "concat" : {
-            "dup" : 8,
-            "lost" : 117,
+            "dup" : 0,
+            "lost" : 0,
             "evidence_dup" : 0,
-            "unflagged" : 8,
+            "unflagged" : 0,
             "lost-flagged" : 0,
-            "seams" : 126,
+            "seams" : 1,
             "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 24,
+            "out-of-order-missed-gap" : 0,
             "shared" : 0,
             "matched-dup" : 0,
-            "lost-rows" : 149,
+            "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           },
           "actual" : {
-            "dup" : 7,
-            "lost" : 117,
+            "dup" : 0,
+            "lost" : 0,
             "evidence_dup" : 0,
-            "unflagged" : 6,
-            "lost-flagged" : 104,
-            "seams" : 126,
+            "unflagged" : 0,
+            "lost-flagged" : 0,
+            "seams" : 1,
             "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 13,
+            "out-of-order-missed-gap" : 0,
             "shared" : 0,
             "matched-dup" : 0,
-            "lost-rows" : 149,
-            "spurious-gap" : 15
+            "lost-rows" : 0,
+            "same-photo-dup" : 0,
+            "spurious-gap" : 0
+          }
+        },
+        "gap" : {
+          "concat" : {
+            "dup" : 0,
+            "lost" : 80,
+            "evidence_dup" : 0,
+            "unflagged" : 0,
+            "lost-flagged" : 0,
+            "seams" : 81,
+            "out-of-order-unflagged" : 0,
+            "out-of-order-missed-gap" : 14,
+            "shared" : 0,
+            "matched-dup" : 0,
+            "lost-rows" : 159,
+            "same-photo-dup" : 2,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "dup" : 0,
+            "lost" : 80,
+            "evidence_dup" : 0,
+            "unflagged" : 0,
+            "lost-flagged" : 75,
+            "seams" : 81,
+            "out-of-order-unflagged" : 0,
+            "out-of-order-missed-gap" : 5,
+            "shared" : 0,
+            "matched-dup" : 0,
+            "lost-rows" : 159,
+            "same-photo-dup" : 0,
+            "spurious-gap" : 7
           }
         },
         "identical" : {
@@ -1242,6 +1348,7 @@
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           },
           "actual" : {
@@ -1256,37 +1363,40 @@
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           }
         },
-        "gap" : {
+        "partial" : {
           "concat" : {
-            "dup" : 2,
-            "lost" : 80,
+            "dup" : 1,
+            "lost" : 117,
             "evidence_dup" : 0,
-            "unflagged" : 2,
+            "unflagged" : 1,
             "lost-flagged" : 0,
-            "seams" : 81,
+            "seams" : 126,
+            "out-of-order-unflagged" : 0,
+            "out-of-order-missed-gap" : 24,
+            "shared" : 0,
+            "matched-dup" : 0,
+            "lost-rows" : 149,
+            "same-photo-dup" : 6,
+            "spurious-gap" : 0
+          },
+          "actual" : {
+            "dup" : 1,
+            "lost" : 117,
+            "evidence_dup" : 0,
+            "unflagged" : 0,
+            "lost-flagged" : 103,
+            "seams" : 126,
             "out-of-order-unflagged" : 0,
             "out-of-order-missed-gap" : 14,
             "shared" : 0,
             "matched-dup" : 0,
-            "lost-rows" : 159,
-            "spurious-gap" : 0
-          },
-          "actual" : {
-            "dup" : 0,
-            "lost" : 80,
-            "evidence_dup" : 0,
-            "unflagged" : 0,
-            "lost-flagged" : 74,
-            "seams" : 81,
-            "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 6,
-            "shared" : 0,
-            "matched-dup" : 0,
-            "lost-rows" : 159,
-            "spurious-gap" : 9
+            "lost-rows" : 149,
+            "same-photo-dup" : 5,
+            "spurious-gap" : 14
           }
         },
         "repeat" : {
@@ -1302,6 +1412,7 @@
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           },
           "actual" : {
@@ -1316,37 +1427,8 @@
             "shared" : 0,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
-          }
-        },
-        "2-3" : {
-          "concat" : {
-            "dup" : 107,
-            "lost" : 3,
-            "evidence_dup" : 91,
-            "unflagged" : 107,
-            "lost-flagged" : 0,
-            "seams" : 79,
-            "out-of-order-unflagged" : 16,
-            "out-of-order-missed-gap" : 1,
-            "shared" : 204,
-            "matched-dup" : 0,
-            "lost-rows" : 4,
-            "spurious-gap" : 0
-          },
-          "actual" : {
-            "dup" : 102,
-            "lost" : 3,
-            "evidence_dup" : 88,
-            "unflagged" : 60,
-            "lost-flagged" : 2,
-            "seams" : 79,
-            "out-of-order-unflagged" : 10,
-            "out-of-order-missed-gap" : 1,
-            "shared" : 204,
-            "matched-dup" : 0,
-            "lost-rows" : 4,
-            "spurious-gap" : 40
           }
         },
         "separator" : {
@@ -1362,6 +1444,7 @@
             "shared" : 4,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
           },
           "actual" : {
@@ -1376,78 +1459,11 @@
             "shared" : 4,
             "matched-dup" : 0,
             "lost-rows" : 0,
+            "same-photo-dup" : 0,
             "spurious-gap" : 0
-          }
-        },
-        "4+" : {
-          "concat" : {
-            "dup" : 100,
-            "lost" : 1,
-            "evidence_dup" : 107,
-            "unflagged" : 100,
-            "lost-flagged" : 0,
-            "seams" : 45,
-            "out-of-order-unflagged" : 21,
-            "out-of-order-missed-gap" : 0,
-            "shared" : 193,
-            "matched-dup" : 0,
-            "lost-rows" : 1,
-            "spurious-gap" : 0
-          },
-          "actual" : {
-            "dup" : 87,
-            "lost" : 1,
-            "evidence_dup" : 91,
-            "unflagged" : 40,
-            "lost-flagged" : 1,
-            "seams" : 45,
-            "out-of-order-unflagged" : 11,
-            "out-of-order-missed-gap" : 0,
-            "shared" : 193,
-            "matched-dup" : 0,
-            "lost-rows" : 1,
-            "spurious-gap" : 23
-          }
-        },
-        "clean" : {
-          "concat" : {
-            "dup" : 1,
-            "lost" : 0,
-            "evidence_dup" : 0,
-            "unflagged" : 1,
-            "lost-flagged" : 0,
-            "seams" : 1,
-            "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 0,
-            "shared" : 0,
-            "matched-dup" : 0,
-            "lost-rows" : 0,
-            "spurious-gap" : 0
-          },
-          "actual" : {
-            "dup" : 1,
-            "lost" : 0,
-            "evidence_dup" : 0,
-            "unflagged" : 1,
-            "lost-flagged" : 0,
-            "seams" : 1,
-            "out-of-order-unflagged" : 0,
-            "out-of-order-missed-gap" : 0,
-            "shared" : 0,
-            "matched-dup" : 0,
-            "lost-rows" : 0,
-            "spurious-gap" : 1
           }
         }
       }
     }
-  },
-  "environment" : {
-    "os" : "macOS arm64",
-    "tesseract" : "5.5.3",
-    "leptonica" : "1.87.0",
-    "python" : "3.12.3",
-    "eng" : "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
-    "osd" : "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"
   }
 }

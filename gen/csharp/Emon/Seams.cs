@@ -14,22 +14,76 @@ public static class Seams {
         }
         return 0;
     }
-    internal static int MsIndex(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int np, emon.Port.Cells keys, emon.Port.Cells codepoints) {
-        // Each flow line has a normalized text span and a kind: blank 0, separator 1, or content 2.
-        int line = 0;
+    internal static int MsStride() {
+        return 9;
+    }
+    internal static int MsKey(emon.Port.Cells keys, int line, int field) {
+        return emon.Port.CellsAt(keys, (line * MsStride()) + field);
+    }
+    internal static int MsSetKey(emon.Port.Cells keys, int line, int field, int value) {
+        emon.Port.CellsSet(keys, (line * MsStride()) + field, value);
+        return 0;
+    }
+    internal static int MsHeight(emon.Port.Cells fl, int line) {
+        return Evidence.LnGet(fl, line, Evidence.LhY1()) - Evidence.LnGet(fl, line, Evidence.LhY0());
+    }
+    internal static int MsRectifiedY(int x, int y, long sine, long cosine) {
+        return (int) ((unchecked(((long) y) * cosine) + unchecked(((long) x) * sine)) / ((long) 65536));
+    }
+    internal static int MsPageAngle(emon.Port.Cells fw, int page, int first, int end) {
+        // Word angles use a y-up convention. Find the signed median without sorting the words.
+        int lo = -2500;
+        int hi = 2500;
+        int mid = 0;
+        int word = 0;
+        int rot = 0;
+        int below = 0;
+        int count = 0;
+        if (first >= end) {
+            return 0;
+        }
+        while (lo < hi) {
+            mid = lo + ((hi - lo) / 2);
+            word = first;
+            below = 0;
+            count = 0;
+            while (word < end) {
+                if (Evidence.WdGet(fw, word, Evidence.HdPage()) == page) {
+                    rot = (Evidence.WdGet(fw, word, Evidence.HdRot()) + 18000) % 36000;
+                    rot -= 18000;
+                    if ((rot < -2500) || (rot > 2500)) {
+                        rot = 0;
+                    }
+                    if (rot <= mid) {
+                        below += 1;
+                    }
+                    count += 1;
+                }
+                word += 1;
+            }
+            if (count == 0) {
+                return 0;
+            }
+            if ((below * 2) > (count - 1)) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        return lo;
+    }
+    internal static int MsRowText(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int line, emon.Port.Cells keys, emon.Port.Cells codepoints) {
+        int start = emon.Port.CellsLen(codepoints);
+        int segment = line;
         int word = 0;
         int stop = 0;
-        int start = 0;
         int pos = 0;
         int end = 0;
         int cp = 0;
         int kind = 0;
-        int at = 0;
-        while (line < Evidence.LnCount(fl)) {
-            start = emon.Port.CellsLen(codepoints);
-            kind = 0;
-            word = Evidence.LnGet(fl, line, Evidence.LhFirst());
-            stop = word + Evidence.LnGet(fl, line, Evidence.LhCount());
+        while (segment >= 0) {
+            word = Evidence.LnGet(fl, segment, Evidence.LhFirst());
+            stop = word + Evidence.LnGet(fl, segment, Evidence.LhCount());
             while (word < stop) {
                 pos = Evidence.WdGet(fw, word, Evidence.HdTstart());
                 end = pos + Evidence.WdGet(fw, word, Evidence.HdTlen());
@@ -54,29 +108,282 @@ public static class Seams {
                 }
                 word += 1;
             }
-            emon.Port.CellsPush(keys, start);
-            emon.Port.CellsPush(keys, emon.Port.CellsLen(codepoints) - start);
-            emon.Port.CellsPush(keys, kind);
+            segment = MsKey(keys, segment, 3);
+        }
+        MsSetKey(keys, line, 0, start);
+        MsSetKey(keys, line, 1, emon.Port.CellsLen(codepoints) - start);
+        MsSetKey(keys, line, 2, kind);
+        return 0;
+    }
+    internal static int MsRowPage(emon.Port.Cells fl, emon.Port.Cells fw, int page, int first, int end, emon.Port.Cells keys, emon.Port.Cells sorted) {
+        // Match visual rows, retaining each segment's original line and words for the ledger and rebuild.
+        int w0 = Evidence.LnGet(fl, first, Evidence.LhFirst());
+        int w1 = Evidence.LnGet(fl, end - 1, Evidence.LhFirst()) + Evidence.LnGet(fl, end - 1, Evidence.LhCount());
+        int angle = MsPageAngle(fw, page, w0, w1);
+        long sine = (long) Evidence.EvSin(angle);
+        long cosine = (long) Evidence.EvCos(angle);
+        int line = first;
+        int j = 0;
+        int other = 0;
+        int x = 0;
+        int y = 0;
+        int h = 0;
+        int parent = 0;
+        int tail = 0;
+        int best = 0;
+        int delta = 0;
+        int quality = 0;
+        emon.Port.CellsDrop(sorted, 0);
+        while (line < end) {
+            if (Evidence.LnGet(fl, line, Evidence.HdPage()) == page) {
+                x = Evidence.LnGet(fl, line, Evidence.LhX0()) + Evidence.LnGet(fl, line, Evidence.LhX1());
+                y = Evidence.LnGet(fl, line, Evidence.LhY0()) + Evidence.LnGet(fl, line, Evidence.LhY1());
+                MsSetKey(keys, line, 4, MsRectifiedY(x, y, sine, cosine));
+                j = emon.Port.CellsLen(sorted);
+                emon.Port.CellsPush(sorted, line);
+                if ((end - first) <= 1500) {
+                    while ((j > 0) && (Evidence.LnGet(fl, emon.Port.CellsAt(sorted, j - 1), Evidence.LhX0()) > Evidence.LnGet(fl, line, Evidence.LhX0()))) {
+                        emon.Port.CellsSet(sorted, j, emon.Port.CellsAt(sorted, j - 1));
+                        j -= 1;
+                    }
+                }
+                emon.Port.CellsSet(sorted, j, line);
+            }
             line += 1;
         }
-        while (at < np) {
-            emon.Port.CellsPush(keys, line);
-            emon.Port.CellsPush(keys, 0);
+        j = 0;
+        while (j < emon.Port.CellsLen(sorted)) {
+            line = emon.Port.CellsAt(sorted, j);
+            y = MsKey(keys, line, 4);
+            x = Evidence.LnGet(fl, line, Evidence.LhX0());
+            h = MsHeight(fl, line);
+            best = -1;
+            quality = 2147483647;
+            other = 0;
+            if (((end - first) <= 1500) && (h > 0) && (Evidence.LnGet(fl, line, Evidence.LhCount()) > 0)) {
+                while (other < j) {
+                    parent = emon.Port.CellsAt(sorted, other);
+                    tail = MsKey(keys, parent, 6);
+                    if ((tail >= 0) && (Evidence.LnGet(fl, parent, Evidence.LhCount()) > 0) && (x >= Evidence.LnGet(fl, tail, Evidence.LhX1()))) {
+                        delta = y - MsKey(keys, parent, 4);
+                        if (delta < 0) {
+                            delta = 0 - delta;
+                        }
+                        if ((delta < quality) && ((10 * delta) < (11 * h)) && ((10 * delta) < (11 * MsHeight(fl, parent)))) {
+                            best = parent;
+                            quality = delta;
+                        }
+                    }
+                    other += 1;
+                }
+            }
+            if (best >= 0) {
+                tail = MsKey(keys, best, 6);
+                MsSetKey(keys, tail, 3, line);
+                MsSetKey(keys, best, 6, line);
+                MsSetKey(keys, line, 5, best);
+            } else {
+                MsSetKey(keys, line, 6, line);
+            }
+            j += 1;
+        }
+        return 0;
+    }
+    internal static int MsLineConfidence(emon.Port.Cells fl, emon.Port.Cells fw, int line) {
+        int first = Evidence.LnGet(fl, line, Evidence.LhFirst());
+        int count = Evidence.LnGet(fl, line, Evidence.LhCount());
+        int word = first;
+        int conf = 0;
+        int p = 0;
+        while (word < (first + count)) {
+            p = Evidence.WdGet(fw, word, Evidence.HdConf());
+            if (p > 0) {
+                conf += p;
+            }
+            word += 1;
+        }
+        if (count == 0) {
+            return 0;
+        }
+        return conf / count;
+    }
+    internal static int MsPageMedian(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, int page, int first, int end, int confidence) {
+        int lo = 1;
+        int hi = 1;
+        int mid = 0;
+        int n = 0;
+        int i = first;
+        int value = 0;
+        int count = 0;
+        while (i < end) {
+            if ((Evidence.LnGet(fl, i, Evidence.HdPage()) == page) && (MsKey(keys, i, 2) == 2)) {
+                value = MsHeight(fl, i);
+                if (confidence == 1) {
+                    value = MsLineConfidence(fl, fw, i);
+                }
+                if (value > 0) {
+                    n += 1;
+                }
+                if (value > hi) {
+                    hi = value;
+                }
+            }
+            i += 1;
+        }
+        if (n == 0) {
+            return 0;
+        }
+        while (lo < hi) {
+            mid = lo + ((hi - lo) / 2);
+            count = 0;
+            i = first;
+            while (i < end) {
+                if ((Evidence.LnGet(fl, i, Evidence.HdPage()) == page) && (MsKey(keys, i, 2) == 2)) {
+                    value = MsHeight(fl, i);
+                    if (confidence == 1) {
+                        value = MsLineConfidence(fl, fw, i);
+                    }
+                    if ((value > 0) && (value <= mid)) {
+                        count += 1;
+                    }
+                }
+                i += 1;
+            }
+            if ((count * 2) > (n - 1)) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        return lo;
+    }
+    internal static int MsRowNoise(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells codepoints, int line, int typical, int conf) {
+        int first = MsKey(keys, line, 0);
+        int size = MsKey(keys, line, 1);
+        int current = MsLineConfidence(fl, fw, line);
+        int at = first;
+        int chars = 0;
+        if ((2 * MsHeight(fl, line)) < typical) {
+            return 1;
+        }
+        if ((current > 0) && ((5 * current) < (3 * conf))) {
+            return 1;
+        }
+        while (at < (first + size)) {
+            if (emon.Port.CellsAt(codepoints, at) != 32) {
+                chars += 1;
+            }
             at += 1;
         }
+        if ((100 * Scan.ScCountClass(codepoints, first, size, 2)) > (12 * chars)) {
+            return 1;
+        }
+        return 0;
+    }
+    internal static int MsPageNoise(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells text, emon.Port.Cells keys, int page, int first, int end) {
+        int typical = MsPageMedian(fl, fw, keys, page, first, end, 0);
+        int conf = MsPageMedian(fl, fw, keys, page, first, end, 1);
+        int line = first;
+        while (line < end) {
+            if ((Evidence.LnGet(fl, line, Evidence.HdPage()) == page) && (MsKey(keys, line, 2) == 2)) {
+                int noise = MsRowNoise(fl, fw, keys, text, line, typical, conf);
+                MsSetKey(keys, line, 7, noise);
+            }
+            line += 1;
+        }
+        return 0;
+    }
+    internal static int MsPageSiblings(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells ol, emon.Port.Cells keys, int page, int first, int end) {
+        // A short surviving segment beside clipped text can be the remainder of that same row.
+        int w0 = Evidence.LnGet(fl, first, Evidence.LhFirst());
+        int w1 = Evidence.LnGet(fl, end - 1, Evidence.LhFirst()) + Evidence.LnGet(fl, end - 1, Evidence.LhCount());
+        int angle = MsPageAngle(fw, page, w0, w1);
+        long sine = (long) Evidence.EvSin(angle);
+        long cosine = (long) Evidence.EvCos(angle);
+        int clip = 0;
+        int x0 = 0;
+        int x1 = 0;
+        int y = 0;
+        int line = first;
+        int distance = 0;
+        while (clip < Evidence.OlCount(ol)) {
+            if ((Evidence.OlGet(ol, clip, Evidence.HdPage()) == page) && (Evidence.OlGet(ol, clip, Evidence.OlfConf()) == Evidence.EvClippedConf()) && (Evidence.OlGet(ol, clip, Evidence.LhCount()) > 0)) {
+                x0 = Evidence.OlGet(ol, clip, Evidence.LhX0());
+                x1 = Evidence.OlGet(ol, clip, Evidence.LhX1());
+                y = MsRectifiedY(x0 + x1, Evidence.OlGet(ol, clip, Evidence.LhY0()) + Evidence.OlGet(ol, clip, Evidence.LhY1()), sine, cosine);
+                line = first;
+                while (line < end) {
+                    if ((Evidence.LnGet(fl, line, Evidence.HdPage()) == page) && (MsKey(keys, line, 2) == 2) && (MsKey(keys, line, 3) == -1) && (MsKey(keys, line, 1) >= 4) && (MsKey(keys, line, 1) <= 24) && ((Evidence.LnGet(fl, line, Evidence.LhX1()) <= x0) || (Evidence.LnGet(fl, line, Evidence.LhX0()) >= x1))) {
+                        distance = MsKey(keys, line, 4) - y;
+                        if (distance < 0) {
+                            distance = 0 - distance;
+                        }
+                        if (distance <= MsHeight(fl, line)) {
+                            MsSetKey(keys, line, 8, 1);
+                        }
+                    }
+                    line += 1;
+                }
+            }
+            clip += 1;
+        }
+        return 0;
+    }
+    internal static int MsIndex(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells ol, emon.Port.Cells et, int np, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells sorted) {
+        // A row key stores text offset, size, kind, next segment, corrected y, parent, tail, edge noise, and clipped sibling.
+        int n = Evidence.LnCount(fl);
+        int @base = n * MsStride();
+        int line = 0;
+        int page = 1;
+        int start = 0;
+        int end = 0;
+        int at = 0;
+        while (line < n) {
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, -1);
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, -1);
+            emon.Port.CellsPush(keys, -1);
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, 0);
+            line += 1;
+        }
+        while (page <= np) {
+            emon.Port.CellsPush(keys, 0);
+            emon.Port.CellsPush(keys, 0);
+            page += 1;
+        }
         line = 0;
-        while (line < Evidence.LnCount(fl)) {
-            at = (Evidence.LnCount(fl) * 3) + ((Evidence.LnGet(fl, line, Evidence.HdPage()) - 1) * 2);
+        while (line < n) {
+            at = @base + ((Evidence.LnGet(fl, line, Evidence.HdPage()) - 1) * 2);
             if (emon.Port.CellsAt(keys, at + 1) == 0) {
                 emon.Port.CellsSet(keys, at, line);
             }
             emon.Port.CellsSet(keys, at + 1, line + 1);
             line += 1;
         }
-        return line;
-    }
-    internal static int MsKey(emon.Port.Cells keys, int line, int field) {
-        return emon.Port.CellsAt(keys, (line * 3) + field);
+        page = 1;
+        while (page <= np) {
+            at = @base + ((page - 1) * 2);
+            start = emon.Port.CellsAt(keys, at);
+            end = emon.Port.CellsAt(keys, at + 1);
+            if (end > start) {
+                MsRowPage(fl, fw, page, start, end, keys, sorted);
+                at = start;
+                while (at < end) {
+                    if ((Evidence.LnGet(fl, at, Evidence.HdPage()) == page) && (MsKey(keys, at, 5) < 0)) {
+                        MsRowText(fl, fw, et, at, keys, codepoints);
+                    }
+                    at += 1;
+                }
+                MsPageNoise(fl, fw, codepoints, keys, page, start, end);
+                MsPageSiblings(fl, fw, ol, keys, page, start, end);
+            }
+            page += 1;
+        }
+        return 0;
     }
     internal static int MsEqual(emon.Port.Cells keys, emon.Port.Cells codepoints, int a, int b) {
         int na = MsKey(keys, a, 1);
@@ -102,6 +409,12 @@ public static class Seams {
         }
         return 1;
     }
+    internal static int MsFold(int cp) {
+        if ((cp >= 65) && (cp <= 90)) {
+            return cp + 32;
+        }
+        return cp;
+    }
     internal static int MsOneEdit(emon.Port.Cells codepoints, int sa, int na, int sb, int nb, int minSize) {
         int i = 0;
         int j = 0;
@@ -110,7 +423,7 @@ public static class Seams {
             return 0;
         }
         while ((i < na) && (j < nb)) {
-            if (emon.Port.CellsAt(codepoints, sa + i) == emon.Port.CellsAt(codepoints, sb + j)) {
+            if (MsFold(emon.Port.CellsAt(codepoints, sa + i)) == MsFold(emon.Port.CellsAt(codepoints, sb + j))) {
                 i += 1;
                 j += 1;
             } else {
@@ -131,83 +444,65 @@ public static class Seams {
         }
         return 1;
     }
-    internal static int MsNextTokenChar(emon.Port.Cells text, int at, int end) {
-        int i = at;
-        int cp = 0;
-        while (i < end) {
-            cp = emon.Port.CellsAt(text, i);
-            if ((cp == 32) || ((cp >= 48) && (cp <= 57)) || ((cp >= 97) && (cp <= 122)) || (cp >= 128)) {
-                return i;
-            }
-            i += 1;
+    internal static int MsMin(int a, int b) {
+        if (a < b) {
+            return a;
         }
-        return i;
+        return b;
     }
-    internal static int MsTokenBand(emon.Port.Cells keys, emon.Port.Cells codepoints, int a, int b) {
-        // A substantially identical word band may have punctuation variants or one extra final token.
-        int i = MsKey(keys, a, 0);
-        int j = MsKey(keys, b, 0);
-        int ea = i + MsKey(keys, a, 1);
-        int eb = j + MsKey(keys, b, 1);
-        int words = 0;
-        int chars = 0;
-        i = MsNextTokenChar(codepoints, i, ea);
-        j = MsNextTokenChar(codepoints, j, eb);
-        while ((i < ea) && (j < eb) && (emon.Port.CellsAt(codepoints, i) == emon.Port.CellsAt(codepoints, j))) {
-            if (emon.Port.CellsAt(codepoints, i) == 32) {
-                if (chars > 0) {
-                    words += 1;
-                }
-                chars = 0;
-            } else {
-                chars += 1;
-            }
-            i = MsNextTokenChar(codepoints, i + 1, ea);
-            j = MsNextTokenChar(codepoints, j + 1, eb);
+    internal static int MsMax(int a, int b) {
+        if (a > b) {
+            return a;
         }
-        if ((i < ea) && (j < eb)) {
+        return b;
+    }
+    public static int MsSimilarity(emon.Port.Cells text, int a, int na, int b, int nb, emon.Port.Cells row) {
+        // Levenshtein similarity in per mille. Bound the work for exceptionally long OCR lines.
+        int size = MsMax(na, nb);
+        int i = 0;
+        int j = 0;
+        int prev = 0;
+        int up = 0;
+        int cost = 0;
+        int cp = 0;
+        if ((na == 0) || (nb == 0)) {
             return 0;
         }
-        if (chars > 0) {
-            words += 1;
-        }
-        if (words < 3) {
-            return 0;
-        }
-        if (i < ea) {
-            if (emon.Port.CellsAt(codepoints, i) != 32) {
-                return 0;
-            }
-            i += 1;
-            while (i < ea) {
-                if (emon.Port.CellsAt(codepoints, i) == 32) {
-                    return 0;
-                }
+        if (na == nb) {
+            while ((i < na) && (emon.Port.CellsAt(text, a + i) == emon.Port.CellsAt(text, b + i))) {
                 i += 1;
             }
-        }
-        if (j < eb) {
-            if (emon.Port.CellsAt(codepoints, j) != 32) {
-                return 0;
-            }
-            j += 1;
-            while (j < eb) {
-                if (emon.Port.CellsAt(codepoints, j) == 32) {
-                    return 0;
-                }
-                j += 1;
+            if (i == na) {
+                return 1000;
             }
         }
-        return 1;
-    }
-    internal static int MsVariant(emon.Port.Cells keys, emon.Port.Cells codepoints, int a, int b) {
-        if ((MsKey(keys, a, 2) != 2) || (MsKey(keys, b, 2) != 2)) {
+        if ((size > 256) || ((100 * MsMin(na, nb)) < (45 * size))) {
             return 0;
         }
-        if (MsOneEdit(codepoints, MsKey(keys, a, 0), MsKey(keys, a, 1), MsKey(keys, b, 0), MsKey(keys, b, 1), 8) == 1) {
-            return 1;
+        emon.Port.CellsDrop(row, 0);
+        while (j <= nb) {
+            emon.Port.CellsPush(row, j);
+            j += 1;
         }
-        return MsTokenBand(keys, codepoints, a, b);
+        i = 0;
+        while (i < na) {
+            cp = emon.Port.CellsAt(text, a + i);
+            prev = i;
+            emon.Port.CellsSet(row, 0, i + 1);
+            j = 0;
+            while (j < nb) {
+                up = emon.Port.CellsAt(row, j + 1);
+                cost = prev;
+                if (cp != emon.Port.CellsAt(text, b + j)) {
+                    cost += 1;
+                }
+                emon.Port.CellsSet(row, j + 1, MsMin(cost, 1 + MsMin(up, emon.Port.CellsAt(row, j))));
+                prev = up;
+                j += 1;
+            }
+            i += 1;
+        }
+        return (1000 * (size - emon.Port.CellsAt(row, nb))) / size;
     }
     internal static int MsWordLimit() {
         return 160;
@@ -215,18 +510,24 @@ public static class Seams {
     internal static int MsWordCandidate() {
         return 32768;
     }
-    internal static int MsWordConfirmed() {
+    internal static int MsWordOpen() {
         return 65536;
+    }
+    internal static int MsQualityCode(int quality) {
+        return (quality - 18) / 32;
     }
     internal static int MsLeftFactor() {
         return 131072;
+    }
+    internal static int MsTrimmedFactor() {
+        return 4194304;
     }
     internal static int MsMatchKind(int match) {
         return match % MsLeftFactor();
     }
     internal static int MsMatchLeft(int match) {
         if (MsMatchKind(match) >= MsWordCandidate()) {
-            return match / MsLeftFactor();
+            return (match / MsLeftFactor()) % 32;
         }
         return match % 32;
     }
@@ -286,6 +587,16 @@ public static class Seams {
         int na = emon.Port.CellsAt(a, (i * 4) + 1);
         int nb = emon.Port.CellsAt(b, (j * 4) + 1);
         int k = 0;
+        if ((na > 1) && (Scan.ScCpClass(emon.Port.CellsAt(codepoints, sa)) <= 1)) {
+            while ((na > 1) && (Scan.ScCpClass(emon.Port.CellsAt(codepoints, sa + na + -1)) >= 2)) {
+                na -= 1;
+            }
+        }
+        if ((nb > 1) && (Scan.ScCpClass(emon.Port.CellsAt(codepoints, sb)) <= 1)) {
+            while ((nb > 1) && (Scan.ScCpClass(emon.Port.CellsAt(codepoints, sb + nb + -1)) >= 2)) {
+                nb -= 1;
+            }
+        }
         if (na == nb) {
             while ((k < na) && (emon.Port.CellsAt(codepoints, sa + k) == emon.Port.CellsAt(codepoints, sb + k))) {
                 k += 1;
@@ -297,7 +608,7 @@ public static class Seams {
         if (MsOneEdit(codepoints, sa, na, sb, nb, 4) == 1) {
             return 3;
         }
-        return -4;
+        return 0;
     }
     internal static int MsWordEnd(emon.Port.Cells words, int n, int at) {
         // An imperfect edge word may be omitted. No complete edge line may be skipped.
@@ -342,8 +653,11 @@ public static class Seams {
         int end = 0;
         int before = 0;
         int quality = 0;
+        int open = 0;
+        int dice = 0;
+        int rank = 0;
         int best = 0;
-        int bestQuality = 0;
+        int bestRank = 0;
         int an = 0;
         int bn = 0;
         int lines = 0;
@@ -365,47 +679,44 @@ public static class Seams {
                 left = emon.Port.CellsAt(row, j);
                 word = MsWordScore(codepoints, aw, bw, i, j);
                 diag = 0;
-                if ((prev > 0) && ((prev + (word * 256)) >= 256)) {
-                    diag = prev + (word * 256);
+                if ((prev > 0) && ((prev + (word * 512)) >= 512)) {
+                    diag = prev + (word * 512);
                 }
                 if ((word > 0) && (before <= 1) && (j <= 1) && (emon.Port.CellsAt(bw, (j * 4) + 3) == j)) {
-                    score = (word * 256) + (i - before);
+                    score = (word * 512) + (2 * (i - before)) + MsMin(1, before + j);
                     if (score > diag) {
                         diag = score;
                     }
                 }
                 score = diag;
-                if (up >= 1280) {
-                    if ((up - 1024) > score) {
-                        score = up - 1024;
-                    }
+                if (up > score) {
+                    score = up;
                 }
-                if (left >= 1280) {
-                    if ((left - 1024) > score) {
-                        score = left - 1024;
-                    }
+                if (left > score) {
+                    score = left;
                 }
                 emon.Port.CellsSet(row, j + 1, score);
                 prev = up;
                 if ((word > 0) && (diag > 0) && (MsWordEnd(aw, na, i) == na)) {
-                    quality = diag / 256;
-                    start = diag % 256;
+                    quality = diag / 512;
+                    start = (diag % 512) / 2;
+                    open = diag % 2;
                     end = MsWordEnd(bw, nb, j);
-                    // An exact word adds four and an edit subtracts four. Half of the maximum
-                    // score therefore requires at least three quarters of the words to agree.
-                    if ((quality > bestQuality) && (end >= 2) && (quality >= (2 * (na - start))) && (quality >= (2 * end))) {
-                        an = emon.Port.CellsAt(aw, (start * 4) + 2) + 1;
-                        bn = emon.Port.CellsAt(bw, ((end - 1) * 4) + 2) + 1;
-                        lines = MsContentLines(keys, codepoints, a, an);
-                        other = MsContentLines(keys, codepoints, b, bn);
-                        if (other < lines) {
-                            lines = other;
-                        }
-                        if (lines > 0) {
-                            bestQuality = quality;
-                            best = (an * MsLeftFactor()) + MsWordCandidate() + (lines * 32) + bn;
-                            if ((lines >= 4) && ((quality * 10) >= (36 * end)) && (end == (na - start))) {
-                                best = (an * MsLeftFactor()) + MsWordConfirmed() + (lines * 32) + bn;
+                    if (((i + 1) < na) || ((j + 1) < end)) {
+                        open = 1;
+                    }
+                    if (end >= 2) {
+                        dice = (quality * 500) / (end + (na - start));
+                        if (dice >= 720) {
+                            an = emon.Port.CellsAt(aw, (start * 4) + 2) + 1;
+                            bn = emon.Port.CellsAt(bw, ((end - 1) * 4) + 2) + 1;
+                            lines = MsContentLines(keys, codepoints, a, an);
+                            other = MsContentLines(keys, codepoints, b, bn);
+                            lines = MsMin(lines, other);
+                            rank = (lines * 1024) + dice;
+                            if ((lines > 0) && (rank > bestRank)) {
+                                bestRank = rank;
+                                best = (an * MsLeftFactor()) + MsWordCandidate() + (lines * 1024) + (MsQualityCode(dice) * 32) + bn + (open * MsWordOpen());
                             }
                         }
                     }
@@ -548,7 +859,7 @@ public static class Seams {
         return 0;
     }
     public static int MsNcc(emon.Port.Cells pixels, int a, int b, int count) {
-        // Scaled integer Pearson correlation. Require positive covariance and reject near-flat crops.
+        // Scaled integer Pearson correlation. Require r >= 0.60 and reject near-flat crops.
         int i = 0;
         int x = 0;
         int y = 0;
@@ -574,7 +885,7 @@ public static class Seams {
         vy = ((((long) count) * yy) - (sy * sy)) / ((long) count);
         covariance = ((((long) count) * xy) - (sx * sy)) / ((long) count);
         if ((covariance > ((long) 0)) && (vx > ((long) count)) && (vy > ((long) count))) {
-            if (((covariance * covariance) * ((long) 100)) >= ((vx * vy) * ((long) 81))) {
+            if (((covariance * covariance) * ((long) 100)) >= ((vx * vy) * ((long) 36))) {
                 return 1;
             }
         }
@@ -588,6 +899,38 @@ public static class Seams {
         int side = 0;
         while (i < j) {
             side = y - MsY(fl, emon.Port.CellsAt(edge, i));
+            if (bottom == 0) {
+                side = 0 - side;
+            }
+            if (side > 0) {
+                j = i;
+            } else {
+                i += 1;
+            }
+        }
+        if (i >= MsBand()) {
+            return 0;
+        }
+        j = emon.Port.CellsLen(edge) - 1;
+        if (emon.Port.CellsLen(edge) < MsBand()) {
+            emon.Port.CellsPush(edge, 0);
+            j += 1;
+        }
+        while (j > i) {
+            emon.Port.CellsSet(edge, j, emon.Port.CellsAt(edge, j - 1));
+            j -= 1;
+        }
+        emon.Port.CellsSet(edge, i, line);
+        return 0;
+    }
+    internal static int MsRowEdgeAdd(emon.Port.Cells keys, emon.Port.Cells edge, int line, int bottom) {
+        // Insert from the physical edge inward. Bound the band even on very long pages.
+        int y = MsKey(keys, line, 4);
+        int i = 0;
+        int j = emon.Port.CellsLen(edge);
+        int side = 0;
+        while (i < j) {
+            side = y - MsKey(keys, emon.Port.CellsAt(edge, i), 4);
             if (bottom == 0) {
                 side = 0 - side;
             }
@@ -646,74 +989,90 @@ public static class Seams {
         }
         return 0;
     }
+    internal static int MsPixelPair(emon.Port.Cells fl, emon.Port.Cells offsets, emon.Port.Cells pixels, int la, int lb) {
+        int a = Evidence.LnGet(fl, la, Evidence.LfOrder());
+        int b = Evidence.LnGet(fl, lb, Evidence.LfOrder());
+        if ((a < 0) || (a >= emon.Port.CellsLen(offsets)) || (b < 0) || (b >= emon.Port.CellsLen(offsets))) {
+            return 0;
+        }
+        int va = emon.Port.CellsAt(offsets, a);
+        int vb = emon.Port.CellsAt(offsets, b);
+        if ((va < 0) || (vb < 0)) {
+            return 0;
+        }
+        if ((MsNcc(pixels, va, vb, 384) == 1) || (MsNcc(pixels, va + 32, vb, 352) == 1) || (MsNcc(pixels, va, vb + 32, 352) == 1)) {
+            return 1;
+        }
+        return 0;
+    }
     internal static int MsPixelVotes(emon.Port.Cells fl, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells keys, emon.Port.Cells offsets, emon.Port.Cells pixels, int n) {
         int i = 0;
         int la = 0;
         int lb = 0;
-        int va = 0;
-        int vb = 0;
         int votes = 0;
         while (i < n) {
-            la = emon.Port.CellsAt(a, (n - 1) - i);
+            la = emon.Port.CellsAt(a, n - 1 - i);
             lb = emon.Port.CellsAt(b, i);
-            if ((MsKey(keys, la, 2) == 2) && (Evidence.LnGet(fl, la, Evidence.LfOrder()) < emon.Port.CellsLen(offsets)) && (Evidence.LnGet(fl, lb, Evidence.LfOrder()) < emon.Port.CellsLen(offsets)) && (Evidence.LnGet(fl, la, Evidence.LfOrder()) >= 0) && (Evidence.LnGet(fl, lb, Evidence.LfOrder()) >= 0)) {
-                va = emon.Port.CellsAt(offsets, Evidence.LnGet(fl, la, Evidence.LfOrder()));
-                vb = emon.Port.CellsAt(offsets, Evidence.LnGet(fl, lb, Evidence.LfOrder()));
-                if ((va >= 0) && (vb >= 0)) {
-                    if ((MsNcc(pixels, va, vb, 384) == 1) || (MsNcc(pixels, va + 32, vb, 352) == 1) || (MsNcc(pixels, va, vb + 32, 352) == 1)) {
-                        votes += 1;
-                    }
-                }
+            if ((MsKey(keys, la, 2) == 2) && (MsKey(keys, la, 3) == -1) && (MsKey(keys, lb, 3) == -1)) {
+                votes += MsPixelPair(fl, offsets, pixels, la, lb);
             }
             i += 1;
         }
         return votes;
     }
-    internal static int MsRunScore(emon.Port.Cells fl, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells keys, emon.Port.Cells codepoints, int n) {
-        // Compare a suffix of a with a prefix of b. Separator matches carry no content votes.
+    internal static int MsRunScore(emon.Port.Cells fl, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells keys, emon.Port.Cells codepoints, int n, emon.Port.Cells row) {
+        // Separator matches carry no content votes. A long run can bridge one noisy OCR reading.
         int i = 0;
         int la = 0;
         int lb = 0;
         int prevA = -1;
         int prevB = -1;
-        int votes = 0;
+        int total = 0;
+        int rows = 0;
+        int bad = 0;
         int deltaA = 0;
         int deltaB = 0;
         int ha = 0;
         int hb = 0;
-        int exact = 0;
+        int sim = 0;
         while (i < n) {
-            la = emon.Port.CellsAt(a, (n - 1) - i);
+            la = emon.Port.CellsAt(a, n - 1 - i);
             lb = emon.Port.CellsAt(b, i);
-            exact = MsEqual(keys, codepoints, la, lb);
-            if ((exact == 0) && (MsVariant(keys, codepoints, la, lb) == 0)) {
+            if (MsKey(keys, la, 2) != MsKey(keys, lb, 2)) {
                 return 0;
             }
-            if (prevA >= 0) {
-                deltaA = MsY(fl, la) - MsY(fl, prevA);
-                deltaB = MsY(fl, lb) - MsY(fl, prevB);
-                ha = Evidence.LnGet(fl, la, Evidence.LhY1()) - Evidence.LnGet(fl, la, Evidence.LhY0());
-                hb = Evidence.LnGet(fl, lb, Evidence.LhY1()) - Evidence.LnGet(fl, lb, Evidence.LhY0());
-                if ((ha > 0) && (hb > 0)) {
-                    if (((deltaA / ha) > (2 + (deltaB / hb))) || ((deltaB / hb) > (2 + (deltaA / ha)))) {
-                        return 0;
-                    }
-                }
-            }
             if (MsKey(keys, la, 2) == 2) {
-                if ((prevA < 0) || (MsEqual(keys, codepoints, la, prevA) == 0)) {
-                    if (exact == 1) {
-                        votes += 32;
-                    } else {
-                        votes += 1;
+                sim = MsSimilarity(codepoints, MsKey(keys, la, 0), MsKey(keys, la, 1), MsKey(keys, lb, 0), MsKey(keys, lb, 1), row);
+                if ((sim < 450) || ((n == 1) && (sim < 850))) {
+                    return 0;
+                }
+                if (sim < 780) {
+                    bad += 1;
+                }
+                if ((prevA < 0) || (MsEqual(keys, codepoints, la, prevA) == 0) || (MsEqual(keys, codepoints, lb, prevB) == 0)) {
+                    total += sim;
+                    rows += 1;
+                }
+                if (prevA >= 0) {
+                    deltaA = MsKey(keys, la, 4) - MsKey(keys, prevA, 4);
+                    deltaB = MsKey(keys, lb, 4) - MsKey(keys, prevB, 4);
+                    ha = MsMax(MsHeight(fl, la), MsHeight(fl, prevA));
+                    hb = MsMax(MsHeight(fl, lb), MsHeight(fl, prevB));
+                    if ((ha > 0) && (hb > 0)) {
+                        if (((deltaA / ha) > (2 + (deltaB / hb))) || ((deltaB / hb) > (2 + (deltaA / ha)))) {
+                            return 0;
+                        }
                     }
                 }
+                prevA = la;
+                prevB = lb;
             }
-            prevA = la;
-            prevB = lb;
             i += 1;
         }
-        return votes;
+        if ((rows == 0) || (bad > 1) || ((rows < 3) && (bad > 0))) {
+            return 0;
+        }
+        return (rows * 32) + MsQualityCode(total / rows);
     }
     internal static int MsCut(emon.Port.Cells cuts, int page, int bottom) {
         int index = ((page - 1) * 2) + bottom;
@@ -721,12 +1080,6 @@ public static class Seams {
             return emon.Port.CellsAt(cuts, index);
         }
         return 0;
-    }
-    internal static int MsFold(int cp) {
-        if ((cp >= 65) && (cp <= 90)) {
-            return cp + 32;
-        }
-        return cp;
     }
     internal static int MsFragmentMatches(emon.Port.Cells et, emon.Port.Cells ow, int first, int count, emon.Port.Cells fl, emon.Port.Cells fw, int line) {
         int full = Evidence.LnGet(fl, line, Evidence.LhFirst());
@@ -770,7 +1123,74 @@ public static class Seams {
         }
         return 0;
     }
-    internal static int MsGapEdge(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells pages, emon.Port.Cells cuts, int page, int bottom, emon.Port.Cells neighbor, int firstNeighbor, emon.Port.Cells dropped) {
+    internal static int MsFragmentWord(emon.Port.Cells et, emon.Port.Cells ow, emon.Port.Cells fw, int fragment, int full) {
+        int a = Evidence.OwGet(ow, fragment, Evidence.HdTstart());
+        int na = Evidence.OwGet(ow, fragment, Evidence.HdTlen());
+        int b = Evidence.WdGet(fw, full, Evidence.HdTstart());
+        int nb = Evidence.WdGet(fw, full, Evidence.HdTlen());
+        int i = 0;
+        if (na == nb) {
+            while ((i < na) && (MsFold(emon.Port.CellsAt(et, a + i)) == MsFold(emon.Port.CellsAt(et, b + i)))) {
+                i += 1;
+            }
+            if (i == na) {
+                return 10 * na;
+            }
+        }
+        if (MsOneEdit(et, a, na, b, nb, 4) == 1) {
+            return (10 * na) - 10;
+        }
+        return 0;
+    }
+    internal static int MsFragmentCovered(emon.Port.Cells et, emon.Port.Cells ow, int first, int count, emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, int line) {
+        // Find the fragment's words in order across all segments of the other visual row.
+        int start = 0;
+        int chars = 0;
+        int score = 0;
+        int hits = 0;
+        int next = 0;
+        int weight = 0;
+        int segment = 0;
+        int word = 0;
+        int end = 0;
+        if ((count < 1) || (count > 32)) {
+            return 0;
+        }
+        while (start < count) {
+            chars += Evidence.OwGet(ow, first + start, Evidence.HdTlen());
+            start += 1;
+        }
+        if (chars < 4) {
+            return 0;
+        }
+        start = 0;
+        while (start < count) {
+            next = start;
+            score = 0;
+            hits = 0;
+            segment = line;
+            while ((segment >= 0) && (next < count)) {
+                word = Evidence.LnGet(fl, segment, Evidence.LhFirst());
+                end = word + Evidence.LnGet(fl, segment, Evidence.LhCount());
+                while ((word < end) && (next < count)) {
+                    weight = MsFragmentWord(et, ow, fw, first + next, word);
+                    if (weight > 0) {
+                        hits += 1;
+                        score += weight;
+                        next += 1;
+                    }
+                    word += 1;
+                }
+                segment = MsKey(keys, segment, 3);
+            }
+            if ((score >= (7 * chars)) && ((hits >= 2) || ((count == 1) && (chars >= 4)))) {
+                return 1;
+            }
+            start += 1;
+        }
+        return 0;
+    }
+    internal static int MsGapEdge(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells pages, emon.Port.Cells cuts, int page, int bottom, emon.Port.Cells neighbor, int firstNeighbor, int lastNeighbor, emon.Port.Cells dropped, int context) {
         int height = Model.PageH(pages, page - 1);
         int pixels = Model.PagePxH(pages, page - 1);
         int i = 0;
@@ -793,13 +1213,17 @@ public static class Seams {
                 if (((edge == 0) || ((pixels > 0) && (unchecked(((long) edge) * ((long) pixels)) <= unchecked(((long) height) * ((long) 4))) && (unchecked(((long) edge) * ((long) pixels)) >= unchecked(((long) height) * ((long) -4))))) && ((count == 0) || ((first >= 0) && ((Evidence.OwGet(ow, first, Evidence.OwfFlags()) & Evidence.OeClipped()) != 0)))) {
                     matches = 0;
                     j = firstNeighbor;
-                    while (j < emon.Port.CellsLen(neighbor)) {
+                    while ((j < lastNeighbor) && (j < emon.Port.CellsLen(neighbor))) {
                         if (emon.Port.CellsAt(dropped, emon.Port.CellsAt(neighbor, j)) == 0) {
-                            matches += MsFragmentMatches(et, ow, first, count, fl, fw, emon.Port.CellsAt(neighbor, j));
+                            if (context == 1) {
+                                matches += MsFragmentMatches(et, ow, first, count, fl, fw, emon.Port.CellsAt(neighbor, j));
+                            } else {
+                                matches += MsFragmentCovered(et, ow, first, count, fl, fw, keys, emon.Port.CellsAt(neighbor, j));
+                            }
                         }
                         j += 1;
                     }
-                    if (matches == 1) {
+                    if (matches > 0) {
                         covered = 2;
                     } else {
                         uncovered = 1;
@@ -836,18 +1260,66 @@ public static class Seams {
         Model.LedgerSetText(ledger, record, textStart, emon.Port.CellsLen(modelText) - textStart);
         return 0;
     }
+    internal static int MsWordSame(emon.Port.Cells fw, emon.Port.Cells et, int a, int b) {
+        int n = Evidence.WdGet(fw, a, Evidence.HdTlen());
+        int sa = Evidence.WdGet(fw, a, Evidence.HdTstart());
+        int sb = Evidence.WdGet(fw, b, Evidence.HdTstart());
+        int pos = 0;
+        if (n != Evidence.WdGet(fw, b, Evidence.HdTlen())) {
+            return 0;
+        }
+        while (pos < n) {
+            if (MsFold(emon.Port.CellsAt(et, sa + pos)) != MsFold(emon.Port.CellsAt(et, sb + pos))) {
+                return 0;
+            }
+            pos += 1;
+        }
+        return 1;
+    }
+    internal static int MsFuseRow(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int kept, int other, emon.Port.Cells edits) {
+        // A confident alternative may repair a word when its neighbour is shared. Preserve the
+        // retained row's geometry, word gaps and page provenance.
+        int n = Evidence.LnGet(fl, kept, Evidence.LhCount());
+        int a = Evidence.LnGet(fl, kept, Evidence.LhFirst());
+        int b = Evidence.LnGet(fl, other, Evidence.LhFirst());
+        int @base = Evidence.LnCount(fl);
+        int i = 0;
+        int current = 0;
+        int donor = 0;
+        if ((n < 2) || (n != Evidence.LnGet(fl, other, Evidence.LhCount()))) {
+            return 0;
+        }
+        while (i < n) {
+            current = a + i;
+            donor = b + i;
+            if ((Evidence.WdGet(fw, donor, Evidence.HdConf()) > (150 + Evidence.WdGet(fw, current, Evidence.HdConf()))) && (Evidence.WdGet(fw, current, Evidence.HdConf()) < 750) && (Evidence.WdGet(fw, donor, Evidence.HdConf()) >= 800) && (MsWordSame(fw, et, current, donor) == 0) && (((i > 0) && (MsWordSame(fw, et, current - 1, donor - 1) == 1)) || (((i + 1) < n) && (MsWordSame(fw, et, current + 1, donor + 1) == 1)))) {
+                emon.Port.CellsSet(edits, @base + current, donor);
+            }
+            i += 1;
+        }
+        return 0;
+    }
     internal static int MsRebuild(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells dropped, emon.Port.Cells newLines, emon.Port.Cells newWords) {
         int i = 0;
         int word = 0;
         int stop = 0;
         int first = 0;
+        int donor = 0;
+        int target = 0;
         while (i < Evidence.LnCount(fl)) {
             if (emon.Port.CellsAt(dropped, i) == 0) {
                 word = Evidence.LnGet(fl, i, Evidence.LhFirst());
                 stop = word + Evidence.LnGet(fl, i, Evidence.LhCount());
                 first = Player.FwCount(newWords);
                 while (word < stop) {
+                    target = Player.FwCount(newWords);
                     Player.FwCopyWord(newWords, fw, word, Evidence.LnCount(newLines));
+                    donor = emon.Port.CellsAt(dropped, Evidence.LnCount(fl) + word);
+                    if (donor >= 0) {
+                        Evidence.WdSet(newWords, target, Evidence.HdTstart(), Evidence.WdGet(fw, donor, Evidence.HdTstart()));
+                        Evidence.WdSet(newWords, target, Evidence.HdTlen(), Evidence.WdGet(fw, donor, Evidence.HdTlen()));
+                        Evidence.WdSet(newWords, target, Evidence.HdConf(), Evidence.WdGet(fw, donor, Evidence.HdConf()));
+                    }
                     word += 1;
                 }
                 int count = Evidence.LnGet(fl, i, Evidence.LhCount());
@@ -863,86 +1335,159 @@ public static class Seams {
         return emon.Port.CellsAt(mask, page - 1) % 4;
     }
     internal static int MsPageEdge(emon.Port.Cells fl, emon.Port.Cells keys, int page, int bottom, emon.Port.Cells band) {
-        int at = (Evidence.LnCount(fl) * 3) + ((page - 1) * 2);
+        int at = (Evidence.LnCount(fl) * MsStride()) + ((page - 1) * 2);
         int end = emon.Port.CellsAt(keys, at + 1);
         int i = emon.Port.CellsAt(keys, at);
         emon.Port.CellsDrop(band, 0);
         while (i < end) {
             if ((Evidence.LnGet(fl, i, Evidence.HdPage()) == page) && (MsKey(keys, i, 2) > 0)) {
-                MsEdgeAdd(fl, band, i, bottom);
+                MsRowEdgeAdd(keys, band, i, bottom);
             }
             i += 1;
         }
         return 0;
     }
-    internal static int MsPair(emon.Port.Cells fl, emon.Port.Cells keys, emon.Port.Cells codepoints, int left, int right, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells aw, emon.Port.Cells bw, emon.Port.Cells wordRow) {
-        MsPageEdge(fl, keys, left, 1, a);
-        MsPageEdge(fl, keys, right, 0, b);
+    internal static int MsTrimEdge(emon.Port.Cells keys, emon.Port.Cells edge) {
+        // Only an outer prefix of non-content may be transparent. Keep interior rows in the run.
+        int n = emon.Port.CellsLen(edge);
+        int i = 0;
+        int j = 0;
+        while ((i < n) && ((MsKey(keys, emon.Port.CellsAt(edge, i), 2) == 1) || (MsKey(keys, emon.Port.CellsAt(edge, i), 7) == 1))) {
+            i += 1;
+        }
+        if (i == 0) {
+            return 0;
+        }
+        while (i < n) {
+            emon.Port.CellsSet(edge, j, emon.Port.CellsAt(edge, i));
+            i += 1;
+            j += 1;
+        }
+        emon.Port.CellsDrop(edge, j);
+        return n - j;
+    }
+    internal static int MsMatchRows(int match) {
+        return (match / 1024) % 32;
+    }
+    internal static int MsMatchQuality(int match) {
+        return (match / 32) % 32;
+    }
+    internal static int MsLinkScore(int match) {
+        // A direct anchor wins equally strong evidence that skipped an edge reading.
+        return ((32 * MsMatchRows(match)) + MsMatchQuality(match)) - (match / MsTrimmedFactor());
+    }
+    internal static int MsPairMatch(emon.Port.Cells fl, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells aw, emon.Port.Cells bw, emon.Port.Cells wordRow) {
         int n = 1;
         int score = 0;
         int best = 0;
         while ((n <= emon.Port.CellsLen(a)) && (n <= emon.Port.CellsLen(b))) {
-            score = MsRunScore(fl, a, b, keys, codepoints, n);
+            score = MsRunScore(fl, a, b, keys, codepoints, n, wordRow);
             if ((score > 0) && (((score * 32) + n) > best)) {
                 best = (score * 32) + n;
             }
             n += 1;
         }
-        if ((best / 1024) >= 4) {
-            return best;
-        }
         int band = MsWordAlign(keys, codepoints, a, b, aw, bw, wordRow);
-        if ((best == 0) || ((MsMatchKind(band) >= MsWordConfirmed()) && ((band % 32) >= (best % 32)))) {
+        if ((best == 0) || (((band / 32) % 1024) > ((best / 32) % 1024))) {
             return band;
         }
         return best;
     }
-    internal static int MsBandWords(emon.Port.Cells fl, emon.Port.Cells band, int count) {
+    internal static int MsRowSubset(emon.Port.Cells keys, emon.Port.Cells codepoints, int fragment, int full) {
+        // Look for the complete short segment on word boundaries in the other reading.
+        int a = MsKey(keys, fragment, 0);
+        int na = MsKey(keys, fragment, 1);
+        int b = MsKey(keys, full, 0);
+        int nb = MsKey(keys, full, 1);
+        int start = 0;
         int i = 0;
-        int words = 0;
-        while (i < count) {
-            words += Evidence.LnGet(fl, emon.Port.CellsAt(band, i), Evidence.LhCount());
-            i += 1;
-        }
-        return words;
-    }
-    internal static int MsAccepted(emon.Port.Cells fl, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells keys, emon.Port.Cells offsets, emon.Port.Cells pixels, int match) {
-        int kind = MsMatchKind(match);
-        int n = match % 32;
-        int score = kind / 32;
-        int exact = score / 32;
-        int variant = score % 32;
-        if (kind >= MsWordConfirmed()) {
-            return 1;
-        }
-        if (kind >= MsWordCandidate()) {
-            if ((variant >= 2) && (MsMatchLeft(match) == n) && (MsBandWords(fl, a, n) == MsBandWords(fl, b, n)) && (MsPixelVotes(fl, a, b, keys, offsets, pixels, n) >= 2)) {
-                return 1;
-            }
+        if (na >= nb) {
             return 0;
         }
-        if ((exact >= 4) || ((exact >= 3) && (variant > 0) && (exact >= variant)) || ((exact >= 2) && (MsPixelVotes(fl, a, b, keys, offsets, pixels, n) >= 1)) || (((exact + variant) >= 2) && (MsPixelVotes(fl, a, b, keys, offsets, pixels, n) >= 2))) {
-            return 1;
+        while ((start + na) <= nb) {
+            if (((start == 0) || (emon.Port.CellsAt(codepoints, b + start + -1) == 32)) && (((start + na) == nb) || (emon.Port.CellsAt(codepoints, b + start + na) == 32))) {
+                i = 0;
+                while ((i < na) && (emon.Port.CellsAt(codepoints, a + i) == emon.Port.CellsAt(codepoints, b + start + i))) {
+                    i += 1;
+                }
+                if (i == na) {
+                    return 1;
+                }
+            }
+            start += 1;
         }
         return 0;
     }
-    internal static int MsLineConfidence(emon.Port.Cells fl, emon.Port.Cells fw, int line) {
-        int first = Evidence.LnGet(fl, line, Evidence.LhFirst());
-        int count = Evidence.LnGet(fl, line, Evidence.LhCount());
-        int word = first;
-        int conf = 0;
-        int p = 0;
-        while (word < (first + count)) {
-            p = Evidence.WdGet(fw, word, Evidence.HdConf());
-            if (p > 0) {
-                conf += p;
+    internal static int MsWithoutEdgeRow(emon.Port.Cells edge) {
+        int n = emon.Port.CellsLen(edge);
+        int i = 1;
+        while (i < n) {
+            emon.Port.CellsSet(edge, i - 1, emon.Port.CellsAt(edge, i));
+            i += 1;
+        }
+        emon.Port.CellsDrop(edge, n - 1);
+        return 0;
+    }
+    internal static int MsRestoreEdgeRow(emon.Port.Cells edge, int line) {
+        int i = emon.Port.CellsLen(edge);
+        emon.Port.CellsPush(edge, 0);
+        while (i > 0) {
+            emon.Port.CellsSet(edge, i, emon.Port.CellsAt(edge, i - 1));
+            i -= 1;
+        }
+        emon.Port.CellsSet(edge, 0, line);
+        return 0;
+    }
+    internal static int MsPair(emon.Port.Cells fl, emon.Port.Cells keys, emon.Port.Cells codepoints, int left, int right, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells aw, emon.Port.Cells bw, emon.Port.Cells wordRow) {
+        MsPageEdge(fl, keys, left, 1, a);
+        MsPageEdge(fl, keys, right, 0, b);
+        int raw = MsPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow);
+        int trimLeft = MsTrimEdge(keys, a);
+        int trimRight = MsTrimEdge(keys, b);
+        int match = raw;
+        int edge = -1;
+        int candidate = 0;
+        int count = 0;
+        if ((trimLeft + trimRight) > 0) {
+            candidate = MsPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow);
+            if (MsLinkScore(candidate) > MsLinkScore(raw)) {
+                match = candidate + MsTrimmedFactor();
+            } else {
+                MsPageEdge(fl, keys, left, 1, a);
+                MsPageEdge(fl, keys, right, 0, b);
             }
-            word += 1;
         }
-        if (count == 0) {
-            return 0;
+        if (MsMatchRows(match) < 3) {
+            if ((emon.Port.CellsLen(a) > 3) && (MsKey(keys, emon.Port.CellsAt(a, 0), 8) == 1)) {
+                edge = emon.Port.CellsAt(a, 0);
+                MsWithoutEdgeRow(a);
+                candidate = MsPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow);
+                count = candidate % 32;
+                if ((MsMatchRows(candidate) >= 3) && (count < emon.Port.CellsLen(b)) && (MsRowSubset(keys, codepoints, edge, emon.Port.CellsAt(b, count)) == 1)) {
+                    emon.Port.CellsDrop(aw, 0);
+                    emon.Port.CellsPush(aw, edge);
+                    emon.Port.CellsDrop(bw, 0);
+                    return candidate + MsTrimmedFactor();
+                }
+                MsRestoreEdgeRow(a, edge);
+            }
+            if ((emon.Port.CellsLen(b) > 3) && (MsKey(keys, emon.Port.CellsAt(b, 0), 8) == 1)) {
+                edge = emon.Port.CellsAt(b, 0);
+                MsWithoutEdgeRow(b);
+                candidate = MsPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow);
+                count = MsMatchLeft(candidate);
+                if ((MsMatchRows(candidate) >= 3) && (count < emon.Port.CellsLen(a)) && (MsRowSubset(keys, codepoints, edge, emon.Port.CellsAt(a, count)) == 1)) {
+                    emon.Port.CellsDrop(bw, 0);
+                    emon.Port.CellsPush(bw, edge);
+                    emon.Port.CellsDrop(aw, 0);
+                    return candidate + MsTrimmedFactor();
+                }
+                MsRestoreEdgeRow(b, edge);
+            }
         }
-        return conf / count;
+        emon.Port.CellsDrop(aw, 0);
+        emon.Port.CellsDrop(bw, 0);
+        return match;
     }
     internal static int MsBandConfidence(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells band, int n) {
         int i = 0;
@@ -978,30 +1523,54 @@ public static class Seams {
         }
         return split;
     }
-    internal static int MsConfirmPair(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells offsets, emon.Port.Cells pixels, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells pages, emon.Port.Cells cuts, emon.Port.Cells dropped, int left, int right, emon.Port.Cells a, emon.Port.Cells b, int match) {
-        if (MsAccepted(fl, a, b, keys, offsets, pixels, match) == 1) {
-            return 1;
-        }
-        if ((MsMatchLeft(match) != 1) || ((match % 32) != 1)) {
-            return 0;
-        }
-        int bottom = MsGapEdge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 1, dropped);
-        int top = MsGapEdge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 1, dropped);
-        if (((match / 1024) == 1) && ((bottom >= 2) || (top >= 2))) {
-            return 1;
-        }
-        if ((bottom > 0) && (top > 0) && (MsPixelVotes(fl, a, b, keys, offsets, pixels, 1) == 1)) {
-            return 1;
+    internal static int MsWordPixels(emon.Port.Cells fl, emon.Port.Cells a, emon.Port.Cells b, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells offsets, emon.Port.Cells pixels, int na, int nb) {
+        // A word band can cross different OCR line boundaries. Compare only identifiable whole row pairs.
+        int i = 0;
+        int j = 0;
+        int la = 0;
+        int lb = 0;
+        while (i < na) {
+            la = emon.Port.CellsAt(a, i);
+            j = 0;
+            while (j < nb) {
+                lb = emon.Port.CellsAt(b, j);
+                if ((MsKey(keys, la, 2) == 2) && (MsEqual(keys, codepoints, la, lb) == 1) && (MsPixelPair(fl, offsets, pixels, la, lb) == 1)) {
+                    return 1;
+                }
+                j += 1;
+            }
+            i += 1;
         }
         return 0;
     }
-    internal static int MsLinkScore(int match) {
+    internal static int MsConfirmPair(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells offsets, emon.Port.Cells pixels, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells pages, emon.Port.Cells cuts, emon.Port.Cells dropped, int left, int right, emon.Port.Cells a, emon.Port.Cells b, int match) {
         int kind = MsMatchKind(match);
-        int votes = kind / 32;
-        if (kind >= MsWordCandidate()) {
-            return (votes % 32) * 32;
+        int rows = MsMatchRows(match);
+        int na = MsMatchLeft(match);
+        int nb = match % 32;
+        if (rows == 0) {
+            return 0;
         }
-        return votes;
+        if ((rows == 1) && ((na != 1) || (nb != 1) || (MsEqual(keys, codepoints, emon.Port.CellsAt(a, 0), emon.Port.CellsAt(b, 0)) == 0))) {
+            return 0;
+        }
+        if ((rows >= 3) && (MsMatchQuality(match) >= MsQualityCode(850)) && (kind < MsWordOpen())) {
+            return 1;
+        }
+        if ((rows >= 2) && (kind < MsWordOpen())) {
+            if (kind < MsWordCandidate()) {
+                if (MsPixelVotes(fl, a, b, keys, offsets, pixels, na) > 0) {
+                    return 1;
+                }
+            }
+            if ((kind >= MsWordCandidate()) && (MsWordPixels(fl, a, b, keys, codepoints, offsets, pixels, na, nb) == 1)) {
+                return 1;
+            }
+        }
+        if ((MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2)) {
+            return 1;
+        }
+        return 0;
     }
     internal static int MsBestLink(emon.Port.Cells scores, emon.Port.Cells taken, int n, int at, int step) {
         int i = 0;
@@ -1090,7 +1659,7 @@ public static class Seams {
                     if (match > 0) {
                         score = -1;
                     }
-                    if (MsConfirmPair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, match) == 1) {
+                    if (MsConfirmPair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, match) == 1) {
                         score = MsLinkScore(match);
                     }
                 }
@@ -1124,7 +1693,7 @@ public static class Seams {
         emon.Port.CellsPush(seams, right);
         emon.Port.CellsPush(seams, kind);
         emon.Port.CellsPush(seams, match % 32);
-        emon.Port.CellsPush(seams, ((match / 1024) % 32) + ((match / 32) % 32));
+        emon.Port.CellsPush(seams, ((match / 1024) % 32) + 0);
         return 0;
     }
     internal static int MsOpenEdge(emon.Port.Cells links, int first, int page) {
@@ -1204,7 +1773,7 @@ public static class Seams {
                 candidate = 0;
                 if ((right != head) && (MsOpenEdge(outgoing, first, left) == 1) && (MsOpenEdge(incoming, first, right) == 1) && (emon.Port.CellsAt(scores, ((right - first) * n) + (left - first)) == 0)) {
                     MsPageEdge(fl, keys, right, 0, b);
-                    if (((MsGapEdge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 0, dropped) & 1) != 0) && ((MsGapEdge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 0, dropped) & 1) != 0)) {
+                    if (((MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, emon.Port.CellsLen(b), dropped, 0) & 1) != 0) && ((MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, emon.Port.CellsLen(a), dropped, 0) & 1) != 0)) {
                         candidate = 1;
                     }
                 }
@@ -1239,7 +1808,7 @@ public static class Seams {
         if (firstPair >= np) {
             return 0;
         }
-        MsIndex(fl, fw, et, np, keys, codepoints);
+        MsIndex(fl, fw, ol, et, np, keys, codepoints, aw);
         int page = 1;
         int first = 1;
         int end = 1;
@@ -1263,6 +1832,11 @@ public static class Seams {
             emon.Port.CellsPush(dropped, 0);
             i += 1;
         }
+        i = 0;
+        while (i < Player.FwCount(fw)) {
+            emon.Port.CellsPush(dropped, -1);
+            i += 1;
+        }
         page = 1;
         while (page <= np) {
             end = page + 1;
@@ -1278,35 +1852,68 @@ public static class Seams {
                 left = emon.Port.CellsAt(order, page - 1);
                 right = emon.Port.CellsAt(order, page);
                 reverse = MsPair(fl, keys, codepoints, right, left, a, b, aw, bw, wordRow);
-                reverseAccepted = MsConfirmPair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, right, left, a, b, reverse);
+                reverseAccepted = MsConfirmPair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, right, left, a, b, reverse);
                 forward = MsPair(fl, keys, codepoints, left, right, a, b, aw, bw, wordRow);
-                accepted = MsConfirmPair(fl, fw, keys, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
+                accepted = MsConfirmPair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
                 if ((accepted == 1) && (((emon.Port.CellsLen(outgoing) > 0) && (emon.Port.CellsAt(outgoing, left - first) == right)) || ((reverseAccepted == 0) && (MsOpenEdge(outgoing, first, left) == 1) && (MsOpenEdge(incoming, first, right) == 1)))) {
                     leftCount = MsMatchLeft(forward);
                     split = MsCopySplit(fl, fw, a, b, forward);
                     rightDrop = split;
+                    if (MsMatchKind(forward) < MsWordCandidate()) {
+                        i = 0;
+                        while (i < leftCount) {
+                            if (i < split) {
+                                MsFuseRow(fl, fw, et, emon.Port.CellsAt(a, leftCount - i - 1), emon.Port.CellsAt(b, i), dropped);
+                            } else {
+                                MsFuseRow(fl, fw, et, emon.Port.CellsAt(b, i), emon.Port.CellsAt(a, leftCount - i - 1), dropped);
+                            }
+                            i += 1;
+                        }
+                    }
                     if ((split > 0) && (MsMatchKind(forward) >= MsWordCandidate())) {
                         rightDrop = forward % 32;
                     }
                     i = 0;
                     while (i < (leftCount - split)) {
                         line = emon.Port.CellsAt(a, i);
-                        if (emon.Port.CellsAt(dropped, line) == 0) {
-                            MsDropLine(fl, fw, et, line, ledger, modelText);
-                            emon.Port.CellsSet(dropped, line, 1);
-                            changes += 1;
+                        while (line >= 0) {
+                            if (emon.Port.CellsAt(dropped, line) == 0) {
+                                MsDropLine(fl, fw, et, line, ledger, modelText);
+                                emon.Port.CellsSet(dropped, line, 1);
+                                changes += 1;
+                            }
+                            line = MsKey(keys, line, 3);
                         }
                         i += 1;
                     }
                     i = 0;
                     while (i < rightDrop) {
                         line = emon.Port.CellsAt(b, i);
+                        while (line >= 0) {
+                            if (emon.Port.CellsAt(dropped, line) == 0) {
+                                MsDropLine(fl, fw, et, line, ledger, modelText);
+                                emon.Port.CellsSet(dropped, line, 1);
+                                changes += 1;
+                            }
+                            line = MsKey(keys, line, 3);
+                        }
+                        i += 1;
+                    }
+                    if (emon.Port.CellsLen(aw) > 0) {
+                        line = emon.Port.CellsAt(aw, 0);
                         if (emon.Port.CellsAt(dropped, line) == 0) {
                             MsDropLine(fl, fw, et, line, ledger, modelText);
                             emon.Port.CellsSet(dropped, line, 1);
                             changes += 1;
                         }
-                        i += 1;
+                    }
+                    if (emon.Port.CellsLen(bw) > 0) {
+                        line = emon.Port.CellsAt(bw, 0);
+                        if (emon.Port.CellsAt(dropped, line) == 0) {
+                            MsDropLine(fl, fw, et, line, ledger, modelText);
+                            emon.Port.CellsSet(dropped, line, 1);
+                            changes += 1;
+                        }
                     }
                     MsMark(seams, left, right, 1, forward);
                 } else {
@@ -1316,8 +1923,8 @@ public static class Seams {
                     if (reverse > 0) {
                         MsMark(seams, right, left, 2, reverse);
                     }
-                    if ((reverseAccepted == 0) && (MsOpenEdge(outgoing, first, left) == 1) && (MsOpenEdge(incoming, first, right) == 1) && ((forward == 0) || ((MsMatchKind(forward) >= MsWordCandidate()) && (((forward / 32) % 32) == 1)))) {
-                        if (((MsGapEdge(ol, ow, et, fl, fw, pages, cuts, left, 1, b, 0, dropped) & 1) != 0) || ((MsGapEdge(ol, ow, et, fl, fw, pages, cuts, right, 0, a, 0, dropped) & 1) != 0)) {
+                    if ((reverseAccepted == 0) && (MsOpenEdge(outgoing, first, left) == 1) && (MsOpenEdge(incoming, first, right) == 1) && ((forward == 0) || ((MsMatchKind(forward) >= MsWordCandidate()) && (MsMatchRows(forward) == 1)))) {
+                        if (((MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, emon.Port.CellsLen(b), dropped, 0) & 1) != 0) || ((MsGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, emon.Port.CellsLen(a), dropped, 0) & 1) != 0)) {
                             MsMark(seams, left, right, 3, 0);
                         } else if (((end - first) > 16) && (forward == 0) && (reverse == 0) && (MsCut(cuts, right, 1) == 1) && (MsCut(cuts, left, 0) == 1)) {
                             MsMark(seams, right, left, 3, 0);
