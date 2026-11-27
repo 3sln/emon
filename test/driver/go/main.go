@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -329,23 +330,32 @@ func main() {
 	}
 	inputs := []emon.Input{input}
 	ppAlone := opts.OcrEngine == 8
-	if !ppAlone && (tess || opts.PpOcr) && replay == "" {
-		o, err := emon.NewTessOcr(tessdata)
-		if err != nil {
+	// every engine is a registered adapter (D925): Tesseract's library (not loaded when the selection does not use it, D920) and the PP-OCR one
+	var registry *emon.Engines
+	if (tess || opts.PpOcr || ppAlone) && replay == "" {
+		registry = emon.NewEngines()
+		registry.SetTessdata(tessdata)
+		if err := registry.Defaults(opts); err != nil {
 			usage(err.Error())
 		}
-		cfg.Ocr = o
-	}
-	if (opts.PpOcr || ppAlone) && replay == "" {
-		o, err := emon.NewPpOcr("", cfg.Ocr)
-		if err != nil {
-			usage(err.Error())
+		if opts.PpOcr || ppAlone {
+			lib, models := os.Getenv("EMON_PPOCR_LIB"), os.Getenv("EMON_PPOCR_MODELS")
+			if lib == "" {
+				lib = ".cache/ppocr/libemon_ppocr_adapter." + map[bool]string{true: "dylib", false: "so"}[runtime.GOOS == "darwin"]
+			}
+			if models == "" {
+				models = ".cache/ppocr"
+			}
+			if err := registry.Load(lib, "", models); err != nil {
+				usage(err.Error())
+			}
 		}
-		cfg.Ocr = o
+		cfg.Ocr = registry
 	}
 	closePp := func() {
-		if p, ok := cfg.Ocr.(interface{ Close() }); ok {
-			p.Close()
+		if registry != nil {
+			registry.Close()
+			registry = nil
 		}
 	}
 	defer closePp()

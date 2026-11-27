@@ -8,11 +8,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 )
 
 func main() {
-	p, e := emon.NewPpOcr("", nil)
-	if e != nil {
+	// PP-OCR alone, through the registry: the adapter library is registered, no Tesseract is
+	p := emon.NewEngines()
+	lib, models := os.Getenv("EMON_PPOCR_LIB"), os.Getenv("EMON_PPOCR_MODELS")
+	if lib == "" {
+		lib = ".cache/ppocr/libemon_ppocr_adapter." + map[bool]string{true: "dylib", false: "so"}[runtime.GOOS == "darwin"]
+	}
+	if models == "" {
+		models = ".cache/ppocr"
+	}
+	if e := p.Load(lib, "", models); e != nil {
 		panic(e)
 	}
 	defer p.Close()

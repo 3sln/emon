@@ -18,15 +18,14 @@
 # `bb emit` is NOT run here: callers that must be current run it first.
 set -e
 cd "$(dirname "$0")/../.."
-# LIVE (D211, D539): EMON_GO_LIVE=1 builds the same module with the `tesseract` build tag (the cgo adapter of the Ocr port, linked to
-# libtesseract and libleptonica) and the `pdfium` tag (the driver's `--pdfium`: host/go/pdfium, cgo for dlopen only, nothing of pdfium is
-# linked; the library is found at run time, EMON_PDFIUM_LIB) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript).
-# EMON_TESS_LIB is the directory of the Tesseract libraries (default /opt/homebrew/lib).
+# LIVE (D211, D539, D925): EMON_GO_LIVE=1 builds the same module with the `pdfium` tag (the driver's `--pdfium`: host/go/pdfium, cgo for dlopen only, nothing
+# of pdfium is linked; the library is found at run time, EMON_PDFIUM_LIB) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript). OCR engines are
+# adapter libraries the registry loads at run time (host/go/engines.go: EMON_ADAPTER_DIR, EMON_PPOCR_LIB), so no engine is linked and no build tag names one.
 mod=.cache/emon-go
 tags=""
 # `emontest` (P11.4, D542): the driver's test hooks (host/go/testhooks.go: SetNoRetarget); never a consumer's, and not in the published module
 build_tags="-tags emontest"
-if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags tesseract,pdfium,ppocr"; build_tags="-tags tesseract,pdfium,ppocr,emontest"; fi
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags pdfium"; build_tags="-tags pdfium,emontest"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -58,7 +57,7 @@ printf 'module emon\n\ngo 1.21\n' > "$mod/go.mod.new"
 put "$mod/go.mod.new" "$mod/go.mod"
 rm -f "$mod/go.mod.new" "$mod/go.sum"
 
-if [ -n "$tags" ]; then export CGO_ENABLED=1 CGO_LDFLAGS="-L${EMON_TESS_LIB:-/opt/homebrew/lib} ${CGO_LDFLAGS:-}"; fi
+if [ -n "$tags" ]; then export CGO_ENABLED=1; fi
 out=$(cd "$mod" && go build $build_tags -o emon-go ./cmd/emon-go 2>&1) || { echo "$out" | head -80 >&2; echo "emon-go: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 # a cgo binary the external linker signed on macOS can fail its own signature check (SIGKILL at launch): sign it again

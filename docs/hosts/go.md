@@ -127,22 +127,18 @@ neither, a request for them is answered `unsupported` and the text layer stands 
   and no pdfium header or `-lpdfium`): `pdfium.Open(dir)` finds `libpdfium` in `dir`, in `$EMON_PDFIUM_LIB`, and in the system's
   search; the error is `*pdfium.Unavailable`. Built with `CGO_ENABLED=0` the package compiles and `Open` answers that error.
   pdfium is not thread-safe, so renders happen one at a time.
-- **Tesseract**: `emon.NewTessOcr(tessdata)`, compiled only under the build tag `tesseract` (cgo, linking `libtesseract` and
-  `libleptonica`; without the tag it answers an error). `""` looks in `$TESSDATA_PREFIX` and the usual places. Point cgo at the
-  libraries if they are not on the default path: `CGO_LDFLAGS=-L/opt/homebrew/lib go build -tags tesseract`.
-  **On macOS (Apple silicon) a binary built with `-tags tesseract` is killed at launch** (the shell says `Killed: 9`, exit 137)
-  unless you build it with `-ldflags=-w`, or sign it again, ad hoc, afterwards: `codesign -s - -f ./yourbinary`. Why: a cgo
-  program is linked by the system linker, which signs the result; the Go linker then rewrites the file to add its DWARF debug
-  information, which breaks that signature (`codesign --verify` says "invalid signature (code or signature have been modified)"),
-  and the kernel refuses to run an arm64 binary whose signature does not match. `-ldflags=-w` leaves the DWARF out, so nothing
-  is rewritten and the linker's own signature stays valid (stack traces and `pprof` still work; only a debugger loses its
-  source-level information). Verified with Go 1.21.3 on macOS 14, Apple silicon: without the flag the binary is killed and
-  `codesign --verify` fails; with it the binary runs and verifies. A pure-Go build (no tag, no cgo) is not affected, and neither
-  is Linux. emon cannot set it for you: linker flags belong to the build of the program that imports the module.
+- **OCR engines are registered adapters** (D925), the same model as every host's registry and the C ABI's (`host/c/include/emon_adapter.h`). `emon.NewEngines()` is the registry
+  and itself the `Ocr` port (`config.Ocr = engines`): `engines.Defaults(options)` loads every `libemon_ocr_*` of `$EMON_ADAPTER_DIR`, or of `lib/emon/adapters` beside
+  the program (the C archive lays it out), and **does not load Tesseract's when the selected engine does not use it** (PP-OCR alone); `engines.Load(library, config, packsDir)`
+  registers one library by path, `engines.Add(adapter)` an in-process `emon.Adapter`. Every registration is held to kin's engine table and refused by name
+  (`adapter-caps-beyond-engine`, `adapter-remote-refused`, ...); a request goes to the adapter registered for the engine it names; an adapter that cannot read leaves the page
+  unread, never blank; an answer is held to what the adapter registered (`ocr-adapter-invalid`). `engines.SetTessdata(dir)` names the Tesseract models (else `$EMON_TESSDATA`,
+  `$TESSDATA_PREFIX`, `share/emon/tessdata` beside the program); `engines.Describe()` lists the adapters; `engines.Notes()` says why requests were left unread; `engines.Close()`
+  ends them. Loading a library needs cgo (macOS and Linux); a build without it can still `Add` in-process adapters. Go links no Tesseract: there is no build tag, and the
+  Apple-silicon launch kill that a `-tags tesseract` build had (the Go linker rewriting a cgo binary's signature) no longer applies.
 
-This program converts a scan with both. It is built (without the tag, with the stub) by `bb package --check` against the
-built module, and on a machine that has pdfium and Tesseract installed also built with `-tags tesseract` and run (it prints
-a NOTE and skips that on one that does not, as a CI runner does):
+This program converts a scan with both. It is built by `bb package --check` against the built module, and on a machine that has pdfium and the Tesseract adapter library
+installed (`$EMON_ADAPTER_DIR`) also run (it prints a NOTE and skips that on one that does not, as a CI runner does):
 
 <!-- snippet: docs/snippets/go/native.go -->
 ```go

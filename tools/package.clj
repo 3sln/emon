@@ -894,16 +894,13 @@
     (fs/create-dirs (str app "/tour"))
     (spit (str app "/tour/main.go") (slurp (snippet-file "go/tour.go")))
     (run {:dir app :env env} "go" "build" "-o" "tourbin" "./tour")
-    ;; pdfium and Tesseract wired in: it compiles in the module's plain build (NewTessOcr then answers an error); with the engines here it is built with -tags tesseract and run
+    ;; pdfium and the engine registry wired in (D925): it compiles in the module's plain build; with pdfium and the Tesseract adapter library here (EMON_ADAPTER_DIR) it is run
     (fs/create-dirs (str app "/native"))
     (spit (str app "/native/main.go") (slurp (snippet-file "go/native.go")))
     (run {:dir app :env env} "go" "build" "-o" "nativebin" "./native")
-    (if-let [live (live-ports)]
-      (let [env2 (merge env (:env live) {"CGO_LDFLAGS" (str "-L" (:tess-lib live))})]
+    (if-let [live (when (System/getenv "EMON_ADAPTER_DIR") (live-ports))]
+      (let [env2 (merge env (:env live))]
         (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
-        (run {:dir app :env env2} "go" "build" "-tags" "tesseract" "-o" "nativebin" "./native")
-        ;; macOS kills a cgo binary linked to Homebrew's Tesseract at launch until it is signed again, ad hoc (kin/scripts/emon-go-build does the same)
-        (when (= "Darwin" (str/trim (:out (run {} "uname" "-s")))) (run {:ok? false} "codesign" "-s" "-" "-f" (str app "/nativebin")))
         (run {:dir app :env env2} (str app "/nativebin"))
         (scan-html-ok! "go" app))
       (say "  NOTE go: pdfium or Tesseract is not installed here, so the native snippet was compiled but not run"))

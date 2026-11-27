@@ -34,7 +34,7 @@
 (def jdk (or (System/getenv "EMON_JDK") "/opt/homebrew/opt/openjdk"))
 (fs/create-dirs ".cache/emon-go/cmd/ppocr-hosts")
 (fs/copy "tools/ppocr/hosts.go" ".cache/emon-go/cmd/ppocr-hosts/main.go" {:replace-existing true})
-(run! "go-probe-build" ["go" "build" "-tags" "ppocr" "-o" "ppocr-hosts" "./cmd/ppocr-hosts"] {:dir ".cache/emon-go"})
+(run! "go-probe-build" ["go" "build" "-o" "ppocr-hosts" "./cmd/ppocr-hosts"] {:dir ".cache/emon-go"})
 (when (= "Mac OS X" (System/getProperty "os.name")) (run! "go-probe-sign" ["codesign" "--force" "--sign" "-" ".cache/emon-go/ppocr-hosts"]))
 (run! "java-probe-build" [(str jdk "/bin/javac") "-cp" ".cache/emon-java/classes" "-d" ".cache/emon-java/classes" "tools/ppocr/Hosts.java"])
 (fs/create-dirs ".cache/ppocr-hosts-cs")

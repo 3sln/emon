@@ -16,20 +16,22 @@ func main() {
 	if err != nil {
 		panic(err) // *pdfium.Unavailable: the library was not found
 	}
-	ocr, err := emon.NewTessOcr("") // "": $TESSDATA_PREFIX and the usual places (build with -tags tesseract)
-	if err != nil {
+	options := emon.DefaultOptions()
+	engines := emon.NewEngines() // OCR engines are registered adapters, never wired in
+	defer engines.Close()
+	if err := engines.Defaults(options); err != nil { // lib/emon/adapters beside the program, or $EMON_ADAPTER_DIR
 		panic(err)
 	}
 	config := emon.DefaultConfig()
 	config.Renderer = renderer
-	config.Ocr = ocr
+	config.Ocr = engines
 	engine := emon.NewEngine(config)
 
 	data, err := os.ReadFile("scan.pdf")
 	if err != nil {
 		panic(err)
 	}
-	model, err := engine.Convert([]emon.Input{emon.BytesInput(data)}, emon.DefaultOptions())
+	model, err := engine.Convert([]emon.Input{emon.BytesInput(data)}, options)
 	if err != nil {
 		panic(err)
 	}
