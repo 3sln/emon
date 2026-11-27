@@ -288,11 +288,13 @@ fn convert(args: Vec<String>) {
     let platform_engine = opts.ocr_engine == emon::OcrEngine::WindowsMediaOcr;
     let mut registry = None;
     let mut tess_dir = None;
+    let mut tess_port: Option<Arc<emon::tess::TessOcr>> = None;
     if platform_engine && !never {
         #[cfg(all(feature = "winocr", windows))]
         {
             let port = emon::winocr::WinOcr::new().unwrap_or_else(|e| die(3, &e));
-            cfg.ocr = Some(emon::OcrPort(Arc::new(port)));
+            let info = port.info();
+            registry.get_or_insert_with(pack_engines).add_port(info, Arc::new(port)).unwrap_or_else(|r| die(3, &format!("{}: {}", r.name, r.message)));
         }
         #[cfg(not(all(feature = "winocr", windows)))]
         die(3, "--ocr-engine windows-media-ocr needs the Windows build of this tool (Windows.Media.Ocr); this build has none");
@@ -344,32 +346,37 @@ fn convert(args: Vec<String>) {
                 None => emon::tess::TessOcr::new(Some(&d)).unwrap_or_else(|e| die(3, &e)),
             };
             tess_dir = Some(dir);
-            cfg.ocr = Some(emon::OcrPort(Arc::new(t)));
+            tess_port = Some(Arc::new(t));
         }
     } else if lang.is_some() && never {
         eprintln!("emon: note: --lang does nothing with ocr=never");
     }
+    // Every engine is registered, none is wired: Apple Vision first (it reads, and kin falls back page by page to Tesseract), then Tesseract (not at all when the selection does not use
+    // it, D920), then PP-OCR's adapter library; the router of the registry is the one `Ocr` port (D925).
     if apple && !never {
         #[cfg(all(feature = "vision", target_os = "macos"))]
         {
             let v = emon::vision::VisionOcr::new().unwrap_or_else(|e| die(3, &e));
             let info = v.info();
-            cfg.ocr = Some(emon::adapter::platform_fallback(info, Arc::new(v), cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
+            registry.get_or_insert_with(pack_engines).add_port(info, Arc::new(v)).unwrap_or_else(|r| die(3, &format!("{}: {}", r.name, r.message)));
         }
         #[cfg(not(all(feature = "vision", target_os = "macos")))]
         die(3, "--ocr-engine apple-vision needs the macOS build of this tool (Apple's Vision framework); this build has none");
     }
-
+    if let Some(t) = tess_port.take() {
+        registry.get_or_insert_with(pack_engines).add_tesseract(t).unwrap_or_else(|r| die(3, &format!("{}: {}", r.name, r.message)));
+    }
     if opts.ocr_engine.uses_pp() && !never {
-        // Register the PP adapter and the Tesseract port when the hybrid selected it.
-        let engines = registry.get_or_insert_with(|| {
-            let engines = pack_engines();
-            if let Some(dir) = &tess_dir {
-                engines.packs().add_dir(dir);
-            }
-            engines
-        });
-        cfg.ocr = Some(emon::adapter::ppocr_hybrid_with_engines(engines, cfg.ocr.take()).unwrap_or_else(|e| die(3, &e)));
+        let engines = registry.get_or_insert_with(pack_engines);
+        if let Some(dir) = &tess_dir {
+            engines.packs().add_dir(dir);
+        }
+        engines.load_ppocr().unwrap_or_else(|e| die(3, &e));
+    }
+    if let Some(engines) = &registry {
+        if engines.has_ocr() {
+            cfg.ocr = Some(engines.port().unwrap_or_else(|e| die(3, &e)));
+        }
     }
 
     // the document

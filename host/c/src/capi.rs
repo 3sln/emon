@@ -548,12 +548,6 @@ pub fn html_options(list: &str) -> Result<HtmlOptions, String> {
     shared::parse_html(list)
 }
 
-// PP-OCR's hybrid for the pod, which links Tesseract itself: its port registered as Tesseract beside the PP adapter library (`adapter::ppocr_hybrid`).
-pub fn ppocr_config(cfg: &mut Config) -> Result<(), String> {
-    cfg.ocr = Some(adapters::ppocr_hybrid(cfg.ocr.take())?);
-    Ok(())
-}
-
 pub fn native_config(cfg: &mut Config) -> Result<(), String> {
     native_config_at(cfg, None, None)
 }
@@ -564,23 +558,33 @@ pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option
 }
 
 pub fn native_config_for(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>, engine: crate::engine::OcrEngine) -> Result<(), String> {
-    native_ports(cfg, pdfium, tessdata, engine.uses_tesseract()).map_err(|f| match f {
+    native_ports(cfg, pdfium, tessdata, engine).map_err(|f| match f {
         Fail::Usage(m) => m,
         Fail::Engine(e) => e.to_string(),
     })
 }
 
-// The pod's own ports (it links Tesseract statically, under the `tesseract` feature) and pdfium, for the ones this build has and finds (D127, D211, D336; `native` above). A
-// build without them, or a process that does not find them, has none, and a request for one is answered `unsupported` (D199). The C library does NOT call this: its ports are
-// the engines an embedder registers (`emon_engines_*`, K2, D899).
+// The pod's own ports (it links Tesseract statically, under the `tesseract` feature) and pdfium, for the ones this build has and finds (D127, D211, D336; `native` above). Every
+// OCR engine is REGISTERED in one registry and the router of the registry is the port (D925): Tesseract, unless the selection does not use it (D920), and PP-OCR's adapter
+// library when the selection is PP-OCR's. A build without them, or a process that does not find them, has none, and a request for one is answered `unsupported` (D199). The C
+// library does NOT call this: its ports are the engines an embedder registers (`emon_engines_*`, K2, D899).
 #[allow(unused_variables)]
-fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>, use_tesseract: bool) -> Result<(), Fail> {
-    #[cfg(feature = "tesseract")]
-    {
-        if use_tesseract && cfg.ocr.is_none() {
-            if let Some(t) = native::tesseract(tessdata).map_err(|e| Fail::Usage(format!("tesseract: {}", e)))? {
-                cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(t)));
+fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>, engine: crate::engine::OcrEngine) -> Result<(), Fail> {
+    if cfg.ocr.is_none() {
+        let registry = Engines::new();
+        #[cfg(feature = "tesseract")]
+        {
+            if engine.uses_tesseract() {
+                if let Some(t) = native::tesseract(tessdata).map_err(|e| Fail::Usage(format!("tesseract: {}", e)))? {
+                    registry.add_tesseract(std::sync::Arc::new(t)).map_err(|r| Fail::Usage(format!("{}: {}", r.name, r.message)))?;
+                }
             }
+        }
+        if engine.uses_pp() {
+            registry.load_ppocr().map_err(Fail::Usage)?;
+        }
+        if registry.has_ocr() {
+            cfg.ocr = Some(registry.port().map_err(Fail::Usage)?);
         }
     }
     #[cfg(pdfium)]

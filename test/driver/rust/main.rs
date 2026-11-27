@@ -366,15 +366,19 @@ fn main() {
             }
             #[cfg(all(not(ppocr), feature = "tesseract"))]
             {
-                let incumbent = opts.ocr_engine.uses_tesseract().then(|| {
+                let registry = emon::adapter::Engines::new();
+                if opts.ocr_engine.uses_tesseract() {
                     let tess = emon::tess::TessOcr::new(None).unwrap_or_else(|e| usage(&e));
-                    emon::OcrPort(std::sync::Arc::new(tess))
-                });
-                cfg.ocr = Some(emon::adapter::ppocr_hybrid(incumbent).unwrap_or_else(|e| usage(&e)));
+                    registry.add_tesseract(std::sync::Arc::new(tess)).unwrap_or_else(|r| usage(&r.message));
+                }
+                registry.load_ppocr().unwrap_or_else(|e| usage(&e));
+                cfg.ocr = Some(registry.port().unwrap_or_else(|e| usage(&e)));
             }
             #[cfg(all(not(ppocr), not(feature = "tesseract")))]
             {
-                cfg.ocr = Some(emon::adapter::ppocr_hybrid(None).unwrap_or_else(|e| usage(&e)));
+                let registry = emon::adapter::Engines::new();
+                registry.load_ppocr().unwrap_or_else(|e| usage(&e));
+                cfg.ocr = Some(registry.port().unwrap_or_else(|e| usage(&e)));
             }
         }
     }
@@ -414,7 +418,10 @@ fn main() {
             if vision_fallback {
                 let v = emon::vision::VisionOcr::new().unwrap_or_else(|e| usage(&e));
                 let info = v.info();
-                cfg.ocr = Some(emon::adapter::platform_fallback(info, std::sync::Arc::new(v), Some(t)).unwrap_or_else(|e| usage(&e)));
+                let registry = emon::adapter::Engines::new();
+                registry.add_port(info, std::sync::Arc::new(v)).unwrap_or_else(|r| usage(&r.message));
+                registry.add_tesseract(t.0).unwrap_or_else(|r| usage(&r.message));
+                cfg.ocr = Some(registry.port().unwrap_or_else(|e| usage(&e)));
             } else {
                 cfg.ocr = Some(t);
             }

@@ -626,9 +626,6 @@ fn setup(text: &str, native: bool, places: (Option<&str>, Option<&str>)) -> Resu
     if native || p.options.ocr_engine.uses_pp() {
         native_config_for(&mut cfg, places.0, places.1, p.options.ocr_engine).map_err(PodError::usage)?;
     }
-    if p.options.ocr_engine.uses_pp() {
-        emon::capi::ppocr_config(&mut cfg).map_err(PodError::usage)?;
-    }
     Ok((Engine::new(cfg), p.options))
 }
 

@@ -37,12 +37,10 @@ Native host bindings share the exact Rust preprocessing and complete answer
 construction through `host/native/include/emon_ppocr.h` (ABI v1). Run
 `bb tools/ppocr/build_shared.clj` after fetching the pinned optional assets;
 this builds `.cache/ppocr/libemon_ppocr_adapter.dylib`. It never downloads.
-Go uses cgo (`NewPpOcr`, build tag `ppocr`; the native driver build
-`EMON_GO_LIVE=1 kin/scripts/emon-go-build` enables it together with Tesseract), Java FFM (`emon.ffi.PpOcr.open`), C# P/Invoke
-(`emon.Ffi.PpOcr.Open`), and C/pod the direct native binding. Embedders pass
-the incumbent Tesseract OCR port to the wrapper; close/dispose it after all
-conversions finish. Drivers select it with `--ocr-engine=ppocr`. C/pod use
-their existing native-port builds and native conversion option.
+Go, Java and C# load the adapter library through their `Engines` registry (`Engines.Load` in Go, `emon.api.OcrEngines.load`, `emon.Api.OcrEngines.Load`; D925): PP-OCR is a
+registered adapter, as Tesseract's is, and the registry routes each request to the engine it names. A selection that does not use Tesseract (`ppocr-alone`) registers no
+Tesseract. Close/dispose the registry after all conversions finish. Drivers select it with `--ocr-engine=ppocr`; C/pod register it themselves
+(`Engines::load_ppocr`) and use their existing native-port builds and native conversion option.
 `EMON_PPOCR_LIB` overrides the adapter library and `EMON_PPOCR_MODELS` the
 model directory (development defaults under `.cache/ppocr`). The adapter
 loads ORT at run time. Default builds and replays need neither the adapter

@@ -160,8 +160,10 @@ fn request(id: i32, engine: i32, osd: bool) -> (Request, Bitmaps) {
     let mut c = Cells::new();
     let at = kp::rq_ocr(&mut c, id, 1, 3, if osd { 2 } else { 0 }, 0, 0, 0, 0);
     kp::rq_ocr_end(&mut c, at);
-    // The PP request carries the PP adapter's requested identity.
-    ocrengine::oe_tag(&mut c, &mut Cells::new(), if engine == 2 { 1 } else { 0 });
+    // The PP request carries the PP adapter's requested identity (`oe_select`: D920 replaced the request-tag mode `oe_tag`, whose call here no longer compiled).
+    if engine == 2 {
+        ocrengine::oe_select(&mut c, at, 2);
+    }
     let rec: Vec<i32> = (0..cells_len(&c)).map(|i| cells_at(&c, i)).collect();
     let mut bm = Bitmaps::new();
     bm.insert(1, Arc::new(Bitmap::from_bytes(4, 4, 1, &[255u8; 16])));
@@ -557,4 +559,37 @@ fn the_host_supplies_a_local_file_and_core_verifies_it_before_installing() {
     assert!(dir.join("tess-fast-eng/eng.traineddata").exists());
     assert!(e.packs().ensure(&[1]).is_ok());
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+// ------------------------------------------------------------------------------------------------ one registry per process (D925)
+
+// The CLI and the pod link Tesseract themselves: an in-process port is REGISTERED as the Tesseract adapter and the registry's router is the one `Ocr` port, so it is held to
+// kin's table and routed by engine like a library.
+struct InProcess;
+impl emon::Ocr for InProcess {
+    fn fulfil(&self, req: &Request, _bm: &Bitmaps, _keep: bool) -> Result<emon::plan::Answer, emon::plan::PlanError> {
+        Ok(emon::plan::Answer { rec: vec![4, req.rec[1], req.rec[2], kp::ps_unsupported()], bitmap: None })
+    }
+    fn producer(&self) -> Vec<(String, String)> {
+        vec![("engine".to_string(), "in-process".to_string())]
+    }
+}
+
+#[test]
+fn an_in_process_port_registers_as_tesseract_and_the_registry_is_the_port() {
+    let _g = serial();
+    let e = Engines::new();
+    assert_eq!(e.port().unwrap_err(), "no adapter", "an empty registry has no port: the host must not wire an engine");
+    e.add_tesseract(Arc::new(InProcess)).unwrap();
+    assert!(e.has_ocr());
+    let port = e.port().unwrap();
+    assert_eq!(port.0.producer(), vec![("engine".to_string(), "in-process".to_string())], "one adapter: its producer is the port's");
+    let (req, bm) = request(3, 1, false);
+    let a = port.0.fulfil(&req, &bm, false).unwrap();
+    assert_eq!((a.rec.len(), a.rec[2], status(&a)), (4, 3, kp::ps_unsupported()), "the adapter that cannot read leaves the page unread");
+    // a request for PP-OCR has nobody registered for it: unsupported, and the Tesseract port was not asked
+    let (req, bm) = request(4, 2, false);
+    assert_eq!(status(&port.0.fulfil(&req, &bm, false).unwrap()), kp::ps_unsupported());
+    // the second registration of the role is another adapter of the same engine: kin routes to the first
+    assert_eq!(e.adapters().len(), 1);
 }

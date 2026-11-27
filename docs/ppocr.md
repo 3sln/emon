@@ -46,19 +46,21 @@ adapter (K2, D899): `emon_engines_load(engines, path_to_libemon_ocr_ppocr, NULL,
 beside the Tesseract adapter, with the PP-OCR packs (`pp5-det-mobile`,
 `pp5-cls-mobile`, `pp5-rec-en-mobile`) in the pack directory, and the option
 `ocr-engine=ppocr` then composes the two (docs/hosts/c.md). Rust embedders call
-`emon::adapter::ppocr_hybrid(incumbent)` (their Tesseract port registered as
-Tesseract, the adapter library loaded from `$EMON_PPOCR_LIB`) and set the typed
-`Options::ocr_engine` to `OcrEngine::PpOcr`; the existing `tesseract` feature
-supplies the incumbent, with no ORT link dependency.
+`engines.add_tesseract(port)` (their Tesseract port registered as the Tesseract
+adapter) and `engines.load_ppocr()` (the adapter library loaded from
+`$EMON_PPOCR_LIB`) on one `emon::adapter::Engines`, give `engines.port()` (the
+registry's router) as `Config::ocr`, and set the typed `Options::ocr_engine` to
+`OcrEngine::PpOcr`; the existing `tesseract` feature supplies the Tesseract
+port, with no ORT link dependency.
 Go, Java and C# gain no required package dependency. Set the variables before
-starting your application, then wrap its incumbent OCR port with Go `NewPpOcr`
-(cgo and build tag `ppocr`), Java `emon.ffi.PpOcr.open` (JDK 22+ FFM with native
-access enabled), or C# `emon.Ffi.PpOcr.Open`. Supply the model directory to that
-wrapper if your API takes it, select the PP engine in the conversion options,
-and close/dispose the wrapper after conversions finish. Retain the incumbent
-Tesseract port: PP adds a reading to it. See the [native implementation guide](../tools/ppocr/README.md).
-The Go wrapper currently supports cgo on macOS and Linux; its Windows stub
-retains `ppocr-runtime-missing`. Java and C# users on Windows should also add
+starting your application, then register the adapter library in the host's engine
+registry (D925): Go `engines.Load(lib, "", models)` (cgo, macOS and Linux), Java
+`OcrEngines.load(lib, null, models)` (JDK 22+ FFM with native access enabled), or C#
+`OcrEngines.Load(lib, null, models)`, beside the Tesseract adapter that
+`engines.Defaults(options)` loads. Select the PP engine in the conversion options and
+close/dispose the registry after conversions finish. The registry routes each
+request to the engine it names; keep Tesseract registered: PP adds a reading to it. See the [native implementation guide](../tools/ppocr/README.md).
+Go loads adapters with cgo on macOS and Linux only. Java and C# users on Windows should also add
 the add-on's `lib` directory to the process `PATH` before startup, so their
 host loaders can resolve ORT's dependent DLLs.
 Missing models report `ppocr-models-missing`; an unavailable adapter or ORT
@@ -84,8 +86,8 @@ See [browser and Node configuration](ppocr-web.md) for the full example.
 PP-OCR reader. The registry uses the same PP adapter and three PP model packs as the
 hybrid. The CLI and pod skip Tesseract registration for this selection. C clients
 can use `emon_engines_defaults_for` with `ocr-engines=ppocr-alone` or load only the PP
-adapter. Rust embedders use `OcrEngine::PpOcrAlone` with `ppocr_hybrid(None)`.
-Go, Java and C# use selection code 8 and a PP wrapper with a nil or null incumbent.
+adapter. Rust embedders use `OcrEngine::PpOcrAlone` with a registry that holds only `load_ppocr()`.
+Go, Java and C# use selection code 8 and a registry that loads only the PP adapter (`engines.Defaults` skips Tesseract's library for it).
 The transcript records the `ppocr-alone` row with role `reader`. Replay uses the
 same selection.
 

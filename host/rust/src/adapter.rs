@@ -1447,44 +1447,33 @@ impl Engines {
     }
 }
 
-// A platform reader with its Tesseract fallback (`ocr-engine=apple-vision`, P13.21b, D907) for a host that links both in process (the CLI, the reference driver): the platform port is
-// registered under its engine and the Tesseract port, when there is one, under Tesseract's; the router of the two is the port, and kin chooses, page by page, which a request names
-// (`emon.ofall`). Tesseract reads from the tessdata directory it was given, so it registers needing no pack of the registry (the registry's pack store is for adapters it loads); with no
-// Tesseract a request that names it is answered unsupported, and kin keeps the platform reading.
-pub fn platform_fallback(primary: PortInfo, platform: Arc<dyn Ocr>, fallback: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
-    let e = Engines::new();
-    e.add_port(primary, platform).map_err(|r| format!("{}: {}", r.name, r.message))?;
-    if let Some(t) = fallback {
-        let producer = t.0.producer();
-        let mut info = PortInfo::tesseract(producer);
+// ONE REGISTRY PER PROCESS for a host that links its engines in process (the CLI, the pod, the reference driver): each engine is REGISTERED here (a platform port with its own
+// `PortInfo`, Tesseract through `add_tesseract`, PP-OCR's adapter library through `load_ppocr`) and the router of the registry is the one `Ocr` port (`port`). A host never holds
+// an engine in `Config::ocr` directly: kin chooses, page by page, which engine a request names (`emon.ofall`) and `ad-route` sends it to the adapter registered for that engine.
+impl Engines {
+    // The host's own Tesseract (`TessOcr` linked statically) as the adapter of the Tesseract role. It reads from the tessdata directory it was given, so it registers needing no
+    // pack of the registry (the registry's pack store is for adapters it loads). A selection that does not use Tesseract (`ocr-engines=ppocr-alone`, D920) must not call this.
+    pub fn add_tesseract(&self, t: Arc<dyn Ocr>) -> Result<usize, RegError> {
+        let mut info = PortInfo::tesseract(t.producer());
         info.needs = 0;
-        e.add_port(info, t.0).map_err(|r| format!("{}: {}", r.name, r.message))?;
+        self.add_port(info, t)
     }
-    let router = e.router().ok_or_else(|| "no adapter".to_string())?;
-    Ok(crate::engine::OcrPort(Arc::new(router)))
-}
 
-// PP-OCR's hybrid (`ocr-engine=ppocr`) for a host that links Tesseract itself: the host's port is registered as Tesseract, the PP adapter library is loaded (`$EMON_PPOCR_LIB`, else
-// `.cache/ppocr/libemon_ppocr_adapter.<ext>`, as the shared adapter was always found) with the models in `$EMON_PPOCR_MODELS` (else `.cache/ppocr`), and the router of the two is
-// the port. Needs the adapter library (a PP archive, `bb ppocr-addon`).
-pub fn ppocr_hybrid(incumbent: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
-    ppocr_hybrid_with_engines(&Engines::new(), incumbent)
-}
-
-pub fn ppocr_hybrid_with_engines(e: &Engines, incumbent: Option<crate::engine::OcrPort>) -> Result<crate::engine::OcrPort, String> {
-    let models = std::env::var("EMON_PPOCR_MODELS").unwrap_or_else(|_| ".cache/ppocr".to_string());
-    e.packs().add_dir(std::path::Path::new(&models));
-    if let Some(t) = incumbent {
-        let producer = t.0.producer();
-        let mut info = PortInfo::tesseract(producer);
-        info.needs = 0; // This in-process port already reads from its own tessdata directory.
-        e.add_port(info, t.0).map_err(|r| format!("{}: {}", r.name, r.message))?;
+    // The PP-OCR adapter library (`$EMON_PPOCR_LIB`, else `.cache/ppocr/libemon_ppocr_adapter.<ext>`, as the shared adapter was always found), with the models in
+    // `$EMON_PPOCR_MODELS` (else `.cache/ppocr`). Needs the adapter library (a PP archive, `bb ppocr-addon`).
+    pub fn load_ppocr(&self) -> Result<usize, String> {
+        let models = std::env::var("EMON_PPOCR_MODELS").unwrap_or_else(|_| ".cache/ppocr".to_string());
+        self.packs().add_dir(std::path::Path::new(&models));
+        let ext = if cfg!(target_os = "macos") { "dylib" } else if cfg!(windows) { "dll" } else { "so" };
+        let lib = std::env::var("EMON_PPOCR_LIB").unwrap_or_else(|_| format!(".cache/ppocr/{}emon_ppocr_adapter.{}", if cfg!(windows) { "" } else { "lib" }, ext));
+        self.load(&lib, None).map_err(|r| format!("{}: {}", r.name, r.message))
     }
-    let ext = if cfg!(target_os = "macos") { "dylib" } else if cfg!(windows) { "dll" } else { "so" };
-    let lib = std::env::var("EMON_PPOCR_LIB").unwrap_or_else(|_| format!(".cache/ppocr/{}emon_ppocr_adapter.{}", if cfg!(windows) { "" } else { "lib" }, ext));
-    e.load(&lib, None).map_err(|r| format!("{}: {}", r.name, r.message))?;
-    let router = e.router().ok_or_else(|| "no adapter".to_string())?;
-    Ok(crate::engine::OcrPort(Arc::new(router)))
+
+    // The router of this registry as the `Ocr` port (`Config::ocr`).
+    pub fn port(&self) -> Result<crate::engine::OcrPort, String> {
+        let router = self.router().ok_or_else(|| "no adapter".to_string())?;
+        Ok(crate::engine::OcrPort(Arc::new(router)))
+    }
 }
 
 /// kin's engine id of Tesseract, for hosts outside the library (the CLI) that filter the pack catalogue by engine.

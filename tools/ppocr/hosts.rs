@@ -30,8 +30,10 @@ fn main() {
         return;
     }
     let port: Arc<dyn Ocr> = if args.get(1).map(String::as_str) == Some("native") {
-        // the PP adapter library, through the registry (`ppocr_hybrid` with no incumbent: PP-OCR alone)
-        emon::adapter::ppocr_hybrid(None).unwrap().0
+        // the PP adapter library, through the registry (PP-OCR alone: no Tesseract registered)
+        let registry = emon::adapter::Engines::new();
+        registry.load_ppocr().unwrap();
+        registry.port().unwrap().0
     } else {
         Arc::new(emon::ppocr::PpOcr::new(std::path::Path::new(".cache/ppocr")).unwrap())
     };
