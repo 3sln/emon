@@ -376,15 +376,23 @@ public static class Program {
         }
         var inputs = new List<Input> { input };
         bool ppAlone = opts.OcrEngine == 8;
+        // every engine is a registered adapter (D925): Tesseract's library (not loaded when the selection does not use it, D920) and the PP-OCR one
+        emon.Api.OcrEngines registry = null;
         if ((tess || opts.PpOcr || ppAlone) && replay.Length == 0) {
             try {
-                if (!ppAlone) cfg.Ocr = emon.Ffi.Tess.Open(tessdata.Length == 0 ? null : tessdata);
-                if (opts.PpOcr || ppAlone) cfg.Ocr = emon.Ffi.PpOcr.Open(null, cfg.Ocr);
+                registry = new emon.Api.OcrEngines();
+                if (tessdata.Length != 0) registry.SetTessdata(tessdata);
+                registry.Defaults(opts);
+                if (opts.PpOcr || ppAlone) {
+                    string ext = OperatingSystem.IsMacOS() ? "dylib" : OperatingSystem.IsWindows() ? "dll" : "so";
+                    registry.Load(Environment.GetEnvironmentVariable("EMON_PPOCR_LIB") ?? ".cache/ppocr/libemon_ppocr_adapter." + ext, null, Environment.GetEnvironmentVariable("EMON_PPOCR_MODELS") ?? ".cache/ppocr");
+                }
+                cfg.Ocr = registry;
             } catch (emon.Ffi.Unavailable e) {
                 Usage(e.Message);
             }
         }
-        using var ownedPp = cfg.Ocr as emon.Ffi.PpOcr;
+        using var ownedRegistry = registry;
         if (pdfium) {
             try {
                 cfg.Renderer = emon.Ffi.Pdfium.Open(pdfiumLib.Length == 0 ? null : pdfiumLib);

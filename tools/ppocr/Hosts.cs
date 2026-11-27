@@ -3,7 +3,9 @@ using System.IO;
 using System.Collections.Generic;
 public static class Hosts {
  public static void Main(){
-  using var p=emon.Ffi.PpOcr.Open(null,null);
+  using var p=new emon.Api.OcrEngines();
+  string ext=OperatingSystem.IsMacOS()?"dylib":OperatingSystem.IsWindows()?"dll":"so";
+  p.Load(Environment.GetEnvironmentVariable("EMON_PPOCR_LIB")??".cache/ppocr/libemon_ppocr_adapter."+ext,null,Environment.GetEnvironmentVariable("EMON_PPOCR_MODELS")??".cache/ppocr");
   string path;
   while((path=Console.ReadLine())!=null){
    using var b=new BinaryReader(File.OpenRead(path));int n=b.ReadInt32(),w=b.ReadInt32(),h=b.ReadInt32(),ch=b.ReadInt32();

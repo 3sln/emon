@@ -916,7 +916,7 @@
     (report-html app)))
 
 (defn- java-native! [jdk cp app]
-  (if-let [live (live-ports)]
+  (if-let [live (when (System/getenv "EMON_ADAPTER_DIR") (live-ports))]
     (do (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
         (run {:dir app :env (:env live)} (str jdk "/bin/java") "--enable-native-access=ALL-UNNAMED" "-cp" cp "Native")
         (scan-html-ok! "java" app))
@@ -990,10 +990,10 @@
       (spit (str app "/Program.cs") (slurp (snippet-file "csharp/Tour.cs")))
       (run {:dir app :env env} path "build" "-c" "Release" "--nologo" "-v" "q" "-clp:NoSummary" "-o" "out3")
       (run {:dir app :env env} path "out3/consumer.dll")
-      ;; pdfium and Tesseract wired in: built always, run where the engines are
+      ;; pdfium and the engine registry wired in (D925): built always, run where pdfium and the Tesseract adapter library (EMON_ADAPTER_DIR) are
       (spit (str app "/Program.cs") (slurp (snippet-file "csharp/Native.cs")))
       (run {:dir app :env env} path "build" "-c" "Release" "--nologo" "-v" "q" "-clp:NoSummary" "-o" "out4")
-      (if-let [live (live-ports)]
+      (if-let [live (when (System/getenv "EMON_ADAPTER_DIR") (live-ports))]
         (do (fs/copy scan-pdf (str app "/scan.pdf") {:replace-existing true})
             (run {:dir app :env (merge env (:env live))} path "out4/consumer.dll")
             (scan-html-ok! "csharp" app))

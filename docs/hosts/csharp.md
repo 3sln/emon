@@ -92,11 +92,16 @@ request for them is answered `unsupported` and the text layer stands alone, so a
 `emon.Ffi.Unavailable` when you open it, not a failed render later.
 
 - `Pdfium.Open(libDirOrFile)`: `null` looks in `$EMON_PDFIUM_LIB` (a directory or a file), then the system's search.
-- `Tess.Open(tessdata)`: `null` looks for the models in `$TESSDATA_PREFIX` and the usual places, and for the libraries in
-  `$EMON_TESS_LIB` (a directory), `/opt/homebrew/lib`, `/usr/local/lib` and the usual Linux directories.
+- `new emon.Api.OcrEngines()` is the **engine registry** (D925), the same model as every host's and the C ABI's (`emon_adapter.h`), and itself the `IOcr` port (`config.Ocr = engines`):
+  `engines.Defaults(options)` loads every `libemon_ocr_*` of `$EMON_ADAPTER_DIR`, or of `lib/emon/adapters` beside the application, and **does not load Tesseract's when the
+  selected engine does not use it** (PP-OCR alone); `engines.Load(library, config, packsDir)` registers one library by path, `engines.Add(adapter)` an in-process
+  `emon.Api.IAdapter`. Every registration is held to kin's engine table and refused by name (`adapter-caps-beyond-engine`, `adapter-remote-refused`, ...); a request goes to
+  the adapter registered for the engine it names; an adapter that cannot read leaves the page unread, never blank; an answer is held to what the adapter registered
+  (`ocr-adapter-invalid`). `SetTessdata(dir)` names the Tesseract models (else `$EMON_TESSDATA`, `$TESSDATA_PREFIX`); `Describe()` lists the adapters; `Notes()` says why requests
+  were left unread; `Dispose()` ends them. C# links no Tesseract and P/Invokes no `libtesseract`: it loads `libemon_ocr_tesseract` like every other host.
 
 Both are **provisional**: shipped and tested, outside the freeze of `api/surface.edn`. This program converts a scan with both. It
-is built against the built package by `bb package --check`, and on a machine that has pdfium and Tesseract installed also run (it
+is built against the built package by `bb package --check`, and on a machine that has pdfium and the Tesseract adapter library installed (`$EMON_ADAPTER_DIR`) also run (it
 prints a NOTE and skips that on one that does not, as a CI runner does):
 
 <!-- snippet: docs/snippets/csharp/Native.cs -->

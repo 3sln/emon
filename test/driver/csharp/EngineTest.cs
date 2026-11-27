@@ -1002,6 +1002,75 @@ public static class EngineTest {
         }
     }
 
+    // The engine registry (D925): registration held to kin's table, routing by the engine a request names, unread-never-blank, an answer held to what was registered.
+    sealed class StubAdapter : IAdapter {
+        internal readonly AdapterInfo I;
+        internal Reading R = new Reading();
+        internal bool Closed;
+        internal int Reads;
+        internal StubAdapter(int engine, int caps = 0, int flags = IAdapter.Threadsafe) { I = new AdapterInfo { Name = "stub", Engine = engine, Caps = caps, Flags = flags }; }
+        public AdapterInfo Info() { return I; }
+        public Reading Read(emon.Planrun.Request req, Dictionary<int, emon.Port.Bitmap> bm, bool keep) { Reads++; return R; }
+        public void Dispose() { Closed = true; }
+    }
+
+    static void EngineRegistry() {
+        var c = emon.Port.NewCells();
+        emon.Plan.RqOcrEnd(c, emon.Plan.RqOcr(c, 7, 1, 3, 0, 0, 0, 0, 0));
+        var req = new emon.Planrun.Request(emon.Port.CellsVec(c));
+        var bm = new Dictionary<int, emon.Port.Bitmap> { { 1, new emon.Port.Bitmap(4, 4, 1, new byte[16]) } };
+        string Refusal(Action a) { try { a(); return ""; } catch (emon.Ffi.Unavailable e) { return e.Message; } }
+        var e1 = new OcrEngines();
+        var bad = new StubAdapter(99);
+        Check(Refusal(() => e1.Add(bad)).StartsWith("adapter-engine-unknown") && bad.Closed, "an engine the table does not know is refused by name and closed");
+        Check(Refusal(() => e1.Add(new StubAdapter(1, unchecked((int) 0xffffffff)))).StartsWith("adapter-caps-beyond-engine"), "caps beyond the ceiling");
+        Check(Refusal(() => e1.Add(new StubAdapter(1, 0, IAdapter.Async))).StartsWith("adapter-abi-unsupported"), "an async adapter");
+        Check(Refusal(() => e1.Add(new StubAdapter(1, 0, IAdapter.Remote))).StartsWith("adapter-remote-refused"), "a remote adapter without AllowRemote");
+        Check(e1.Describe().Count == 0, "a refused adapter did not register");
+        // nobody registered: unsupported, four cells
+        var a0 = e1.Fulfil(req, bm, false);
+        Check(a0.Rec.Length == 4 && a0.Rec[2] == 7 && a0.Rec[3] == emon.Plan.PsUnsupported(), "no adapter: unsupported");
+        // a PP-OCR adapter is not asked to read a Tesseract request
+        var pp = new StubAdapter(2);
+        var e2 = new OcrEngines();
+        e2.Add(pp);
+        Check(e2.Fulfil(req, bm, false).Rec[3] == emon.Plan.PsUnsupported() && pp.Reads == 0, "routed by the engine the request names");
+        // unread, never blank
+        foreach (var (status, want) in new[] { (IAdapter.Unsupported, emon.Plan.PsUnsupported()), (IAdapter.Failed, emon.Plan.PsFailed()) }) {
+            var t = new StubAdapter(1) { R = new Reading { Status = status, Reason = "pack-missing:tess-fast-deu" } };
+            var e3 = new OcrEngines();
+            e3.Add(t);
+            var a = e3.Fulfil(req, bm, false);
+            Check(a.Rec.Length == 4 && a.Rec[3] == want, "an adapter that cannot read leaves the page unread");
+            var notes = e3.Notes();
+            Check(notes.Count == 1 && notes[0].Contains("pack-missing:tess-fast-deu"), "the reason is noted");
+        }
+        // an answer is held to what was registered
+        var liar = new StubAdapter(1) { R = new Reading { Rec = new[] { 8, emon.Plan.PkOcr(), 4, 0, 0, 0, 0, 0 } } };
+        var e4 = new OcrEngines();
+        e4.Add(liar);
+        string msg = "";
+        try { e4.Fulfil(req, bm, false); } catch (emon.Planrun.PlanError e) { msg = e.Message; }
+        Check(msg.Contains("ocr-adapter-invalid: stub"), "an answer to another request is `ocr-adapter-invalid`: " + msg);
+        e4.Dispose();
+        Check(liar.Closed, "Dispose closes the adapters");
+        // an empty adapter directory registers nothing, whatever is selected (Tesseract is not loaded for PP-OCR alone, D920); a directory you name that is wrong is an error
+        string dir = Path.Combine(Path.GetTempPath(), "emon-engines-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try {
+            var e5 = new OcrEngines();
+            e5.SetAdapterDir(dir);
+            var ppAlone = Options.Defaults();
+            ppAlone.OcrEngine = 8;
+            e5.Defaults(ppAlone);
+            e5.Defaults(Options.Defaults());
+            Check(e5.Describe().Count == 0, "an empty adapter directory registers nothing");
+            var e6 = new OcrEngines();
+            e6.SetAdapterDir(dir + "/nope");
+            Check(Refusal(() => e6.Defaults(Options.Defaults())).Contains("not a directory"), "a wrong adapter directory is an error");
+        } finally { Directory.Delete(dir); }
+    }
+
     public static int Run() {
         var t = new Thread(() => {
             RunOne("the adapters give identical JSON and HTML", Adapters);
@@ -1018,6 +1087,7 @@ public static class EngineTest {
             RunOne("an image becomes pages (and async)", Images);
             RunOne("an image records its pixels and replays without a codec", ImageRecordReplay);
             RunOne("an OCR port reads an image and a scanned page; the transcript replays without it", OcrPort);
+            RunOne("the engine registry: registration, routing, unread-never-blank, answers held to what was registered", EngineRegistry);
             RunOne("assets", AssetsTest);
             RunOne("the Renderer port's fulfiller", RenderPortTest);
             RunOne("decode-img: the host's codecs, the embedder's, and the payload", DecodeImg);
