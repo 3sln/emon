@@ -18,6 +18,8 @@ transport with a multi-frame TIFF. The distinct-page control participates in
 seam checks. Word accuracy excludes it because only its first input has gold
 from the receipt being scored. The report also includes the historical
 word aggregate for comparison with earlier runs.
+Seed 917 requires zero output duplicates. Other seeds require every
+remaining output duplicate to carry a flag.
 
 `bb multishot --sweep` draws a fresh seed and selects 200 receipts.
 An explicit `--seed` reproduces the crop design. Pass `--ocr-engine` to select
@@ -30,15 +32,39 @@ and requires the same piece hashes and input transport. Each sweep writes
 completed case scores and any driver errors to `FILE.cases.jsonl` as it
 runs. Driver errors fail the sweep after the remaining cases have run.
 
-The seed 920 Tesseract reference covers 181 SROIE receipts, 19 CORD receipts
-and six traps. Use it with the corpus snapshot that produced those crops.
+The seam metric version is recorded in each report. Ratchet comparisons
+require the same version. The historical seed 920 Tesseract reference covers
+181 SROIE receipts, 19 CORD receipts and six traps. It uses the earlier
+OCR-evidence metric. To measure that corpus with the Model metric, run
 
 ```sh
-bb multishot --sweep --ocr-engine tesseract --ratchet tools/multishot/tesseract-sweep-920.json
+bb multishot --sweep --seed 920 --ocr-engine tesseract --output sweep-920.json
 ```
 
-The reference records a failing acceptance run. The command compares the
-measured scores and also applies the absolute acceptance checks.
+Reports include the following counts.
+
+- `dup` counts extra occurrences of each gold row in emitted Model text.
+  The matcher walks text in document order, including table cells, and uses
+  Model source regions projected into each crop to distinguish genuine
+  repeated rows. It allocates each token span once. A candidate needs at
+  least 75% of the gold tokens and a word-overlap F1 of at least 0.80.
+  `unflagged` counts extra copies whose source pair lacks a
+  `possible-duplicate` mark. `matched-dup` counts extra copies on pairs with
+  a confirmed overlap. The order diagnostics count unflagged extra copies
+  and missed gaps whose source photos are out of physical order.
+- `missing-output` and `missing-concat` count gold rows without an emitted
+  match. `lost-rows` counts absent seam rows whose projected gold box
+  crosses a joining crop edge or falls between the crops, with no complete
+  copy across the pair. `lost` and `lost-flagged` count seams with such
+  loss and how many carry a gap flag. The geometry test uses the crop edge
+  directly, including cuts above the 97% evidence visibility cutoff.
+- `spurious-gap` counts gap flags on seams with no lost output row.
+  A clipped fragment with a complete copy in the neighboring crop does not
+  justify a gap flag. Recovered text also does not justify a gap flag.
+- `evidence_dup` retains the historical count based on surviving OCR lines
+  from both photos and requires at least 97% projected visibility in each.
+  `evidence_missing` and `evidence_missing_concat` count rows absent from
+  the corresponding surviving OCR lines.
 
 `bb multishot --clipped` cuts text at all four image edges and reports
 clipping precision and recall. It also reports the flag rate on tight and

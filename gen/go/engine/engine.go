@@ -495,7 +495,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	var trust int32 = pdfstruct.TgTrust(d.Ss)
 	var pending int32 = 0
 	var w int32 = 0
-	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing, s.Msaw, s.Msbw, s.Mswordrow)
+	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, ev.Owords, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing, s.Msaw, s.Msbw, s.Mswordrow)
 	if c.Keep != 0 {
 		seams.MsEvidence(d.Evidence, s.Seams, s.Msorder, d.Mask, d.Mscuts, c.Capture)
 	}

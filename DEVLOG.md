@@ -15010,3 +15010,13 @@ The seed 920 replay confirmed all 329 unflagged duplicates, missed gaps and spur
 On the paired Tesseract sweep, 200 receipts and six traps produced 470 seams. Unflagged duplicates fell from 160 to 95, lost seams flagged rose from 168 to 173 of 216, and spurious gaps fell from 121 to 106. Total duplicates stayed at 201. The single scored false merge was again the case at the visibility cutoff described in the preceding decision. Recall was 0.736301 against 0.736341 for concatenation. The sweep still fails acceptance and its ratchet reports one additional spurious flag in the abut bucket. P13.23 and P13.24 stay open.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Score emitted photo seams and keep higher-confidence copies
+
+The multishot gate counts extra gold-row occurrences and missing rows in the ordered Model text, including table cells. A matched span can represent one gold-row occurrence. Model provenance and projected gold boxes distinguish repeated rows. The report retains `evidence_dup` and the evidence-level missing counts. The Model metric requires a new sweep reference because the historical reference measured surviving OCR lines. A gap flag is spurious when the output has no lost seam row. A projected cut can establish loss even when the visible fraction is above the evidence threshold.
+
+Confirmed seam matches keep the higher-confidence complete readings in a contiguous reading sequence. Short anchored runs can use grayscale correlation with a one-sample vertical offset. A single-line overlap needs either a unique complete reading of an adjoining clipped fragment or pixel agreement with cut fragments on both facing edges. The fragment check suppresses a gap when the other photo supplies its full reading. Order recovery preserves directed links through an otherwise disconnected upload and leaves uncorroborated joins uncertain.
+
+P13.23 and P13.24 remain open pending qualification.
+
+- [ ] **Signed off** (maintainer)

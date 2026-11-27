@@ -426,7 +426,7 @@
   (let [^I32 trust (tg-trust (fd d ss))
         ^:mut ^I32 pending 0
         ^:mut ^I32 w 0]
-    (ms-run np (fd c capture) (fd d mask) (fd m pages) (fd ev olines) (fd d et) (fd d fl) (fd d fw)
+    (ms-run np (fd c capture) (fd d mask) (fd m pages) (fd ev olines) (fd ev owords) (fd d et) (fd d fl) (fd d fw)
             (fd d mspatch) (fd d mspixel) (fd d mscuts)
             (fd m ledger) (fd m text) (fd s seams) (fd s mskeys) (fd s mscode) (fd s msa) (fd s msb)
             (fd s msdrop) (fd s mslines) (fd s mswords)

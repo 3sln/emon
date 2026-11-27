@@ -8,6 +8,7 @@
 (def engines ["tesseract" "apple-vision" "ppocr"])
 (def buckets ["gap" "abut" "partial" "1" "2-3" "4+"])
 (def traps ["clean" "identical" "asymmetric" "repeat" "separator" "different-pages"])
+(def seam-metric "model-v1")
 (def scratch (fs/path (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "multishot"))
 (def corpus (fs/path (or (System/getenv "EMON_MULTISHOT_CORPUS") "corpus")))
 (defn read-json [f] (json/parse-string (slurp (str f)) true))
@@ -24,8 +25,11 @@
     (reduce-kv (fn [n w c] (+ n (min c (get freq w 0)))) 0 (frequencies a))))
 (defn ratio [a b] (if (zero? b) 1.0 (/ (double a) b)))
 (defn nodes [root] (tree-seq #(seq (:children %)) :children root))
+(defn model-nodes [model]
+  (mapcat nodes (cons (:body model) (:furniture model))))
+
 (defn model-text [model]
-  (str/join " " (keep :text (mapcat nodes (cons (:body model) (:furniture model))))))
+  (str/join " " (keep :text (model-nodes model))))
 
 (defn gold-rows [gold]
   (let [units (sort-by (fn [{[[_ _ y0 _ y1]] :at}] (+ y0 y1))
@@ -234,40 +238,186 @@
                         (re-matches #"[-=*_.]{3,}" text)))))
         lines))
 
-(defn false-merges [case pieces dropped seams]
+(defn output-tokens [model page]
+  (letfn [(walk [{:keys [text at children]} inherited]
+            (let [regions (if (seq at)
+                            (reduce (fn [by-page [p x0 y0 x1 y1]]
+                                      (let [{[width height] :px w :w h :h} (get (:pages model) (dec p))]
+                                        (if (and width height (or (nil? page) (= p 1)))
+                                          (update by-page (or page p) (fnil conj [])
+                                                  [(* x0 (/ width w)) (* y0 (/ height h))
+                                                   (* x1 (/ width w)) (* y1 (/ height h))])
+                                          by-page)))
+                                    {} at)
+                            inherited)
+                  tokens (if (re-matches #"[-=*_.]{3,}" (or text "")) ["::rule"] (words text))]
+              (concat (map #(hash-map :token % :regions regions) tokens)
+                      (mapcat #(walk % regions) children))))]
+    (into [] (mapcat #(walk % {}) (cons (:body model) (:furniture model))))))
+
+(defn output-candidates [tokens pieces row-index row]
+  (let [expected (vec (if (re-matches #"[-=*_.]{3,}" (:text row)) ["::rule"] (words (:text row))))
+        n (count expected)
+        vocabulary (set expected)]
+    (when (pos? n)
+      (mapcat
+       (fn [[page piece]]
+         (when (pos? (get (:visible piece) row-index))
+           (let [[_ y0 _ y1 :as box] (get (:boxes piece) row-index)
+                 proximity (mapv (fn [token]
+                                   (reduce (fn [best [_ a _ b :as region]]
+                                             (if (and (y-intersects? box region)
+                                                      (>= (- (min y1 b) (max y0 a))
+                                                          (* 0.25 (min (- y1 y0) (- b a)))))
+                                               (min best (/ (abs (- (+ y0 y1) (+ a b)))
+                                                            (max 1 (- b a) (- y1 y0))))
+                                               best))
+                                           ##Inf (get (:regions token) page)))
+                                 tokens)]
+             (for [start (range (count tokens))
+                   :when (and (vocabulary (:token (tokens start))) (< (proximity start) ##Inf))
+                   end (take-while #(< (proximity (dec %)) ##Inf)
+                                   (range (inc start) (inc (min (count tokens) (+ start n (max 1 (quot n 4)))))))
+                   :when (vocabulary (:token (tokens (dec end))))
+                   :let [span (subvec tokens start end)
+                         length (- end start)]
+                   :let [hits (common expected (map :token span))
+                         score (/ (* 2.0 hits) (+ n length))]
+                   :when (and (>= hits (* 0.75 n)) (>= score 0.8))
+                   :let [distance (/ (reduce + (subvec proximity start end)) length)]]
+               {:row row-index :page page :start start :end end
+                :score score :distance distance}))))
+       pieces))))
+
+(defn output-occurrences [rows pieces tokens]
+  ;; At equal text similarity, give each physical row a reading before assigning a second
+  ;; one on the same photo. This also handles equal rows in the same paragraph region.
+  (let [candidates (sort-by (juxt (comp - :score) :distance :start :row :page)
+                            (mapcat #(output-candidates tokens pieces %1 %2) (range) rows))
+        allocate (fn [result matches unique?]
+                   (reduce (fn [{:keys [used assigned] :as current} {:keys [start end row page] :as match}]
+                             (let [span (range start end)
+                                   key [page row]]
+                               (if (or (some used span) (and unique? (assigned key)))
+                                 current
+                                 (-> current
+                                     (update :used into span)
+                                     (update :assigned conj key)
+                                     (update-in [:rows row] (fnil conj []) match)))))
+                           result matches))]
+    (:rows (reduce (fn [result same-score]
+                     (allocate (allocate result same-score true) same-score false))
+                   {:used #{} :assigned #{} :rows {}}
+                   (partition-by :score candidates)))))
+
+(defn vertical-cut? [piece row edge]
+  (let [[_ top _ bottom] (get (:boxes piece) row)
+        boundary (if (= edge :top) 0 (:height piece))]
+    (and (pos? (get (:visible piece) row))
+         (< top boundary bottom))))
+
+(defn full-row? [piece row]
+  (let [[_ top _ bottom] (get (:boxes piece) row)]
+    (and (= 1.0 (double (get (:visible piece) row)))
+         (<= 0 top bottom (:height piece)))))
+
+(defn lost-rows [left right]
+  (let [indices (range (count (:visible left)))
+        last-left (last (filter #(pos? (get (:visible left) %)) indices))
+        first-right (first (filter #(pos? (get (:visible right) %)) indices))]
+    (filterv (fn [i]
+               (and (not (or (full-row? left i) (full-row? right i)))
+                    (or (vertical-cut? left i :bottom) (vertical-cut? right i :top)
+                        (and last-left first-right (< last-left i first-right)))))
+             indices)))
+
+(defn false-merges [case pieces dropped seams occurrences]
   (let [order (:order case)
-        predecessors (into {} (for [{:keys [left right kind]} seams :when (= kind "overlap")]
-                                [right left]))]
+        neighbors (reduce (fn [pairs {:keys [left right kind]}]
+                            (if (= kind "overlap")
+                              (-> pairs (update left (fnil conj []) right)
+                                  (update right (fnil conj []) left))
+                              pairs))
+                          {} seams)]
     (count (remove (fn [{:keys [page] :as row}]
-                     (when-let [left-page (get predecessors page)]
-                       (let [left (pieces (order (dec left-page)))
-                             right (pieces (order (dec page)))
-                             shared (:shared (seam-gold left right))]
-                         (some #(row-read? (get-in case [:rows %]) (get-in right [:boxes %]) [row]) shared))))
+                     (let [index (order (dec page))
+                           piece (pieces index)]
+                       (some (fn [other-page]
+                               (let [other-index (order (dec other-page))
+                                     other (pieces other-index)]
+                                 (some (fn [i]
+                                         (and (row-read? (get-in case [:rows i]) (get-in piece [:boxes i]) [row])
+                                              (or (and (>= (get (:visible piece) i) 0.97)
+                                                       (>= (get (:visible other) i) 0.97))
+                                                  (some #(= other-index (:page %)) (get occurrences i)))))
+                                       (range (count (:rows case))))))
+                             (get neighbors page))))
                    dropped))))
 
-(defn seam-score [rows {:keys [shared lost]} left-piece right-piece left right marks]
-  (let [duplicates (filter #(and (row-read? (rows %) (get-in left-piece [:boxes %]) left)
-                                 (row-read? (rows %) (get-in right-piece [:boxes %]) right)) shared)
-        gap? (some #{"possible-gap" "seam-gap" "spliced"} marks)]
-    {:seams 1 :shared (count shared) :dup (count duplicates)
-     :unflagged (if (some #{"possible-duplicate"} marks) 0 (count duplicates))
-     :lost (if (seq lost) 1 0) :lost-flagged (if (and (seq lost) gap?) 1 0)
-     :spurious-gap (if (and (empty? lost) gap?) 1 0)}))
+(defn duplicate-events [occurrences page-count]
+  (group-by :seam
+            (for [[row copies] occurrences
+                  [a b] (partition 2 1 (sort-by (juxt :page :start) copies))
+                  :let [left (:page a) right (:page b)]]
+              {:row row :left left :right right :seam (min left (- page-count 2))})))
 
-(defn run-case [bin engine mode case manifest tiff]
+(defn seam-marks [order seams left right]
+  (let [a (inc (.indexOf order left))
+        b (inc (.indexOf order right))]
+    (keep (fn [{:keys [left right kind]}]
+            (when (or (and (= a left) (= b right)) (and (= a right) (= b left)))
+              kind))
+          seams)))
+
+(defn evidence-occurrences [case pieces reads]
+  (into #{}
+        (for [[i row] (map-indexed vector (:rows case))
+              [page piece] pieces
+              :when (and (pos? (get (:visible piece) i))
+                         (row-read? row (get (:boxes piece) i) (reads page)))]
+          i)))
+
+(defn seam-score [case pieces i reads occurrences duplicates seams physical-order]
+  (let [left (pieces i)
+        right (pieces (inc i))
+        shared (when-not (:other case) (:shared (seam-gold left right)))
+        evidence-dup (count (filter #(and (row-read? (get-in case [:rows %]) (get-in left [:boxes %]) (reads i))
+                                         (row-read? (get-in case [:rows %]) (get-in right [:boxes %]) (reads (inc i))))
+                                   shared))
+        missing (when-not (:other case) (remove occurrences (lost-rows left right)))
+        marks (seam-marks (:order case) seams i (inc i))
+        gap? (some #{"possible-gap" "seam-gap"} marks)
+        in-order? (= (inc (.indexOf physical-order i)) (.indexOf physical-order (inc i)))
+        events (map (fn [{:keys [left right] :as copy}]
+                      (assoc copy :marks (seam-marks (:order case) seams left right)))
+                    duplicates)
+        unflagged (remove #(some #{"possible-duplicate"} (:marks %)) events)]
+    {:seams 1 :shared (count shared) :evidence_dup evidence-dup
+     :dup (count duplicates) :unflagged (count unflagged)
+     :matched-dup (count (filter #(some #{"overlap"} (:marks %)) events))
+     :out-of-order-unflagged (count (filter (fn [{:keys [left right]}]
+                                             (and (not= left right)
+                                                  (not= (inc (.indexOf physical-order left))
+                                                        (.indexOf physical-order right))))
+                                           unflagged))
+     :out-of-order-missed-gap (if (and (not in-order?) (seq missing) (not gap?)) 1 0)
+     :lost-rows (count missing)
+     :lost (if (seq missing) 1 0) :lost-flagged (if (and (seq missing) gap?) 1 0)
+     :spurious-gap (if (and (empty? missing) gap?) 1 0)}))
+
+(defn case-document [case manifest tiff]
+  (let [paths (mapv :path (:pieces manifest))
+        order (:order case)]
+    (if tiff [(:sequence manifest)]
+      (into ["--images"] (if-let [other (:other case)]
+                          [(paths (first order)) other]
+                          (mapv paths order))))))
+
+(defn score-case [case manifest separate scan actual control]
   (let [pieces (:pieces manifest)
-        paths (mapv :path pieces)
         order (:order case)
-        separate (mapv #(bundle bin engine [] [%]) paths)
-        scan (bundle bin engine [] [(:scan manifest)])
-        document (if tiff [(:sequence manifest)]
-                     (into ["--images"] (if-let [other (:other case)]
-                                          [(paths (first order)) other]
-                                          (mapv paths order))))
-        actual (when (= mode "gate") (bundle bin engine [] document))
-        control (when (and actual (:careful case))
-                  (bundle bin engine ["--capture=scan"] document))
+        physical-order (if (:other case) [(first order)] order)
+        physical-pieces (mapv (fn [i] [i (pieces i)]) physical-order)
         text-of #(model-text (:model %))
         concat-text (str/join " " (map text-of (mapv separate order)))
         final-text (if actual (text-of actual) concat-text)
@@ -277,6 +427,19 @@
                   (mapv #(get pages (inc (.indexOf order %))) (range (count pieces))))
                 before)
         seams (get-in actual [:evidence :seams])
+        source-order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
+        joined-order (mapv #(order (dec %)) source-order)
+        concat-occ (output-occurrences (:rows case) physical-pieces
+                                       (into [] (mapcat #(output-tokens (:model (separate %)) %) physical-order)))
+        actual-occ (if actual
+                     (let [tokens (mapv (fn [t] (update t :regions
+                                                      #(into {} (for [[p box] % :when (<= p (count physical-order))]
+                                                                  [(order (dec p)) box]))))
+                                        (output-tokens (:model actual) nil))]
+                       (output-occurrences (:rows case) physical-pieces tokens))
+                     concat-occ)
+        concat-dup (duplicate-events concat-occ (count pieces))
+        actual-dup (duplicate-events actual-occ (count pieces))
         scan-total (total-count (:total case) (text-of scan))
         concat-total (total-count (:total case) concat-text)
         actual-total (total-count (:total case) final-text)
@@ -285,31 +448,40 @@
                      :total-after actual-total
                      :total-missing (if (and (pos? scan-total) (zero? actual-total)) 1 0)
                      :total-duplicates (if (pos? scan-total) (max 0 (- actual-total scan-total)) 0)
-                     :false-merges (false-merges case pieces (dropped-seam-reads (:model actual)) seams)
+                     :missing-concat (- (count (:rows case)) (count concat-occ))
+                     :missing-output (- (count (:rows case)) (count actual-occ))
+                     :evidence_missing (- (count (:rows case))
+                                          (count (evidence-occurrences case physical-pieces after)))
+                     :evidence_missing_concat (- (count (:rows case))
+                                                 (count (evidence-occurrences case physical-pieces before)))
+                     :false-merges (false-merges case pieces (dropped-seam-reads (:model actual)) seams actual-occ)
                      :changed-clean (if (and control (some #{"clean" "different-pages"} [(:kind case)])
                                              (not= (:canonical actual) (:canonical control))) 1 0)
                      :changed-repeat (if (and control (some #{"identical" "repeat"} [(:kind case)])
                                               (not= (:canonical actual) (:canonical control))) 1 0)}]
     {:kind (:kind case)
-     :order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
+     :order source-order
+     :output-duplicates (mapv (fn [event]
+                                (assoc event :marks (vec (seam-marks order seams (:left event) (:right event)))))
+                              (mapcat actual-dup (range (dec (count pieces)))))
      :words {:scan (score-words (:rows case) (text-of scan))
              :concat (score-words (:rows case) concat-text)
              :actual (score-words (:rows case) final-text)}
      :checks case-checks
      :seams (mapv (fn [i left right]
-                    (let [gold (if (:other case) {:bucket "different-pages" :shared [] :lost []}
-                                   (seam-gold left right))
-                          a (inc (.indexOf order i))
-                          b (inc (.indexOf order (inc i)))
-                          marks (keep (fn [{:keys [left right kind]}]
-                                        (when (or (and (= a left) (= b right))
-                                                  (and (= a right) (= b left) (= kind "possible-duplicate")))
-                                          kind))
-                                      seams)]
-                      {:bucket (if (:careful case) (:kind case) (:bucket gold))
-                       :concat (seam-score (:rows case) gold left right (before i) (before (inc i)) [])
-                       :actual (seam-score (:rows case) gold left right (after i) (after (inc i)) marks)}))
+                    {:bucket (if (:careful case) (:kind case) (:bucket (seam-gold left right)))
+                     :concat (seam-score case pieces i before concat-occ (concat-dup i) [] order)
+                     :actual (seam-score case pieces i after actual-occ (actual-dup i) seams joined-order)})
                   (range) pieces (rest pieces))}))
+
+(defn run-case [bin engine mode case manifest tiff]
+  (let [document (case-document case manifest tiff)
+        separate (mapv #(bundle bin engine [] [(:path %)]) (:pieces manifest))
+        scan (bundle bin engine [] [(:scan manifest)])
+        actual (when (= mode "gate") (bundle bin engine [] document))
+        control (when (and actual (:careful case))
+                  (bundle bin engine ["--capture=scan"] document))]
+    (score-case case manifest separate scan actual control)))
 
 (defn sum-maps [maps] (apply merge-with + {} maps))
 (defn word-report [rows]
@@ -433,6 +605,8 @@
       (fail "multishot acceptance failed (see per-bucket counts)"))))
 
 (defn compare-sweep! [reference current]
+  (when-not (= (:seam-metric reference) (:seam-metric current))
+    (fail "sweep ratchet requires a reference scored with the same seam metric"))
   (when-not (= (select-keys reference [:seed :mode :input :cases])
                (select-keys current [:seed :mode :input :cases]))
     (fail "sweep ratchet requires the same seed, input mode and piece hashes"))
@@ -488,7 +662,10 @@
       report (print (slurp (str result-file)))
       :else
       (let [reference (when ratchet (read-json ratchet))
+            _ (when (and reference (not= seam-metric (:seam-metric reference)))
+                (fail "sweep ratchet requires a reference scored with the same seam metric"))
             seed (or seed (:seed reference) (if ci 917 (.nextLong (java.util.Random.))))
+            strict? (and ci (= seed 917))
             rng (java.util.Random. seed)
             sets (str/split (or set "sroie,cord") #",")
             [lo hi] (mapv parse-long (str/split (or pieces (if ci "2" "2-5")) #"-"))
@@ -551,16 +728,17 @@
                                [engine (if clipped
                                          (cond-> (clip-report rows) keep (assoc :case-scores rows))
                                          (cond-> (multishot/report rows)
-                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows ci)))
+                                           (not baseline) (assoc :failed-cases (vec (failed-cases cases rows strict?)))
                                            keep (assoc :case-scores rows)))]))]
                 (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
+                            :seam-metric seam-metric
                             :cases hashes :engines results}]
                   (spit (str result-file) (str (json/generate-string data {:pretty true}) "\n"))
                   (when reference (compare-sweep! reference (json/parse-string (json/generate-string data) true)))
                   (println (json/generate-string results {:pretty true})))
                 (when (and (or ci sweep) (not baseline))
                   (doseq [[engine summary] results]
-                    (try (verify! summary ci)
+                    (try (verify! summary strict?)
                          (catch Exception e (fail (str "seed " seed " " engine ": " (ex-message e))))))))
               (finally
                 (when-not keep (fs/delete-tree run-dir))))))))))

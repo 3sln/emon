@@ -84,6 +84,7 @@ def generate(case, out):
         path = out / f"piece-{i}.jpg"
         view.save(path, quality=96 if case["careful"] else int(rng.integers(66, 93)))
         pieces.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                       "height": view.height - blank,
                        "visible": [p[0] for p in projections],
                        "boxes": [p[1] for p in projections]})
     manifest = {"scan": str(scan), "pieces": pieces}

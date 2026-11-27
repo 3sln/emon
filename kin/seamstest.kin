@@ -2,12 +2,13 @@
   (:require [emon.lang :refer [I32 Cells Bitmap]]
             [emon.test :refer [deftest assert-eq new-cells new-bitmap-set TestT test-t]]
             [emon.port :refer [cells-push cells-at cells-set cells-len bms-put bitmap-set-u8]]
-            [emon.evidence :refer [ln-new ln-count wd-new ol-new ol-set olf-conf]]
-            [emon.model :refer [page-new pk-image ledger-count model-init model-check
+            [emon.evidence :refer [ln-new ln-count ln-set lf-order wd-new wd-get wd-set wd-count hd-conf hd-tstart
+                                   ol-new ol-set olf-conf ow-new ow-set owf-flags oe-clipped]]
+            [emon.model :refer [page-new pk-image ledger-count ledger-page model-init model-check
                                 node-count node-kind node-flags nk-row nk-cell fl-seam-gap]]
             [emon.seams :refer [ms-run ms-ncc ms-sample-cut]]
             [emon.table :refer [tb-seam-gaps tb-emit]]
-            [kin.lang :refer [defn let if do set while return + - * < == and or]]))
+            [kin.lang :refer [defn let if do set while return + - * rem < == and or]]))
 
 (defn ^I32 law-line [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et ^I32 page ^I32 y ^I32 cp]
   (let [^I32 start (cells-len et)
@@ -41,7 +42,7 @@
       (do (set r (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 -1 0))
           (ol-set ol r (olf-conf) 300)))
     (law-line fl fw et 2 400 82)
-    (assert-eq (ms-run 2 capture mask pages ol et fl fw (new-cells) (new-cells) (new-cells) ledger text decisions
+    (assert-eq (ms-run 2 capture mask pages ol (new-cells) et fl fw (new-cells) (new-cells) (new-cells) ledger text decisions
                        (new-cells) (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
@@ -103,27 +104,44 @@
   (law-seam (test-t) 1 0 4 0 0 0 0)
   (law-seam (test-t) 2 1 4 0 0 0 0))
 
-(deftest test-reversed-photos-use-the-unique-anchored-order
+(defn ^I32 law-reversed-link [^TestT emon-t ^I32 np ^I32 earlier]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
         ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells order (new-cells)
-        ^Cells decisions (new-cells) ^:mut ^I32 i 0]
-    (page-new pages 1 450 1000 0 (pk-image))
-    (page-new pages 2 450 1000 0 (pk-image))
-    (cells-push mask 1) (cells-push mask 1)
+        ^Cells ledger (new-cells) ^Cells decisions (new-cells) ^:mut ^I32 i 0]
+    (while (< i np)
+      (do (page-new pages (+ i 1) 450 1000 0 (pk-image))
+          (cells-push mask 1)
+          (set i (+ i 1))))
+    (set i 0)
     (while (< i 4)
       (do (law-line fl fw et 1 (+ 20 (* i 30)) (+ 65 i))
-          (law-line fl fw et 2 (+ 700 (* i 30)) (+ 65 i))
+          (wd-set fw (- (ln-count fl) 1) (hd-conf) 950)
           (set i (+ i 1))))
-    (law-line fl fw et 2 50 91)
     (law-line fl fw et 1 450 92)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
+    (if (== np 3) (law-line fl fw et 2 450 93))
+    (law-line fl fw et earlier 50 91)
+    (set i 0)
+    (while (< i 4)
+      (do (law-line fl fw et earlier (+ 700 (* i 30)) (+ 65 i))
+          (set i (+ i 1))))
+    (assert-eq (ms-run np 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       ledger (new-cells) decisions (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells))
-               4 "remove the leading duplicate lines of the later photo")
-    (assert-eq (cells-at order 0) 2 "source page two starts the document")
+               4 "remove the lower-confidence copy")
+    (assert-eq (cells-at order 0) earlier "the earlier source page starts the document")
     (assert-eq (cells-at order 1) 1 "source page one follows")
-    (assert-eq (cells-at decisions 0) 2 "the seam preserves upload provenance")))
+    (if (== np 3) (assert-eq (cells-at order 2) 2 "the unrelated page remains in the document"))
+    (assert-eq (cells-at decisions 0) earlier "the seam preserves upload provenance")
+    (assert-eq (ledger-page ledger 0) earlier "the earlier photo supplied the lower-confidence copy")
+    (assert-eq (ln-count fl) (+ np 4) "keep all distinct lines and one copy of the overlap")
+    (return 0)))
+
+(deftest test-reversed-photos-use-the-unique-anchored-order
+  (law-reversed-link (test-t) 2 2))
+
+(deftest test-a-confirmed-link-survives-a-disconnected-upload
+  (law-reversed-link (test-t) 3 3))
 
 (deftest test-several-strokes-at-the-bitmap-edge-are-clipping-evidence
   (let [^Bitmap pixels (bms-put (new-bitmap-set) 1 50 12 1)
@@ -166,12 +184,86 @@
     (law-band-line fl fw et 1 900 3)
     (law-band-line fl fw et 2 50 4)
     (law-line fl fw et 2 500 92)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells))
                0 "punctuation and an extra tail token do not prove an overlap on their own")
     (assert-eq (cells-at decisions 2) 2 "the OCR variant is still reported as a possible duplicate")))
+
+(defn ^I32 law-covered-fragment [^TestT emon-t ^I32 shared]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells cuts (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 w 0 ^:mut ^I32 first 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (cells-push cuts 0) (cells-push cuts 1) (cells-push cuts 0) (cells-push cuts 0)
+    (law-line fl fw et 1 50 91)
+    (if (== shared 1)
+      (do (law-line fl fw et 1 957 88)
+          (law-line fl fw et 2 50 88)))
+    (set first (wd-count fw))
+    (law-band-line fl fw et 2 80 5)
+    (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 0 4)
+    (ol-set ol 0 (olf-conf) 300)
+    (while (< i 4)
+      (do (set w (ow-new ow 1 50 993 80 1000 50 993 80 993 0 0
+                         (wd-get fw (+ first i 1) (hd-tstart)) 2 0 300 0))
+          (ow-set ow w (owf-flags) (oe-clipped))
+          (set i (+ i 1))))
+    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells) (new-cells) cuts
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               shared "the full copy of the fragment corroborates a shared edge line")
+    (assert-eq (ln-count fl) (+ 2 shared) "keep every distinct complete line")
+    (if (== shared 1)
+      (assert-eq (cells-at decisions 2) 1 "report the confirmed overlap")
+      (assert-eq (cells-len decisions) 0 "the full line covers the fragment"))
+    (return 0)))
+
+(deftest test-a-complete-neighboring-copy-covers-a-clipped-fragment
+  (law-covered-fragment (test-t) 0))
+
+(deftest test-a-covered-fragment-corroborates-a-single-line-overlap
+  (law-covered-fragment (test-t) 1))
+
+(defn ^I32 law-cut-and-pixel [^TestT emon-t ^I32 cut]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells offsets (new-cells) ^Cells pixels (new-cells) ^Cells cuts (new-cells)
+        ^:mut ^I32 i 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (cells-push cuts 0) (cells-push cuts cut) (cells-push cuts cut) (cells-push cuts 0)
+    (law-line fl fw et 1 50 91)
+    (law-line fl fw et 1 920 88)
+    (law-line fl fw et 2 50 88)
+    (law-line fl fw et 2 450 92)
+    (ln-set fl 1 (lf-order) 0)
+    (ln-set fl 2 (lf-order) 1)
+    (cells-push offsets 0) (cells-push offsets 384)
+    (while (< i 768)
+      (do (cells-push pixels (rem (* i 17) 128))
+          (set i (+ i 1))))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels cuts
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               cut "the identical strip needs opposing cut fragments")
+    (assert-eq (cells-at decisions 2) (- 2 cut) "corroboration controls the seam decision")
+    (return 0)))
+
+(deftest test-pixel-confirmation-of-a-single-line-needs-cut-context
+  (law-cut-and-pixel (test-t) 0)
+  (law-cut-and-pixel (test-t) 1))
 
 (defn ^I32 law-word-seam [^TestT emon-t ^I32 variant ^I32 expected-drop ^I32 expected-kind]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
@@ -197,7 +289,7 @@
           (ln-new fl 2 50 (+ 40 (* i 13)) 140 (+ 53 (* i 13)) 50 53 140 53 0 0 word 2)
           (set i (+ i 2))))
     (law-line fl fw et 2 450 89)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) decisions
                        (new-cells) (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) (new-cells)
@@ -221,7 +313,7 @@
     (cells-push cuts 1) (cells-push cuts 0) (cells-push cuts 0) (cells-push cuts 1)
     (law-line fl fw et 1 140 66)
     (law-line fl fw et 2 320 65)
-    (ms-run 2 0 mask pages (new-cells) et fl fw (new-cells) (new-cells) cuts
+    (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) cuts
             (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
             (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
             (new-cells) (new-cells) (new-cells))
