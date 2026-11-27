@@ -1,6 +1,6 @@
 # emon for Java
 
-The Maven artifact `com.3sln:emon`, package `emon.api`. **JDK 22 or newer**: pdfium and Tesseract are reached through
+The Maven artifact `com.3sln:emon`, package `emon.api`. **JDK 22 or newer**: pdfium and the OCR adapters are reached through
 `java.lang.foreign`, which is final from 22. The artifact is plain Java with no dependency; it converts born-digital PDFs
 on its own.
 
@@ -105,11 +105,16 @@ The adapters in `emon.ffi` load the native libraries at run time, so nothing is 
 `emon.ffi.Unavailable` when you open it, not a failed render later. Run the JVM with `--enable-native-access=ALL-UNNAMED`.
 
 - `Pdfium.open(libDirOrFile)`: `null` looks in `$EMON_PDFIUM_LIB` (a directory or a file), then the system's search.
-- `Tess.open(tessdata)`: `null` looks for the models in `$TESSDATA_PREFIX` and the usual places, and for the libraries in
-  `$EMON_TESS_LIB` (a directory), `/opt/homebrew/lib`, `/usr/local/lib` and the usual Linux directories.
+- `new OcrEngines()` is the **engine registry** (D925), the same model as every host's and the C ABI's (`emon_adapter.h`), and itself the `Ocr` port (`config.ocr = engines`):
+  `engines.defaults(options)` loads every `libemon_ocr_*` of `$EMON_ADAPTER_DIR`, or of `lib/emon/adapters` beside the application, and **does not load Tesseract's when the
+  selected engine does not use it** (PP-OCR alone); `engines.load(library, config, packsDir)` registers one library by path, `engines.add(adapter)` an in-process
+  `OcrEngines.Adapter`. Every registration is held to kin's engine table and refused by name (`adapter-caps-beyond-engine`, `adapter-remote-refused`, ...); a request goes to
+  the adapter registered for the engine it names; an adapter that cannot read leaves the page unread, never blank; an answer is held to what the adapter registered
+  (`ocr-adapter-invalid`). `setTessdata(dir)` names the Tesseract models (else `$EMON_TESSDATA`, `$TESSDATA_PREFIX`); `describe()` lists the adapters; `notes()` says why requests
+  were left unread; `close()` ends them. Java links no Tesseract and binds no `libtesseract`: it loads `libemon_ocr_tesseract` like every other host.
 
 This program converts a scan with both. It is compiled against the built jar by `bb package --check`, and on a machine that
-has pdfium and Tesseract installed also run (it prints a NOTE and skips that on one that does not, as a CI runner does):
+has pdfium and the Tesseract adapter library installed (`$EMON_ADAPTER_DIR`) also run (it prints a NOTE and skips that on one that does not, as a CI runner does):
 
 <!-- snippet: docs/snippets/java/Native.java -->
 ```java

@@ -52,7 +52,6 @@
          [:port    "host/rust/src/ppocr_abi.rs" "engines ocrengine oil ocrport plan"]
          [:port    "host/go/engines.go" "adapters engines oil ocrport plan"]
          [:port    "host/go/adapter_cgo.go" "adapters ocr plan"]
-         [:port    "host/java/emon/ffi/PpOcr.java" "ocrengine ocrport plan"]
          [:port "host/rust/src/ppocr.rs" "evidence ocr ocrengine ocrport oil plan"]
          ;; K8 (D901): the platform OCR ports are ports like tess.rs and ppocr.rs. They build OIL answers with the same builders, read a request's languages through kin's `emon.ocrloc` (the
          ;; locale tables of ruling 7) and its engine configuration (`emon.ocrengine`), and hold no policy: what an engine may declare, which locale a language is and what a request must say are kin's.
@@ -82,11 +81,12 @@
          [:port    "host/java/emon/api/Ports.java"      "plan planloop"]
          [:port    "host/java/emon/Port.java"           "limits"]
          [:port    "host/java/emon/RenderPort.java"     "plan"]
-         [:port "host/java/emon/ffi/Tess.java" "ocr ocrport ocrtess oil plan"]
+         [:port    "host/java/emon/api/OcrEngines.java" "adapters engines oil ocrport plan"]
+         [:port    "host/java/emon/ffi/AdapterLib.java" "adapters ocr plan"]
          [:api     "host/java/emon/api/Model.java"      "enctx html json model"]
          [:api     "host/java/emon/api/Node.java"       "enctx model"]
          [:api     "host/java/emon/api/Options.java"    "config enctx html"]
-         [:test "test/driver/java/EngineTest.java" "oil"]
+         [:test "test/driver/java/EngineTest.java" "oil plan"]
          [:test "test/driver/java/Main.java" "oil"]
          [:driver  "host/csharp/Emon/Api/Engine.cs"     "enctx model plan planloop"]
          [:driver  "host/csharp/Emon/Api/Units.cs"      "enctx engine planloop"]

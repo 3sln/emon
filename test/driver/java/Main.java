@@ -377,15 +377,23 @@ public class Main {
         }
         final List<Input> inputs = List.of(input);
         boolean ppAlone = opts.ocrEngine == 8;
+        // every engine is a registered adapter (D925): Tesseract's library (not loaded when the selection does not use it, D920) and the PP-OCR one
+        emon.api.OcrEngines registry = null;
         if ((tess || opts.ppOcr || ppAlone) && replay.isEmpty()) {
             try {
-                if (!ppAlone) cfg.ocr = emon.ffi.Tess.open(tessdata.isEmpty() ? null : tessdata);
-                if (opts.ppOcr || ppAlone) cfg.ocr = emon.ffi.PpOcr.open(null, cfg.ocr);
+                registry = new emon.api.OcrEngines();
+                if (!tessdata.isEmpty()) registry.setTessdata(tessdata);
+                registry.defaults(opts);
+                if (opts.ppOcr || ppAlone) {
+                    String ext = System.getProperty("os.name").equals("Mac OS X") ? "dylib" : "so";
+                    registry.load(System.getenv().getOrDefault("EMON_PPOCR_LIB", ".cache/ppocr/libemon_ppocr_adapter." + ext), null, System.getenv().getOrDefault("EMON_PPOCR_MODELS", ".cache/ppocr"));
+                }
+                cfg.ocr = registry;
             } catch (emon.ffi.Unavailable e) {
                 usage(e.getMessage());
             }
         }
-        try (emon.ffi.PpOcr ownedPp = cfg.ocr instanceof emon.ffi.PpOcr p ? p : null) {
+        try (emon.api.OcrEngines ownedRegistry = registry) {
         if (pdfium) {
             try {
                 cfg.renderer = emon.ffi.Pdfium.open(pdfiumLib.isEmpty() ? null : pdfiumLib);

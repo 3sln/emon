@@ -755,6 +755,102 @@ public class EngineTest {
         }
     }
 
+    // The engine registry (D925): registration held to kin's table, routing by the engine a request names, unread-never-blank, an answer held to what was registered.
+    static final class StubAdapter implements emon.api.OcrEngines.Adapter {
+        final emon.api.OcrEngines.AdapterInfo i = new emon.api.OcrEngines.AdapterInfo();
+        emon.api.OcrEngines.Reading r = new emon.api.OcrEngines.Reading();
+        boolean closed;
+        int reads;
+
+        StubAdapter(int engine, int caps, int flags) {
+            i.name = "stub";
+            i.engine = engine;
+            i.caps = caps;
+            i.flags = flags;
+        }
+
+        public emon.api.OcrEngines.AdapterInfo info() {
+            return i;
+        }
+
+        public emon.api.OcrEngines.Reading read(Planrun.Request req, Map<Integer, Port.Bitmap> bm, boolean keep) {
+            reads++;
+            return r;
+        }
+
+        public void close() {
+            closed = true;
+        }
+    }
+
+    static String refusal(Runnable a) {
+        try {
+            a.run();
+            return "";
+        } catch (emon.ffi.Unavailable e) {
+            return e.getMessage();
+        }
+    }
+
+    static void engineRegistry() throws Exception {
+        Port.Cells c = Port.newCells();
+        emon.Plan.rqOcrEnd(c, emon.Plan.rqOcr(c, 7, 1, 3, 0, 0, 0, 0, 0));
+        Planrun.Request req = new Planrun.Request(Port.cellsVec(c));
+        Map<Integer, Port.Bitmap> bm = Map.of(1, new Port.Bitmap(4, 4, 1, new byte[16]));
+        emon.api.OcrEngines e1 = new emon.api.OcrEngines();
+        StubAdapter bad = new StubAdapter(99, 0, 4);
+        check(refusal(() -> e1.add(bad)).startsWith("adapter-engine-unknown") && bad.closed, "an engine the table does not know is refused by name and closed");
+        check(refusal(() -> e1.add(new StubAdapter(1, 0xffffffff, 4))).startsWith("adapter-caps-beyond-engine"), "caps beyond the ceiling");
+        check(refusal(() -> e1.add(new StubAdapter(1, 0, 1))).startsWith("adapter-abi-unsupported"), "an async adapter");
+        check(refusal(() -> e1.add(new StubAdapter(1, 0, 2))).startsWith("adapter-remote-refused"), "a remote adapter without allowRemote");
+        check(e1.describe().isEmpty(), "a refused adapter did not register");
+        Planrun.Answer a0 = e1.fulfil(req, bm, false);
+        check(a0.rec.length == 4 && a0.rec[2] == 7 && a0.rec[3] == emon.Plan.psUnsupported(), "no adapter: unsupported");
+        StubAdapter pp = new StubAdapter(2, 0, 4);
+        emon.api.OcrEngines e2 = new emon.api.OcrEngines();
+        e2.add(pp);
+        check(e2.fulfil(req, bm, false).rec[3] == emon.Plan.psUnsupported() && pp.reads == 0, "routed by the engine the request names");
+        for (int[] sw : new int[][] {{emon.api.OcrEngines.UNSUPPORTED, emon.Plan.psUnsupported()}, {emon.api.OcrEngines.FAILED, emon.Plan.psFailed()}}) {
+            StubAdapter t = new StubAdapter(1, 0, 4);
+            t.r.status = sw[0];
+            t.r.reason = "pack-missing:tess-fast-deu";
+            emon.api.OcrEngines e3 = new emon.api.OcrEngines();
+            e3.add(t);
+            Planrun.Answer a = e3.fulfil(req, bm, false);
+            check(a.rec.length == 4 && a.rec[3] == sw[1], "an adapter that cannot read leaves the page unread");
+            List<String> notes = e3.notes();
+            check(notes.size() == 1 && notes.get(0).contains("pack-missing:tess-fast-deu"), "the reason is noted");
+        }
+        StubAdapter liar = new StubAdapter(1, 0, 4);
+        liar.r.rec = new int[] {8, emon.Plan.pkOcr(), 4, 0, 0, 0, 0, 0};
+        emon.api.OcrEngines e4 = new emon.api.OcrEngines();
+        e4.add(liar);
+        String msg = "";
+        try {
+            e4.fulfil(req, bm, false);
+        } catch (Planrun.PlanError e) {
+            msg = e.getMessage();
+        }
+        check(msg.contains("ocr-adapter-invalid: stub"), "an answer to another request is `ocr-adapter-invalid`: " + msg);
+        e4.close();
+        check(liar.closed, "close closes the adapters");
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("emon-engines-");
+        try {
+            emon.api.OcrEngines e5 = new emon.api.OcrEngines();
+            e5.setAdapterDir(dir.toString());
+            Options ppAlone = Options.defaults();
+            ppAlone.ocrEngine = 8;
+            e5.defaults(ppAlone);
+            e5.defaults(Options.defaults());
+            check(e5.describe().isEmpty(), "an empty adapter directory registers nothing");
+            emon.api.OcrEngines e6 = new emon.api.OcrEngines();
+            e6.setAdapterDir(dir + "/nope");
+            check(refusal(() -> e6.defaults(Options.defaults())).contains("not a directory"), "a wrong adapter directory is an error");
+        } finally {
+            java.nio.file.Files.delete(dir);
+        }
+    }
+
     static void renderPort() throws Exception {
         FakeRenderer r = new FakeRenderer(false);
         RenderPort.Fulfiller f = RenderPort.Fulfiller.forInput(r, 0, new RenderPort.Input(ByteSource.of(new byte[4]), null));
@@ -1028,6 +1124,7 @@ public class EngineTest {
             run("an OCR port reads an image and a scanned page; the transcript replays without it", EngineTest::ocrPort);
             run("assets", EngineTest::assets);
             run("decode-img: the host's codecs, the embedder's, and the payload", EngineTest::decodeImg);
+            run("the engine registry: registration, routing, unread-never-blank, answers held to what was registered", EngineTest::engineRegistry);
             run("the Renderer port's fulfiller", EngineTest::renderPort);
             run("parallel: the serial Model and transcript, and the OCR of a multi-page scan overlapped", EngineTest::parallelModel);
             run("parallel: a renderer and an OCR port are called as often as in a serial run", EngineTest::parallelPorts);
