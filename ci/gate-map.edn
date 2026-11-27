@@ -191,7 +191,7 @@
   {:glob "tools/fusion/live-sets.edn" :gates [] :why "the live sets' list (never committed data)"}
   {:glob "tools/fuzz/**" :gates ["fuzz"] :why "the fuzzer"}
   {:glob "tools/table/**" :gates [] :why "offline protected-ownership and word controls over private Models; not a public CI gate"}
-  {:glob "tools/{receipts,multishot}/**" :gates [] :why "live receipt measurement and qualification using an external corpus and OCR engine"}
+  {:glob "tools/{receipts,multishot,spool}/**" :gates [] :why "live receipt measurement and qualification using an external corpus and OCR engine; spool runs shard them"}
   {:glob "tools/controls/**" :gates [] :why "the 54 controls under two OCR engines (K8, D901): a live, macOS measurement, not a gate"}
   {:glob "test/receipts/**" :gates [] :why "numerical live receipt baselines and metric documentation"}
   {:glob "test/tables-ab/**" :gates [] :why "the frozen populations, baseline scores, expectations, repairs and acceptance criteria of `bb tables-ab` (IDs and numbers only); not a gate"}

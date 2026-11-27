@@ -221,10 +221,13 @@ fi
 # the lock file is committed (host/rust/Cargo.lock); the registry is reached only when a crate is not cached
 bb tools/version.clj --stamp-copy host/rust/Cargo.lock "$crate/Cargo.lock"
 
-out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
+# EMON_RS_TARGET=T (tools/spool): cross-compile the driver for the Rust target T (the linker comes from CARGO_TARGET_<T>_LINKER)
+target_flag=""; target_dir=""
+if [ -n "${EMON_RS_TARGET:-}" ]; then target_flag="--target $EMON_RS_TARGET"; target_dir="$EMON_RS_TARGET/"; fi
+out=$(cd "$crate" && { RUSTFLAGS="$flags" cargo build --release --offline -q $target_flag $cargo_features 2>&1 || RUSTFLAGS="$flags" cargo build --release -q $target_flag $cargo_features 2>&1; }) || { echo "$out" | head -80 >&2; echo "emon-rs: build failed" >&2; exit 1; }
 [ -z "$out" ] || echo "$out" >&2
 if [ -n "$cli_mode" ]; then
   case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo "$crate/target/release/emon.exe" ;; *) echo "$crate/target/release/emon" ;; esac
 else
-  echo "$crate/target/release/emon-rs"
+  echo "$crate/target/${target_dir}release/emon-rs"
 fi

@@ -122,6 +122,7 @@
     (apply str (map #(format "%02x" (bit-and % 0xff)) (.digest md)))))
 
 ;; ------------------------------------------------------------------------------------------------ building
+(defn cross-linux? [t] (and (= :linux (:os (get-in pins [:triples t]))) (not= t (host-triple))))
 (defn cmake-args [t src bdir prefix s]
   (let [cfg (triple-cfg t)
         mac? (= :mac (:os cfg))
@@ -141,6 +142,16 @@
           (when (= :ios (:os cfg))
             ["-DCMAKE_SYSTEM_NAME=iOS" "-DCMAKE_SYSTEM_PROCESSOR=aarch64" (str "-DCMAKE_OSX_SYSROOT=" (:sdk cfg)) (str "-DCMAKE_OSX_ARCHITECTURES=" (:arch cfg))
              (str "-DCMAKE_OSX_DEPLOYMENT_TARGET=" (:ios-deployment cfg))])
+          ;; LINUX x64 FROM ANOTHER LINUX CPU (tools/spool): Debian's x86-64 cross compilers; try_run programs go through qemu-user (EMON_CROSS_EMULATOR)
+          (when (cross-linux? t)
+            (cond-> ["-DCMAKE_SYSTEM_NAME=Linux" "-DCMAKE_SYSTEM_PROCESSOR=x86_64"
+                     "-DCMAKE_C_COMPILER=x86_64-linux-gnu-gcc" "-DCMAKE_CXX_COMPILER=x86_64-linux-gnu-g++"]
+              (System/getenv "EMON_CROSS_EMULATOR") (conj (str "-DCMAKE_CROSSCOMPILING_EMULATOR=" (System/getenv "EMON_CROSS_EMULATOR")))))
+          ;; GNU ld reads static archives once, in order, and Tesseract's own command-line program is linked as ... libjpeg libpng libz libtiff ...: libtiff's
+          ;; 12-bit JPEG calls then have no definition. libjpeg is named again at the end (CMake puts CMAKE_CXX_STANDARD_LIBRARIES last). Only the program
+          ;; needs it; the library the Rust crate links is ordered by :link-order.
+          (when (and (cross-linux? t) (= "tesseract" (:id s)))
+            [(str "-DCMAKE_CXX_STANDARD_LIBRARIES=" prefix "/lib/libjpeg.a")])
           ;; the assembler is a program, found on the PATH before the prefix filters above
           (when (and (= "libjpeg-turbo" (:id s)) (fs/which "nasm")) [(str "-DCMAKE_ASM_NASM_COMPILER=" (fs/which "nasm"))])
           (when-let [pi (:project-include s)] [(str "-DCMAKE_PROJECT_INCLUDE=" (abs pi))])

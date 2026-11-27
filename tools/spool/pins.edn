@@ -1,0 +1,14 @@
+;; Everything the spool setup downloads or runs, pinned. The static Tesseract itself is pinned in tools/native/native.edn.
+{;; The builder: Rust 1.92.0 on Debian 12 (the spool base is Debian 12 too, so glibc and libstdc++ agree). Multi-arch index digest;
+ ;; the container runs natively on the laptop's CPU and cross-compiles to x86_64, so nothing is emulated.
+ :builder-image "rust@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2"
+ :rust-target "x86_64-unknown-linux-gnu"
+ ;; Babashka static binaries (checksums published beside the release assets and compared).
+ :babashka {:version "1.3.190"
+            :linux-aarch64 {:file "babashka-1.3.190-linux-aarch64-static.tar.gz"
+                            :sha256 "3832a48fb0f5da1343bd1cc520db2759b28c90774ab53779c288952191f26f62"}
+            :linux-amd64 {:file "babashka-1.3.190-linux-amd64-static.tar.gz"
+                          :sha256 "b974fd4b0bf9c05a65dec59c165339a02d157e4571f80b570ab0734fc3fa5855"}}
+ :babashka-url "https://github.com/babashka/babashka/releases/download/v@VERSION@/@FILE@"
+ ;; Spool runner profile for shards: standard-2 (1 vCPU, 6 GB). Raise it only when measured to help.
+ :profile "standard-2"}

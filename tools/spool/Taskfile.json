@@ -1,0 +1,14 @@
+{
+  "version": "0.1",
+  "kind": "task",
+  "extends": ["base.json", "../../.cache/spool/cases-layers.json"],
+  "command": {
+    "argv": [
+      "sh",
+      "-ec",
+      "export HOME=/workspace TESSDATA_PREFIX=/workspace/spool/tessdata; mkdir -p out; for f in bb emon-rs; do cat spool/bin/$f.gz.part-* | gzip -dc > spool/bin/$f; chmod +x spool/bin/$f; done; spool/bin/bb --config tools/multishot/bb.edn tools/multishot/multishot.clj --prepared cases --shard \"$SPOOL_SHARD_INDEX/$SPOOL_SHARD_COUNT\" --bin /workspace/spool/bin/emon-rs --output out/shard.edn"
+    ],
+    "cwd": "/workspace"
+  },
+  "outputs": { "paths": ["/workspace/out/shard.edn"] }
+}

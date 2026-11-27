@@ -1,5 +1,6 @@
 (ns multishot
   (:require [babashka.cli :as cli]
+            [clojure.edn]
             [babashka.fs :as fs]
             [babashka.process :refer [process destroy shell]]
             [cheshire.core :as json]
@@ -660,7 +661,11 @@
            :pieces {:coerce :string} :ocr-engine {:coerce :string} :report {:coerce :boolean}
            :keep {:coerce :boolean} :baseline {:coerce :boolean} :clipped {:coerce :boolean} :help {:coerce :boolean}
            :tiff {:coerce :boolean} :bin {:coerce :string} :output {:coerce :string}
-           :ratchet {:coerce :string}})
+           :ratchet {:coerce :string}
+           ;; spool (tools/spool): :prepare DIR writes the crops and case designs; :prepared DIR scores one
+           ;; :shard I/K of them into :output as EDN rows; :merge joins those row files into the normal report
+           :prepare {:coerce :string} :prepared {:coerce :string} :shard {:coerce :string}
+           :merge {:coerce :string}})
 
 (defn driver [engine bin]
   (or bin (System/getenv "EMON_MULTISHOT_BIN")
@@ -749,13 +754,95 @@
       (fail "crop generator returned the wrong number of manifests"))
     manifests))
 
+
+;; ---- prepared cases (spool): crops are generated once, locally; the shards only need the driver ----
+(defn rel-path [dir p] (str (fs/relativize (fs/absolutize dir) (fs/absolutize p))))
+
+(defn write-prepared! [dir seed mode tiff selected cases manifests hashes]
+  (fs/create-dirs dir)
+  (let [dir (str dir)
+        cases (vec (map-indexed
+                    (fn [i case]
+                      (cond-> (dissoc case :source)
+                        (:other case) (assoc :other (let [from (:other case)
+                                                          name (str "other-" i "." (fs/extension from))]
+                                                      (fs/copy from (fs/path dir name) {:replace-existing true})
+                                                      name))))
+                    cases))
+        ;; the crops live in the run directory, which is deleted when the run ends: they move into the prepared directory
+        keep (fn [i from]
+               (let [to (fs/path dir (str i) (fs/file-name from))]
+                 (fs/create-dirs (fs/parent to))
+                 (fs/copy from to {:replace-existing true})
+                 (rel-path dir to)))
+        manifests (vec (map-indexed
+                        (fn [i m]
+                          (cond-> (-> m (update :scan (partial keep i))
+                                        (update :pieces (fn [ps] (mapv #(update % :path (partial keep i)) ps))))
+                            (:sequence m) (update :sequence (partial keep i))))
+                        manifests))]
+    (spit (str (fs/path dir "cases.edn"))
+          (pr-str {:seed seed :mode mode :tiff (boolean tiff) :engines selected
+                   :cases cases :manifests manifests :hashes hashes}))))
+
+(defn read-prepared [dir]
+  (let [data (clojure.edn/read-string (slurp (str (fs/path dir "cases.edn"))))
+        abs #(str (fs/absolutize (fs/path dir %)))]
+    (-> data
+        (update :cases (fn [cs] (mapv #(cond-> % (:other %) (update :other abs)) cs)))
+        (update :manifests (fn [ms] (mapv (fn [m]
+                                            (cond-> (-> m (update :scan abs)
+                                                          (update :pieces (fn [ps] (mapv #(update % :path abs) ps))))
+                                              (:sequence m) (update :sequence abs)))
+                                          ms))))))
+
+(defn run-shard! [prepared shard bin output]
+  (let [{:keys [seed mode tiff engines cases manifests]} (read-prepared prepared)
+        [index count] (mapv parse-long (str/split shard #"/"))
+        engine (first engines)
+        bin (driver engine bin)
+        mine (filterv #(= index (mod % count)) (range (clojure.core/count cases)))]
+    (when-not (and index count (< -1 index count) (= 1 (clojure.core/count engines)))
+      (fail "a prepared shard needs --shard I/K and exactly one engine"))
+    (spit output "")
+    (score-cases (fn [case manifest]
+                   (locking *err* (binding [*out* *err*] (println engine "seed" seed "case" (:id case) (:kind case))))
+                   (run-case bin engine mode case manifest tiff))
+                 (mapv cases mine) (mapv manifests mine)
+                 (fn [{:keys [index score error]}]
+                   (spit output (str (pr-str (cond-> {:index (nth mine index)}
+                                               score (assoc :score score) error (assoc :error error))) "\n")
+                         :append true)))
+    (println "shard" shard "scored" (clojure.core/count mine) "of" (clojure.core/count cases) "cases")))
+
+(defn merge-shards! [prepared files output]
+  (let [{:keys [seed mode tiff engines cases hashes]} (read-prepared prepared)
+        engine (first engines)
+        rows (->> files
+                  (mapcat #(str/split-lines (slurp (str %))))
+                  (remove str/blank?)
+                  (map clojure.edn/read-string)
+                  (sort-by :index))]
+    (when-not (= (range (count cases)) (map :index rows))
+      (fail (str "shards cover " (count rows) " of " (count cases) " cases")))
+    (let [scores (mapv :score rows)
+          result (cond-> (multishot/report scores)
+                   (not= mode "baseline") (assoc :failed-cases (vec (failed-cases cases scores))))
+          data {:seed seed :mode mode :input (if tiff "tiff" "images") :seam-metric seam-metric
+                :cases hashes :engines {engine result}}]
+      (spit (str output) (str (json/generate-string data {:pretty true}) "\n"))
+      (println (json/generate-string {engine result} {:pretty true}))
+      (when (not= mode "baseline") (verify! result)))))
+
 (defn main []
-  (let [{:keys [ci sweep seed n set pieces ocr-engine report keep baseline clipped help tiff bin output ratchet]}
+  (let [{:keys [ci sweep seed n set pieces ocr-engine report keep baseline clipped help tiff bin output ratchet prepare prepared shard merge]}
         (cli/parse-opts *command-line-args* {:spec spec :restrict true})
         result-file (if output (fs/path output) (fs/path scratch "report.json"))]
     (cond
-      help (println "bb multishot [--ci | --sweep | --clipped] [--seed N] [--n N] [--set sroie,cord] [--pieces 2-5] [--ocr-engine tesseract|apple-vision|ppocr|all] [--baseline] [--report] [--keep] [--tiff] [--bin FILE] [--output FILE] [--ratchet FILE]")
+      help (println "bb multishot [--ci | --sweep | --clipped] [--seed N] [--n N] [--set sroie,cord] [--pieces 2-5] [--ocr-engine tesseract|apple-vision|ppocr|all] [--baseline] [--report] [--keep] [--tiff] [--bin FILE] [--output FILE] [--ratchet FILE] (spool: --prepare DIR | --prepared DIR --shard I/K | --prepared DIR --merge FILE,..)")
       report (print (slurp (str result-file)))
+      (and prepared shard) (run-shard! prepared shard bin (str result-file))
+      (and prepared merge) (merge-shards! prepared (str/split merge #",") (str result-file))
       :else
       (let [reference (when ratchet (read-json ratchet))
             _ (when (and reference (not= seam-metric (:seam-metric reference)))
@@ -798,7 +885,7 @@
                                               (mapv :sha256 (:pieces manifest)))})
                                  cases manifests)
                     results
-                    (into {} (for [engine selected
+                    (into {} (for [engine (if prepare [] selected)
                                    :let [bin (driver engine bin)
                                          rows (score-cases (fn [case manifest]
                                                       (locking *err*
@@ -825,14 +912,17 @@
                                          (cond-> (multishot/report rows)
                                            (not baseline) (assoc :failed-cases (vec (failed-cases cases rows)))
                                            keep (assoc :case-scores rows)))]))]
-                (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
+                (when prepare
+                  (write-prepared! prepare seed mode tiff selected cases manifests hashes)
+                  (println "prepared" (count cases) "cases in" prepare))
+                (when-not prepare (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
                             :seam-metric seam-metric
                             :false-merge-metric false-merge-metric
                             :cases hashes :engines results}]
                   (spit (str result-file) (str (json/generate-string data {:pretty true}) "\n"))
                   (when reference (compare-sweep! reference (json/parse-string (json/generate-string data) true)))
-                  (println (json/generate-string results {:pretty true})))
-                (when (and (or ci sweep) (not baseline))
+                  (println (json/generate-string results {:pretty true}))))
+                (when (and (or ci sweep) (not baseline) (not prepare))
                   (doseq [[engine summary] results]
                     (try (verify! summary)
                          (catch Exception e (fail (str "seed " seed " " engine ": " (ex-message e))))))))

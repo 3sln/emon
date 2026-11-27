@@ -1,0 +1,16 @@
+{
+  "version": "0.1",
+  "kind": "base",
+  "task_timeout_s": 3600,
+  "layers": [
+    { "id": "babashka", "kind": "directory", "path": "../../.cache/spool/toolchain", "include": ["spool/bin/bb.gz.part-*"] },
+    { "id": "driver", "kind": "directory", "path": "../../.cache/spool/toolchain", "include": ["spool/bin/emon-rs.gz.part-*", "spool/tessdata/*"] },
+    {
+      "id": "harness",
+      "kind": "sources",
+      "sources": [
+        { "path": "../multishot", "destination": "/workspace/tools/multishot", "include": ["multishot.clj", "bb.edn"] }
+      ]
+    }
+  ]
+}
