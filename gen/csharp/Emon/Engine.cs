@@ -213,7 +213,6 @@ public static class Engine {
     }
     internal static int EnHybrid(emon.Enctx.Cfg c) {
         // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
-        // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
         if (c.Oengine == 1) {
             return 1;
         }
@@ -240,26 +239,6 @@ public static class Engine {
         }
         if (Ofall.FbTakenId(ans, i) != 0) {
             return 1;
-        }
-        return 0;
-    }
-    internal static int EnOeMode(emon.Enctx.Cfg c) {
-        // How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
-        if (c.Oengine == 1) {
-            return 2;
-        }
-        if (c.Oengine == 2) {
-            return 1;
-        }
-        if (c.Oengine == 3) {
-            return 4;
-        }
-        if (c.Oengine == 4) {
-            return 6;
-        }
-        if (c.Oengine == 5) {
-            return 8;
         }
         return 0;
     }
@@ -298,7 +277,7 @@ public static class Engine {
         if (EnFallback(c) == 1) {
             Ocrengine.OeTagFb(rq, d.Pscr, EnRouted(c, ans, i), Ofall.FbSlotRead(), Ofall.FbSlotSpec());
         } else {
-            Ocrengine.OeTag(rq, d.Pscr, EnOeMode(c));
+            Ocrengine.OeRoute(rq, d.Pscr, Engines.PkEngineOen(Engines.PkOptionEngine(c.Oengine)), EnHybrid(c));
         }
         if (status == 0) {
             // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
@@ -628,7 +607,7 @@ public static class Engine {
         if (kind == 0) {
             Inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw);
         }
-        if (Ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, EnOeMode(c), s.S0) < 0) {
+        if (Ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2 * EnHybrid(c), s.S0) < 0) {
             return 2;
         }
         Para.PaBuild(d.Fw, d.Et, np, s.Msorder, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix);

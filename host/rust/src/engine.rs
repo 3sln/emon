@@ -176,8 +176,14 @@ impl OcrPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcrEngine { Tesseract, PpOcr, PpOcrAlone, AppleVision, WindowsMediaOcr, MlkitText }
 impl OcrEngine {
-    fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::PpOcrAlone => 2, Self::AppleVision => 3, Self::WindowsMediaOcr => 4, Self::MlkitText => 5 } }
-    fn from_code(code: i32) -> Self { match code { 1 => Self::PpOcr, 2 => Self::PpOcrAlone, 3 => Self::AppleVision, 4 => Self::WindowsMediaOcr, 5 => Self::MlkitText, _ => Self::Tesseract } }
+    pub(crate) fn code(self) -> i32 { match self { Self::Tesseract => 0, Self::PpOcr => 1, Self::PpOcrAlone => crate::emon::engines::eng_ppocr_alone(), Self::AppleVision => 3, Self::WindowsMediaOcr => 4, Self::MlkitText => 5 } }
+    fn from_code(code: i32) -> Self {
+        if code == crate::emon::engines::eng_ppocr_alone() { return Self::PpOcrAlone; }
+        match code { 1 => Self::PpOcr, 3 => Self::AppleVision, 4 => Self::WindowsMediaOcr, 5 => Self::MlkitText, _ => Self::Tesseract }
+    }
+    pub(crate) fn registry_engine(self) -> i32 { crate::emon::engines::pk_option_engine(self.code()) }
+    /// Whether this selection uses Tesseract as its primary reader or page fallback.
+    pub fn uses_tesseract(self) -> bool { crate::emon::engines::pk_uses_tesseract(self.registry_engine()) == 1 }
     /// True when the PP-OCR port has to be loaded (either way of selecting it).
     pub fn uses_pp(self) -> bool { matches!(self, Self::PpOcr | Self::PpOcrAlone) }
 }
@@ -458,9 +464,13 @@ fn config_of(c: &Cfg) -> Config {
 // host has. An Err is the sentence a driver prints after `usage`.
 pub fn parse_options(text: &str) -> Result<Parsed, String> {
     let c = parse_cfg(text)?;
-    if (c.oengine == 1 || c.oengine == 2) && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST
+    let options = options_of(&c);
+    if options.ocr_engine == OcrEngine::PpOcr && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST
         && !(cfg!(feature = "tesseract") && !cfg!(target_arch = "wasm32")) {
         return Err("ocr-engine=ppocr is unsupported in this Rust build".into());
+    }
+    if options.ocr_engine == OcrEngine::PpOcrAlone && cfg!(target_arch = "wasm32") {
+        return Err("ocr-engines=ppocr-alone requires a native PP adapter".into());
     }
     let mut producer = Vec::new();
     let mut at = 0;
@@ -469,7 +479,7 @@ pub fn parse_options(text: &str) -> Result<Parsed, String> {
         producer.push((string_of_cells(&c.prod, at + 2, kl), string_of_cells(&c.prod, at + 2 + kl, vl)));
         at += 2 + kl + vl;
     }
-    Ok(Parsed { options: options_of(&c), config: config_of(&c), record: c.rec != 0, js_ocr: c.jsocr != 0, js_render: c.jsrender != 0, producer })
+    Ok(Parsed { options, config: config_of(&c), record: c.rec != 0, js_ocr: c.jsocr != 0, js_render: c.jsrender != 0, producer })
 }
 
 // Whether `name` (a driver's `--name=`) is a key of the grammar, which kin owns.
@@ -1518,7 +1528,7 @@ impl Engine {
                 t.inputs = this_input.clone();
                 if let Some(p) = &self.cfg.ocr {
                     t.producer = p.0.producer();
-                    t.engines = plan::engine_rows(&t.producer);
+                    t.engines = plan::engine_rows_for(&t.producer, opts.ocr_engine.registry_engine());
                 }
                 recording = Some(t);
             }

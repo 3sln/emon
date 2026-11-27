@@ -99,14 +99,16 @@ func (p *PpOcr) Close() {
 }
 func (p *PpOcr) Producer() [][2]string {
 	var out [][2]string
+	engine := "ppocr-alone"
 	if p.incumbent != nil {
 		out = append(out, p.incumbent.Producer()...)
+		engine = "tesseract+ppocr"
 	}
 	id := ""
 	for i := int32(0); i < int32(len(ocrengine.OeIdentity)); i++ {
 		id += string(rune(ocrengine.OeIdentity[i]))
 	}
-	return append(out, [2]string{"ocr-engine", "tesseract+ppocr"}, [2]string{"ocr-model", id}, [2]string{"pp-lexicon", "tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"}, [2]string{"onnxruntime", "1.22.0 CPU sequential intra=1 inter=1"})
+	return append(out, [2]string{"ocr-engine", engine}, [2]string{"ocr-model", id}, [2]string{"pp-lexicon", "tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"}, [2]string{"onnxruntime", "1.22.0 CPU sequential intra=1 inter=1"})
 }
 func (p *PpOcr) Fulfil(req port.PlanRequest, bitmaps port.PlanBitmaps, keep bool) (port.PlanAnswer, error) {
 	r := port.NewCells()

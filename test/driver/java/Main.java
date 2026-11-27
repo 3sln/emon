@@ -376,10 +376,11 @@ public class Main {
             input = input.withPassword(password.getBytes(StandardCharsets.UTF_8));
         }
         final List<Input> inputs = List.of(input);
-        if ((tess || opts.ppOcr) && replay.isEmpty()) {
+        boolean ppAlone = opts.ocrEngine == 8;
+        if ((tess || opts.ppOcr || ppAlone) && replay.isEmpty()) {
             try {
-                cfg.ocr = emon.ffi.Tess.open(tessdata.isEmpty() ? null : tessdata);
-                if (opts.ppOcr) cfg.ocr = emon.ffi.PpOcr.open(null, cfg.ocr);
+                if (!ppAlone) cfg.ocr = emon.ffi.Tess.open(tessdata.isEmpty() ? null : tessdata);
+                if (opts.ppOcr || ppAlone) cfg.ocr = emon.ffi.PpOcr.open(null, cfg.ocr);
             } catch (emon.ffi.Unavailable e) {
                 usage(e.getMessage());
             }

@@ -27,6 +27,7 @@ static int slurp(const char *path, unsigned char **out, size_t *len) {
 int main(int argc, char **argv) {
     if (argc < 3) { fprintf(stderr, "usage: smoke IN.pdf OUT.html [native [PDFIUM [ADAPTER [PACKS]]]]\n"); return 2; }
     int native = argc > 3 && strcmp(argv[3], "native") == 0;
+    const char *options = native ? (argc > 7 && argv[7][0] ? argv[7] : NULL) : "ocr=never";
     emon_error err = {0};
     emon_engines *engines = NULL;
     if (native) {
@@ -38,7 +39,7 @@ int main(int argc, char **argv) {
         if (ad || pd) {
             if (ad && emon_engines_load(engines, ad, NULL, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
             if (emon_engines_pdfium(engines, pd, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
-        } else if (emon_engines_defaults(engines, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
+        } else if (emon_engines_defaults_for(engines, options, &err) < 0) { fprintf(stderr, "%s: %s\n", err.name, err.message); emon_free_error(&err); return 3; }
     }
     printf("emon %s caps=%u\n", emon_version(), emon_capabilities());
     if (native) {
@@ -53,7 +54,6 @@ int main(int argc, char **argv) {
     in.data = pdf;
     in.len = len;
     emon_buf html = {0};
-    const char *options = native ? (argc > 7 && argv[7][0] ? argv[7] : NULL) : "ocr=never";
     if (emon_convert_html(&in, options, engines, NULL, &html, &err) < 0) {
         fprintf(stderr, "%s: %s\n", err.name, err.message);
         emon_free_error(&err);

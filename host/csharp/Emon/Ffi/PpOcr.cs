@@ -36,7 +36,7 @@ public sealed unsafe class PpOcr : emon.Api.IOcr, IDisposable {
     public List<string[]> Producer() {
         var p=incumbent==null?new List<string[]>():new List<string[]>(incumbent.Producer());
         var id=new System.Text.StringBuilder(); for(int i=0;i<emon.Ocrengine.OeIdentity.Length;i++) id.Append(char.ConvertFromUtf32(emon.Ocrengine.OeIdentity[i]));
-        p.Add(new[]{"ocr-engine","tesseract+ppocr"}); p.Add(new[]{"ocr-model",id.ToString()});
+        p.Add(new[]{"ocr-engine",incumbent == null ? "ppocr-alone" : "tesseract+ppocr"}); p.Add(new[]{"ocr-model",id.ToString()});
         p.Add(new[]{"pp-lexicon","tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"});
         p.Add(new[]{"onnxruntime","1.22.0 CPU sequential intra=1 inter=1"}); return p;
     }

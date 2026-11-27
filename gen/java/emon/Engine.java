@@ -213,7 +213,6 @@ public final class Engine {
     }
     public static int enHybrid(emon.Enctx.Cfg c) {
         // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
-        // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
         if (c.oengine == 1) {
             return 1;
         }
@@ -240,26 +239,6 @@ public final class Engine {
         }
         if (Ofall.fbTakenId(ans, i) != 0) {
             return 1;
-        }
-        return 0;
-    }
-    public static int enOeMode(emon.Enctx.Cfg c) {
-        // How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-        // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
-        if (c.oengine == 1) {
-            return 2;
-        }
-        if (c.oengine == 2) {
-            return 1;
-        }
-        if (c.oengine == 3) {
-            return 4;
-        }
-        if (c.oengine == 4) {
-            return 6;
-        }
-        if (c.oengine == 5) {
-            return 8;
         }
         return 0;
     }
@@ -298,7 +277,7 @@ public final class Engine {
         if (enFallback(c) == 1) {
             Ocrengine.oeTagFb(rq, d.pscr, enRouted(c, ans, i), Ofall.fbSlotRead(), Ofall.fbSlotSpec());
         } else {
-            Ocrengine.oeTag(rq, d.pscr, enOeMode(c));
+            Ocrengine.oeRoute(rq, d.pscr, Engines.pkEngineOen(Engines.pkOptionEngine(c.oengine)), enHybrid(c));
         }
         if (status == 0) {
             // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
@@ -628,7 +607,7 @@ public final class Engine {
         if (kind == 0) {
             Inline.ilAnalyze(d.fw, s.lt, d.et, d.gl, d.ift, s.sf, d.an, d.txt, d.pg, m.pages, np, m.text, s.hc, s.isw);
         }
-        if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, enOeMode(c), s.s0) < 0) {
+        if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, 2 * enHybrid(c), s.s0) < 0) {
             return 2;
         }
         Para.paBuild(d.fw, d.et, np, s.msorder, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);

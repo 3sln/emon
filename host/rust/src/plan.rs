@@ -745,14 +745,21 @@ pub fn platform_class() -> i32 {
 // producer says whose engine answered (`engine` for one, `ocr-engine` for a hybrid: `tesseract+ppocr`); read from it, so that the engines' own files, which are inputs of the requested
 // identities, are not touched. A name that is no engine of kin's table (a test double, a host's own) adds none, and no engine at all leaves the transcript without a table, as it never had one.
 pub fn engine_rows(producer: &[(String, String)]) -> Vec<(i32, i32, i32)> {
+    engine_rows_for(producer, crate::emon::engines::eng_tesseract())
+}
+
+pub(crate) fn engine_rows_for(producer: &[(String, String)], primary: i32) -> Vec<(i32, i32, i32)> {
     use crate::emon::engines as ke;
     let class = platform_class();
     let mut avail = Cells::new();
     for (k, v) in producer {
         if k == "engine" || k == "ocr-engine" {
             for name in v.split('+') {
-                let e = ke::eng_find(name.as_bytes(), 0, name.len() as i32);
-                if e >= 0 {
+                let mut e = ke::eng_find(name.as_bytes(), 0, name.len() as i32);
+                if primary == ke::eng_ppocr_alone() {
+                    e = crate::emon::adapters::ad_selected_eng(primary, ke::pk_engine_oen(e));
+                }
+                if e > 0 {
                     cells_push(&mut avail, e);
                 }
             }

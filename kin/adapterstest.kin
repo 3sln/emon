@@ -7,7 +7,7 @@
             [emon.plan :refer [an-ok an-status ps-failed ps-unsupported pk-ocr rec-kind rec-id]]
             [emon.oil :refer [oen-tesseract oen-ppocr oen-apple-vision]]
             [emon.packdata :refer [pkid-tess-fast-eng pkid-tess-osd pkid-pp5-det-mobile]]
-            [emon.engines :refer [eng-tesseract eng-ppocr eng-apple-vision eimpl-builtin eimpl-native eimpl-plugin
+            [emon.engines :refer [eng-tesseract eng-ppocr eng-ppocr-alone eng-apple-vision eng-windows-media-ocr eng-mlkit-text eimpl-builtin eimpl-native eimpl-plugin
                                   ekind-ocr pcls-linux pcls-macos pcls-ios pcls-android pfetch-never pfetch-cache pfetch-auto
                                   pkerr-ok pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-caps pk-engine-needs pk-resolve pk-rows pkf-osd]]
             [emon.adapters :refer [ad-abi adf-async adf-remote adf-threadsafe adf-known ads-ok ads-unsupported ads-failed
@@ -17,7 +17,7 @@
                                    pdec-fetch pdec-provide pdec-decline pdec-substitute
                                    pver-ready pver-partial pver-downloadable pver-blocked
                                    est-builtin est-installed est-downloadable est-unavailable
-                                   ad-oen-eng ad-register-check ad-request-oen ad-route ad-route-unsupported ad-route-caller ad-answer-check ad-refusal
+                                   ad-oen-eng ad-selected-eng ad-register-check ad-request-oen ad-route ad-route-unsupported ad-route-caller ad-answer-check ad-refusal
                                    ad-pack-action ad-asks-hook ad-verdict ad-engine-state]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or bit-and]]))
 
@@ -95,6 +95,16 @@
     (assert-text t "adapter-abi-unsupported" "the name a caller routes on")))
 
 ;; ------------------------------------------------------------------ routing
+
+(deftest test-the-pp-adapter-takes-the-selected-registry-role
+  (assert-eq (ad-selected-eng (eng-ppocr-alone) (oen-ppocr)) (eng-ppocr-alone) "PP registers as the sole reader")
+  (assert-eq (ad-selected-eng (eng-tesseract) (oen-ppocr)) (eng-ppocr) "PP keeps the challenger row alongside Tesseract"))
+
+(deftest test-tesseract-is-absent-when-the-selected-engine-does-not-use-it
+  (assert-eq (ad-selected-eng (eng-ppocr-alone) (oen-tesseract)) 0 "standalone PP excludes Tesseract")
+  (assert-eq (ad-selected-eng (eng-windows-media-ocr) (oen-tesseract)) 0 "Windows OCR excludes Tesseract")
+  (assert-eq (ad-selected-eng (eng-mlkit-text) (oen-tesseract)) 0 "ML Kit excludes Tesseract")
+  (assert-eq (ad-selected-eng (eng-apple-vision) (oen-tesseract)) (eng-tesseract) "Vision can use the Tesseract fallback"))
 
 (deftest test-a-request-goes-to-the-adapter-of-its-engine
   (let [^Cells reg (new-cells)]

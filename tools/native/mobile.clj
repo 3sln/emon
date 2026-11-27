@@ -361,7 +361,8 @@
           (when pp-packs
             (doseq [engine ["ppocr" "ppocr-alone"]
                     :let [out (str smoke-dir "/receipt." engine ".html")
-                          r (spawn exe receipt-in out "native" "" "" pp-packs (str "ocr-engine=" engine))]]
+                          option (if (= engine "ppocr-alone") "ocr-engines=ppocr-alone" "ocr-engine=ppocr")
+                          r (spawn exe receipt-in out "native" "" "" pp-packs option)]]
               (when-not (zero? (:exit r)) (die engine " receipt failed in the simulator: " (:out r) (:err r)))
               (check-receipt! out engine))))
         true
@@ -405,7 +406,8 @@
               (push receipt-in (str dir "/receipt.png"))
               (doseq [engine ["ppocr" "ppocr-alone"]
                       :let [out (str "receipt." engine ".html")
-                            r (shell (str "./smoke receipt.png " out " native '' '' " dir "/ppocr-packs ocr-engine=" engine))]]
+                            option (if (= engine "ppocr-alone") "ocr-engines=ppocr-alone" "ocr-engine=ppocr")
+                            r (shell (str "./smoke receipt.png " out " native '' '' " dir "/ppocr-packs " option))]]
                 (when-not (str/includes? (:out r) "EXIT=0") (die engine " receipt failed on " ser ": " (:out r) (:err r)))
                 (adb "-s" ser "pull" (str dir "/" out) (str smoke-dir "/" out))
                 (check-receipt! (str smoke-dir "/" out) engine)))

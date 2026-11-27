@@ -55,7 +55,7 @@ public static class Enginestest {
     }
     [Xunit.Fact]
     public static void TestEveryEngineOfTheTableIsRegisteredWithASoundRow() {
-        emon.Testport.AssertEq(Engines.PkEngineCount(), 7, "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium");
+        emon.Testport.AssertEq(Engines.PkEngineCount(), 8, "the engines include the standalone PP reader");
         int i = 0;
         while (i < Engines.PkEngineCount()) {
             int eng = Engines.PkEngineAt(i);
@@ -297,6 +297,29 @@ public static class Enginestest {
         emon.Testport.AssertEq(Engines.PkPackFor(Engines.EngTesseract(), Engines.PkindRecognizer(), Engines.PkLangEng()), Packdata.PkidTessFastEng(), "English for Tesseract");
         emon.Testport.AssertEq(Engines.PkPackFor(Engines.EngPpocr(), Engines.PkindRecognizer(), Engines.PkLangEng()), Packdata.PkidPp5RecEnMobile(), "English for PP-OCR");
         emon.Testport.AssertEq(Engines.PkPackFor(Engines.EngPpocr(), Engines.PkindRecognizer(), 1936744704), 0, "no Spanish for PP-OCR");
+    }
+    [Xunit.Fact]
+    public static void TestPpocrAloneHasAReaderRowAndSharesTheNativePpPacks() {
+        int eng = Engines.EngPpocrAlone();
+        emon.Port.Cells langs = emon.Port.NewCells();
+        emon.Port.Cells engs = emon.Port.NewCells();
+        emon.Port.Cells installed = emon.Port.NewCells();
+        emon.Port.Cells @out = emon.Port.NewCells();
+        emon.Testport.AssertEq(Engines.EngFind(emon.Testport.TextBlob("ppocr-alone"), 0, 11), eng, "standalone registry name");
+        emon.Testport.AssertEq(Engines.PkOptionEngine(8), eng, "standalone option selects the row");
+        emon.Testport.AssertEq(Engines.PkEngineOen(eng), Engines.PkEngineOen(Engines.EngPpocr()), "the same adapter answers");
+        emon.Testport.AssertEq(Engines.PkEngineCaps(eng), Engines.PkEngineCaps(Engines.EngPpocr()), "the same capability ceiling");
+        emon.Testport.AssertEq(Engines.PkEngineClasses(eng), Engines.PkEngineClasses(Engines.EngPpocr()), "the same native classes");
+        emon.Testport.AssertEq(Engines.PkRoleMask(eng, Engines.PclsLinux()), Engines.EroleReader(), "reader is the only role");
+        EnCells1(engs, eng);
+        emon.Testport.AssertEq(Engines.PkRecordEngines(@out, Engines.PclsLinux(), engs), 0, "the selected row can be recorded");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 0), eng, "the transcript names standalone PP");
+        emon.Testport.AssertEq(emon.Port.CellsAt(@out, 2), Engines.EroleReader(), "the transcript records reader");
+        emon.Testport.AssertEq(EnResolve(Engines.PclsLinux(), Engines.PkfOsd(), langs, engs, installed, @out), Engines.PkerrOk(), "resolves");
+        emon.Testport.AssertEq(Engines.PkRows(@out), 3, "only the three PP packs");
+        EnExpectRow(0, @out, 0, Engines.PstateMissing(), Engines.EngPpocr(), Packdata.PkidPp5DetMobile(), 0, "detector");
+        EnExpectRow(0, @out, 1, Engines.PstateMissing(), Engines.EngPpocr(), Packdata.PkidPp5ClsMobile(), 0, "classifier");
+        EnExpectRow(0, @out, 2, Engines.PstateMissing(), Engines.EngPpocr(), Packdata.PkidPp5RecEnMobile(), 0, "recognizer");
     }
     [Xunit.Fact]
     public static void TestTheDefaultResolutionNeedsEnglishAndSaysWhetherItIsThere() {

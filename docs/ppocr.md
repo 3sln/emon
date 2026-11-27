@@ -80,8 +80,16 @@ See [browser and Node configuration](ppocr-web.md) for the full example.
 
 ## PP-OCR alone
 
-`--ocr-engine=ppocr-alone` (Rust-native hosts, experimental) has PP-OCR read every
-OCR request, with no Tesseract reading beside it. PP-OCR answers detector segments,
+`emon convert --ocr-engines=ppocr-alone INPUT` selects the experimental native
+PP-OCR reader. The registry uses the same PP adapter and three PP model packs as the
+hybrid. The CLI and pod skip Tesseract registration for this selection. C clients
+can use `emon_engines_defaults_for` with `ocr-engines=ppocr-alone` or load only the PP
+adapter. Rust embedders use `OcrEngine::PpOcrAlone` with `ppocr_hybrid(None)`.
+Go, Java and C# use selection code 8 and a PP wrapper with a nil or null incumbent.
+The transcript records the `ppocr-alone` row with role `reader`. Replay uses the
+same selection.
+
+PP-OCR answers detector segments,
 one box per piece of a row (an item's name, its quantity and its price). Kin joins
 the segments of one row into one line before the paragraph, table and column stages
 read them; the last word of each segment but a row's last keeps a `gap` word break

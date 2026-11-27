@@ -56,6 +56,11 @@ Set the pack directory and mode with `emon_engines_packs(engines, dir, mode, &er
 `EMON_PACKS_CACHE` and `EMON_PACKS_AUTO` let the hook supply missing packs. A new registry starts in `NEVER`.
 `emon_engines_defaults` uses `CACHE` unless `EMON_PACKS_FETCH` overrides it. `EMON_OFFLINE=1` takes precedence over the mode and hook.
 
+Use `emon_engines_defaults_for` with the conversion options to skip registering the
+bundled Tesseract adapter when the selection has no Tesseract role. For example,
+`ocr-engines=ppocr-alone` selects the PP adapter as sole reader in both one-shot
+conversions and sessions.
+
 **The platform's own OCR** (DEVLOG D901). The macOS and iOS archives carry a second adapter library, `lib/emon/adapters/libemon_ocr_vision.dylib` (Apple Vision: no pack, no model), which
 `emon_engines_defaults` registers with Tesseract's. It is explicit: a conversion reads with it only when its options say `ocr-engine=apple-vision`, and then the pages kin sends to Tesseract (a script Vision cannot read, a seal or a stamp, a table of numbers, D907) are read by the Tesseract adapter beside it (a registry with no Tesseract keeps Vision's reading); the Windows adapter is `emon_ocr_winocr.dll`
 (`ocr-engine=windows-media-ocr`). What they say and do not say, and why they are explicit, is [the platform's own OCR](../platform-ocr.md).
@@ -362,7 +367,7 @@ header and have no example here.
   the step API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the c host: 255 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the c host: 256 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -480,6 +485,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon_engines_add_ocr` | `int (emon_engines *e, const emon_ocr_adapter *a, emon_error *err)` |
 | `emon_engines_allow_remote` | `int (emon_engines *e, int allow, emon_error *err)` |
 | `emon_engines_defaults` | `int (emon_engines *e, emon_error *err)` |
+| `emon_engines_defaults_for` | `int (emon_engines *e, const char *options, emon_error *err)` |
 | `emon_engines_describe` | `int (const emon_engines *e, emon_buf *out, emon_error *err)` |
 | `emon_engines_free` | `void (emon_engines *e)` |
 | `emon_engines_load` | `int (emon_engines *e, const char *path, const char *config, emon_error *err)` |

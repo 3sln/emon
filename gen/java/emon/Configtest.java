@@ -126,7 +126,7 @@ public final class Configtest {
         int n = 0;
         int i = 0;
         int k = 0;
-        while (i < 23) {
+        while (i < 24) {
             if ((Config.CK_ROWS[i * 5 + 0] == 1) && (Config.CK_ROWS[i * 5 + 1] < 0)) {
                 n += 1;
             }
@@ -190,7 +190,7 @@ public final class Configtest {
         emon.Testport.assertEq(Limits.sgHi(1), 1, "tasks to");
     }
     public static void testTheKeysHaveTheirNamesInKin() {
-        emon.Testport.assertEq(23, 23, "twenty-three keys");
+        emon.Testport.assertEq(24, 23, "twenty-three keys");
         tKeyName(0, 0, "locale");
         tKeyName(0, 1, "ocr");
         tKeyName(0, 2, "furniture");
@@ -214,6 +214,7 @@ public final class Configtest {
         tKeyName(0, 20, "tables");
         tKeyName(0, 21, "ocr-engine");
         tKeyName(0, 22, "capture");
+        tKeyName(0, 23, "ocr-engines");
     }
     public static void testTheWordsHaveTheirNamesAndCodesInKin() {
         emon.Testport.assertEq(24, 24, "twenty-four words");
@@ -234,13 +235,13 @@ public final class Configtest {
         tWordName(0, 14, 20, 1, "scored");
         tWordName(0, 15, 21, 0, "tesseract");
         tWordName(0, 16, 21, 1, "ppocr");
-        tWordName(0, 17, 21, 2, "ppocr-alone");
-        tWordName(0, 18, 21, 3, "apple-vision");
-        tWordName(0, 19, 21, 4, "windows-media-ocr");
-        tWordName(0, 20, 21, 5, "mlkit-text");
-        tWordName(0, 21, 22, 0, "auto");
-        tWordName(0, 22, 22, 1, "scan");
-        tWordName(0, 23, 22, 2, "photos");
+        tWordName(0, 17, 21, 3, "apple-vision");
+        tWordName(0, 18, 21, 4, "windows-media-ocr");
+        tWordName(0, 19, 21, 5, "mlkit-text");
+        tWordName(0, 20, 22, 0, "auto");
+        tWordName(0, 21, 22, 1, "scan");
+        tWordName(0, 22, 22, 2, "photos");
+        tWordName(0, 23, 23, 8, "ppocr-alone");
     }
     public static void testAKeyIsFoundByItsWholeNameOrItsPrefix() {
         tIsKey(0, emon.Testport.textBlob("ocr"), 1, "ocr");
@@ -458,15 +459,15 @@ public final class Configtest {
         emon.Testport.assertEq(c.oengine, 1, "explicit optional engine");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr\nocr-engine=tesseract")), 0, "last engine wins");
         emon.Testport.assertEq(c.oengine, 0, "explicit Tesseract");
-        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=ppocr-alone")), 0, "PP-OCR alone parses (P13.4)");
-        emon.Testport.assertEq(c.oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
+        emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engines=ppocr-alone")), 0, "the standalone registry row parses");
+        emon.Testport.assertEq(c.oengine, 8, "the standalone registry row is selected");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=apple-vision")), 0, "Apple Vision parses");
         emon.Testport.assertEq(c.oengine, 3, "the platform engines read alone: their own codes, not PP's");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=windows-media-ocr")), 0, "Windows.Media.Ocr parses");
         emon.Testport.assertEq(c.oengine, 4, "code 4");
         emon.Testport.assertEq(tParse(c, emon.Testport.textBlob("ocr-engine=mlkit-text")), 0, "ML Kit parses (K7)");
         emon.Testport.assertEq(c.oengine, 5, "code 5");
-        tRefused(0, emon.Testport.textBlob("ocr-engine=unknown"), "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text");
+        tRefused(0, emon.Testport.textBlob("ocr-engine=ppocr-alone"), "ocr-engine is tesseract, ppocr, apple-vision, windows-media-ocr or mlkit-text");
     }
     public static void testCaptureOption() {
         emon.Enctx.Cfg c = new emon.Enctx.Cfg();

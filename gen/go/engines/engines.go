@@ -31,6 +31,9 @@ func EngMlkitText() int32 {
 func EngPdfium() int32 {
 	return 7
 }
+func EngPpocrAlone() int32 {
+	return 8
+}
 func EngEmitName(t *strings.Builder, code int32) int32 {
 	if code == 1 {
 		port.TextAscii(t, "tesseract")
@@ -58,6 +61,10 @@ func EngEmitName(t *strings.Builder, code int32) int32 {
 	}
 	if code == 7 {
 		port.TextAscii(t, "pdfium")
+		return 1
+	}
+	if code == 8 {
+		port.TextAscii(t, "ppocr-alone")
 		return 1
 	}
 	return 0
@@ -213,6 +220,31 @@ func EngFind(b []byte, from int32, to int32) int32 {
 						if port.BlobU8(b, from+4) == 117 {
 							if port.BlobU8(b, from+5) == 109 {
 								return 7
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (to - from) == 11 {
+		if port.BlobU8(b, from+0) == 112 {
+			if port.BlobU8(b, from+1) == 112 {
+				if port.BlobU8(b, from+2) == 111 {
+					if port.BlobU8(b, from+3) == 99 {
+						if port.BlobU8(b, from+4) == 114 {
+							if port.BlobU8(b, from+5) == 45 {
+								if port.BlobU8(b, from+6) == 97 {
+									if port.BlobU8(b, from+7) == 108 {
+										if port.BlobU8(b, from+8) == 111 {
+											if port.BlobU8(b, from+9) == 110 {
+												if port.BlobU8(b, from+10) == 101 {
+													return 8
+												}
+											}
+										}
+									}
+								}
 							}
 						}
 					}
@@ -944,7 +976,7 @@ func PkfOsd() int32 {
 	return 1
 }
 
-var EnTable [56]int32 = [56]int32{
+var EnTable [64]int32 = [64]int32{
 	1, 1, 1, 2, 7339791, 63, 1, 3,
 	2, 2, 1, 2, 24928, 31, 1, 13,
 	3, 2, 1, 3, 24928, 32, 1, 13,
@@ -952,9 +984,10 @@ var EnTable [56]int32 = [56]int32{
 	5, 5, 1, 2, 9216, 8, 0, 0,
 	6, 4, 1, 3, 401825, 16, 0, 0,
 	7, 0, 2, 1, 0, 63, 0, 0,
+	8, 2, 1, 2, 24928, 31, 1, 13,
 }
 
-var EnRoles [64]int32 = [64]int32{
+var EnRoles [84]int32 = [84]int32{
 	1, 1, 21, 1,
 	1, 2, 21, 1,
 	1, 3, 5, 1,
@@ -971,6 +1004,11 @@ var EnRoles [64]int32 = [64]int32{
 	4, 2, 12, 4,
 	5, 4, 12, 4,
 	6, 5, 12, 4,
+	8, 1, 4, 4,
+	8, 2, 4, 4,
+	8, 3, 4, 4,
+	8, 4, 4, 4,
+	8, 5, 4, 4,
 }
 
 var EnTurnkey [42]int32 = [42]int32{
@@ -985,7 +1023,7 @@ var EnTurnkey [42]int32 = [42]int32{
 func pkEnRow(eng int32) int32 {
 	// The row of an engine in the table, or -1.
 	var i int32 = 0
-	for i < 7 {
+	for i < 8 {
 		if EnTable[i*8+0] == eng {
 			return i
 		}
@@ -1002,7 +1040,7 @@ func PkEngineKnown(eng int32) int32 {
 }
 
 func PkEngineCount() int32 {
-	return 7
+	return 8
 }
 
 func PkEngineAt(i int32) int32 {
@@ -1046,6 +1084,39 @@ func PkEngineNeeds(eng int32) int32 {
 	return pkEnCol(eng, 7)
 }
 
+func PkOptionEngine(code int32) int32 {
+	// The engine row selected by the options. The PP hybrid selects Tesseract as its primary.
+	if code == EngPpocrAlone() {
+		return EngPpocrAlone()
+	}
+	if code == 3 {
+		return EngAppleVision()
+	}
+	if code == 4 {
+		return EngWindowsMediaOcr()
+	}
+	if code == 5 {
+		return EngMlkitText()
+	}
+	return EngTesseract()
+}
+
+func PkUsesTesseract(eng int32) int32 {
+	// Tesseract is the primary reader, or Apple's page-level fallback.
+	if (eng == EngTesseract()) || (eng == EngAppleVision()) {
+		return 1
+	}
+	return 0
+}
+
+func pkPackOwner(eng int32) int32 {
+	// The standalone reader shares the native PP adapter's packs.
+	if eng == EngPpocrAlone() {
+		return EngPpocr()
+	}
+	return eng
+}
+
 func PkClassKnown(pclass int32) int32 {
 	if pclass < 1 {
 		return 0
@@ -1069,7 +1140,7 @@ func PkEngineOn(eng int32, pclass int32) int32 {
 
 func pkRoleRow(eng int32, pclass int32) int32 {
 	var i int32 = 0
-	for i < 16 {
+	for i < 21 {
 		if (EnRoles[i*4+0] == eng) && (EnRoles[i*4+1] == pclass) {
 			return i
 		}
@@ -1236,7 +1307,7 @@ func PkPackFor(eng int32, kind int32, lang int32) int32 {
 	var pe int32 = 0
 	for p <= 24 {
 		pe = PkPackEngine(p)
-		if (PkPackKind(p) == kind) && ((pe == eng) || (pe == 0)) {
+		if (PkPackKind(p) == kind) && ((pe == pkPackOwner(eng)) || (pe == 0)) {
 			if PkPackCovers(p, lang) == 1 {
 				return p
 			}
@@ -1452,7 +1523,7 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 		return pkFail(out, PkerrUnknownClass(), pclass, 0)
 	}
 	var np int32 = 24
-	var ne int32 = 7
+	var ne int32 = 8
 	var sel int32 = np + 1
 	var lb int32 = (np + 1) + ne
 	var i int32 = 0
@@ -1532,7 +1603,7 @@ func PkResolve(pclass int32, flags int32, langs *port.Cells, engines *port.Cells
 			for p <= np {
 				pe = PkPackEngine(p)
 				pk = PkPackKind(p)
-				if ((pe == eng) || (pe == 0)) && ((needs & pk) != 0) {
+				if ((pe == pkPackOwner(eng)) || (pe == 0)) && ((needs & pk) != 0) {
 					if pk == PkindOsd() {
 						if (flags & PkfOsd()) != 0 {
 							pkMark(scratch, p, sv)
@@ -1668,7 +1739,7 @@ func PkRecordEngines(out *port.Cells, pclass int32, avail *port.Cells) int32 {
 	var r int32 = 0
 	var rowEng int32 = 0
 	var role int32 = 0
-	for r < 7 {
+	for r < 8 {
 		rowEng = EnTable[r*8+0]
 		if pkHas(avail, 0, rowEng) == 1 {
 			role = PkRoleDefault(rowEng, pclass)

@@ -39,8 +39,8 @@
 ;; PP also derives its native quad angle with evidence/ev-angle, a pure geometry helper.
 (def stage-allow
   (mapv (fn [[role file mods]] {:role role :file file :mods (set (remove str/blank? (str/split mods #"\s+")))})
-        [[:driver  "host/rust/src/engine.rs"            "config enctx engine html json model plan planloop"]
-         [:machine "host/rust/src/plan.rs"              "engines plan planctx planloop pngcheck pngread transcript transcriptctx"]
+        [[:driver  "host/rust/src/engine.rs"            "config enctx engine engines html json model plan planloop"]
+         [:machine "host/rust/src/plan.rs"              "adapters engines plan planctx planloop pngcheck pngread transcript transcriptctx"]
          [:driver "host/rust/src/session.rs" "ocr ocrport ocrtess oil plan"]
          [:port    "host/rust/src/imgdec.rs"            "ccitt imgcheck pngcheck tiffcheck"]
          [:port    "host/rust/src/pdfimg.rs"            "ccitt"]

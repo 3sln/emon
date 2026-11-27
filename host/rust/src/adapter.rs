@@ -679,10 +679,15 @@ impl Engines {
 
     pub fn router(&self) -> Option<Router> {
         if self.has_ocr() {
-            Some(Router { inner: self.inner.clone() })
+            Some(Router { inner: self.inner.clone(), primary: None })
         } else {
             None
         }
+    }
+
+    pub(crate) fn router_for(&self, selection: crate::engine::OcrEngine) -> Option<Router> {
+        let router = Router { inner: self.inner.clone(), primary: Some(selection.registry_engine()) };
+        (!router.entries().is_empty()).then_some(router)
     }
 
     // ---------------------------------------------------------------------------------------- engines() and prepare()
@@ -699,7 +704,7 @@ impl Engines {
         }
         // the table's `impl` decides: a platform plugin (ML Kit, the browser's PP-OCR) is registered as callbacks, a native engine as a library: both are an entry of the engine's OIL code
         let oen = ke::pk_engine_oen(eng);
-        // two rows may share an OIL engine (ppocr, ppocr-web): the one that runs on this platform is the registered one
+        // Rows can share an OIL engine, including the two roles of the native PP adapter.
         ke::pk_engine_on(eng, self.inner.packs.class()) == 1 && self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).iter().any(|a| a.oen() == oen)
     }
 
@@ -762,16 +767,11 @@ impl Engines {
         let packs = &self.inner.packs;
         let (mode, off) = (packs.mode(), packs::offline());
         let never = p.options.ocr == OcrPolicy::Never;
-        // the platform engines read alone and need no pack (K8, D901); PP-OCR, alone or not (D900), is loaded beside Tesseract's pack
-        let mut engines = match p.options.ocr_engine {
-            crate::engine::OcrEngine::AppleVision => vec![ke::eng_apple_vision()],
-            crate::engine::OcrEngine::WindowsMediaOcr => vec![ke::eng_windows_media_ocr()],
-            crate::engine::OcrEngine::MlkitText => vec![ke::eng_mlkit_text()],
-            _ => vec![ke::eng_tesseract()],
-        };
-        if p.options.ocr_engine.uses_pp() {
+        let mut engines = vec![p.options.ocr_engine.registry_engine()];
+        if p.options.ocr_engine == crate::engine::OcrEngine::PpOcr {
             engines.push(ke::eng_ppocr());
         }
+        let osd = !never && p.options.ocr_engine.uses_tesseract();
         let mut langs: Vec<i32> = Vec::new();
         if let Some(l) = &p.options.locale {
             let mut c = Cells::new();
@@ -798,7 +798,7 @@ impl Engines {
                 cells_push(&mut i, *v);
             });
             let (mut out, mut scratch) = (Cells::new(), Cells::new());
-            let r = ke::pk_resolve(packs.class(), ke::pkf_osd(), &mut l, &mut e, &mut i, &mut out, &mut scratch);
+            let r = ke::pk_resolve(packs.class(), if osd { ke::pkf_osd() } else { 0 }, &mut l, &mut e, &mut i, &mut out, &mut scratch);
             if r != 0 {
                 let mut msg = String::new();
                 ke::pk_explain(r, &mut out, &mut msg);
@@ -839,7 +839,7 @@ impl Engines {
         ke::pfetch_emit_name(&mut m, mode);
         Ok(format!(
             "{{\"verdict\":{},\"mode\":{},\"offline\":{},\"engines\":[{}],\"languages\":[{}],\"osd\":{},\"packs\":[{}],\"unsupported\":[{}],\"missing\":{},\"missing_bytes\":{},\"conditional\":{},\"conditional_bytes\":{}}}",
-            js(&vname), js(&m), off, engine_names.join(","), lang_names.join(","), !never, packs_json.join(","), unsupported.join(","), missing, missing_bytes, conditional, conditional_bytes
+            js(&vname), js(&m), off, engine_names.join(","), lang_names.join(","), osd, packs_json.join(","), unsupported.join(","), missing, missing_bytes, conditional, conditional_bytes
         ))
     }
 }
@@ -938,6 +938,7 @@ pub enum Begun {
 #[derive(Clone)]
 pub struct Router {
     inner: Arc<Inner>,
+    primary: Option<i32>,
 }
 
 impl std::fmt::Debug for Router {
@@ -961,8 +962,14 @@ impl Router {
         Duration::from_millis(self.inner.timeout_ms.load(Ordering::SeqCst).max(1) as u64)
     }
 
+    fn entries(&self) -> Vec<Arc<Adapter>> {
+        self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).iter()
+            .filter(|entry| self.primary.is_none_or(|primary| ka::ad_selected_eng(primary, entry.oen()) > 0))
+            .cloned().collect()
+    }
+
     fn registered_oens(&self) -> (Vec<Arc<Adapter>>, Cells) {
-        let v = self.inner.entries.read().unwrap_or_else(|e| e.into_inner()).clone();
+        let v = self.entries();
         let mut c = Cells::new();
         for e in &v {
             cells_push(&mut c, e.oen());
@@ -989,7 +996,7 @@ impl Router {
 
     // The transcript's `:producer` is a map: the first adapter's pairs, the combined engine name, then additional keys from the other adapters.
     pub fn producer_pairs(&self) -> Vec<(String, String)> {
-        let v = self.inner.entries.read().unwrap_or_else(|e| e.into_inner());
+        let v = self.entries();
         let combined = (v.len() > 1).then(|| {
             v.iter().map(|e| Engines::eng_name(ka::ad_oen_eng(e.oen()))).collect::<Vec<_>>().join("+")
         });

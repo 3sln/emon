@@ -127,7 +127,7 @@ pub(crate) fn t_negative_rows() -> i32 {
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut k: i32 = 0;
-    while i < 23 {
+    while i < 24 {
         if (CK_ROWS[(i * 5 + 0) as usize] == 1) && (CK_ROWS[(i * 5 + 1) as usize] < 0) {
             n += 1;
         }
@@ -196,7 +196,7 @@ fn test_the_settings_have_their_names_defaults_and_ranges_in_kin() {
 }
 #[test]
 fn test_the_keys_have_their_names_in_kin() {
-    crate::testport::assert_eq(23, 23, "twenty-three keys");
+    crate::testport::assert_eq(24, 23, "twenty-three keys");
     t_key_name(0, 0, "locale");
     t_key_name(0, 1, "ocr");
     t_key_name(0, 2, "furniture");
@@ -220,6 +220,7 @@ fn test_the_keys_have_their_names_in_kin() {
     t_key_name(0, 20, "tables");
     t_key_name(0, 21, "ocr-engine");
     t_key_name(0, 22, "capture");
+    t_key_name(0, 23, "ocr-engines");
 }
 #[test]
 fn test_the_words_have_their_names_and_codes_in_kin() {
@@ -241,13 +242,13 @@ fn test_the_words_have_their_names_and_codes_in_kin() {
     t_word_name(0, 14, 20, 1, "scored");
     t_word_name(0, 15, 21, 0, "tesseract");
     t_word_name(0, 16, 21, 1, "ppocr");
-    t_word_name(0, 17, 21, 2, "ppocr-alone");
-    t_word_name(0, 18, 21, 3, "apple-vision");
-    t_word_name(0, 19, 21, 4, "windows-media-ocr");
-    t_word_name(0, 20, 21, 5, "mlkit-text");
-    t_word_name(0, 21, 22, 0, "auto");
-    t_word_name(0, 22, 22, 1, "scan");
-    t_word_name(0, 23, 22, 2, "photos");
+    t_word_name(0, 17, 21, 3, "apple-vision");
+    t_word_name(0, 18, 21, 4, "windows-media-ocr");
+    t_word_name(0, 19, 21, 5, "mlkit-text");
+    t_word_name(0, 20, 22, 0, "auto");
+    t_word_name(0, 21, 22, 1, "scan");
+    t_word_name(0, 22, 22, 2, "photos");
+    t_word_name(0, 23, 23, 8, "ppocr-alone");
 }
 #[test]
 fn test_a_key_is_found_by_its_whole_name_or_its_prefix() {
@@ -480,15 +481,15 @@ fn test_optional_ocr_engine_is_explicit_and_defaults_to_tesseract() {
     crate::testport::assert_eq(c.oengine, 1, "explicit optional engine");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr\nocr-engine=tesseract")[..]), 0, "last engine wins");
     crate::testport::assert_eq(c.oengine, 0, "explicit Tesseract");
-    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=ppocr-alone")[..]), 0, "PP-OCR alone parses (P13.4)");
-    crate::testport::assert_eq(c.oengine, 2, "PP-OCR alone is its own code: every request names it, none is Tesseract's");
+    crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engines=ppocr-alone")[..]), 0, "the standalone registry row parses");
+    crate::testport::assert_eq(c.oengine, 8, "the standalone registry row is selected");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=apple-vision")[..]), 0, "Apple Vision parses");
     crate::testport::assert_eq(c.oengine, 3, "the platform engines read alone: their own codes, not PP's");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=windows-media-ocr")[..]), 0, "Windows.Media.Ocr parses");
     crate::testport::assert_eq(c.oengine, 4, "code 4");
     crate::testport::assert_eq(t_parse(c, &crate::testport::text_blob("ocr-engine=mlkit-text")[..]), 0, "ML Kit parses (K7)");
     crate::testport::assert_eq(c.oengine, 5, "code 5");
-    t_refused(0, &crate::testport::text_blob("ocr-engine=unknown")[..], "ocr-engine is tesseract, ppocr, ppocr-alone, apple-vision, windows-media-ocr or mlkit-text");
+    t_refused(0, &crate::testport::text_blob("ocr-engine=ppocr-alone")[..], "ocr-engine is tesseract, ppocr, apple-vision, windows-media-ocr or mlkit-text");
 }
 #[test]
 fn test_capture_option() {

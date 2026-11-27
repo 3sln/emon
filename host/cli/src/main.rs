@@ -47,6 +47,7 @@ INPUT is a PDF or an image file, or - for standard input. The result goes to FIL
   --ocr      when to read pages with Tesseract (the engine's own default when omitted)
   --capture  auto (default), scan (disable raster seam matching), or photos (also check the side edges)
   --ocr-engine tesseract (default), ppocr (experimental, separate add-on; docs/ppocr.md), apple-vision (macOS: Apple's Vision framework, with Tesseract as the fallback of the pages kin sends to it) or windows-media-ocr (Windows: Windows.Media.Ocr); the platform engines need no models and are explicit only (docs/platform-ocr.md)
+  --ocr-engines ppocr-alone (experimental PP-OCR as the sole reader; docs/ppocr.md)
   --lang     the Tesseract models to read with, joined by + (default: every model in the models directory)
   --tessdata the models directory (default: $EMON_TESSDATA, else ../share/emon/tessdata beside the executable)
   --pdfium   the pdfium library or the directory holding it (default: $EMON_PDFIUM_LIB, else ../lib or beside the executable)
@@ -192,6 +193,7 @@ fn convert(args: Vec<String>) {
             "--ocr" => ocr = Some(a.value("--ocr", inline)),
             "--ocr-engine" => kv.push(format!("ocr-engine={}", a.value("--ocr-engine", inline))),
             "--capture" => kv.push(format!("capture={}", a.value("--capture", inline))),
+            "--ocr-engines" => kv.push(format!("ocr-engines={}", a.value("--ocr-engines", inline))),
             "--lang" => lang = Some(a.value("--lang", inline)),
             "--tessdata" => tessdata = Some(a.value("--tessdata", inline)),
             "--pdfium" => pdfium = Some(a.value("--pdfium", inline)),
@@ -296,7 +298,7 @@ fn convert(args: Vec<String>) {
         die(3, "--ocr-engine windows-media-ocr needs the Windows build of this tool (Windows.Media.Ocr); this build has none");
     }
     // Tesseract's models, unless the pages are never read
-    if !never && !platform_engine {
+    if !never && opts.ocr_engine.uses_tesseract() {
         let mut found = find_tessdata(tessdata.as_deref());
         if apple && matches!(found, Found::Missing(_)) {
             // Apple Vision alone: no fallback, and nothing to say about it (the fallback is best effort)
@@ -359,7 +361,7 @@ fn convert(args: Vec<String>) {
     }
 
     if opts.ocr_engine.uses_pp() && !never {
-        // PP-OCR (the hybrid, or alone: kin routes by the engine each request names): Tesseract (linked here) registered as an adapter beside the PP adapter library, a router over the two (K2, D899)
+        // Register the PP adapter and the Tesseract port when the hybrid selected it.
         let engines = registry.get_or_insert_with(|| {
             let engines = pack_engines();
             if let Some(dir) = &tess_dir {

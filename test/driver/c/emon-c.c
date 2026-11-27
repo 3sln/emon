@@ -350,7 +350,7 @@ int main(int argc, char **argv) {
             emon_error perr = {0};
             if (emon_engines_pdfium(g_engines, NULL, &perr) < 0) emon_free_error(&perr);
         } else {
-            CHECK(emon_engines_defaults(g_engines, &err));
+            CHECK(emon_engines_defaults_for(g_engines, options, &err));
         }
     }
     int use_step = async || record || replay || !strcmp(source, "step");

@@ -55,7 +55,8 @@
    [eng-apple-vision 4 "apple-vision"]
    [eng-windows-media-ocr 5 "windows-media-ocr"]
    [eng-mlkit-text 6 "mlkit-text"]
-   [eng-pdfium 7 "pdfium"]])
+   [eng-pdfium 7 "pdfium"]
+   [eng-ppocr-alone 8 "ppocr-alone"]])
 
 (defenum ^:pub ^:parse ekind
   [[ekind-ocr 1 "ocr"]
@@ -140,7 +141,8 @@
          4 3 1 2 1056992 3 1 0
          5 5 1 2 9216 8 0 0
          6 4 1 3 401825 16 0 0
-         7 0 2 1 0 63 0 0]
+         7 0 2 1 0 63 0 0
+         8 2 1 2 24928 31 1 13]
   :accessors {^I32 en-table-count [^I32 ignored]
               ^I32 en-table-at [^I32 ignored ^I32 row ^I32 col]})
 
@@ -163,7 +165,12 @@
          4 1 12 4
          4 2 12 4
          5 4 12 4
-         6 5 12 4]
+         6 5 12 4
+         8 1 4 4
+         8 2 4 4
+         8 3 4 4
+         8 4 4 4
+         8 5 4 4]
   :accessors {^I32 en-roles-count [^I32 ignored]
               ^I32 en-roles-at [^I32 ignored ^I32 row ^I32 col]})
 
@@ -217,6 +224,24 @@
 (defn ^:pub ^I32 pk-engine-classes [^I32 eng] (return (pk-en-col eng 5)))
 (defn ^:pub ^I32 pk-engine-calibrated [^I32 eng] (return (pk-en-col eng 6)))
 (defn ^:pub ^I32 pk-engine-needs [^I32 eng] (return (pk-en-col eng 7)))
+
+(defn ^:pub ^I32 pk-option-engine [^I32 code]
+  (comment "The engine row selected by the options. The PP hybrid selects Tesseract as its primary.")
+  (if (== code (eng-ppocr-alone)) (return (eng-ppocr-alone)))
+  (if (== code 3) (return (eng-apple-vision)))
+  (if (== code 4) (return (eng-windows-media-ocr)))
+  (if (== code 5) (return (eng-mlkit-text)))
+  (return (eng-tesseract)))
+
+(defn ^:pub ^I32 pk-uses-tesseract [^I32 eng]
+  (comment "Tesseract is the primary reader, or Apple's page-level fallback.")
+  (if (or (== eng (eng-tesseract)) (== eng (eng-apple-vision))) (return 1))
+  (return 0))
+
+(defn ^I32 pk-pack-owner [^I32 eng]
+  (comment "The standalone reader shares the native PP adapter's packs.")
+  (if (== eng (eng-ppocr-alone)) (return (eng-ppocr)))
+  (return eng))
 
 (defn ^:pub ^I32 pk-class-known [^I32 pclass]
   (if (< pclass 1) (return 0))
@@ -346,7 +371,7 @@
   (let [^:mut ^I32 p 1 ^:mut ^I32 pe 0]
     (while (<= p (pack-row-count 0))
       (do (set pe (pk-pack-engine p))
-          (if (and (== (pk-pack-kind p) kind) (or (== pe eng) (== pe 0)))
+          (if (and (== (pk-pack-kind p) kind) (or (== pe (pk-pack-owner eng)) (== pe 0)))
             (if (== (pk-pack-covers p lang) 1) (return p)))
           (set p (+ p 1)))))
   (return 0))
@@ -538,7 +563,7 @@
                 (while (<= p np)
                   (do (set pe (pk-pack-engine p))
                       (set pk (pk-pack-kind p))
-                      (if (and (or (== pe eng) (== pe 0)) (!= (bit-and needs pk) 0))
+                      (if (and (or (== pe (pk-pack-owner eng)) (== pe 0)) (!= (bit-and needs pk) 0))
                         (do (if (== pk (pkind-osd))
                               (if (!= (bit-and flags (pkf-osd)) 0) (pk-mark scratch p sv)))
                             (if (or (== pk (pkind-detector)) (== pk (pkind-classifier)))

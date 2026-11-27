@@ -36,7 +36,7 @@
 (assert (zero? (:exit @(process ["bb" "tools/ppocr/wasm_link.clj"] {:inherit true :shutdown nil}))) "wasm dictionary linker")
 (let [p (str root "/src/engine.rs")
       s (slurp p)
-      from "if (c.oengine == 1 || c.oengine == 2) && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST"]
+      from "if options.ocr_engine == OcrEngine::PpOcr && !cfg!(ppocr) && !crate::PPOCR_NATIVE_HOST"]
   (assert (str/includes? s from) "optional wasm engine selector anchor")
   (spit p (str/replace s from (str from " && !cfg!(ppocr_web)"))))
 (doseq [name ["ppocr_image" "ppocr_ctc"]]

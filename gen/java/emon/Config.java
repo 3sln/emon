@@ -18,7 +18,8 @@ public final class Config {
         107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
         112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
         114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
-        101, 99, 97, 112, 116, 117, 114, 101
+        101, 99, 97, 112, 116, 117, 114, 101, 111, 99, 114, 45, 101, 110, 103, 105,
+        110, 101, 115
     };
     public static final int[] CK_ROWS = {
         0, 0, 0, 0, 6,
@@ -43,7 +44,8 @@ public final class Config {
         3, 0, 0, 168, 9,
         2, 0, 0, 177, 6,
         2, 0, 0, 183, 10,
-        2, 0, 0, 193, 7
+        2, 0, 0, 193, 7,
+        2, 0, 0, 200, 11
     };
     public static final int[] CV_CHARS = {
         97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -75,13 +77,13 @@ public final class Config {
         20, 1, 68, 6,
         21, 0, 74, 9,
         21, 1, 83, 5,
-        21, 2, 88, 11,
         21, 3, 99, 12,
         21, 4, 111, 17,
         21, 5, 128, 10,
         22, 0, 6, 4,
         22, 1, 138, 4,
-        22, 2, 142, 6
+        22, 2, 142, 6,
+        23, 8, 88, 11
     };
     public static final int K_LOCALE = 0;
     public static final int K_OCR = 1;
@@ -104,6 +106,7 @@ public final class Config {
     public static final int K_TABLES = 20;
     public static final int K_OENGINE = 21;
     public static final int K_CAPTURE = 22;
+    public static final int K_OENGINES = 23;
     public static final int SH_STR = 0;
     public static final int SH_NUM = 1;
     public static final int SH_ENUM = 2;
@@ -160,7 +163,7 @@ public final class Config {
     public static int cfKeyFind(emon.Port.Cells t, int from, int to) {
         // The key t[from, to) names, or -1.
         int k = 0;
-        while (k < 23) {
+        while (k < 24) {
             if (cfKeyIs(t, from, to, k) == 1) {
                 return k;
             }
@@ -377,7 +380,7 @@ public final class Config {
         if (k == K_TABLES) {
             c.tabl = v;
         }
-        if (k == K_OENGINE) {
+        if ((k == K_OENGINE) || (k == K_OENGINES)) {
             c.oengine = v;
         }
         if (k == K_CAPTURE) {

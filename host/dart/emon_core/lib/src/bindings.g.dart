@@ -200,6 +200,19 @@ external int emon_engines_defaults(
 @ffi.Native<
   ffi.Int Function(
     ffi.Pointer<emon_engines>,
+    ffi.Pointer<ffi.Char>,
+    ffi.Pointer<emon_error>,
+  )
+>()
+external int emon_engines_defaults_for(
+  ffi.Pointer<emon_engines> e,
+  ffi.Pointer<ffi.Char> options,
+  ffi.Pointer<emon_error> err,
+);
+
+@ffi.Native<
+  ffi.Int Function(
+    ffi.Pointer<emon_engines>,
     ffi.Pointer<emon_buf>,
     ffi.Pointer<emon_error>,
   )

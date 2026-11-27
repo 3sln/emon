@@ -2,6 +2,7 @@
 
 [Experimental PP-OCR](ppocr.md) is a separate opt-in download; enable it with
 `emon convert --ocr-engine=ppocr INPUT` after configuring the add-on.
+Use `emon convert --ocr-engines=ppocr-alone INPUT` to select PP-OCR as the sole reader.
 
 On a Mac, `emon convert --ocr-engine apple-vision INPUT` reads scans with Apple's Vision framework (the pages kin sends to Tesseract, and only those, are read by it: its models are looked for as for Tesseract, and with none Vision reads alone), and on Windows `--ocr-engine windows-media-ocr`
 with `Windows.Media.Ocr`: no model to download for the OS engine, explicit only, never chosen for you ([the platform's own OCR](platform-ocr.md)).

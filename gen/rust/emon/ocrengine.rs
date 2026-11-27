@@ -7,11 +7,11 @@ use crate::emon::oil::*;
 use crate::emon::plan::*;
 
 pub static OE_IDENTITY: [i32; 74] = [
-    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 56, 57, 55, 55, 98, 53,
-    49, 53, 49, 100, 53, 54, 97, 48, 99, 99, 52, 98, 54, 55, 53, 99,
-    57, 56, 57, 100, 98, 102, 51, 102, 48, 100, 56, 100, 53, 50, 53, 55,
-    57, 50, 52, 53, 98, 53, 55, 48, 56, 53, 98, 102, 57, 50, 48, 49,
-    99, 51, 56, 55, 57, 97, 98, 102, 51, 101
+    112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 57, 50, 49, 102, 56, 54,
+    50, 101, 101, 57, 51, 50, 54, 52, 97, 98, 98, 51, 54, 55, 54, 99,
+    102, 57, 100, 50, 100, 53, 102, 98, 52, 54, 48, 50, 48, 53, 48, 53,
+    49, 54, 53, 51, 53, 102, 55, 55, 52, 55, 101, 102, 56, 100, 53, 53,
+    55, 49, 55, 49, 97, 49, 56, 52, 48, 53
 ];
 pub static OE_VISION_CONFIG: [i32; 91] = [
     97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
@@ -153,9 +153,9 @@ pub(crate) fn oe_context(mut requests: &mut crate::port::Cells, at: i32) -> i32 
     }
     return 0;
 }
-pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells, mode: i32) -> i32 {
+pub fn oe_route(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::port::Cells, primary: i32, hybrid: i32) -> i32 {
     // Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.
-    if mode == 0 {
+    if (primary == 1) && (hybrid == 0) {
         return 0;
     }
     crate::port::cells_drop(scratch, 0);
@@ -170,20 +170,10 @@ pub fn oe_tag(mut requests: &mut crate::port::Cells, mut scratch: &mut crate::po
             i += 1;
         }
         if crate::port::cells_at(requests, at + 1) == pk_ocr() {
-            if mode == 1 {
-                oe_select(scratch, out, 2);
-            }
-            if mode == 2 {
+            if hybrid == 1 {
                 oe_context(scratch, out);
-            }
-            if mode == 4 {
-                oe_select(scratch, out, 3);
-            }
-            if mode == 6 {
-                oe_select(scratch, out, 5);
-            }
-            if mode == 8 {
-                oe_select(scratch, out, 4);
+            } else {
+                oe_select(scratch, out, primary);
             }
         }
         at += n;

@@ -29,7 +29,7 @@
  *
  * OPTIONS are one text, kin's grammar (emon.config): `key=value` lines separated by LF (spaces are not trimmed), the last line wins:
  *     locale ocr furniture assets asset-dpi asset-pixels asset-bytes assets-bytes asset-signatures keep-evidence ocr-scope
- *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel js-render ocr-engine capture
+ *     max-rounds fetch-rounds record js-ocr chunk limit.NAME producer.NAME parallel js-render ocr-engine capture ocr-engines
  *     e.g. "ocr=never\nassets=images\nlimit.pages=50\n".
  * `parallel=N` (P10.2, SPEC 12.1) spreads the fulfilment of ONE conversion over N worker threads that emon starts and ends inside the call (limit.workers caps
  * it; 1, the default, starts none): the one-shot calls use it, with the engines you gave; the step API (emon_open / emon_step) answers its adapters' requests one at a time on
@@ -326,6 +326,8 @@ int emon_engines_pdfium(emon_engines *e, const char *lib_or_dir, emon_error *err
  * `lib/emon/adapters/` (or $EMON_ADAPTER_DIR; in an app, by name from the loader); pdfium where emon_engines_pdfium(NULL) finds it.  Nothing found is not an error; an
  * adapter that is found and cannot be opened is. */
 int emon_engines_defaults(emon_engines *e, emon_error *err);
+/* Turnkey registration for a conversion's options. Skips the bundled Tesseract adapter when the selected engine has no Tesseract role. */
+int emon_engines_defaults_for(emon_engines *e, const char *options, emon_error *err);
 /* How long a one-shot call waits for an async adapter, per request (default 60000 ms): then the request is `failed` and the page unread. */
 int emon_engines_set_timeout(emon_engines *e, int32_t ms, emon_error *err);
 /* Allow adapters that send the pixels off the device (EMON_ADAPTER_REMOTE).  The default is no: documents may hold personal data.  Before registering them. */

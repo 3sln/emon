@@ -8,6 +8,7 @@ import (
 	"emon/asset"
 	"emon/columns"
 	"emon/enctx"
+	"emon/engines"
 	"emon/evidence"
 	"emon/fields"
 	"emon/figclass"
@@ -278,7 +279,6 @@ func EnAttempt(view *port.Src, pw *port.Src, c *enctx.Cfg, d *enctx.Doc, ev *enc
 
 func enHybrid(c *enctx.Cfg) int32 {
 	// 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
-	// The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
 	if c.Oengine == 1 {
 		return 1
 	}
@@ -308,27 +308,6 @@ func enRouted(c *enctx.Cfg, ans *port.Cells, i int32) int32 {
 	}
 	if ofall.FbTakenId(ans, i) != 0 {
 		return 1
-	}
-	return 0
-}
-
-func enOeMode(c *enctx.Cfg) int32 {
-	// How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-	// 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
-	if c.Oengine == 1 {
-		return 2
-	}
-	if c.Oengine == 2 {
-		return 1
-	}
-	if c.Oengine == 3 {
-		return 4
-	}
-	if c.Oengine == 4 {
-		return 6
-	}
-	if c.Oengine == 5 {
-		return 8
 	}
 	return 0
 }
@@ -370,7 +349,7 @@ func EnPage(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, i int32, idx int32, 
 	if enFallback(c) == 1 {
 		ocrengine.OeTagFb(rq, d.Pscr, enRouted(c, ans, i), ofall.FbSlotRead(), ofall.FbSlotSpec())
 	} else {
-		ocrengine.OeTag(rq, d.Pscr, enOeMode(c))
+		ocrengine.OeRoute(rq, d.Pscr, engines.PkEngineOen(engines.PkOptionEngine(c.Oengine)), enHybrid(c))
 	}
 	if status == 0 {
 		// Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
@@ -708,7 +687,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	if kind == 0 {
 		inline.IlAnalyze(d.Fw, s.Lt, d.Et, d.Gl, d.Ift, s.Sf, d.An, d.Txt, d.Pg, m.Pages, np, m.Text, s.Hc, s.Isw)
 	}
-	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, enOeMode(c), s.S0) < 0 {
+	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2*enHybrid(c), s.S0) < 0 {
 		return 2
 	}
 	para.PaBuild(d.Fw, d.Et, np, s.Msorder, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)

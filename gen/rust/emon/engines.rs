@@ -25,6 +25,9 @@ pub fn eng_mlkit_text() -> i32 {
 pub fn eng_pdfium() -> i32 {
     return 7;
 }
+pub fn eng_ppocr_alone() -> i32 {
+    return 8;
+}
 pub fn eng_emit_name(mut t: &mut String, code: i32) -> i32 {
     if code == 1 {
         crate::port::text_ascii(t, "tesseract");
@@ -52,6 +55,10 @@ pub fn eng_emit_name(mut t: &mut String, code: i32) -> i32 {
     }
     if code == 7 {
         crate::port::text_ascii(t, "pdfium");
+        return 1;
+    }
+    if code == 8 {
+        crate::port::text_ascii(t, "ppocr-alone");
         return 1;
     }
     return 0;
@@ -207,6 +214,31 @@ pub fn eng_find(b: &[u8], from: i32, to: i32) -> i32 {
                         if crate::port::blob_u8(b, from + 4) == 117 {
                             if crate::port::blob_u8(b, from + 5) == 109 {
                                 return 7;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (to - from) == 11 {
+        if crate::port::blob_u8(b, from + 0) == 112 {
+            if crate::port::blob_u8(b, from + 1) == 112 {
+                if crate::port::blob_u8(b, from + 2) == 111 {
+                    if crate::port::blob_u8(b, from + 3) == 99 {
+                        if crate::port::blob_u8(b, from + 4) == 114 {
+                            if crate::port::blob_u8(b, from + 5) == 45 {
+                                if crate::port::blob_u8(b, from + 6) == 97 {
+                                    if crate::port::blob_u8(b, from + 7) == 108 {
+                                        if crate::port::blob_u8(b, from + 8) == 111 {
+                                            if crate::port::blob_u8(b, from + 9) == 110 {
+                                                if crate::port::blob_u8(b, from + 10) == 101 {
+                                                    return 8;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -928,16 +960,17 @@ pub fn pkerr_emit_name(mut t: &mut String, code: i32) -> i32 {
 pub fn pkf_osd() -> i32 {
     return 1;
 }
-pub static EN_TABLE: [i32; 56] = [
+pub static EN_TABLE: [i32; 64] = [
     1, 1, 1, 2, 7339791, 63, 1, 3,
     2, 2, 1, 2, 24928, 31, 1, 13,
     3, 2, 1, 3, 24928, 32, 1, 13,
     4, 3, 1, 2, 1056992, 3, 1, 0,
     5, 5, 1, 2, 9216, 8, 0, 0,
     6, 4, 1, 3, 401825, 16, 0, 0,
-    7, 0, 2, 1, 0, 63, 0, 0
+    7, 0, 2, 1, 0, 63, 0, 0,
+    8, 2, 1, 2, 24928, 31, 1, 13
 ];
-pub static EN_ROLES: [i32; 64] = [
+pub static EN_ROLES: [i32; 84] = [
     1, 1, 21, 1,
     1, 2, 21, 1,
     1, 3, 5, 1,
@@ -953,7 +986,12 @@ pub static EN_ROLES: [i32; 64] = [
     4, 1, 12, 4,
     4, 2, 12, 4,
     5, 4, 12, 4,
-    6, 5, 12, 4
+    6, 5, 12, 4,
+    8, 1, 4, 4,
+    8, 2, 4, 4,
+    8, 3, 4, 4,
+    8, 4, 4, 4,
+    8, 5, 4, 4
 ];
 pub static EN_TURNKEY: [i32; 42] = [
     1, 4, 4, 2, 3, 7, 1,
@@ -966,7 +1004,7 @@ pub static EN_TURNKEY: [i32; 42] = [
 pub(crate) fn pk_en_row(eng: i32) -> i32 {
     // The row of an engine in the table, or -1.
     let mut i: i32 = 0;
-    while i < 7 {
+    while i < 8 {
         if EN_TABLE[(i * 8 + 0) as usize] == eng {
             return i;
         }
@@ -981,7 +1019,7 @@ pub fn pk_engine_known(eng: i32) -> i32 {
     return 1;
 }
 pub fn pk_engine_count() -> i32 {
-    return 7;
+    return 8;
 }
 pub fn pk_engine_at(i: i32) -> i32 {
     // The i-th engine of the table, in its order.
@@ -1015,6 +1053,36 @@ pub fn pk_engine_calibrated(eng: i32) -> i32 {
 pub fn pk_engine_needs(eng: i32) -> i32 {
     return pk_en_col(eng, 7);
 }
+pub fn pk_option_engine(code: i32) -> i32 {
+    // The engine row selected by the options. The PP hybrid selects Tesseract as its primary.
+    if code == eng_ppocr_alone() {
+        return eng_ppocr_alone();
+    }
+    if code == 3 {
+        return eng_apple_vision();
+    }
+    if code == 4 {
+        return eng_windows_media_ocr();
+    }
+    if code == 5 {
+        return eng_mlkit_text();
+    }
+    return eng_tesseract();
+}
+pub fn pk_uses_tesseract(eng: i32) -> i32 {
+    // Tesseract is the primary reader, or Apple's page-level fallback.
+    if (eng == eng_tesseract()) || (eng == eng_apple_vision()) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn pk_pack_owner(eng: i32) -> i32 {
+    // The standalone reader shares the native PP adapter's packs.
+    if eng == eng_ppocr_alone() {
+        return eng_ppocr();
+    }
+    return eng;
+}
 pub fn pk_class_known(pclass: i32) -> i32 {
     if pclass < 1 {
         return 0;
@@ -1036,7 +1104,7 @@ pub fn pk_engine_on(eng: i32, pclass: i32) -> i32 {
 }
 pub(crate) fn pk_role_row(eng: i32, pclass: i32) -> i32 {
     let mut i: i32 = 0;
-    while i < 16 {
+    while i < 21 {
         if (EN_ROLES[(i * 4 + 0) as usize] == eng) && (EN_ROLES[(i * 4 + 1) as usize] == pclass) {
             return i;
         }
@@ -1178,7 +1246,7 @@ pub fn pk_pack_for(eng: i32, kind: i32, lang: i32) -> i32 {
     let mut pe: i32 = 0;
     while p <= 24 {
         pe = pk_pack_engine(p);
-        if (pk_pack_kind(p) == kind) && ((pe == eng) || (pe == 0)) {
+        if (pk_pack_kind(p) == kind) && ((pe == pk_pack_owner(eng)) || (pe == 0)) {
             if pk_pack_covers(p, lang) == 1 {
                 return p;
             }
@@ -1384,7 +1452,7 @@ pub fn pk_resolve(pclass: i32, flags: i32, langs: &mut crate::port::Cells, engin
         return pk_fail(out, pkerr_unknown_class(), pclass, 0);
     }
     let np: i32 = 24;
-    let ne: i32 = 7;
+    let ne: i32 = 8;
     let sel: i32 = np + 1;
     let lb: i32 = (np + 1) + ne;
     let mut i: i32 = 0;
@@ -1464,7 +1532,7 @@ pub fn pk_resolve(pclass: i32, flags: i32, langs: &mut crate::port::Cells, engin
             while p <= np {
                 pe = pk_pack_engine(p);
                 pk = pk_pack_kind(p);
-                if ((pe == eng) || (pe == 0)) && ((needs & pk) != 0) {
+                if ((pe == pk_pack_owner(eng)) || (pe == 0)) && ((needs & pk) != 0) {
                     if pk == pkind_osd() {
                         if (flags & pkf_osd()) != 0 {
                             pk_mark(scratch, p, sv);
@@ -1593,7 +1661,7 @@ pub fn pk_record_engines(mut out: &mut crate::port::Cells, pclass: i32, avail: &
     let mut r: i32 = 0;
     let mut row_eng: i32 = 0;
     let mut role: i32 = 0;
-    while r < 7 {
+    while r < 8 {
         row_eng = EN_TABLE[(r * 8 + 0) as usize];
         if pk_has(avail, 0, row_eng) == 1 {
             role = pk_role_default(row_eng, pclass);

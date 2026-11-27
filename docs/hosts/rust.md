@@ -132,7 +132,7 @@ implement `Renderer` (`render(source, password, &RenderRequest) -> Result<Bitmap
 - The `no_retarget` test setting of `Options` is not in the published crate (`bb package --check` proves it).
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the rust host: 339 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the rust host: 340 entries, and 41 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -328,6 +328,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon::OcrEngine::Tesseract` | `variant` |
 | `emon::OcrEngine::WindowsMediaOcr` | `variant` |
 | `emon::OcrEngine::uses_pp` | `fn (self) -> bool` |
+| `emon::OcrEngine::uses_tesseract` | `fn (self) -> bool` |
 | `emon::OcrPolicy` | `enum derive(Clone,Copy,Debug,Eq,PartialEq)` |
 | `emon::OcrPolicy::Always` | `variant` |
 | `emon::OcrPolicy::Auto` | `variant` |

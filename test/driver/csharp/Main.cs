@@ -375,10 +375,11 @@ public static class Program {
             input = input.WithPassword(Utf8.GetBytes(password));
         }
         var inputs = new List<Input> { input };
-        if ((tess || opts.PpOcr) && replay.Length == 0) {
+        bool ppAlone = opts.OcrEngine == 8;
+        if ((tess || opts.PpOcr || ppAlone) && replay.Length == 0) {
             try {
-                cfg.Ocr = emon.Ffi.Tess.Open(tessdata.Length == 0 ? null : tessdata);
-                if (opts.PpOcr) cfg.Ocr = emon.Ffi.PpOcr.Open(null, cfg.Ocr);
+                if (!ppAlone) cfg.Ocr = emon.Ffi.Tess.Open(tessdata.Length == 0 ? null : tessdata);
+                if (opts.PpOcr || ppAlone) cfg.Ocr = emon.Ffi.PpOcr.Open(null, cfg.Ocr);
             } catch (emon.Ffi.Unavailable e) {
                 Usage(e.Message);
             }

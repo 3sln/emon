@@ -86,6 +86,18 @@ fn test_a_refusal_has_a_name_to_route_on() {
     crate::testport::assert_text(t, "adapter-abi-unsupported", "the name a caller routes on");
 }
 #[test]
+fn test_the_pp_adapter_takes_the_selected_registry_role() {
+    crate::testport::assert_eq(ad_selected_eng(eng_ppocr_alone(), oen_ppocr()), eng_ppocr_alone(), "PP registers as the sole reader");
+    crate::testport::assert_eq(ad_selected_eng(eng_tesseract(), oen_ppocr()), eng_ppocr(), "PP keeps the challenger row alongside Tesseract");
+}
+#[test]
+fn test_tesseract_is_absent_when_the_selected_engine_does_not_use_it() {
+    crate::testport::assert_eq(ad_selected_eng(eng_ppocr_alone(), oen_tesseract()), 0, "standalone PP excludes Tesseract");
+    crate::testport::assert_eq(ad_selected_eng(eng_windows_media_ocr(), oen_tesseract()), 0, "Windows OCR excludes Tesseract");
+    crate::testport::assert_eq(ad_selected_eng(eng_mlkit_text(), oen_tesseract()), 0, "ML Kit excludes Tesseract");
+    crate::testport::assert_eq(ad_selected_eng(eng_apple_vision(), oen_tesseract()), eng_tesseract(), "Vision can use the Tesseract fallback");
+}
+#[test]
 fn test_a_request_goes_to_the_adapter_of_its_engine() {
     let reg: &mut crate::port::Cells = &mut crate::port::Cells::new();
     ad_cells2(reg, oen_tesseract(), oen_ppocr());

@@ -6,11 +6,11 @@ package emon;
 
 public final class Ocrengine {
     public static final int[] OE_IDENTITY = {
-        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 56, 57, 55, 55, 98, 53,
-        49, 53, 49, 100, 53, 54, 97, 48, 99, 99, 52, 98, 54, 55, 53, 99,
-        57, 56, 57, 100, 98, 102, 51, 102, 48, 100, 56, 100, 53, 50, 53, 55,
-        57, 50, 52, 53, 98, 53, 55, 48, 56, 53, 98, 102, 57, 50, 48, 49,
-        99, 51, 56, 55, 57, 97, 98, 102, 51, 101
+        112, 112, 111, 99, 114, 53, 45, 101, 110, 45, 57, 50, 49, 102, 56, 54,
+        50, 101, 101, 57, 51, 50, 54, 52, 97, 98, 98, 51, 54, 55, 54, 99,
+        102, 57, 100, 50, 100, 53, 102, 98, 52, 54, 48, 50, 48, 53, 48, 53,
+        49, 54, 53, 51, 53, 102, 55, 55, 52, 55, 101, 102, 56, 100, 53, 53,
+        55, 49, 55, 49, 97, 49, 56, 52, 48, 53
     };
     public static final int[] OE_VISION_CONFIG = {
         97, 112, 112, 108, 101, 45, 118, 105, 115, 105, 111, 110, 59, 86, 78, 82,
@@ -152,9 +152,9 @@ public final class Ocrengine {
         }
         return 0;
     }
-    public static int oeTag(emon.Port.Cells requests, emon.Port.Cells scratch, int mode) {
+    public static int oeRoute(emon.Port.Cells requests, emon.Port.Cells scratch, int primary, int hybrid) {
         // Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.
-        if (mode == 0) {
+        if ((primary == 1) && (hybrid == 0)) {
             return 0;
         }
         emon.Port.cellsDrop(scratch, 0);
@@ -169,20 +169,10 @@ public final class Ocrengine {
                 i += 1;
             }
             if (emon.Port.cellsAt(requests, at + 1) == Plan.pkOcr()) {
-                if (mode == 1) {
-                    oeSelect(scratch, out, 2);
-                }
-                if (mode == 2) {
+                if (hybrid == 1) {
                     oeContext(scratch, out);
-                }
-                if (mode == 4) {
-                    oeSelect(scratch, out, 3);
-                }
-                if (mode == 6) {
-                    oeSelect(scratch, out, 5);
-                }
-                if (mode == 8) {
-                    oeSelect(scratch, out, 4);
+                } else {
+                    oeSelect(scratch, out, primary);
                 }
             }
             at += n;

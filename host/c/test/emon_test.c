@@ -361,6 +361,16 @@ static void test_engines(const uint8_t *scan, size_t sn) {
     int ok = emon_convert_json(&in, "ocr=always\nocr-engine=ppocr\n", e, 0, &b, &err);
     check(ok == 0 && pp.reads > 0 && pp.req_engine == EMON_OEN_PPOCR, "with ocr-engine=ppocr it is asked for PP-OCR's");
     emon_free_buf(&b);
+    int tt_before = tt.reads, pp_before = pp.reads;
+    const char *standalone = "ocr=always\nocr-engines=ppocr-alone\n";
+    ok = emon_convert_json(&in, standalone, e, 0, &b, &err);
+    check(ok == 0 && pp.reads > pp_before && pp.req_engine == EMON_OEN_PPOCR
+          && tt.reads == tt_before, "standalone PP reads all OCR requests in a shared registry");
+    emon_free_buf(&b);
+    ok = emon_prepare(e, standalone, &b, &err);
+    check(ok == 0 && strstr((const char *)b.data, "\"engines\":[\"ppocr-alone\"]")
+          && !strstr((const char *)b.data, "tess-fast-eng"), "prepare resolves standalone PP and its packs");
+    emon_free_buf(&b);
     emon_engines_free(e);
 
     /* async: start returns at once, the step says WAITING, emon_complete answers, and the Model is the sync reading's */

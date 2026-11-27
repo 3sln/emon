@@ -84,6 +84,18 @@ public static class Adapterstest {
         emon.Testport.AssertText(t, "adapter-abi-unsupported", "the name a caller routes on");
     }
     [Xunit.Fact]
+    public static void TestThePpAdapterTakesTheSelectedRegistryRole() {
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngPpocrAlone(), Oil.OenPpocr()), Engines.EngPpocrAlone(), "PP registers as the sole reader");
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngTesseract(), Oil.OenPpocr()), Engines.EngPpocr(), "PP keeps the challenger row alongside Tesseract");
+    }
+    [Xunit.Fact]
+    public static void TestTesseractIsAbsentWhenTheSelectedEngineDoesNotUseIt() {
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngPpocrAlone(), Oil.OenTesseract()), 0, "standalone PP excludes Tesseract");
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngWindowsMediaOcr(), Oil.OenTesseract()), 0, "Windows OCR excludes Tesseract");
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngMlkitText(), Oil.OenTesseract()), 0, "ML Kit excludes Tesseract");
+        emon.Testport.AssertEq(Adapters.AdSelectedEng(Engines.EngAppleVision(), Oil.OenTesseract()), Engines.EngTesseract(), "Vision can use the Tesseract fallback");
+    }
+    [Xunit.Fact]
     public static void TestARequestGoesToTheAdapterOfItsEngine() {
         emon.Port.Cells reg = emon.Port.NewCells();
         AdCells2(reg, Oil.OenTesseract(), Oil.OenPpocr());

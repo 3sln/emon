@@ -60,7 +60,7 @@ public final class PpOcr implements Ocr, AutoCloseable {
         if (incumbent != null) out.addAll(incumbent.producer());
         StringBuilder id = new StringBuilder();
         for(int k=0;k<Ocrengine.OE_IDENTITY.length;k++) id.appendCodePoint(Ocrengine.OE_IDENTITY[k]);
-        out.add(new String[]{"ocr-engine","tesseract+ppocr"});
+        out.add(new String[]{"ocr-engine",incumbent == null ? "ppocr-alone" : "tesseract+ppocr"});
         out.add(new String[]{"ocr-model",id.toString()});
         out.add(new String[]{"pp-lexicon","tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"});
         out.add(new String[]{"onnxruntime","1.22.0 CPU sequential intra=1 inter=1"});

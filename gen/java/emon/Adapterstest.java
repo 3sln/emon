@@ -77,6 +77,16 @@ public final class Adapterstest {
         Adapters.adrEmitName(t, Adapters.adrAbi());
         emon.Testport.assertText(t, "adapter-abi-unsupported", "the name a caller routes on");
     }
+    public static void testThePpAdapterTakesTheSelectedRegistryRole() {
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engPpocrAlone(), Oil.oenPpocr()), Engines.engPpocrAlone(), "PP registers as the sole reader");
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engTesseract(), Oil.oenPpocr()), Engines.engPpocr(), "PP keeps the challenger row alongside Tesseract");
+    }
+    public static void testTesseractIsAbsentWhenTheSelectedEngineDoesNotUseIt() {
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engPpocrAlone(), Oil.oenTesseract()), 0, "standalone PP excludes Tesseract");
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engWindowsMediaOcr(), Oil.oenTesseract()), 0, "Windows OCR excludes Tesseract");
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engMlkitText(), Oil.oenTesseract()), 0, "ML Kit excludes Tesseract");
+        emon.Testport.assertEq(Adapters.adSelectedEng(Engines.engAppleVision(), Oil.oenTesseract()), Engines.engTesseract(), "Vision can use the Tesseract fallback");
+    }
     public static void testARequestGoesToTheAdapterOfItsEngine() {
         emon.Port.Cells reg = emon.Port.newCells();
         adCells2(reg, Oil.oenTesseract(), Oil.oenPpocr());

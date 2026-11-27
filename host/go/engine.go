@@ -255,7 +255,7 @@ type Options struct {
 	Capture Capture
 	// PpOcr selects the experimental additive PP reading when true.
 	PpOcr bool
-	// OcrEngine is kin's code of the `ocr-engine` option (K8, D901): 0 tesseract, 1 ppocr, 2 ppocr-alone (PpOcr says either), 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text. The platform engines read alone and
+	// OcrEngine is kin's selection code: 0 tesseract, 1 ppocr hybrid, 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text, 8 ppocr-alone (ocr-engines). The platform engines
 	// only run on their platform; a replay names the same engine, because a request says which engine it is for.
 	OcrEngine int32
 	// Locale is a BCP 47 hint, written to the Model's `settings.locale`; empty is none. It decides how an initial
@@ -392,7 +392,7 @@ func optionsOf(c *enctx.Cfg) Options {
 	o := Options{
 		Capture:         Capture(c.Capture),
 		Ocr:             ocrPolicyOf(c.Ocr),
-		PpOcr:           c.Oengine == 1 || c.Oengine == 2,
+		PpOcr:           c.Oengine == 1,
 		OcrEngine:       c.Oengine,
 		Assets:          Assets(c.Level),
 		AssetDPI:        c.Dpi,

@@ -29,7 +29,7 @@ fn test_every_default_ocr_request_carries_requested_identity() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 0);
+    oe_route(r, scratch, 1, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + 112, "default identity extends the key");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "record header includes identity");
     crate::testport::assert_eq(op_lang_count(r), 1, "one legacy language");
@@ -41,7 +41,7 @@ fn test_optional_engine_identity_is_in_the_request_not_the_language_list() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 1);
+    oe_route(r, scratch, 2, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + 74, "identity extends request key");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "record length includes identity");
     crate::testport::assert_eq(crate::port::cells_at(r, 11), -3100, "identity marker");
@@ -57,8 +57,8 @@ fn test_queued_ocr_requests_are_tagged_idempotently() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 1);
-    oe_tag(r, scratch, 1);
+    oe_route(r, scratch, 2, 0);
+    oe_route(r, scratch, 2, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + 74, "exactly one identity trailer");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "canonical record length");
     crate::testport::assert_eq(op_lang_count(r), 1, "English remains the only language");
@@ -74,8 +74,8 @@ fn test_mixed_queued_views_keep_hashes_and_exactly_one_trailer() {
     let view: i32 = rq_ocr_view(r, 13, view_base() + 1, 99, -3100, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, view);
-    oe_tag(r, scratch, 1);
-    oe_tag(r, scratch, 1);
+    oe_route(r, scratch, 2, 0);
+    oe_route(r, scratch, 2, 0);
     crate::testport::assert_eq(crate::port::cells_at(r, 0), first, "first request length");
     crate::testport::assert_eq(crate::port::cells_at(r, first), 17 + 74, "view request length");
     crate::testport::assert_eq(crate::port::cells_len(r), (32 + 74) + 74, "two canonical records");
@@ -88,8 +88,8 @@ fn test_compact_crops_over_views_have_an_independent_identity_tail() {
     let scratch: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let at: i32 = rq_ocr(r, 12, view_base() + 120, 7, 1, 1536, 18, 144, 57);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 1);
-    oe_tag(r, scratch, 1);
+    oe_route(r, scratch, 2, 0);
+    oe_route(r, scratch, 2, 0);
     crate::testport::assert_eq(op_identity_at(r), 10, "compact view has no hash cells or languages");
     crate::testport::assert_eq(op_lang_first(r), 7, "tagged compact layout");
     crate::testport::assert_eq(op_lang_count(r), 0, "shared helper excludes the trailer");
@@ -106,10 +106,10 @@ fn test_actual_view_hash_disambiguates_language_shaped_hash_cells() {
     rq_ocr_lang(compact, 76, 97, 116, 110);
     rq_ocr_lang(compact, 101, 110, 103, 0);
     rq_ocr_end(compact, at);
-    oe_tag(compact, scratch, 1);
+    oe_route(compact, scratch, 2, 0);
     let view: i32 = rq_ocr_view(hashed, 13, view_base() + 1, 1281455214, 1701734144, 7, 1, 0, 0, 0, 0);
     rq_ocr_end(hashed, view);
-    oe_tag(hashed, scratch, 1);
+    oe_route(hashed, scratch, 2, 0);
     crate::testport::assert_eq(op_pp_lang_first(compact, 123, 456), 7, "two compact languages");
     crate::testport::assert_eq(op_pp_lang_count(compact, 7), 2, "both languages retained");
     crate::testport::assert_eq(op_pp_lang_at(compact, 7, 1), 1701734144, "English retained");
@@ -295,7 +295,7 @@ fn test_apple_vision_selection_retags_every_request_with_its_configuration() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 4);
+    oe_route(r, scratch, 3, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "the trailer is Vision's, not Tesseract's");
     crate::testport::assert_eq(crate::port::cells_at(r, 0), crate::port::cells_len(r), "the record length includes it");
     crate::testport::assert_eq(crate::port::cells_at(r, 11), -3100, "identity marker");
@@ -305,7 +305,7 @@ fn test_apple_vision_selection_retags_every_request_with_its_configuration() {
     crate::testport::assert_eq(op_request_engine(r), 3, "the request says which engine reads it");
     crate::testport::assert_eq(op_lang_count(r), 1, "the language is still the one language");
     crate::testport::assert_eq(op_lang_at(r, 0), 1701734144, "English");
-    oe_tag(r, scratch, 4);
+    oe_route(r, scratch, 3, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "idempotent: one trailer");
 }
 #[test]
@@ -315,10 +315,10 @@ fn test_windows_selection_retags_with_the_windows_configuration() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 6);
+    oe_route(r, scratch, 5, 0);
     crate::testport::assert_eq(op_request_engine(r), 5, "Windows.Media.Ocr");
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(5), "its trailer");
-    oe_tag(r, scratch, 4);
+    oe_route(r, scratch, 3, 0);
     crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(3), "one trailer");
 }
@@ -329,13 +329,13 @@ fn test_ml_kit_selection_retags_with_its_configuration() {
     let at: i32 = rq_ocr(r, 12, 7, 3, 1, 0, 0, 0, 0);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, at);
-    oe_tag(r, scratch, 8);
+    oe_route(r, scratch, 4, 0);
     crate::testport::assert_eq(op_request_engine(r), 4, "ML Kit");
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "its trailer");
     crate::testport::assert_eq(crate::port::cells_at(r, 14), 71, "its configuration's length");
-    oe_tag(r, scratch, 8);
+    oe_route(r, scratch, 4, 0);
     crate::testport::assert_eq(crate::port::cells_len(r), 15 + oe_config_len(4), "idempotent: one trailer");
-    oe_tag(r, scratch, 4);
+    oe_route(r, scratch, 3, 0);
     crate::testport::assert_eq(op_request_engine(r), 3, "a later selection replaces it, never stacks");
 }
 #[test]
@@ -348,7 +348,7 @@ fn test_an_engine_selection_reaches_every_ocr_request_of_a_batch() {
     let b: i32 = rq_ocr(r, 13, 7, 7, 1, 5, 6, 40, 12);
     rq_ocr_lang(r, 101, 110, 103, 0);
     rq_ocr_end(r, b);
-    oe_tag(r, scratch, 4);
+    oe_route(r, scratch, 3, 0);
     let first: i32 = 15 + oe_config_len(3);
     crate::testport::assert_eq(crate::port::cells_at(r, 0), first, "the first request's length");
     crate::testport::assert_eq(crate::port::cells_len(r), first + (15 + oe_config_len(3)), "two records, each with exactly one trailer");

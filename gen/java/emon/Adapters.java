@@ -256,6 +256,20 @@ public final class Adapters {
         }
         return -1;
     }
+    public static int adSelectedEng(int primary, int oen) {
+        // The adapter's registry row for this conversion, or 0 when the selection excludes it.
+        if (primary == Engines.engPpocrAlone()) {
+            if (oen == Engines.pkEngineOen(primary)) {
+                return primary;
+            }
+            return 0;
+        }
+        int eng = adOenEng(oen);
+        if ((eng == Engines.engTesseract()) && (Engines.pkUsesTesseract(primary) == 0)) {
+            return 0;
+        }
+        return eng;
+    }
     public static int adRegisterCheck(int abi, int oen, int caps, int measured, int needs, int flags) {
         // 0 when an adapter that says it is built for `abi`, answers as the OIL engine `oen`, declares `caps` (of which `measured` are measured, not derived) and reads with the pack
         // kinds `needs`, and sets `flags`, may be registered; else the reason (`adr`). The table's row of the engine is the ceiling: an adapter may declare less, never more.

@@ -13,7 +13,7 @@ using System.Collections.Generic;
 
 public sealed class Options {
     public bool PpOcr;
-    /// <summary>kin's code of the `ocr-engine` option (K8, D901): 0 tesseract, 1 ppocr, 2 ppocr-alone (`PpOcr` says either), 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text. The platform engines read alone and run only on their platform; a replay names the same engine.</summary>
+    /// <summary>kin's selection code: 0 tesseract, 1 ppocr hybrid, 3 apple-vision, 4 windows-media-ocr, 5 mlkit-text, 8 ppocr-alone (ocr-engines). A replay selects the engine that made the recording.</summary>
     public int OcrEngine;
     /// <summary>SPEC 13's OCR setting (D038): `never` asks for no OCR; `auto` and `always` OCR an image and a scanned PDF page, `always` also fuses a born-digital one. `Code()` is kin's (an extension below).</summary>
     public enum OcrPolicy {
@@ -250,7 +250,7 @@ public sealed class Options {
             throw new System.ArgumentException(c.Msg.ToString());
         }
         var o = new Options();
-        o.PpOcr = c.Oengine == 1 || c.Oengine == 2;
+        o.PpOcr = c.Oengine == 1;
         o.OcrEngine = c.Oengine;
         o.Ocr = (OcrPolicy) (c.Ocr == 0 ? 2 : c.Ocr == 1 ? 1 : 0);
         o.Assets = (AssetsLevel) c.Level;

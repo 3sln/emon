@@ -57,7 +57,7 @@ fn test_an_engine_is_spelled_once_for_the_option_and_the_transcript() {
 }
 #[test]
 fn test_every_engine_of_the_table_is_registered_with_a_sound_row() {
-    crate::testport::assert_eq(pk_engine_count(), 7, "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium");
+    crate::testport::assert_eq(pk_engine_count(), 8, "the engines include the standalone PP reader");
     let mut i: i32 = 0;
     while i < pk_engine_count() {
         let eng: i32 = pk_engine_at(i);
@@ -299,6 +299,29 @@ fn test_the_catalogue_holds_the_hashes_the_hosts_verify_against() {
     crate::testport::assert_eq(pk_pack_for(eng_tesseract(), pkind_recognizer(), pk_lang_eng()), pkid_tess_fast_eng(), "English for Tesseract");
     crate::testport::assert_eq(pk_pack_for(eng_ppocr(), pkind_recognizer(), pk_lang_eng()), pkid_pp5_rec_en_mobile(), "English for PP-OCR");
     crate::testport::assert_eq(pk_pack_for(eng_ppocr(), pkind_recognizer(), 1936744704), 0, "no Spanish for PP-OCR");
+}
+#[test]
+fn test_ppocr_alone_has_a_reader_row_and_shares_the_native_pp_packs() {
+    let eng: i32 = eng_ppocr_alone();
+    let langs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let engs: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let installed: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let out: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    crate::testport::assert_eq(eng_find(&crate::testport::text_blob("ppocr-alone")[..], 0, 11), eng, "standalone registry name");
+    crate::testport::assert_eq(pk_option_engine(8), eng, "standalone option selects the row");
+    crate::testport::assert_eq(pk_engine_oen(eng), pk_engine_oen(eng_ppocr()), "the same adapter answers");
+    crate::testport::assert_eq(pk_engine_caps(eng), pk_engine_caps(eng_ppocr()), "the same capability ceiling");
+    crate::testport::assert_eq(pk_engine_classes(eng), pk_engine_classes(eng_ppocr()), "the same native classes");
+    crate::testport::assert_eq(pk_role_mask(eng, pcls_linux()), erole_reader(), "reader is the only role");
+    en_cells1(engs, eng);
+    crate::testport::assert_eq(pk_record_engines(out, pcls_linux(), engs), 0, "the selected row can be recorded");
+    crate::testport::assert_eq(crate::port::cells_at(out, 0), eng, "the transcript names standalone PP");
+    crate::testport::assert_eq(crate::port::cells_at(out, 2), erole_reader(), "the transcript records reader");
+    crate::testport::assert_eq(en_resolve(pcls_linux(), pkf_osd(), langs, engs, installed, out), pkerr_ok(), "resolves");
+    crate::testport::assert_eq(pk_rows(out), 3, "only the three PP packs");
+    en_expect_row(0, out, 0, pstate_missing(), eng_ppocr(), pkid_pp5_det_mobile(), 0, "detector");
+    en_expect_row(0, out, 1, pstate_missing(), eng_ppocr(), pkid_pp5_cls_mobile(), 0, "classifier");
+    en_expect_row(0, out, 2, pstate_missing(), eng_ppocr(), pkid_pp5_rec_en_mobile(), 0, "recognizer");
 }
 #[test]
 fn test_the_default_resolution_needs_english_and_says_whether_it_is_there() {

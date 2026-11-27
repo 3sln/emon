@@ -41,7 +41,7 @@
          107 108 105 109 105 116 46 112 114 111 100 117 99 101 114 46
          112 97 114 97 108 108 101 108 106 115 45 114 101 110 100 101
          114 116 97 98 108 101 115 111 99 114 45 101 110 103 105 110 101
-         99 97 112 116 117 114 101]
+         99 97 112 116 117 114 101 111 99 114 45 101 110 103 105 110 101 115]
   :accessors {^I32 ck-char-at [^I32 ignored ^I32 i]})
 
 ;; a key is a row's index: [shape lo hi name-offset name-length]. Shapes: 0 a string, 1 a number in lo..hi, 2 a word of `cv-rows`, 3 a flag,
@@ -71,7 +71,8 @@
          3 0 0 168 9                                ;; 19 js-render (P11.4c: the host owes render and crop)
          2 0 0 177 6
          2 0 0 183 10                               ;; 21 ocr-engine
-         2 0 0 193 7]                               ;; 22 capture
+         2 0 0 193 7                                ;; 22 capture
+         2 0 0 200 11]                              ;; 23 ocr-engines
   :accessors {^I32 ck-row-count [^I32 ignored]
               ^I32 ck-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -108,13 +109,13 @@
          20 1 68 6
          21 0 74 9
          21 1 83 5
-         21 2 88 11                                 ;;               ppocr-alone (P13.4, D900)
          21 3 99 12                                 ;;               apple-vision (K8, D901)
          21 4 111 17                                ;;               windows-media-ocr (K8, D901)
          21 5 128 10                                ;;               mlkit-text (K7: the Android plugin's engine, answered by the caller)
          22 0 6 4
          22 1 138 4
-         22 2 142 6]
+         22 2 142 6
+         23 8 88 11]                                ;; ocr-engines   ppocr-alone (P13.4b, engine table row 8)
   :accessors {^I32 cv-row-count [^I32 ignored]
               ^I32 cv-row-at [^I32 ignored ^I32 row ^I32 field]})
 
@@ -139,6 +140,7 @@
 (defconst ^I32 K_TABLES 20)
 (defconst ^I32 K_OENGINE 21)
 (defconst ^I32 K_CAPTURE 22)
+(defconst ^I32 K_OENGINES 23)
 
 (defconst ^I32 SH_STR 0)
 (defconst ^I32 SH_NUM 1)
@@ -344,7 +346,7 @@
   (if (== k K_SIGS) (set (fd c sigs) v))
   (if (== k K_SCOPE) (set (fd c scope) v))
   (if (== k K_TABLES) (set (fd c tabl) v))
-  (if (== k K_OENGINE) (set (fd c oengine) v))
+  (if (or (== k K_OENGINE) (== k K_OENGINES)) (set (fd c oengine) v))
   (if (== k K_CAPTURE) (set (fd c capture) v))
   (return 0))
 

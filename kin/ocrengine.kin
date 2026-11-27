@@ -12,7 +12,7 @@
 ;; policy and the frozen calibration. Update on any observable adapter change.
 (defdata ^:pub oe-identity
   :emitter kin.lang/flat-array
-  :data [112 112 111 99 114 53 45 101 110 45 56 57 55 55 98 53 49 53 49 100 53 54 97 48 99 99 52 98 54 55 53 99 57 56 57 100 98 102 51 102 48 100 56 100 53 50 53 55 57 50 52 53 98 53 55 48 56 53 98 102 57 50 48 49 99 51 56 55 57 97 98 102 51 101]
+  :data [112 112 111 99 114 53 45 101 110 45 57 50 49 102 56 54 50 101 101 57 51 50 54 52 97 98 98 51 54 55 54 99 102 57 100 50 100 53 102 98 52 54 48 50 48 53 48 53 49 54 53 51 53 102 55 55 52 55 101 102 56 100 53 53 55 49 55 49 97 49 56 52 48 53]
   :accessors {^I32 oe-id-count [^I32 ignored]
               ^I32 oe-id-at [^I32 ignored ^I32 i]})
 
@@ -135,9 +135,9 @@
           (set k (+ k 1)))))
   (return 0))
 
-(defn ^:pub ^I32 oe-tag [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 mode]
+(defn ^:pub ^I32 oe-route [^:mut ^Cells requests ^:mut ^Cells scratch ^I32 primary ^I32 hybrid]
   (comment "Configuration context is part of every request key. The hybrid primary names its challenger policy, so replaying a hybrid with different options misses an actual request without a classifier.")
-  (if (== mode 0) (return 0))
+  (if (and (== primary 1) (== hybrid 0)) (return 0))
   (cells-drop scratch 0)
   (let [^:mut ^I32 at 0 ^:mut ^I32 i 0]
     (while (< at (cells-len requests))
@@ -146,11 +146,9 @@
         (while (< i n)
           (do (cells-push scratch (cells-at requests (+ at i))) (set i (+ i 1))))
         (if (== (cells-at requests (+ at 1)) (pk-ocr))
-          (do (if (== mode 1) (oe-select scratch out 2))
-              (if (== mode 2) (oe-context scratch out))
-              (if (== mode 4) (oe-select scratch out 3))
-              (if (== mode 6) (oe-select scratch out 5))
-              (if (== mode 8) (oe-select scratch out 4))))
+          (if (== hybrid 1)
+            (oe-context scratch out)
+            (oe-select scratch out primary)))
         (set at (+ at n))))
     (cells-drop requests 0) (set i 0)
     (while (< i (cells-len scratch))

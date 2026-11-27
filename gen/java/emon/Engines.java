@@ -26,6 +26,9 @@ public final class Engines {
     public static int engPdfium() {
         return 7;
     }
+    public static int engPpocrAlone() {
+        return 8;
+    }
     public static int engEmitName(StringBuilder t, int code) {
         if (code == 1) {
             emon.Port.textAscii(t, "tesseract");
@@ -53,6 +56,10 @@ public final class Engines {
         }
         if (code == 7) {
             emon.Port.textAscii(t, "pdfium");
+            return 1;
+        }
+        if (code == 8) {
+            emon.Port.textAscii(t, "ppocr-alone");
             return 1;
         }
         return 0;
@@ -208,6 +215,31 @@ public final class Engines {
                             if (emon.Port.blobU8(b, from + 4) == 117) {
                                 if (emon.Port.blobU8(b, from + 5) == 109) {
                                     return 7;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if ((to - from) == 11) {
+            if (emon.Port.blobU8(b, from + 0) == 112) {
+                if (emon.Port.blobU8(b, from + 1) == 112) {
+                    if (emon.Port.blobU8(b, from + 2) == 111) {
+                        if (emon.Port.blobU8(b, from + 3) == 99) {
+                            if (emon.Port.blobU8(b, from + 4) == 114) {
+                                if (emon.Port.blobU8(b, from + 5) == 45) {
+                                    if (emon.Port.blobU8(b, from + 6) == 97) {
+                                        if (emon.Port.blobU8(b, from + 7) == 108) {
+                                            if (emon.Port.blobU8(b, from + 8) == 111) {
+                                                if (emon.Port.blobU8(b, from + 9) == 110) {
+                                                    if (emon.Port.blobU8(b, from + 10) == 101) {
+                                                        return 8;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -936,7 +968,8 @@ public final class Engines {
         4, 3, 1, 2, 1056992, 3, 1, 0,
         5, 5, 1, 2, 9216, 8, 0, 0,
         6, 4, 1, 3, 401825, 16, 0, 0,
-        7, 0, 2, 1, 0, 63, 0, 0
+        7, 0, 2, 1, 0, 63, 0, 0,
+        8, 2, 1, 2, 24928, 31, 1, 13
     };
     public static final int[] EN_ROLES = {
         1, 1, 21, 1,
@@ -954,7 +987,12 @@ public final class Engines {
         4, 1, 12, 4,
         4, 2, 12, 4,
         5, 4, 12, 4,
-        6, 5, 12, 4
+        6, 5, 12, 4,
+        8, 1, 4, 4,
+        8, 2, 4, 4,
+        8, 3, 4, 4,
+        8, 4, 4, 4,
+        8, 5, 4, 4
     };
     public static final int[] EN_TURNKEY = {
         1, 4, 4, 2, 3, 7, 1,
@@ -967,7 +1005,7 @@ public final class Engines {
     public static int pkEnRow(int eng) {
         // The row of an engine in the table, or -1.
         int i = 0;
-        while (i < 7) {
+        while (i < 8) {
             if (EN_TABLE[i * 8 + 0] == eng) {
                 return i;
             }
@@ -982,7 +1020,7 @@ public final class Engines {
         return 1;
     }
     public static int pkEngineCount() {
-        return 7;
+        return 8;
     }
     public static int pkEngineAt(int i) {
         // The i-th engine of the table, in its order.
@@ -1016,6 +1054,36 @@ public final class Engines {
     public static int pkEngineNeeds(int eng) {
         return pkEnCol(eng, 7);
     }
+    public static int pkOptionEngine(int code) {
+        // The engine row selected by the options. The PP hybrid selects Tesseract as its primary.
+        if (code == engPpocrAlone()) {
+            return engPpocrAlone();
+        }
+        if (code == 3) {
+            return engAppleVision();
+        }
+        if (code == 4) {
+            return engWindowsMediaOcr();
+        }
+        if (code == 5) {
+            return engMlkitText();
+        }
+        return engTesseract();
+    }
+    public static int pkUsesTesseract(int eng) {
+        // Tesseract is the primary reader, or Apple's page-level fallback.
+        if ((eng == engTesseract()) || (eng == engAppleVision())) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int pkPackOwner(int eng) {
+        // The standalone reader shares the native PP adapter's packs.
+        if (eng == engPpocrAlone()) {
+            return engPpocr();
+        }
+        return eng;
+    }
     public static int pkClassKnown(int pclass) {
         if (pclass < 1) {
             return 0;
@@ -1037,7 +1105,7 @@ public final class Engines {
     }
     public static int pkRoleRow(int eng, int pclass) {
         int i = 0;
-        while (i < 16) {
+        while (i < 21) {
             if ((EN_ROLES[i * 4 + 0] == eng) && (EN_ROLES[i * 4 + 1] == pclass)) {
                 return i;
             }
@@ -1179,7 +1247,7 @@ public final class Engines {
         int pe = 0;
         while (p <= 24) {
             pe = pkPackEngine(p);
-            if ((pkPackKind(p) == kind) && ((pe == eng) || (pe == 0))) {
+            if ((pkPackKind(p) == kind) && ((pe == pkPackOwner(eng)) || (pe == 0))) {
                 if (pkPackCovers(p, lang) == 1) {
                     return p;
                 }
@@ -1385,7 +1453,7 @@ public final class Engines {
             return pkFail(out, pkerrUnknownClass(), pclass, 0);
         }
         int np = 24;
-        int ne = 7;
+        int ne = 8;
         int sel = np + 1;
         int lb = (np + 1) + ne;
         int i = 0;
@@ -1465,7 +1533,7 @@ public final class Engines {
                 while (p <= np) {
                     pe = pkPackEngine(p);
                     pk = pkPackKind(p);
-                    if (((pe == eng) || (pe == 0)) && ((needs & pk) != 0)) {
+                    if (((pe == pkPackOwner(eng)) || (pe == 0)) && ((needs & pk) != 0)) {
                         if (pk == pkindOsd()) {
                             if ((flags & pkfOsd()) != 0) {
                                 pkMark(scratch, p, sv);
@@ -1594,7 +1662,7 @@ public final class Engines {
         int r = 0;
         int rowEng = 0;
         int role = 0;
-        while (r < 7) {
+        while (r < 8) {
             rowEng = EN_TABLE[r * 8 + 0];
             if (pkHas(avail, 0, rowEng) == 1) {
                 role = pkRoleDefault(rowEng, pclass);

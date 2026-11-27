@@ -139,9 +139,9 @@ impl Session {
 
     fn open_impl(length: u64, chunk: Option<usize>, intake_only: bool, password: Option<Vec<u8>>, options: &str,
                  #[cfg(not(target_arch = "wasm32"))] engines: Option<&Engines>) -> Result<Session, Fault> {
-        #[cfg(not(target_arch = "wasm32"))]
-        let router = engines.and_then(|e| e.router());
         let mut p = parse_options(options).map_err(Fault::Usage)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let router = engines.and_then(|e| e.router_for(p.options.ocr_engine));
         if let Some(c) = chunk {
             p.config.chunk_size = c;
         }
@@ -184,7 +184,7 @@ impl Session {
                         prod.push((k.clone(), v.clone()));
                     }
                 }
-                t.engines = plan::engine_rows(&prod);
+                t.engines = plan::engine_rows_for(&prod, p.options.ocr_engine.registry_engine());
                 t.producer = prod;
             }
             recording = Some(t);

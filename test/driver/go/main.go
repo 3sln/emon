@@ -328,14 +328,15 @@ func main() {
 		input = input.WithPassword([]byte(*password))
 	}
 	inputs := []emon.Input{input}
-	if (tess || opts.PpOcr) && replay == "" {
+	ppAlone := opts.OcrEngine == 8
+	if !ppAlone && (tess || opts.PpOcr) && replay == "" {
 		o, err := emon.NewTessOcr(tessdata)
 		if err != nil {
 			usage(err.Error())
 		}
 		cfg.Ocr = o
 	}
-	if opts.PpOcr && replay == "" {
+	if (opts.PpOcr || ppAlone) && replay == "" {
 		o, err := emon.NewPpOcr("", cfg.Ocr)
 		if err != nil {
 			usage(err.Error())

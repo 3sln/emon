@@ -24,7 +24,7 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 0);
+        Ocrengine.oeRoute(r, scratch, 1, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 112, "default identity extends the key");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record header includes identity");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "one legacy language");
@@ -35,7 +35,7 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 1);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 74, "identity extends request key");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "record length includes identity");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 11), -3100, "identity marker");
@@ -50,8 +50,8 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 1);
-        Ocrengine.oeTag(r, scratch, 1);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + 74, "exactly one identity trailer");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "canonical record length");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "English remains the only language");
@@ -66,8 +66,8 @@ public final class Ocrenginetest {
         int view = Plan.rqOcrView(r, 13, Plan.viewBase() + 1, 99, -3100, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, view);
-        Ocrengine.oeTag(r, scratch, 1);
-        Ocrengine.oeTag(r, scratch, 1);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), first, "first request length");
         emon.Testport.assertEq(emon.Port.cellsAt(r, first), 17 + 74, "view request length");
         emon.Testport.assertEq(emon.Port.cellsLen(r), (32 + 74) + 74, "two canonical records");
@@ -79,8 +79,8 @@ public final class Ocrenginetest {
         emon.Port.Cells scratch = emon.Port.newCells();
         int at = Plan.rqOcr(r, 12, Plan.viewBase() + 120, 7, 1, 1536, 18, 144, 57);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 1);
-        Ocrengine.oeTag(r, scratch, 1);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
+        Ocrengine.oeRoute(r, scratch, 2, 0);
         emon.Testport.assertEq(Ocrport.opIdentityAt(r), 10, "compact view has no hash cells or languages");
         emon.Testport.assertEq(Ocrport.opLangFirst(r), 7, "tagged compact layout");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 0, "shared helper excludes the trailer");
@@ -96,10 +96,10 @@ public final class Ocrenginetest {
         Plan.rqOcrLang(compact, 76, 97, 116, 110);
         Plan.rqOcrLang(compact, 101, 110, 103, 0);
         Plan.rqOcrEnd(compact, at);
-        Ocrengine.oeTag(compact, scratch, 1);
+        Ocrengine.oeRoute(compact, scratch, 2, 0);
         int view = Plan.rqOcrView(hashed, 13, Plan.viewBase() + 1, 1281455214, 1701734144, 7, 1, 0, 0, 0, 0);
         Plan.rqOcrEnd(hashed, view);
-        Ocrengine.oeTag(hashed, scratch, 1);
+        Ocrengine.oeRoute(hashed, scratch, 2, 0);
         emon.Testport.assertEq(Ocrport.opPpLangFirst(compact, 123, 456), 7, "two compact languages");
         emon.Testport.assertEq(Ocrport.opPpLangCount(compact, 7), 2, "both languages retained");
         emon.Testport.assertEq(Ocrport.opPpLangAt(compact, 7, 1), 1701734144, "English retained");
@@ -274,7 +274,7 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 4);
+        Ocrengine.oeRoute(r, scratch, 3, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "the trailer is Vision's, not Tesseract's");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), emon.Port.cellsLen(r), "the record length includes it");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 11), -3100, "identity marker");
@@ -284,7 +284,7 @@ public final class Ocrenginetest {
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "the request says which engine reads it");
         emon.Testport.assertEq(Ocrport.opLangCount(r), 1, "the language is still the one language");
         emon.Testport.assertEq(Ocrport.opLangAt(r, 0), 1701734144, "English");
-        Ocrengine.oeTag(r, scratch, 4);
+        Ocrengine.oeRoute(r, scratch, 3, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "idempotent: one trailer");
     }
     public static void testWindowsSelectionRetagsWithTheWindowsConfiguration() {
@@ -293,10 +293,10 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 6);
+        Ocrengine.oeRoute(r, scratch, 5, 0);
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 5, "Windows.Media.Ocr");
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(5), "its trailer");
-        Ocrengine.oeTag(r, scratch, 4);
+        Ocrengine.oeRoute(r, scratch, 3, 0);
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "a later selection replaces it, never stacks");
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(3), "one trailer");
     }
@@ -306,13 +306,13 @@ public final class Ocrenginetest {
         int at = Plan.rqOcr(r, 12, 7, 3, 1, 0, 0, 0, 0);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, at);
-        Ocrengine.oeTag(r, scratch, 8);
+        Ocrengine.oeRoute(r, scratch, 4, 0);
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 4, "ML Kit");
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(4), "its trailer");
         emon.Testport.assertEq(emon.Port.cellsAt(r, 14), 71, "its configuration's length");
-        Ocrengine.oeTag(r, scratch, 8);
+        Ocrengine.oeRoute(r, scratch, 4, 0);
         emon.Testport.assertEq(emon.Port.cellsLen(r), 15 + Ocrengine.oeConfigLen(4), "idempotent: one trailer");
-        Ocrengine.oeTag(r, scratch, 4);
+        Ocrengine.oeRoute(r, scratch, 3, 0);
         emon.Testport.assertEq(Ocrport.opRequestEngine(r), 3, "a later selection replaces it, never stacks");
     }
     public static void testAnEngineSelectionReachesEveryOcrRequestOfABatch() {
@@ -324,7 +324,7 @@ public final class Ocrenginetest {
         int b = Plan.rqOcr(r, 13, 7, 7, 1, 5, 6, 40, 12);
         Plan.rqOcrLang(r, 101, 110, 103, 0);
         Plan.rqOcrEnd(r, b);
-        Ocrengine.oeTag(r, scratch, 4);
+        Ocrengine.oeRoute(r, scratch, 3, 0);
         int first = 15 + Ocrengine.oeConfigLen(3);
         emon.Testport.assertEq(emon.Port.cellsAt(r, 0), first, "the first request's length");
         emon.Testport.assertEq(emon.Port.cellsLen(r), first + (15 + Ocrengine.oeConfigLen(3)), "two records, each with exactly one trailer");

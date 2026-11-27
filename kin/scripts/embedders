@@ -222,9 +222,11 @@
 (def rust-only
   "[kind Type member] on the Rust side with no Go twin, and why."
   {[:type "OcrEngine" nil]
-   "D866: Rust's typed selector is an enum; Go's twin is Options.OcrEngine, kin's engine code as an int32 (K8, D901: 0 tesseract, 1 ppocr, 2 apple-vision, 3 windows-media-ocr), beside the PP hybrid's Options.PpOcr"
+   "Rust's typed selector is an enum. Go's twin is Options.OcrEngine, kin's selection code as an int32, beside the PP hybrid's Options.PpOcr"
    [:method "OcrEngine" "uses_pp"]
    "a method of the Rust-only OcrEngine enum (true for PpOcr and PpOcrAlone); Go's twin is the int32 Options.OcrEngine, where a caller compares the code (1 ppocr) and Options.PpOcr carries the hybrid"
+   [:method "OcrEngine" "uses_tesseract"]
+   "a method of the Rust-only OcrEngine enum for selectors that use Tesseract as primary or fallback"
    [:method "Engine" "start_pushed"]
    "the step-wise run for an embedder that owns the loop (the browser build, P9.3, D356: a JS read is a promise, so the engine is stepped and the bytes it misses are pushed in): an extra way in over `emon::engine::{Run, ChunkCache}`, not part of SPEC 13's Engine; Go's loop is `plan.Run` over a blocking `io.ReaderAt` and needs none"
    [:type "Inputs" nil]

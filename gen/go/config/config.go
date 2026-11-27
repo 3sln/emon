@@ -9,7 +9,7 @@ import (
 	"emon/port"
 )
 
-var CkChars [200]int32 = [200]int32{
+var CkChars [211]int32 = [211]int32{
 	108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
 	114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
 	105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -22,10 +22,11 @@ var CkChars [200]int32 = [200]int32{
 	107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
 	112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
 	114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
-	101, 99, 97, 112, 116, 117, 114, 101,
+	101, 99, 97, 112, 116, 117, 114, 101, 111, 99, 114, 45, 101, 110, 103, 105,
+	110, 101, 115,
 }
 
-var CkRows [115]int32 = [115]int32{
+var CkRows [120]int32 = [120]int32{
 	0, 0, 0, 0, 6,
 	2, 0, 0, 6, 3,
 	2, 0, 0, 9, 9,
@@ -49,6 +50,7 @@ var CkRows [115]int32 = [115]int32{
 	2, 0, 0, 177, 6,
 	2, 0, 0, 183, 10,
 	2, 0, 0, 193, 7,
+	2, 0, 0, 200, 11,
 }
 
 var CvChars [148]int32 = [148]int32{
@@ -82,13 +84,13 @@ var CvRows [96]int32 = [96]int32{
 	20, 1, 68, 6,
 	21, 0, 74, 9,
 	21, 1, 83, 5,
-	21, 2, 88, 11,
 	21, 3, 99, 12,
 	21, 4, 111, 17,
 	21, 5, 128, 10,
 	22, 0, 6, 4,
 	22, 1, 138, 4,
 	22, 2, 142, 6,
+	23, 8, 88, 11,
 }
 
 const kLocale int32 = 0
@@ -132,6 +134,8 @@ const kTables int32 = 20
 const kOengine int32 = 21
 
 const kCapture int32 = 22
+
+const kOengines int32 = 23
 
 const shStr int32 = 0
 
@@ -197,7 +201,7 @@ func cfKeyIs(t *port.Cells, from int32, to int32, k int32) int32 {
 func CfKeyFind(t *port.Cells, from int32, to int32) int32 {
 	// The key t[from, to) names, or -1.
 	var k int32 = 0
-	for k < 23 {
+	for k < 24 {
 		if cfKeyIs(t, from, to, k) == 1 {
 			return k
 		}
@@ -426,7 +430,7 @@ func cfSetWord(c *enctx.Cfg, k int32, v int32) int32 {
 	if k == kTables {
 		c.Tabl = v
 	}
-	if k == kOengine {
+	if (k == kOengine) || (k == kOengines) {
 		c.Oengine = v
 	}
 	if k == kCapture {

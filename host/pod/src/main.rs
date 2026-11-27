@@ -31,7 +31,7 @@
 //
 // NO CRATE IS ADDED: bencode, EDN, JSON-to-EDN and base64 are written here (small, and the pod's wire is what a test reads). The conversion runs
 // on a thread with a 32 MiB stack. NOTHING but protocol goes to stdout; diagnostics go to stderr.
-use emon::capi::{capabilities, category_code, category_name, html_options, native_config_at, tesseract_ready};
+use emon::capi::{capabilities, category_code, category_name, html_options, native_config_for, tesseract_ready};
 use emon::{parse_options, Engine, Error, Input, Model};
 use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
@@ -624,7 +624,7 @@ fn setup(text: &str, native: bool, places: (Option<&str>, Option<&str>)) -> Resu
     }
     let mut cfg = p.config.clone();
     if native || p.options.ocr_engine.uses_pp() {
-        native_config_at(&mut cfg, places.0, places.1).map_err(PodError::usage)?;
+        native_config_for(&mut cfg, places.0, places.1, p.options.ocr_engine).map_err(PodError::usage)?;
     }
     if p.options.ocr_engine.uses_pp() {
         emon::capi::ppocr_config(&mut cfg).map_err(PodError::usage)?;

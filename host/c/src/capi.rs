@@ -560,7 +560,11 @@ pub fn native_config(cfg: &mut Config) -> Result<(), String> {
 
 // The same with places named for this call (the pod's `:pdfium` and `:tessdata`).
 pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), String> {
-    native_ports(cfg, pdfium, tessdata).map_err(|f| match f {
+    native_config_for(cfg, pdfium, tessdata, crate::engine::OcrEngine::Tesseract)
+}
+
+pub fn native_config_for(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>, engine: crate::engine::OcrEngine) -> Result<(), String> {
+    native_ports(cfg, pdfium, tessdata, engine.uses_tesseract()).map_err(|f| match f {
         Fail::Usage(m) => m,
         Fail::Engine(e) => e.to_string(),
     })
@@ -570,10 +574,10 @@ pub fn native_config_at(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option
 // build without them, or a process that does not find them, has none, and a request for one is answered `unsupported` (D199). The C library does NOT call this: its ports are
 // the engines an embedder registers (`emon_engines_*`, K2, D899).
 #[allow(unused_variables)]
-fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>) -> Result<(), Fail> {
+fn native_ports(cfg: &mut Config, pdfium: Option<&str>, tessdata: Option<&str>, use_tesseract: bool) -> Result<(), Fail> {
     #[cfg(feature = "tesseract")]
     {
-        if cfg.ocr.is_none() {
+        if use_tesseract && cfg.ocr.is_none() {
             if let Some(t) = native::tesseract(tessdata).map_err(|e| Fail::Usage(format!("tesseract: {}", e)))? {
                 cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(t)));
             }
@@ -645,7 +649,7 @@ unsafe fn one_shot_setup(p: &Parsed, engines: *const emon_engines) -> Result<(En
     }
     let mut cfg = p.config.clone();
     if let Some(e) = engines_ref(engines) {
-        if let Some(r) = e.router() {
+        if let Some(r) = e.router_for(p.options.ocr_engine) {
             cfg.ocr = Some(crate::engine::OcrPort(std::sync::Arc::new(r)));
         }
         if let Some(r) = e.renderer() {
@@ -1270,8 +1274,14 @@ pub unsafe extern "C" fn emon_engines_packs(e: *mut emon_engines, dir: *const c_
 // are the ones that were. An adapter that is found and cannot be opened is.
 #[no_mangle]
 pub unsafe extern "C" fn emon_engines_defaults(e: *mut emon_engines, err: *mut emon_error) -> c_int {
+    emon_engines_defaults_for(e, std::ptr::null(), err)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn emon_engines_defaults_for(e: *mut emon_engines, options: *const c_char, err: *mut emon_error) -> c_int {
     guarded_n(err, || {
         let e = engines_arg(e)?;
+        let p = parse_options(&text(options)?).map_err(RegFail::Usage)?;
         if let Some(d) = native::find_packs_dir() {
             e.packs().add_dir(&d);
         }
@@ -1279,6 +1289,11 @@ pub unsafe extern "C" fn emon_engines_defaults(e: *mut emon_engines, err: *mut e
         e.packs().set_mode(mode);
         let libs = native::find_adapter_libs().map_err(RegFail::Usage)?;
         for l in libs {
+            if !p.options.ocr_engine.uses_tesseract()
+                && l.file_stem().and_then(|s| s.to_str()).is_some_and(|s| matches!(s, "libemon_ocr_tesseract" | "emon_ocr_tesseract"))
+            {
+                continue;
+            }
             e.load(&l.to_string_lossy(), None)?;
         }
         register_pdfium(e, None, false)?;

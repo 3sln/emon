@@ -9,7 +9,7 @@
             [emon.ocrengine :refer [oe-role]]
             [emon.packdata :refer [pack-file-count pack-lang-count pack-lang-at pkid-find pkid-emit-name plic-emit-name
                                    pkid-tess-fast-eng pkid-tess-osd pkid-tess-fast-spa pkid-tess-fast-fra pkid-tess-fast-hin pkid-tess-fast-chs pkid-pp5-det-mobile pkid-pp5-cls-mobile pkid-pp5-rec-en-mobile]]
-            [emon.engines :refer [eng-tesseract eng-ppocr eng-ppocr-web eng-apple-vision eng-windows-media-ocr eng-mlkit-text eng-pdfium eng-find eng-emit-name
+            [emon.engines :refer [eng-tesseract eng-ppocr eng-ppocr-alone eng-ppocr-web eng-apple-vision eng-windows-media-ocr eng-mlkit-text eng-pdfium eng-find eng-emit-name
                                   ekind-ocr ekind-render eimpl-builtin eimpl-native eimpl-plugin
                                   pcls-macos pcls-ios pcls-linux pcls-windows pcls-android pcls-web
                                   erole-incumbent erole-challenger erole-reader erole-fallback
@@ -22,7 +22,7 @@
                                   pk-default-engine pk-platform-engine pk-pp-engine pk-fallback-engine pk-default-fetch pk-default-render pk-bundled-count pk-bundled
                                   pk-pack-count pk-pack-known pk-pack-rev pk-pack-engine pk-pack-kind pk-pack-licence pk-pack-file-count pk-pack-bytes pk-pack-file-bytes
                                   pk-pack-file-sha pk-pack-file-name pk-pack-covers pk-pack-for pk-lang-eng
-                                  pk-parse-engines pk-parse-packs pk-explain pk-resolve pk-rows pk-missing pk-record-engines]]
+                                  pk-parse-engines pk-parse-packs pk-explain pk-resolve pk-rows pk-missing pk-record-engines pk-option-engine]]
             [emon.transcript :refer [tr-read tr-write tr-add-engine tr-n-engines tr-eng-engine tr-eng-caps tr-eng-role tr-add-input tr-add-producer
                                      tb-engines tb-engine-unknown]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or quot bit-and bit-or]]))
@@ -79,7 +79,7 @@
   (assert-eq (eng-find (text-blob "ppocr-we") 0 8) -1 "a prefix is no name"))
 
 (deftest test-every-engine-of-the-table-is-registered-with-a-sound-row
-  (assert-eq (pk-engine-count) 7 "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium")
+  (assert-eq (pk-engine-count) 8 "the engines include the standalone PP reader")
   (let [^:mut ^I32 i 0]
     (while (< i (pk-engine-count))
       (let [^I32 eng (pk-engine-at i)
@@ -292,6 +292,24 @@
     (assert-eq (pk-pack-for (eng-ppocr) (pkind-recognizer) 1936744704) 0 "no Spanish for PP-OCR")))
 
 ;; ------------------------------------------------------------------ resolution
+
+(deftest test-ppocr-alone-has-a-reader-row-and-shares-the-native-pp-packs
+  (let [^I32 eng (eng-ppocr-alone) ^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]
+    (assert-eq (eng-find (text-blob "ppocr-alone") 0 11) eng "standalone registry name")
+    (assert-eq (pk-option-engine 8) eng "standalone option selects the row")
+    (assert-eq (pk-engine-oen eng) (pk-engine-oen (eng-ppocr)) "the same adapter answers")
+    (assert-eq (pk-engine-caps eng) (pk-engine-caps (eng-ppocr)) "the same capability ceiling")
+    (assert-eq (pk-engine-classes eng) (pk-engine-classes (eng-ppocr)) "the same native classes")
+    (assert-eq (pk-role-mask eng (pcls-linux)) (erole-reader) "reader is the only role")
+    (en-cells1 engs eng)
+    (assert-eq (pk-record-engines out (pcls-linux) engs) 0 "the selected row can be recorded")
+    (assert-eq (cells-at out 0) eng "the transcript names standalone PP")
+    (assert-eq (cells-at out 2) (erole-reader) "the transcript records reader")
+    (assert-eq (en-resolve (pcls-linux) (pkf-osd) langs engs installed out) (pkerr-ok) "resolves")
+    (assert-eq (pk-rows out) 3 "only the three PP packs")
+    (en-expect-row (test-t) out 0 (pstate-missing) (eng-ppocr) (pkid-pp5-det-mobile) 0 "detector")
+    (en-expect-row (test-t) out 1 (pstate-missing) (eng-ppocr) (pkid-pp5-cls-mobile) 0 "classifier")
+    (en-expect-row (test-t) out 2 (pstate-missing) (eng-ppocr) (pkid-pp5-rec-en-mobile) 0 "recognizer")))
 
 (deftest test-the-default-resolution-needs-english-and-says-whether-it-is-there
   (let [^Cells langs (new-cells) ^Cells engs (new-cells) ^Cells installed (new-cells) ^Cells out (new-cells)]

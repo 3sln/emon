@@ -10,7 +10,7 @@ enum OcrMode {
   never,
 }
 
-/// What the OCR engine of a conversion is (the option `ocr-engine`).
+/// What the OCR engine of a conversion is.
 ///
 /// [tesseract] is the engine a turnkey package uses when you choose nothing. The platform engines are selected explicitly, and an app
 /// that wants one by default says so ([ConvertOptions.ocrEngine]).
@@ -35,11 +35,11 @@ enum OcrEngine {
 
   const OcrEngine(this.optionValue);
 
-  /// The value of the `ocr-engine` option.
+  /// The option value for this engine selection.
   final String optionValue;
 
   /// The engine's name in kin's engine table.
-  String get engineName => this == ppocrAlone ? 'ppocr' : optionValue;
+  String get engineName => optionValue;
 }
 
 /// SPEC 13's settings by their names (the JS SDK's `ConvertOptions`). Everything is optional: `null` leaves a setting to its default.
@@ -129,7 +129,9 @@ class ConvertOptions {
     put('locale', locale);
     put('ocr', ocr?.name);
     final e = ocrEngine ?? engine;
-    if (e != null && e != OcrEngine.tesseract) put('ocr-engine', e.optionValue);
+    if (e != null && e != OcrEngine.tesseract) {
+      put(e == OcrEngine.ppocrAlone ? 'ocr-engines' : 'ocr-engine', e.optionValue);
+    }
     put('furniture', furniture);
     put('assets', assets);
     put('asset-dpi', assetDpi);

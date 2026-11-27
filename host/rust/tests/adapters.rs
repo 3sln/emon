@@ -160,7 +160,7 @@ fn request(id: i32, engine: i32, osd: bool) -> (Request, Bitmaps) {
     let mut c = Cells::new();
     let at = kp::rq_ocr(&mut c, id, 1, 3, if osd { 2 } else { 0 }, 0, 0, 0, 0);
     kp::rq_ocr_end(&mut c, at);
-    // kin's `oe-tag`: 0 is the default (Tesseract's) requested identity, 1 PP-OCR's
+    // The PP request carries the PP adapter's requested identity.
     ocrengine::oe_tag(&mut c, &mut Cells::new(), if engine == 2 { 1 } else { 0 });
     let rec: Vec<i32> = (0..cells_len(&c)).map(|i| cells_at(&c, i)).collect();
     let mut bm = Bitmaps::new();

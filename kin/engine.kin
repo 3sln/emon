@@ -28,7 +28,8 @@
             [emon.pdfdoc :refer [pd-pg-count pd-open-pw pd-pages pd-need-bytes pd-version-major pd-version-minor pd-encrypted]]
             [emon.pdfcontent :refer [pc-document]]
             [emon.pageunit :refer [pu-plan pu-run-pdf pu-kind pk-born pk-scan]]
-            [emon.ocrengine :refer [oe-register oe-tag oe-tag-fb oe-evidence]]
+            [emon.ocrengine :refer [oe-register oe-route oe-tag-fb oe-evidence]]
+            [emon.engines :refer [pk-option-engine pk-engine-oen]]
             [emon.ofall :refer [fb-taken-id fb-slot-read fb-slot-spec]]
             [emon.oilrows :refer [or-assemble]]
             [emon.oilsrc :refer [oxs-collect oxs-check oxs-emit]]
@@ -233,7 +234,6 @@
 
 (defn ^I32 en-hybrid [^Cfg c]
   (comment "1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).")
-  (comment "The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.")
   (if (== (fd c oengine) 1) (return 1))
   (return 0))
 
@@ -251,16 +251,6 @@
   (comment "Every request of the page is then Tesseract's.")
   (if (== (en-fallback c) 0) (return 0))
   (if (!= (fb-taken-id ans i) 0) (return 1))
-  (return 0))
-
-(defn ^I32 en-oe-mode [^Cfg c]
-  (comment "How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),")
-  (comment "2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).")
-  (if (== (fd c oengine) 1) (return 2))
-  (if (== (fd c oengine) 2) (return 1))
-  (if (== (fd c oengine) 3) (return 4))
-  (if (== (fd c oengine) 4) (return 6))
-  (if (== (fd c oengine) 5) (return 8))
   (return 0))
 
 (defn ^I32 en-page-inner [^Cfg c ^Doc d ^EvArenas ev ^I32 i ^I32 idx ^I32 nbytes ^Cells ans ^:mut ^Cells rq ^BitmapSet bms]
@@ -301,7 +291,7 @@
         ^I32 status (en-page-inner c d ev i idx nbytes ans rq bms)]
     (if (== (en-fallback c) 1)
       (oe-tag-fb rq (fd d pscr) (en-routed c ans i) (fb-slot-read) (fb-slot-spec))
-      (oe-tag rq (fd d pscr) (en-oe-mode c)))
+      (oe-route rq (fd d pscr) (pk-engine-oen (pk-option-engine (fd c oengine))) (en-hybrid c)))
     (if (== status 0)
       (do (comment "Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.")
           (or-assemble (fd ev oruns) r0 (fd ev rules) (+ i 1) (fd d ln) l0 (fd d wd) w0 (fd d pscr))
@@ -555,7 +545,7 @@
       (do
         (il-analyze (fd d fw) (fd s lt) (fd d et) (fd d gl) (fd d ift) (fd s sf) (fd d an) (fd d txt) (fd d pg) (fd m pages) np (fd m text) (fd s hc)
  (fd s isw))))
-    (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (en-oe-mode c) (fd s s0)) 0) (return 2))
+    (if (< (oe-register (fd ev oet) (fd ev oruns) (fd ev olines) (fd ev owords) (* 2 (en-hybrid c)) (fd s s0)) 0) (return 2))
     (pa-build (fd d fw) (fd d et) np (fd s msorder) (fd m pages) (fd m layout) (fd m nodes) (fd m attrs) (fd m regions) (fd m text) (fd s ord) (fd s raw) (fd s tmp)
          (fd s fr) (fd s gp) (fd s lt) (fd s ls) (fd s sd) (fd s it) (fd s io) (fd s rw) (fd s gu) (fd s ac) (fd s tm) (fd s cf) (fd s lo) (fd s pr)
          (fd s dbg) (fd s hc) (fd s tb) (fd s tc) (fd s tw) (fd s tq) (fd m ledger) (fd s ii) (fd s al) (fd s pix))

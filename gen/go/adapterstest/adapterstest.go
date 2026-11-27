@@ -96,6 +96,18 @@ func TestARefusalHasANameToRouteOn(emonT *testing.T) {
 	port.AssertText(emonT, t, "adapter-abi-unsupported", "the name a caller routes on")
 }
 
+func TestThePpAdapterTakesTheSelectedRegistryRole(emonT *testing.T) {
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngPpocrAlone(), oil.OenPpocr()), engines.EngPpocrAlone(), "PP registers as the sole reader")
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngTesseract(), oil.OenPpocr()), engines.EngPpocr(), "PP keeps the challenger row alongside Tesseract")
+}
+
+func TestTesseractIsAbsentWhenTheSelectedEngineDoesNotUseIt(emonT *testing.T) {
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngPpocrAlone(), oil.OenTesseract()), 0, "standalone PP excludes Tesseract")
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngWindowsMediaOcr(), oil.OenTesseract()), 0, "Windows OCR excludes Tesseract")
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngMlkitText(), oil.OenTesseract()), 0, "ML Kit excludes Tesseract")
+	port.AssertEq(emonT, adapters.AdSelectedEng(engines.EngAppleVision(), oil.OenTesseract()), engines.EngTesseract(), "Vision can use the Tesseract fallback")
+}
+
 func TestARequestGoesToTheAdapterOfItsEngine(emonT *testing.T) {
 	var reg *port.Cells = port.NewCells()
 	adCells2(reg, oil.OenTesseract(), oil.OenPpocr())

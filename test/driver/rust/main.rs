@@ -366,13 +366,16 @@ fn main() {
             }
             #[cfg(all(not(ppocr), feature = "tesseract"))]
             {
-                let incumbent = emon::tess::TessOcr::new(None).unwrap_or_else(|e| usage(&e));
-                let incumbent = emon::OcrPort(std::sync::Arc::new(incumbent));
-                // K2 (D899) deleted `ppocr_native`; the hybrid is the registry's: Tesseract registered as an adapter beside the PP adapter library (K8 repaired this live build, which no gate runs)
-                cfg.ocr = Some(emon::adapter::ppocr_hybrid(Some(incumbent)).unwrap_or_else(|e| usage(&e)));
+                let incumbent = opts.ocr_engine.uses_tesseract().then(|| {
+                    let tess = emon::tess::TessOcr::new(None).unwrap_or_else(|e| usage(&e));
+                    emon::OcrPort(std::sync::Arc::new(tess))
+                });
+                cfg.ocr = Some(emon::adapter::ppocr_hybrid(incumbent).unwrap_or_else(|e| usage(&e)));
             }
             #[cfg(all(not(ppocr), not(feature = "tesseract")))]
-            usage("ocr-engine=ppocr is unsupported in this build (EMON_RS_LIVE=1)");
+            {
+                cfg.ocr = Some(emon::adapter::ppocr_hybrid(None).unwrap_or_else(|e| usage(&e)));
+            }
         }
     }
     // Apple Vision reads; with `--tesseract` (the models Tesseract has) its pages fall back to Tesseract by kin's policy (P13.21b, D907), without it Vision reads alone

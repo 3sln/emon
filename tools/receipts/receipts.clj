@@ -2,8 +2,9 @@
   "Build the live Rust driver when needed, then run the non-gate measurement."
   (:require [babashka.process :as p]))
 (def args (vec *command-line-args*))
-(def ppocr? (or (some #{"--ocr-engine=ppocr" "--ocr-engine=ppocr-alone"} args)
-                 (contains? #{"ppocr" "ppocr-alone"} (second (drop-while #(not= % "--ocr-engine") args)))))
+(def ppocr? (or (some #{"--ocr-engine=ppocr" "--ocr-engines=ppocr-alone"} args)
+                (= "ppocr" (second (drop-while #(not= % "--ocr-engine") args)))
+                (= "ppocr-alone" (second (drop-while #(not= % "--ocr-engines") args)))))
 (def vision? (or (some #{"--ocr-engine=apple-vision"} args)
                  (= "apple-vision" (second (drop-while #(not= % "--ocr-engine") args)))))
 (def fallback? (boolean (some #{"--fallback"} args)))

@@ -53,7 +53,7 @@ public final class Enginestest {
         emon.Testport.assertEq(Engines.engFind(emon.Testport.textBlob("ppocr-we"), 0, 8), -1, "a prefix is no name");
     }
     public static void testEveryEngineOfTheTableIsRegisteredWithASoundRow() {
-        emon.Testport.assertEq(Engines.pkEngineCount(), 7, "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium");
+        emon.Testport.assertEq(Engines.pkEngineCount(), 8, "the engines include the standalone PP reader");
         int i = 0;
         while (i < Engines.pkEngineCount()) {
             int eng = Engines.pkEngineAt(i);
@@ -288,6 +288,28 @@ public final class Enginestest {
         emon.Testport.assertEq(Engines.pkPackFor(Engines.engTesseract(), Engines.pkindRecognizer(), Engines.pkLangEng()), Packdata.pkidTessFastEng(), "English for Tesseract");
         emon.Testport.assertEq(Engines.pkPackFor(Engines.engPpocr(), Engines.pkindRecognizer(), Engines.pkLangEng()), Packdata.pkidPp5RecEnMobile(), "English for PP-OCR");
         emon.Testport.assertEq(Engines.pkPackFor(Engines.engPpocr(), Engines.pkindRecognizer(), 1936744704), 0, "no Spanish for PP-OCR");
+    }
+    public static void testPpocrAloneHasAReaderRowAndSharesTheNativePpPacks() {
+        int eng = Engines.engPpocrAlone();
+        emon.Port.Cells langs = emon.Port.newCells();
+        emon.Port.Cells engs = emon.Port.newCells();
+        emon.Port.Cells installed = emon.Port.newCells();
+        emon.Port.Cells out = emon.Port.newCells();
+        emon.Testport.assertEq(Engines.engFind(emon.Testport.textBlob("ppocr-alone"), 0, 11), eng, "standalone registry name");
+        emon.Testport.assertEq(Engines.pkOptionEngine(8), eng, "standalone option selects the row");
+        emon.Testport.assertEq(Engines.pkEngineOen(eng), Engines.pkEngineOen(Engines.engPpocr()), "the same adapter answers");
+        emon.Testport.assertEq(Engines.pkEngineCaps(eng), Engines.pkEngineCaps(Engines.engPpocr()), "the same capability ceiling");
+        emon.Testport.assertEq(Engines.pkEngineClasses(eng), Engines.pkEngineClasses(Engines.engPpocr()), "the same native classes");
+        emon.Testport.assertEq(Engines.pkRoleMask(eng, Engines.pclsLinux()), Engines.eroleReader(), "reader is the only role");
+        enCells1(engs, eng);
+        emon.Testport.assertEq(Engines.pkRecordEngines(out, Engines.pclsLinux(), engs), 0, "the selected row can be recorded");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 0), eng, "the transcript names standalone PP");
+        emon.Testport.assertEq(emon.Port.cellsAt(out, 2), Engines.eroleReader(), "the transcript records reader");
+        emon.Testport.assertEq(enResolve(Engines.pclsLinux(), Engines.pkfOsd(), langs, engs, installed, out), Engines.pkerrOk(), "resolves");
+        emon.Testport.assertEq(Engines.pkRows(out), 3, "only the three PP packs");
+        enExpectRow(0, out, 0, Engines.pstateMissing(), Engines.engPpocr(), Packdata.pkidPp5DetMobile(), 0, "detector");
+        enExpectRow(0, out, 1, Engines.pstateMissing(), Engines.engPpocr(), Packdata.pkidPp5ClsMobile(), 0, "classifier");
+        enExpectRow(0, out, 2, Engines.pstateMissing(), Engines.engPpocr(), Packdata.pkidPp5RecEnMobile(), 0, "recognizer");
     }
     public static void testTheDefaultResolutionNeedsEnglishAndSaysWhetherItIsThere() {
         emon.Port.Cells langs = emon.Port.newCells();

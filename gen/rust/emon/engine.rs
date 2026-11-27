@@ -4,6 +4,7 @@
 use crate::emon::arbiter::*;
 use crate::emon::asset::*;
 use crate::emon::columns::*;
+use crate::emon::engines::*;
 use crate::emon::evidence::*;
 use crate::emon::fields::*;
 use crate::emon::figclass::*;
@@ -253,7 +254,6 @@ pub fn en_attempt(view: &crate::port::Src, pw: &crate::port::Src, c: &mut crate:
 }
 pub(crate) fn en_hybrid(c: &mut crate::emon::enctx::Cfg) -> i32 {
     // 1 when the optional PP-OCR reading is an additional one beside Tesseract's (`ocr-engine=ppocr`, code 1, D850): the page unit then asks for it in its own slot (bit 8, `pu-px`).
-    // The other engines read alone: PP-OCR alone (code 2, P13.4) and the platform engines (apple-vision 3, windows-media-ocr 4, K8, D901; mlkit-text 5, K7) ask for no second reading.
     if c.oengine == 1 {
         return 1;
     }
@@ -280,26 +280,6 @@ pub(crate) fn en_routed(c: &mut crate::emon::enctx::Cfg, ans: &mut crate::port::
     }
     if fb_taken_id(ans, i) != 0 {
         return 1;
-    }
-    return 0;
-}
-pub(crate) fn en_oe_mode(c: &mut crate::emon::enctx::Cfg) -> i32 {
-    // How the OCR requests are tagged and the engines registered (`oe-tag`): 0 Tesseract only, 1 PP-OCR alone (every request names it, `ocr-engine=ppocr-alone`, P13.4),
-    // 2 the hybrid, where Tesseract is the incumbent and PP-OCR a challenger, 4 Apple Vision alone, 6 Windows.Media.Ocr alone (K8, D901; the engine's own name is the request's), 8 ML Kit alone (K7).
-    if c.oengine == 1 {
-        return 2;
-    }
-    if c.oengine == 2 {
-        return 1;
-    }
-    if c.oengine == 3 {
-        return 4;
-    }
-    if c.oengine == 4 {
-        return 6;
-    }
-    if c.oengine == 5 {
-        return 8;
     }
     return 0;
 }
@@ -338,7 +318,7 @@ pub fn en_page(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::enctx::Doc,
     if en_fallback(c) == 1 {
         oe_tag_fb(rq, &mut d.pscr, en_routed(c, ans, i), fb_slot_read(), fb_slot_spec());
     } else {
-        oe_tag(rq, &mut d.pscr, en_oe_mode(c));
+        oe_route(rq, &mut d.pscr, pk_engine_oen(pk_option_engine(c.oengine)), en_hybrid(c));
     }
     if status == 0 {
         // Row assembly (P13.4, D883 ruling 2): a page read by segment engines alone has its detector segments joined into rows before the paragraph, table and column stages see its lines.
@@ -668,7 +648,7 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     if kind == 0 {
         il_analyze(&mut d.fw, &mut s.lt, &mut d.et, &mut d.gl, &mut d.ift, &mut s.sf, &mut d.an, &mut d.txt, &mut d.pg, &mut m.pages, np, &mut m.text, &mut s.hc, &mut s.isw);
     }
-    if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, en_oe_mode(c), &mut s.s0) < 0 {
+    if oe_register(&mut ev.oet, &mut ev.oruns, &mut ev.olines, &mut ev.owords, 2 * en_hybrid(c), &mut s.s0) < 0 {
         return 2;
     }
     pa_build(&mut d.fw, &mut d.et, np, &mut s.msorder, &mut m.pages, &mut m.layout, &mut m.nodes, &mut m.attrs, &mut m.regions, &mut m.text, &mut s.ord, &mut s.raw, &mut s.tmp, &mut s.fr, &mut s.gp, &mut s.lt, &mut s.ls, &mut s.sd, &mut s.it, &mut s.io, &mut s.rw, &mut s.gu, &mut s.ac, &mut s.tm, &mut s.cf, &mut s.lo, &mut s.pr, &mut s.dbg, &mut s.hc, &mut s.tb, &mut s.tc, &mut s.tw, &mut s.tq, &mut m.ledger, &mut s.ii, &mut s.al, &mut s.pix);

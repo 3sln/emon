@@ -276,6 +276,21 @@ func AdOenEng(oen int32) int32 {
 	return -1
 }
 
+func AdSelectedEng(primary int32, oen int32) int32 {
+	// The adapter's registry row for this conversion, or 0 when the selection excludes it.
+	if primary == engines.EngPpocrAlone() {
+		if oen == engines.PkEngineOen(primary) {
+			return primary
+		}
+		return 0
+	}
+	var eng int32 = AdOenEng(oen)
+	if (eng == engines.EngTesseract()) && (engines.PkUsesTesseract(primary) == 0) {
+		return 0
+	}
+	return eng
+}
+
 func AdRegisterCheck(abi int32, oen int32, caps int32, measured int32, needs int32, flags int32) int32 {
 	// 0 when an adapter that says it is built for `abi`, answers as the OIL engine `oen`, declares `caps` (of which `measured` are measured, not derived) and reads with the pack
 	// kinds `needs`, and sets `flags`, may be registered; else the reason (`adr`). The table's row of the engine is the ceiling: an adapter may declare less, never more.

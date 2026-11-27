@@ -70,7 +70,7 @@ func TestAnEngineIsSpelledOnceForTheOptionAndTheTranscript(emonT *testing.T) {
 }
 
 func TestEveryEngineOfTheTableIsRegisteredWithASoundRow(emonT *testing.T) {
-	port.AssertEq(emonT, engines.PkEngineCount(), 7, "tesseract, ppocr, ppocr-web, vision, winocr, mlkit and pdfium")
+	port.AssertEq(emonT, engines.PkEngineCount(), 8, "the engines include the standalone PP reader")
 	var i int32 = 0
 	for i < engines.PkEngineCount() {
 		var eng int32 = engines.PkEngineAt(i)
@@ -314,6 +314,29 @@ func TestTheCatalogueHoldsTheHashesTheHostsVerifyAgainst(emonT *testing.T) {
 	port.AssertEq(emonT, engines.PkPackFor(engines.EngTesseract(), engines.PkindRecognizer(), engines.PkLangEng()), packdata.PkidTessFastEng(), "English for Tesseract")
 	port.AssertEq(emonT, engines.PkPackFor(engines.EngPpocr(), engines.PkindRecognizer(), engines.PkLangEng()), packdata.PkidPp5RecEnMobile(), "English for PP-OCR")
 	port.AssertEq(emonT, engines.PkPackFor(engines.EngPpocr(), engines.PkindRecognizer(), 1936744704), 0, "no Spanish for PP-OCR")
+}
+
+func TestPpocrAloneHasAReaderRowAndSharesTheNativePpPacks(emonT *testing.T) {
+	var eng int32 = engines.EngPpocrAlone()
+	var langs *port.Cells = port.NewCells()
+	var engs *port.Cells = port.NewCells()
+	var installed *port.Cells = port.NewCells()
+	var out *port.Cells = port.NewCells()
+	port.AssertEq(emonT, engines.EngFind(port.TextBlob("ppocr-alone"), 0, 11), eng, "standalone registry name")
+	port.AssertEq(emonT, engines.PkOptionEngine(8), eng, "standalone option selects the row")
+	port.AssertEq(emonT, engines.PkEngineOen(eng), engines.PkEngineOen(engines.EngPpocr()), "the same adapter answers")
+	port.AssertEq(emonT, engines.PkEngineCaps(eng), engines.PkEngineCaps(engines.EngPpocr()), "the same capability ceiling")
+	port.AssertEq(emonT, engines.PkEngineClasses(eng), engines.PkEngineClasses(engines.EngPpocr()), "the same native classes")
+	port.AssertEq(emonT, engines.PkRoleMask(eng, engines.PclsLinux()), engines.EroleReader(), "reader is the only role")
+	enCells1(engs, eng)
+	port.AssertEq(emonT, engines.PkRecordEngines(out, engines.PclsLinux(), engs), 0, "the selected row can be recorded")
+	port.AssertEq(emonT, port.CellsAt(out, 0), eng, "the transcript names standalone PP")
+	port.AssertEq(emonT, port.CellsAt(out, 2), engines.EroleReader(), "the transcript records reader")
+	port.AssertEq(emonT, enResolve(engines.PclsLinux(), engines.PkfOsd(), langs, engs, installed, out), engines.PkerrOk(), "resolves")
+	port.AssertEq(emonT, engines.PkRows(out), 3, "only the three PP packs")
+	enExpectRow(emonT, out, 0, engines.PstateMissing(), engines.EngPpocr(), packdata.PkidPp5DetMobile(), 0, "detector")
+	enExpectRow(emonT, out, 1, engines.PstateMissing(), engines.EngPpocr(), packdata.PkidPp5ClsMobile(), 0, "classifier")
+	enExpectRow(emonT, out, 2, engines.PstateMissing(), engines.EngPpocr(), packdata.PkidPp5RecEnMobile(), 0, "recognizer")
 }
 
 func TestTheDefaultResolutionNeedsEnglishAndSaysWhetherItIsThere(emonT *testing.T) {

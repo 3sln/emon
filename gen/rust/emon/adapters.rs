@@ -255,6 +255,20 @@ pub fn ad_oen_eng(oen: i32) -> i32 {
     }
     return -1;
 }
+pub fn ad_selected_eng(primary: i32, oen: i32) -> i32 {
+    // The adapter's registry row for this conversion, or 0 when the selection excludes it.
+    if primary == eng_ppocr_alone() {
+        if oen == pk_engine_oen(primary) {
+            return primary;
+        }
+        return 0;
+    }
+    let eng: i32 = ad_oen_eng(oen);
+    if (eng == eng_tesseract()) && (pk_uses_tesseract(primary) == 0) {
+        return 0;
+    }
+    return eng;
+}
 pub fn ad_register_check(abi: i32, oen: i32, caps: i32, measured: i32, needs: i32, flags: i32) -> i32 {
     // 0 when an adapter that says it is built for `abi`, answers as the OIL engine `oen`, declares `caps` (of which `measured` are measured, not derived) and reads with the pack
     // kinds `needs`, and sets `flags`, may be registered; else the reason (`adr`). The table's row of the engine is the ceiling: an adapter may declare less, never more.

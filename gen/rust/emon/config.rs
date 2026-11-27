@@ -3,7 +3,7 @@
 
 use crate::emon::limits::*;
 
-pub static CK_CHARS: [i32; 200] = [
+pub static CK_CHARS: [i32; 211] = [
     108, 111, 99, 97, 108, 101, 111, 99, 114, 102, 117, 114, 110, 105, 116, 117,
     114, 101, 97, 115, 115, 101, 116, 115, 97, 115, 115, 101, 116, 45, 100, 112,
     105, 97, 115, 115, 101, 116, 45, 112, 105, 120, 101, 108, 115, 97, 115, 115,
@@ -16,9 +16,10 @@ pub static CK_CHARS: [i32; 200] = [
     107, 108, 105, 109, 105, 116, 46, 112, 114, 111, 100, 117, 99, 101, 114, 46,
     112, 97, 114, 97, 108, 108, 101, 108, 106, 115, 45, 114, 101, 110, 100, 101,
     114, 116, 97, 98, 108, 101, 115, 111, 99, 114, 45, 101, 110, 103, 105, 110,
-    101, 99, 97, 112, 116, 117, 114, 101
+    101, 99, 97, 112, 116, 117, 114, 101, 111, 99, 114, 45, 101, 110, 103, 105,
+    110, 101, 115
 ];
-pub static CK_ROWS: [i32; 115] = [
+pub static CK_ROWS: [i32; 120] = [
     0, 0, 0, 0, 6,
     2, 0, 0, 6, 3,
     2, 0, 0, 9, 9,
@@ -41,7 +42,8 @@ pub static CK_ROWS: [i32; 115] = [
     3, 0, 0, 168, 9,
     2, 0, 0, 177, 6,
     2, 0, 0, 183, 10,
-    2, 0, 0, 193, 7
+    2, 0, 0, 193, 7,
+    2, 0, 0, 200, 11
 ];
 pub static CV_CHARS: [i32; 148] = [
     97, 108, 119, 97, 121, 115, 97, 117, 116, 111, 110, 101, 118, 101, 114, 112,
@@ -73,13 +75,13 @@ pub static CV_ROWS: [i32; 96] = [
     20, 1, 68, 6,
     21, 0, 74, 9,
     21, 1, 83, 5,
-    21, 2, 88, 11,
     21, 3, 99, 12,
     21, 4, 111, 17,
     21, 5, 128, 10,
     22, 0, 6, 4,
     22, 1, 138, 4,
-    22, 2, 142, 6
+    22, 2, 142, 6,
+    23, 8, 88, 11
 ];
 pub(crate) const K_LOCALE: i32 = 0;
 pub(crate) const K_OCR: i32 = 1;
@@ -102,6 +104,7 @@ pub(crate) const K_JSRENDER: i32 = 19;
 pub(crate) const K_TABLES: i32 = 20;
 pub(crate) const K_OENGINE: i32 = 21;
 pub(crate) const K_CAPTURE: i32 = 22;
+pub(crate) const K_OENGINES: i32 = 23;
 pub(crate) const SH_STR: i32 = 0;
 pub(crate) const SH_NUM: i32 = 1;
 pub(crate) const SH_ENUM: i32 = 2;
@@ -158,7 +161,7 @@ pub(crate) fn cf_key_is(t: &mut crate::port::Cells, from: i32, to: i32, k: i32) 
 pub fn cf_key_find(t: &mut crate::port::Cells, from: i32, to: i32) -> i32 {
     // The key t[from, to) names, or -1.
     let mut k: i32 = 0;
-    while k < 23 {
+    while k < 24 {
         if cf_key_is(t, from, to, k) == 1 {
             return k;
         }
@@ -375,7 +378,7 @@ pub(crate) fn cf_set_word(c: &mut crate::emon::enctx::Cfg, k: i32, v: i32) -> i3
     if k == K_TABLES {
         c.tabl = v;
     }
-    if k == K_OENGINE {
+    if (k == K_OENGINE) || (k == K_OENGINES) {
         c.oengine = v;
     }
     if k == K_CAPTURE {

@@ -24,7 +24,7 @@
             [emon.plan :refer [pk-ocr ps-failed ps-unsupported an-fail]]
             [emon.engines :refer [ekind-ocr eimpl-builtin pfetch-never pfetch-cache pfetch-auto pstate-missing pstate-unsupported
                                   pk-engine-count pk-engine-at pk-engine-oen pk-engine-kind pk-engine-caps pk-engine-needs
-                                  pk-rows pk-row-state]]
+                                  pk-rows pk-row-state pk-uses-tesseract eng-tesseract eng-ppocr-alone]]
             [kin.lang :refer [defn return let set while if do comment + - * < > <= >= == != and or bit-and]]))
 
 ;; ----------------------------------------------------------------------------------------------- the numbers
@@ -100,6 +100,15 @@
           (if (and (== (pk-engine-oen eng) oen) (== (pk-engine-kind eng) (ekind-ocr))) (return eng))
           (set i (+ i 1)))))
   (return -1))
+
+(defn ^:pub ^I32 ad-selected-eng [^I32 primary ^I32 oen]
+  (comment "The adapter's registry row for this conversion, or 0 when the selection excludes it.")
+  (if (== primary (eng-ppocr-alone))
+    (do (if (== oen (pk-engine-oen primary)) (return primary))
+        (return 0)))
+  (let [^I32 eng (ad-oen-eng oen)]
+    (if (and (== eng (eng-tesseract)) (== (pk-uses-tesseract primary) 0)) (return 0))
+    (return eng)))
 
 (defn ^:pub ^I32 ad-register-check [^I32 abi ^I32 oen ^I32 caps ^I32 measured ^I32 needs ^I32 flags]
   (comment "0 when an adapter that says it is built for `abi`, answers as the OIL engine `oen`, declares `caps` (of which `measured` are measured, not derived) and reads with the pack")
