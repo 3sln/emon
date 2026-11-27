@@ -16,3 +16,7 @@ await emon.close();
 * Language models are **packs**, fetched on first use over the platform's own HTTPS stack, verified against a SHA-256 catalogue, and cached. `emon.engines()`, `emon.prepare()`, `emon.packs.ensure()`,
   `onPackNeeded` and `emon.packs.events` let app code decide what is downloaded and show progress. `EMON_OFFLINE=1` or `packs: PackMode.never` fetches nothing.
 * `dart run example/convert.dart --engine vision scan.pdf out.html`.
+
+## On the web
+
+The same API runs on Flutter web and Dart web over emon's wasm build and the JS SDK: pass `web: WebAssets(...)` (see `emon_core`'s README) to `openEmon`. Nothing is downloaded by the library on the web, and tesseract.js loads its own models from where you serve them.

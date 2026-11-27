@@ -771,7 +771,7 @@
     (vec (for [pkg dart-packages
                :let [src (str stage "/" pkg) f (str out "/" pkg "-" version ".tar.gz")]
                :when (fs/directory? src)]
-           (do (archives/tar-gz! f stage pkg #{".dart_tool" "build" "pubspec.lock" ".gradle" "Pods" "local.properties"})
+           (do (archives/tar-gz! f stage pkg #{".dart_tool" "build" "pubspec.lock" ".gradle" "Pods" "local.properties" "web_stage"})
                f)))))
 
 (def builders {:dart build-dart! :ppocr build-ppocr! :js-ppocr build-js-ppocr! :rust build-rust! :go build-go! :java build-java! :csharp build-csharp! :js build-js! :c build-c! :pod build-pod!})

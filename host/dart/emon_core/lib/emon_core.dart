@@ -10,7 +10,9 @@
 /// written in Dart: [OcrAdapter]); the turnkey packages `emon` and `emon_flutter` choose them for a platform. See [Emon.open].
 library;
 
-export 'src/emon.dart' show Asset, ConvertStats, Emon, EmonInput, IntakeResult, Model, defaultPackDirectory;
+export 'src/emon.dart' show Asset, Emon, EmonInput, Model, defaultPackDirectory;
+export 'src/types.dart' show ConvertStats, IntakeResult;
+export 'src/web_assets.dart' show WebAssets, WebPdfium, WebTesseract;
 export 'src/engines.dart' show EngineInfo, EnginePack, EngineState, NeededPack, PrepareResult, PrepareVerdict;
 export 'src/errors.dart' show EmonError, EmonErrorCategory;
 export 'src/ocr.dart';
@@ -28,10 +30,11 @@ export 'src/packs.dart'
         PackInfo,
         PackInitiator,
         PackMode,
+        PackBackend,
         PackNeededHook,
         PackProvide,
         PackRequest,
-        PackStore,
         Packs,
         PackSubstitute,
         PackDecline;
+export 'src/pack_store.dart' show PackStore;

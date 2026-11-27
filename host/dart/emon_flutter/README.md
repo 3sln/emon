@@ -15,3 +15,7 @@ final html = await model.html();
 * **Packs** (language models) are fetched on first use into the app's own files directory, by `dart:io`. `EmonFlutter.downloads` is a `ChangeNotifier` that follows every download; `engines()`, `prepare()`,
   `emon.packs.ensure()` and `onPackNeeded` let your UI decide what is fetched (DEVLOG D896).
 * `example/` (in the repository: `host/dart/examples/emon_flutter_example`) converts a bundled PDF and a photo of a receipt, shows the HTML, lets you pick the engine and shows download progress.
+
+## On the web
+
+The same API runs on Flutter web and Dart web over emon's wasm build and the JS SDK: pass `web: WebAssets(...)` (see `emon_core`'s README) to `EmonFlutter.open`. Nothing is downloaded by the library on the web, and tesseract.js loads its own models from where you serve them.

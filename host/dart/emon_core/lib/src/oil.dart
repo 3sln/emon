@@ -49,12 +49,21 @@ int segOfPsm(int psm) {
 }
 
 /// The observed identity as the two header cells: FNV-1a 64 over the UTF-8 bytes (kin's `oil-obs-hash`).
+///
+/// Done in two 32-bit halves so it is the same integer on the VM and in the browser (where an int is a double and a 64-bit literal cannot be written).
 (int hi, int lo) observedHash(String observed) {
-  var h = -3750763034362895579; // 0xcbf29ce484222325
+  const m = 4294967296;
+  var hi = 0xcbf29ce4, lo = 0x84222325; // 0xcbf29ce484222325
   for (final b in utf8.encode(observed)) {
-    h = (h ^ b) * 1099511628211; // wraps at 64 bits, as the native int does
+    lo = (lo ^ b) % m;
+    // times the prime 0x100000001b3 = 2^40 + 0x1b3, modulo 2^64
+    final p = lo * 0x1b3;
+    final carry = p ~/ m;
+    final newHi = (hi * 0x1b3 + carry + (lo * 256) % m) % m;
+    lo = p % m;
+    hi = newHi;
   }
-  return ((h >> 32).toSigned(32), h.toSigned(32));
+  return (hi.toSigned(32), lo.toSigned(32));
 }
 
 /// The flat OIL form of [reading], as [info] says the engine answers, for [request].

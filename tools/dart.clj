@@ -12,6 +12,10 @@
 ;;   bb dart --sha-table FILE         write lib/src/native_assets.g.dart from the SHA256SUMS of a release (the archives `emon-c-<version>-<triple>.tar.gz`), at release time (D886)
 ;;   bb dart --stamp DIR [--publishable] [--sums SHA256SUMS]  copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (--publishable: hosted dependencies, no publish_to: none: what pub.dev gets;
 ;;                                    --sums: also write the SHA-256 table of that release's SHA256SUMS into the COPY, as --sha-table does into the checkout: what `release-ops dart` attaches, D900)
+;;   bb dart --web-stage DIR [--wasm FILE] [--vendor DIR]  stage the files the web backend runs on and the browser test reads (DEVLOG D9xx): the JS SDK (host/js/src) as DIR/emon/sdk, emon.wasm (default: the
+;;                                    staged npm package's, dist/stage/js, else the wasm build's output in .cache/emon-wasm) as DIR/emon/emon.wasm, the samples and fixtures the test converts, and, with --vendor
+;;                                    (a directory with `tesseract/` and `pdfium/`, as `bb demo` builds them), the engines as DIR/emon/vendor
+;;   bb dart --web-test [--wasm FILE] [--vendor DIR] [--platform P]  stage into host/dart/emon_core/test/web_stage and run `dart test -p chrome test/web` there (P: chrome, default); needs Chrome (CHROME_EXECUTABLE)
 ;;   bb dart --analyze                `dart analyze` for every package
 ;;   bb dart --test                   `dart test` for every pure-Dart package (needs `EMON_NATIVE_DIR`: a directory with the C archive(s) of `bb package --host c`)
 ;;   bb dart --check                  the drift checks and --analyze
@@ -44,12 +48,12 @@
 
 (def packages
   "Every package directory, the pure-Dart ones first (`test?`: `dart test` runs there)."
-  [{:dir "emon_core" :test? true}
+  [{:dir "emon_core" :test? true :web ["lib/src/emon_web.dart" "lib/src/pack_store_web.dart"]}
    {:dir "emon_ocr_tesseract" :test? true}
    {:dir "emon_ocr_ppocr" :test? true}
    {:dir "emon_ocr_vision" :test? true}
    {:dir "emon_ocr_winocr" :test? true}
-   {:dir "emon" :test? true}
+   {:dir "emon" :test? true :web ["lib/src/turnkey_web.dart"]}
    {:dir "emon_ocr_mlkit" :flutter? true}
    {:dir "emon_flutter" :flutter? true :test? true}])
 
@@ -126,7 +130,13 @@
           r (apply sh {:dir d} (concat (pub-tool p) ["analyze" "--fatal-infos"]))]
       (if (zero? (:exit r))
         (say "ok   dart analyze " (:dir p))
-        (die "dart analyze " (:dir p) "\n" (:out r) (:err r))))))
+        (die "dart analyze " (:dir p) "\n" (:out r) (:err r)))
+      ;; the analyzer sees the VM's side of every conditional import: the web files are analysed by name (the browser test compiles them, D9xx)
+      (when (:web p)
+        (let [w (apply sh {:dir d} (concat ["dart" "analyze" "--fatal-infos"] (:web p)))]
+          (if (zero? (:exit w))
+            (say "ok   dart analyze " (:dir p) " (web files)")
+            (die "dart analyze " (:dir p) " web files\n" (:out w) (:err w))))))))
 
 (defn test! []
   (doseq [p (existing packages) :when (:test? p)]
@@ -138,7 +148,7 @@
 
 (defn stamp! [dir publishable? sums]
   (fs/delete-tree dir)
-  (let [skip? (fn [f] (some #{".dart_tool" "build" "Pods" ".gradle" ".idea"} (map str (fs/components (fs/relativize dart-root f)))))]
+  (let [skip? (fn [f] (some #{".dart_tool" "build" "Pods" ".gradle" ".idea" "web_stage"} (map str (fs/components (fs/relativize dart-root f)))))]
     (doseq [f (file-seq (java.io.File. dart-root))
             :when (and (.isFile f) (not (skip? (.toPath f))) (not (#{"pubspec.lock" "local.properties"} (.getName f))))]
       (let [dst (fs/path dir (fs/relativize dart-root (.toPath f)))]
@@ -166,6 +176,39 @@
     (say "wrote the SHA-256 table of " sums " into " dir "/emon_core/lib/src/native_assets.g.dart"))
   (say "stamped " version " into " dir (when publishable? " (publishable)")))
 
+;; ------------------------------------------------------------------------------------------------ the web backend
+
+(def web-samples
+  "What the browser test converts: a born-digital PDF, an image, a scan, and an encrypted PDF for the error test."
+  ["samples/invoice.pdf" "samples/image-statement.png" "samples/scan-plain.pdf" "test/pdf/p3/crypt-aes-128-user.pdf"])
+
+(defn find-wasm []
+  (or (opt "--wasm")
+      (System/getenv "EMON_WASM")
+      (first (filter fs/exists? ["dist/stage/js/emon.wasm" ".cache/emon-wasm/target/wasm32-unknown-unknown/release/emon.wasm"]))
+      (die "no emon.wasm: build it (`bb package --host js`, or kin/scripts/wasm) or pass --wasm FILE")))
+
+(defn web-stage! [dir]
+  (fs/delete-tree dir)
+  (fs/create-dirs (str dir "/emon/sdk"))
+  (doseq [f (fs/glob "host/js/src" "*.{js,mjs}")] (fs/copy f (str dir "/emon/sdk/" (fs/file-name f))))
+  (fs/copy (find-wasm) (str dir "/emon/emon.wasm"))
+  (fs/create-dirs (str dir "/samples"))
+  (doseq [s web-samples] (fs/copy s (str dir "/samples/" (fs/file-name s))))
+  (when-let [v (opt "--vendor")]
+    (doseq [d ["tesseract" "pdfium"]]
+      (when-not (fs/directory? (str v "/" d)) (die v " has no " d "/"))
+      (fs/copy-tree (str v "/" d) (str dir "/emon/vendor/" d))))
+  (say "staged the web backend's files in " dir (when-not (opt "--vendor") " (no engines: pass --vendor DIR for tesseract.js and pdfium)")))
+
+(defn web-test! []
+  (let [pkg (str dart-root "/emon_core")]
+    (web-stage! (str pkg "/test/web_stage"))
+    (sh! {:dir pkg} "dart" "pub" "get")
+    (let [r (sh {:dir pkg} "dart" "test" "-p" (or (opt "--platform") "chrome") "test/web")]
+      (print (:out r)) (print (:err r)) (flush)
+      (if (zero? (:exit r)) (say "ok   dart test -p chrome test/web") (die "the web tests failed")))))
+
 ;; ------------------------------------------------------------------------------------------------ main
 
 (cond
@@ -175,6 +218,8 @@
                           (spit (str dart-root "/emon_core/lib/src/native_assets.g.dart") (native-table-dart f))
                           (say "wrote host/dart/emon_core/lib/src/native_assets.g.dart"))
   (flag? "--stamp") (stamp! (or (opt "--stamp") (die "usage: bb dart --stamp DIR [--publishable] [--sums SHA256SUMS]")) (flag? "--publishable") (opt "--sums"))
+  (flag? "--web-stage") (web-stage! (or (opt "--web-stage") (die "usage: bb dart --web-stage DIR [--wasm FILE] [--vendor DIR]")))
+  (flag? "--web-test") (web-test!)
   (flag? "--analyze") (analyze!)
   (flag? "--test") (test!)
   (flag? "--check") (do (bindings! true)
@@ -183,4 +228,4 @@
                           (die "host/dart/" p " has no " f " (pub.dev needs it)"))
                         (write-or-check! (str dart-root "/emon_core/lib/src/packs.g.dart") (packs-dart) true)
                         (analyze!))
-  :else (die "usage: bb dart --bindings | --packs | --sha-table FILE | --stamp DIR [--publishable] [--sums FILE] | --analyze | --test | --check   (see the header of tools/dart.clj)"))
+  :else (die "usage: bb dart --bindings | --packs | --sha-table FILE | --stamp DIR [--publishable] [--sums FILE] | --web-stage DIR | --web-test | --analyze | --test | --check   (see the header of tools/dart.clj)"))

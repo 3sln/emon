@@ -15,59 +15,13 @@
 /// | Linux, Android | Tesseract (`emon_flutter` makes ML Kit the Android default) | PP-OCR (where its library ships) |
 /// | macOS, iOS | Tesseract | Apple Vision (`OcrEngine.appleVision`, with Tesseract as the fallback of the pages kin sends to it, P13.21b D907; the default once the maintainer accepts it) |
 /// | Windows | Windows.Media.Ocr (no download: the OS reads) | Tesseract, PP-OCR |
+/// | web (Dart web, Flutter web) | tesseract.js, when [WebAssets] configure it (the JS SDK's engine; it loads its own models) | engines written in Dart |
 ///
-/// Packs (the language models an engine reads with) are fetched when a conversion first needs them, over the platform's own HTTPS stack. App code decides: [Emon.engines], [Emon.prepare],
+/// On the web the same calls run over emon's wasm build and the JS SDK, through `dart:js_interop` (conditional imports: no code changes per platform); pass `web: WebAssets(...)` to say where
+/// the SDK, `emon.wasm` and the engines' files are served. Packs (the language models an engine reads with) are fetched when a conversion first needs them, over the platform's own HTTPS stack. App code decides: [Emon.engines], [Emon.prepare],
 /// [Packs.ensure], [PackNeededHook] and [Packs.events] (DEVLOG D896).
 library;
 
-import 'dart:io';
-
-import 'package:emon_core/emon_core.dart';
-import 'package:emon_ocr_ppocr/emon_ocr_ppocr.dart';
-import 'package:emon_ocr_tesseract/emon_ocr_tesseract.dart';
-import 'package:emon_ocr_vision/emon_ocr_vision.dart';
-import 'package:emon_ocr_winocr/emon_ocr_winocr.dart';
-
 export 'package:emon_core/emon_core.dart';
 
-/// The native OCR adapters this platform has: Tesseract everywhere, PP-OCR where a release ships it, and the platform's own recogniser (Apple Vision, Windows.Media.Ocr).
-List<NativeAdapter> platformAdapters() => [
-      tesseractAdapter(),
-      if (Platform.isMacOS || Platform.isIOS) visionAdapter(),
-      if (Platform.isWindows) winocrAdapter(),
-      if (ppocrAvailable) ppocrAdapter(),
-    ];
-
-/// The OCR engine a turnkey uses on this platform when the app chooses none: kin's turnkey table (Apple Vision on macOS and iOS with Tesseract as its page fallback, maintainer 2026-11-23, P13.21b D907; Windows.Media.Ocr on Windows, K5 D905; Tesseract elsewhere, and
-/// Android's default, ML Kit, is a Flutter plugin, so the pure-Dart `emon` keeps Tesseract there and `emon_flutter` chooses ML Kit).
-OcrEngine get defaultPlatformEngine => Platform.isWindows
-    ? OcrEngine.windowsMediaOcr
-    : (Platform.isMacOS || Platform.isIOS)
-        ? OcrEngine.appleVision
-        : OcrEngine.tesseract;
-
-/// Open emon with the engines of this platform.
-///
-/// [engine] is the OCR engine conversions use unless their options name another (default: [defaultPlatformEngine]). [packs] says whether packs are fetched (default: on demand; core and
-/// bare adapters never fetch). Everything else is [Emon.open]'s.
-Future<Emon> openEmon({
-  OcrEngine? engine,
-  PackMode packs = PackMode.auto,
-  String? packDirectory,
-  PackNeededHook? onPackNeeded,
-  List<String>? packSources,
-  List<OcrAdapter> adapters = const [],
-  List<NativeAdapter> nativeAdapters = const [],
-  bool pdfium = true,
-}) {
-  return Emon.open(
-    nativeAdapters: [...platformAdapters(), ...nativeAdapters],
-    adapters: adapters,
-    pdfium: pdfium,
-    packDirectory: packDirectory,
-    packMode: packs,
-    packSources: packSources,
-    onPackNeeded: onPackNeeded,
-    defaultEngine: engine ?? defaultPlatformEngine,
-  );
-}
+export 'src/turnkey_io.dart' if (dart.library.js_interop) 'src/turnkey_web.dart';

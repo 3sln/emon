@@ -13,5 +13,6 @@ library;
 export 'package:emon/emon.dart';
 export 'package:emon_ocr_mlkit/emon_ocr_mlkit.dart' show MlKitAdapter;
 
+export 'src/app_dirs.dart' show appPackDirectory;
 export 'src/downloads.dart';
 export 'src/emon_flutter.dart';
