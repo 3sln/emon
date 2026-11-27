@@ -86,17 +86,20 @@ const fail = (e) => {
   return { exit: 1, out: '', err: `error: ${e && e.stack ? e.stack : e}\n` };
 };
 
-// tesseract.js as the page's `ocr` port: its worker, WebAssembly core and language data come from the harness's server (nothing from a CDN)
+// tesseract.js as a registered adapter of the page's engine registry (D925; `ports.ocr` is the registry's port): its worker, WebAssembly core and language data come from the harness's server (nothing from a CDN)
 let tess = null;
 async function ocrPort() {
   if (!tess) {
     const T = (await import('/tess/tesseract.esm.min.js')).default;
-    const { tesseractPort } = await import('/sdk/tesseract.js');
-    tess = tesseractPort({
+    const { tesseractAdapter } = await import('/sdk/tesseract.js');
+    if (!emon) emon = await Emon.load('/emon.wasm');
+    const engines = emon.engines();
+    await engines.add(tesseractAdapter({
       createWorker: T.createWorker,
       languages: ['eng'],
       workerOptions: { workerPath: location.origin + '/tess/worker.min.js', corePath: location.origin + '/tess/core', langPath: location.origin + '/tess/lang', cacheMethod: 'none', gzip: true, workerBlobURL: false },
-    });
+    }));
+    tess = engines.port();
   }
   return tess;
 }

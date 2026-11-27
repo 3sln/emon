@@ -59,9 +59,10 @@ public final class AdapterLib implements OcrEngines.Adapter {
             MemorySegment sym = lib.find("emon_ocr_adapter_v1").orElseThrow(() -> new Unavailable("adapter-load-failed: " + path + " has no emon_ocr_adapter_v1"));
             MethodHandle opener = LINK.downcallHandle(sym, FunctionDescriptor.of(P, P, P, P));
             MemorySegment st = arena.allocate(STATUS);
-            MemorySegment v = ((MemorySegment) opener.invokeExact(
-                config == null ? MemorySegment.NULL : arena.allocateFrom(config), packsDir == null || packsDir.isEmpty() ? MemorySegment.NULL : arena.allocateFrom(packsDir), st))
-                .reinterpret(VT_SIZE);
+            // locals, not conditionals inside the call: a conditional argument of invokeExact is typed Object and the call then fails with WrongMethodTypeException
+            MemorySegment cfgSeg = config == null ? MemorySegment.NULL : arena.allocateFrom(config);
+            MemorySegment dirSeg = packsDir == null || packsDir.isEmpty() ? MemorySegment.NULL : arena.allocateFrom(packsDir);
+            MemorySegment v = ((MemorySegment) opener.invokeExact(cfgSeg, dirSeg, st)).reinterpret(VT_SIZE);
             if (v.equals(MemorySegment.NULL)) {
                 throw new Unavailable(statusText(st, 0, "adapter-open-failed") + ": " + path + ": " + statusText(st, 96, ""));
             }

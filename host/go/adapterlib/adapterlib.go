@@ -68,6 +68,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"unsafe"
 
@@ -176,7 +177,11 @@ func (l *libAdapter) Read(req port.PlanRequest, bm port.PlanBitmaps, keepBinary 
 	if keepBinary {
 		want = 1
 	}
+	// cgo's pointer rule: the struct handed to C holds a pointer into Go memory (the pixels), which is allowed only for pinned memory
+	var pin runtime.Pinner
+	pin.Pin(&b.D[0])
 	rc := C.ad_read(l.a, rec, n, &img, want, &out, &st)
+	pin.Unpin()
 	if rc != 0 {
 		r, _ := statusText(&st, "failed")
 		if out.cells != nil || out.owner != nil {

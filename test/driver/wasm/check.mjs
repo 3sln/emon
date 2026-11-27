@@ -240,8 +240,9 @@ try {
     }
     fs.rmSync(dir, { recursive: true, force: true });
     // and the browser replays what the native host recorded: no engine, no port
-    const nat = await page.evaluate((s) => window.H.run({ path: s, adapter: 'array', replayDir: 'test/ocr/scan/h-keyword', replay: ['transcript.edn'] }), scan);
-    check(nat.exit === 0 && JSON.stringify(JSON.parse(nat.out.slice(nat.out.indexOf('\n') + 1, nat.out.indexOf('\n== json-pretty')))).includes('"kind":"scanned"'), 'the browser replays the transcript the native Tesseract recorded (test/ocr/scan/h-keyword): the scan is OCR\'d with no engine run');
+    const natFiles = fs.readdirSync(path.join(repo, 'test/ocr/scan-px/h-keyword')); // the transcript and the bitmaps its requests name
+    const nat = await page.evaluate((s, files) => window.H.run({ path: s, adapter: 'array', replayDir: 'test/ocr/scan-px/h-keyword', replay: files }), scan, natFiles);
+    check(nat.exit === 0 && JSON.stringify(JSON.parse(nat.out.slice(nat.out.indexOf('\n') + 1, nat.out.indexOf('\n== json-pretty')))).includes('"kind":"scanned"'), 'the browser replays the transcript the native Tesseract recorded (test/ocr/scan-px/h-keyword): the scan is OCR\'d with no engine run');
   }
 
   // ---------------------------------------------------------------------------------------------------- 5b. the render port (P11.4c)
