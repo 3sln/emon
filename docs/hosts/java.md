@@ -120,7 +120,6 @@ has pdfium and the Tesseract adapter library installed (`$EMON_ADAPTER_DIR`) als
 ```java
 import emon.api.*;
 import emon.ffi.Pdfium;
-import emon.ffi.Tess;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -129,10 +128,13 @@ public class Native {
     public static void main(String[] args) throws Exception {
         Options.Config config = Options.Config.defaults();
         config.renderer = Pdfium.open(null); // the library: $EMON_PDFIUM_LIB, then the system's search
-        config.ocr = Tess.open(null);        // the models: $TESSDATA_PREFIX and the usual places; the libraries: $EMON_TESS_LIB
+        OcrEngines engines = new OcrEngines(); // OCR engines are registered adapters, never wired in
+        engines.defaults(Options.defaults());  // lib/emon/adapters beside the application, or $EMON_ADAPTER_DIR
+        config.ocr = engines;
         Engine engine = new Engine(config);
         Model model = engine.convert(List.of(Input.bytes(Files.readAllBytes(Path.of("scan.pdf")))), Options.defaults());
         Files.writeString(Path.of("scan.html"), model.toHtml(new Options.Html()));
+        engines.close();
     }
 }
 ```
@@ -154,7 +156,7 @@ ships to fill it.
   cannot hide a package; `api/surface.edn` lists it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the java host: 394 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the java host: 431 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -454,6 +456,43 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Ocr` | `interface` |
 | `emon.api.Ocr#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Planrun.Answer` |
 | `emon.api.Ocr#producer()` | `List<String[]>` |
+| `emon.api.OcrEngines` | `final class implements Ocr,AutoCloseable` |
+| `emon.api.OcrEngines#add(Adapter)` | `void` |
+| `emon.api.OcrEngines#allowRemote(boolean)` | `void` |
+| `emon.api.OcrEngines#close()` | `void` |
+| `emon.api.OcrEngines#defaults(Options)` | `void` |
+| `emon.api.OcrEngines#describe()` | `List<AdapterInfo>` |
+| `emon.api.OcrEngines#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Planrun.Answer` |
+| `emon.api.OcrEngines#load(String,String,String)` | `void` |
+| `emon.api.OcrEngines#notes()` | `List<String>` |
+| `emon.api.OcrEngines#producer()` | `List<String[]>` |
+| `emon.api.OcrEngines#setAdapterDir(String)` | `void` |
+| `emon.api.OcrEngines#setTessdata(String)` | `void` |
+| `emon.api.OcrEngines.ASYNC` | `static final int = 1` |
+| `emon.api.OcrEngines.Adapter` | `interface extends AutoCloseable` |
+| `emon.api.OcrEngines.Adapter#close()` | `void` |
+| `emon.api.OcrEngines.Adapter#info()` | `AdapterInfo` |
+| `emon.api.OcrEngines.Adapter#read(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Reading` |
+| `emon.api.OcrEngines.AdapterInfo` | `static final class` |
+| `emon.api.OcrEngines.AdapterInfo.caps` | `int` |
+| `emon.api.OcrEngines.AdapterInfo.config` | `String` |
+| `emon.api.OcrEngines.AdapterInfo.engine` | `int` |
+| `emon.api.OcrEngines.AdapterInfo.flags` | `int` |
+| `emon.api.OcrEngines.AdapterInfo.measured` | `int` |
+| `emon.api.OcrEngines.AdapterInfo.name` | `String` |
+| `emon.api.OcrEngines.AdapterInfo.needs` | `int` |
+| `emon.api.OcrEngines.AdapterInfo.observed` | `String` |
+| `emon.api.OcrEngines.AdapterInfo.producer` | `List<String[]>` |
+| `emon.api.OcrEngines.FAILED` | `static final int` |
+| `emon.api.OcrEngines.OK` | `static final int = 0` |
+| `emon.api.OcrEngines.REMOTE` | `static final int` |
+| `emon.api.OcrEngines.Reading` | `static final class` |
+| `emon.api.OcrEngines.Reading.binary` | `Port.Bitmap` |
+| `emon.api.OcrEngines.Reading.reason` | `String` |
+| `emon.api.OcrEngines.Reading.rec` | `int[]` |
+| `emon.api.OcrEngines.Reading.status` | `int` |
+| `emon.api.OcrEngines.THREADSAFE` | `static final int` |
+| `emon.api.OcrEngines.UNSUPPORTED` | `static final int` |
 | `emon.api.Options` | `final class` |
 | `emon.api.Options#copy()` | `Options` |
 | `emon.api.Options#defaults()` | `static Options` |
@@ -559,21 +598,16 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 
 | Name | Signature |
 |---|---|
+| `emon.ffi.AdapterLib` | `final class implements OcrEngines.Adapter` |
+| `emon.ffi.AdapterLib#close()` | `synchronized void` |
+| `emon.ffi.AdapterLib#info()` | `OcrEngines.AdapterInfo` |
+| `emon.ffi.AdapterLib#open(String,String,String)` | `static AdapterLib` |
+| `emon.ffi.AdapterLib#read(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `synchronized OcrEngines.Reading` |
 | `emon.ffi.Pdfium` | `final class implements RenderPort.Renderer` |
 | `emon.ffi.Pdfium#exactCrop()` | `boolean` |
 | `emon.ffi.Pdfium#layers()` | `int` |
 | `emon.ffi.Pdfium#open(String)` | `static Pdfium` |
 | `emon.ffi.Pdfium#render(RenderPort.Source,byte[],RenderPort.Request)` | `Port.Bitmap throws RenderPort.RenderError` |
-| `emon.ffi.PpOcr` | `final class implements Ocr,AutoCloseable` |
-| `emon.ffi.PpOcr#close()` | `synchronized void` |
-| `emon.ffi.PpOcr#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `synchronized Planrun.Answer` |
-| `emon.ffi.PpOcr#open(String,Ocr)` | `static PpOcr` |
-| `emon.ffi.PpOcr#producer()` | `List<String[]>` |
-| `emon.ffi.Tess` | `final class implements Ocr` |
-| `emon.ffi.Tess#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Planrun.Answer` |
-| `emon.ffi.Tess#open(String)` | `static Tess` |
-| `emon.ffi.Tess#producer()` | `List<String[]>` |
-| `emon.ffi.Tess#withDefaultDpi(int)` | `Tess` |
 | `emon.ffi.Unavailable` | `final class extends RuntimeException` |
 | `emon.ffi.Unavailable#<init>(String)` | `ctor` |
 | `emon.ffi.Unavailable#<init>(String,Throwable)` | `ctor` |

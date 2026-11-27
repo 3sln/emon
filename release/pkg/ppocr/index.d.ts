@@ -1,4 +1,4 @@
-export { ppocrPort, ppocrAdapter, ppocrLexicon } from './ppocr.js';
+export { ppocrEngine, ppocrAdapter, ppocrLexicon } from './ppocr.js';
 /** Caller-selected native release .tar.gz URL, compressed bytes or byte stream.
  * The PP port and lexicon verify all returned model bytes before inference.
  */

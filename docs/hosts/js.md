@@ -123,10 +123,15 @@ of `@3sln/emon`, so the code you do not use is never downloaded):
   `.cache/pdfium/chromium-8076/wasm/lib/pdfium.mjs` and `pdfium.wasm` (and `bb package` makes the npm package from them).
   Reading the file whole once, on the first render, is the one place the SDK does not read by range. `render.terminate()`
   frees it.
-- `@3sln/emon/tesseract`: `tesseractPort({ createWorker, languages, oem, workerOptions, workers })`. `createWorker` is
-  [tesseract.js](https://github.com/naptha/tesseract.js)'s (`npm install tesseract.js`); `languages` the models (default `['eng']`);
-  `workerOptions` is tesseract.js's (`langPath`, `corePath`, `workerPath`, `gzip`, `cacheMethod`), which is where the models and
-  the engine's WebAssembly are found. `ocr.terminate()` frees the workers.
+- **OCR engines are registered adapters** (D925), the same model as every host's registry and the C ABI's. `emon.engines()` is an empty registry bound to the loaded module;
+  `await engines.add(adapter)` registers one, and `engines.port()` is the `ports.ocr` of a conversion: each request goes to the adapter registered for the engine it names, an
+  engine nobody registered answers `unsupported` (the page is unread, never blank), and a rejection answers `failed`. Kin decides: what an adapter may declare (`ad-register-check`,
+  refused by name: `adapter-engine-unknown`, `adapter-caps-beyond-engine`, `adapter-remote-refused`, ...) and where a request goes (`ad-route`). `engines.describe()` lists the
+  adapters, `engines.notes()` says why requests were left unread, `engines.close()` (or `ocr.terminate()`) ends them. Nothing is registered unless you add it, so a page that
+  registers no Tesseract has none.
+- `@3sln/emon/tesseract`: `tesseractAdapter({ createWorker, languages, oem, workerOptions, workers })`, the adapter of [tesseract.js](https://github.com/naptha/tesseract.js)
+  (`npm install tesseract.js`). `createWorker` is tesseract.js's; `languages` the models (default `['eng']`); `workerOptions` is tesseract.js's (`langPath`, `corePath`,
+  `workerPath`, `gzip`, `cacheMethod`), which is where the models and the engine's WebAssembly are found.
 
 In Node, after `npm install @3sln/pdfium-wasm tesseract.js @tesseract.js-data/eng` (the English model; a `langPath` of your own
 works as well), this converts a scan. `bb package --check` runs it against the built packages on a machine that has pdfium's
@@ -139,19 +144,21 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createWorker } from 'tesseract.js';
 import { Emon } from '@3sln/emon';
 import { pdfiumRenderer } from '@3sln/emon/pdfium';
-import { tesseractPort } from '@3sln/emon/tesseract';
+import { tesseractAdapter } from '@3sln/emon/tesseract';
 
 const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));
 
 // pdfium's WebAssembly build: with no arguments, the adapter imports the package @3sln/pdfium-wasm (npm install @3sln/pdfium-wasm) on the first render
 const render = pdfiumRenderer();
 
-// tesseract.js, with the English model from the npm package @tesseract.js-data/eng
-const ocr = tesseractPort({
+// OCR engines are registered adapters, never wired in: tesseract.js, with the English model from the npm package @tesseract.js-data/eng
+const engines = emon.engines();
+await engines.add(tesseractAdapter({
   createWorker,
   languages: ['eng'],
   workerOptions: { langPath: './node_modules/@tesseract.js-data/eng/4.0.0_best_int', gzip: true, cacheMethod: 'none' },
-});
+}));
+const ocr = engines.port();
 
 const model = await emon.convert(await readFile('scan.pdf'), { ports: { render, ocr } });
 await writeFile('scan.html', model.html());
@@ -176,7 +183,7 @@ height, rgb }, close() } }` and an OCR port is `async (request) => result`; see 
 - The WebAssembly instance, a Model's handle and the constructors of `Emon`, `Model` and `Asset` are not public API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the js host: 59 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the js host: 69 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -184,9 +191,9 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 |---|---|
 | `@3sln/emon/pdfium::pdfiumRenderer` | `function({ module, wasm, maxPixels = 64 * 2 ** 20 } = {})` |
 | `@3sln/emon/ppocr::ppocrAdapter` | `function({ wasm, loadOrt, wasmPaths, ortWasm, models, lexicon })` |
+| `@3sln/emon/ppocr::ppocrEngine` | `function(options)` |
 | `@3sln/emon/ppocr::ppocrLexicon` | `function({ createCore, coreOptions, traineddata })` |
-| `@3sln/emon/ppocr::ppocrPort` | `function({ incumbent, ...options })` |
-| `@3sln/emon/tesseract::tesseractPort` | `function({ createWorker, languages = ['eng'], oem = 1, workerOptions = {}, workers = 1 })` |
+| `@3sln/emon/tesseract::tesseractAdapter` | `function({ createWorker, languages = ['eng'], oem = 1, workerOptions = {}, workers = 1 })` |
 | `@3sln/emon::Asset` | `class` |
 | `@3sln/emon::Asset#blob` | `()` |
 | `@3sln/emon::Asset#bytes` | `()` |
@@ -197,12 +204,22 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `@3sln/emon::Emon` | `class` |
 | `@3sln/emon::Emon#convert` | `async (input, options = {})` |
 | `@3sln/emon::Emon#defaults` | `property` |
+| `@3sln/emon::Emon#engines` | `()` |
 | `@3sln/emon::Emon#intake` | `async (inputs, options = {})` |
 | `@3sln/emon::Emon.load` | `static async (wasm, defaults = {})` |
 | `@3sln/emon::EmonError` | `class extends Error` |
 | `@3sln/emon::EmonError#code` | `property` |
 | `@3sln/emon::EmonError#constructor` | `(code, message)` |
 | `@3sln/emon::EmonError#name` | `property` |
+| `@3sln/emon::Engines` | `class` |
+| `@3sln/emon::Engines#add` | `async (adapter)` |
+| `@3sln/emon::Engines#allowRemote` | `(allow)` |
+| `@3sln/emon::Engines#close` | `async ()` |
+| `@3sln/emon::Engines#constructor` | `(w)` |
+| `@3sln/emon::Engines#describe` | `()` |
+| `@3sln/emon::Engines#notes` | `()` |
+| `@3sln/emon::Engines#port` | `()` |
+| `@3sln/emon::Engines#producer` | `()` |
 | `@3sln/emon::Model` | `class` |
 | `@3sln/emon::Model#[Symbol.dispose]` | `()` |
 | `@3sln/emon::Model#assets` | `get accessor` |

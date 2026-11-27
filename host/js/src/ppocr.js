@@ -152,22 +152,20 @@ export function ppocrAdapter({ wasm, loadOrt, wasmPaths, ortWasm, models, lexico
   return read;
 }
 
-/** Compose the optional PP fulfiller with the existing Tesseract fulfiller.
- * Ordinary requests retain the incumbent. Tagged requests use Rust's complete
- * canonical answer, so JS never reconstructs boxes, confidence or extensions.
+/** PP-OCR as a REGISTERED ADAPTER (D925): `await emon.engines().add(ppocrEngine(options))`, beside the Tesseract adapter or alone. The registry routes each request to the engine
+ * it names; a PP request is answered by Rust's complete canonical answer, so JS never reconstructs boxes, confidence or extensions.
  */
-export function ppocrPort({ incumbent, ...options }) {
+export function ppocrEngine(options) {
   const read = ppocrAdapter(options);
-  const port = async req => {
-    // kin identified the canonical trailer. A view hash may contain any cell.
-    if (req.engine !== 2) return incumbent(req);
-    const answer = await read({ png: req.bitmap(), id: req.id, rect: req.rect, record: req.record });
-    return answer === null ? null : { [canonicalOcr]: answer };
-  };
-  port.terminate = async () => { try { await read.terminate(); } finally { await incumbent.terminate?.(); } };
-  port.producer = { ...incumbent.producer, 'ocr-engine': 'tesseract+ppocr',
-    'ocr-model': 'ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f',
+  const producer = { 'ocr-model': 'ppocr5-en-0420cd75efc786ba37d1e028a4c9396d2f17a3b4264880f1296a7f186faced7f',
     'pp-lexicon': 'tessdata_fast/eng sha256=7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2',
     'onnxruntime': '1.22.0 WASM fixed SIMD sequential threads=1 graph=all', host: 'host/js/src/ppocr.js' };
-  return port;
+  return {
+    name: 'ppocr', engine: 2, caps: 0, measured: 0, needs: 4 | 8 | 1, flags: 0, producer,
+    async read(req) {
+      const answer = await read({ png: req.bitmap(), id: req.id, rect: req.rect, record: req.record });
+      return answer === null ? null : { [canonicalOcr]: answer };
+    },
+    close: () => read.terminate(),
+  };
 }

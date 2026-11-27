@@ -1,14 +1,16 @@
-// tesseract.js AS emon's `ocr` PORT (DEVLOG P9.3, SPEC 7.3, D211-D214): the browser's OCR engine, fulfilling `ocr` requests through
+// tesseract.js AS a REGISTERED ADAPTER of emon's engine registry (DEVLOG P9.3, SPEC 7.3, D211-D214, D925): the browser's OCR engine, fulfilling `ocr` requests through
 // plan/fulfil. `tesseract.js` is not a dependency of the SDK: the embedder imports it and hands over `createWorker`, which keeps
 // the engine's code, its core WebAssembly and its language data (large, and the embedder's to host or cache) out of the library.
 //
 //     import { createWorker } from 'tesseract.js';
 //     import { Emon } from '@3sln/emon';
-//     import { tesseractPort } from '@3sln/emon/tesseract';
+//     import { tesseractAdapter } from '@3sln/emon/tesseract';
 //
-//     const ocr = tesseractPort({ createWorker, languages: ['eng'], workerOptions: { langPath: '/tessdata', corePath: '/tesseract-core' } });
-//     const model = await emon.convert(scan, { ports: { ocr } });
-//     await ocr.terminate();
+//     const emon = await Emon.load(...);
+//     const engines = emon.engines();
+//     await engines.add(tesseractAdapter({ createWorker, languages: ['eng'], workerOptions: { langPath: '/tessdata', corePath: '/tesseract-core' } }));
+//     const model = await emon.convert(scan, { ports: { ocr: engines.port() } });
+//     await engines.close();
 //
 // WHAT IT GIVES AND WHAT IT CANNOT. tesseract.js reports the page as blocks, paragraphs, lines (with their baselines), words and
 // symbols, each with a box and a confidence, and a block's type: that is the answer, in the form `ocr.js` documents. It does not
@@ -65,9 +67,9 @@ function resultOf(blocks, { wantSymbols, lang, blockType }) {
  * @param {number} [o.oem] the engine mode (1: LSTM, the default)
  * @param {object} [o.workerOptions] tesseract.js's `createWorker` options (`langPath`, `corePath`, `workerPath`, `logger`, ...)
  * @param {number} [o.workers] workers per language set, so recognitions of one round run side by side (default 1)
- * @returns {((request: object) => Promise<object>) & { terminate(): Promise<void>, producer: object }}
+ * @returns an adapter for `emon.engines().add(...)`: `{ name: 'tesseract', engine: 1, needs, producer, read(request), close() }`
  */
-export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, workerOptions = {}, workers = 1 }) {
+export function tesseractAdapter({ createWorker, languages = ['eng'], oem = 1, workerOptions = {}, workers = 1 }) {
   const pools = new Map(); // language key -> [{ promise, busy }]
   const slot = (key) => {
     let pool = pools.get(key);
@@ -88,8 +90,7 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
     }
     return s || pool.reduce((a, b) => (a.busy <= b.busy ? a : b));
   };
-  const port = async (req) => {
-    if (req.engine !== undefined && req.engine !== 1) return null;
+  const read = async (req) => {
     // which of the engine's models read the request is kin's (`emon.ocrport`): a language is its model, a script (`Cyrl`) the models that
     // read it, one with no model is dropped, none left is every model (D038, P10.7)
     const langs = req.models(languages).map((i) => languages[i]);
@@ -106,10 +107,11 @@ export function tesseractPort({ createWorker, languages = ['eng'], oem = 1, work
       s.busy -= 1;
     }
   };
-  port.terminate = async () => {
+  const close = async () => {
     for (const pool of pools.values()) for (const s of pool) await (await s.promise).terminate();
     pools.clear();
   };
-  port.producer = { observed: `tesseract.js;oem=${oem};models=${languages.join('+')};core=${workerOptions.corePath ?? 'bundled'}`, engine: 'tesseract.js', 'engine-mode': oem === 1 ? 'default (LSTM)' : String(oem), 'lstm-choice-mode': '2', models: languages.join(' '), host: 'host/js/src/tesseract.js' };
-  return port;
+  // needs: a recognizer (1); no orientation model (2) is loaded, so a request for OSD is answered without one. The registry routes by engine, so a request for another engine never arrives.
+  const producer = { observed: `tesseract.js;oem=${oem};models=${languages.join('+')};core=${workerOptions.corePath ?? 'bundled'}`, engine: 'tesseract.js', 'engine-mode': oem === 1 ? 'default (LSTM)' : String(oem), 'lstm-choice-mode': '2', models: languages.join(' '), host: 'host/js/src/tesseract.js' };
+  return { name: 'tesseract', engine: 1, caps: 0, measured: 0, needs: 1, flags: 0, producer, read, close };
 }

@@ -41,7 +41,8 @@
   (mapv (fn [[role file mods]] {:role role :file file :mods (set (remove str/blank? (str/split mods #"\s+")))})
         [[:driver  "host/rust/src/engine.rs"            "config enctx engine engines html json model plan planloop"]
          [:machine "host/rust/src/plan.rs"              "adapters engines plan planctx planloop pngcheck pngread transcript transcriptctx"]
-         [:driver "host/rust/src/session.rs" X            "ccitt imgcheck pngcheck tiffcheck"]
+         [:driver "host/rust/src/session.rs" "adapters ocr ocrport ocrtess oil plan"]
+         [:port    "host/rust/src/imgdec.rs"            "ccitt imgcheck pngcheck tiffcheck"]
          [:port    "host/rust/src/pdfimg.rs"            "ccitt"]
          [:port    "host/rust/src/port.rs"              "limits"]
          [:port    "host/rust/src/render.rs"            "plan"]

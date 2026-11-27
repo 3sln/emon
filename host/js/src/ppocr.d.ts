@@ -1,4 +1,4 @@
-import type { OcrPort } from './index.js';
+import type { OcrAdapter } from './index.js';
 
 type AssetSource = string | URL | Uint8Array | ArrayBuffer;
 type WasmSource = AssetSource | WebAssembly.Module | Response | Promise<Response>;
@@ -17,9 +17,8 @@ interface AdapterOptions {
   lexicon: Lexicon;
 }
 
-/** Experimental optional port; requires the optional emon wasm build. */
-export function ppocrPort(options: AdapterOptions & { incumbent: OcrPort & { terminate?(): Promise<void>; producer?: Record<string, string> } }):
-  OcrPort & { terminate(): Promise<void>; producer: Record<string, string> };
+/** Experimental optional engine, registered with `await emon.engines().add(ppocrEngine(options))` (D925); requires the optional emon wasm build. */
+export function ppocrEngine(options: AdapterOptions): OcrAdapter & { name: 'ppocr'; engine: 2; producer: Record<string, string>; close(): Promise<void> };
 
 /** Dedicated pinned English dictionary. Supply tesseract.js-core 7.0.0's
  * ordinary SIMD LSTM factory and local runtime options. */

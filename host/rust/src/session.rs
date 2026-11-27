@@ -655,6 +655,22 @@ pub fn ocr_word_lang(req: &[i32]) -> i32 {
     emon::ocrtess::op_word_lang(&mut cells_of(req))
 }
 
+// THE ADAPTER REGISTRY'S RULES for a host that cannot link kin's Rust (the JS SDK asks the module, D925): kin's `ad-register-check` (0, or the reason), the reason's name (`adr`) and the
+// route of a request of the OIL engine `oen` over the OIL engines registered, in order (`ad-route`: an index or -1).
+pub fn adapter_register_check(abi: i32, oen: i32, caps: i32, measured: i32, needs: i32, flags: i32) -> i32 {
+    emon::adapters::ad_register_check(abi, oen, caps, measured, needs, flags)
+}
+
+pub fn adapter_reason(code: i32) -> String {
+    let mut s = String::new();
+    emon::adapters::adr_emit_name(&mut s, code);
+    s
+}
+
+pub fn adapter_route(oen: i32, registered: &[i32]) -> i32 {
+    emon::adapters::ad_route(oen, &mut cells_of(registered), 0)
+}
+
 // A panic's message (`internal`): a payload of a `String`, a `&str`, or none.
 pub fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
     if let Some(s) = p.downcast_ref::<String>() {

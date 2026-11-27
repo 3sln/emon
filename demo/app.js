@@ -4,7 +4,7 @@
 // No framework and no bundler: this is an ES module and the SDK is `./sdk/` (host/js/src, copied by `bb demo`). `window.__demo` is the page's own door, the
 // one the UI uses, so `bb demo --check` drives the page the way a person does.
 import { tr } from './i18n.js';
-import { tesseractPort } from './sdk/tesseract.js';
+import { tesseractAdapter } from './sdk/tesseract.js';
 
 const $ = (id) => document.getElementById(id);
 const el = { drop: $('drop'), file: $('file'), status: $('status'), out: $('out'), source: $('source'), html: $('html'), json: $('json'), stats: $('stats'), tabs: [...document.querySelectorAll('[role=tab]')], panes: [...document.querySelectorAll('[role=tabpanel]')], dlHtml: $('dl-html'), dlJson: $('dl-json'), ocr: $('ocr'), figures: $('figures'), samples: $('samples'), notice: $('notice'), busy: $('busy') };
@@ -50,7 +50,7 @@ const jobs = new Map();
 // OCR on this thread, for a Worker that cannot start one (tesseract.js keeps its engine in a Worker of its own)
 let pageOcr = null;
 const pageThreadOcr = () =>
-  (pageOcr ||= tesseractPort({
+  (pageOcr ||= tesseractAdapter({
     createWorker: async (...a) => (await import('./vendor/tesseract/tesseract.esm.min.js')).default.createWorker(...a),
     languages: ['eng'],
     workerOptions: { workerPath: new URL('./vendor/tesseract/worker.min.js', import.meta.url).href, corePath: new URL('./vendor/tesseract/core', import.meta.url).href, langPath: new URL('./vendor/tesseract/lang', import.meta.url).href, cacheMethod: 'none', gzip: true, workerBlobURL: false },
@@ -60,7 +60,7 @@ async function answerOcr(m) {
   const r = m.req;
   const req = { id: m.id, psm: r.psm, flags: r.flags, dpi: r.dpi, rect: r.rect, symbols: r.symbols, models: () => r.langs, wordLang: () => r.wordLang, blockType: (p) => r.types[p], bitmap: () => r.png };
   try {
-    worker.postMessage({ type: 'ocr-result', id: m.id, result: await pageThreadOcr()(req) });
+    worker.postMessage({ type: 'ocr-result', id: m.id, result: await pageThreadOcr().read(req) });
   } catch (e) {
     worker.postMessage({ type: 'ocr-error', id: m.id, message: String((e && e.message) || e) });
   }

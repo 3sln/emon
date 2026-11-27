@@ -14,4 +14,5 @@ rc=0
 wasm=$(kin/scripts/emon-wasm-run --check) || rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 kin/scripts/emon-rs-build > /dev/null
+node --experimental-wasm-exnref test/driver/wasm/engines.mjs --wasm "$wasm"
 exec node test/driver/wasm/check.mjs --wasm "$wasm"

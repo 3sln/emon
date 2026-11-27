@@ -69,6 +69,25 @@ export class Wasm {
     return n < 0 ? [] : Array.from(out);
   }
 
+  // THE ADAPTER REGISTRY'S RULES ARE KIN'S (`emon.adapters`, D925): `Engines` asks the module.
+  /** 0 when an adapter of that shape may register (kin's `ad-register-check`), else the reason's code. */
+  adapterCheck(abi, oen, caps, measured, needs, flags) {
+    return this.x.emon_adapter_check(abi, oen, caps, measured, needs, flags);
+  }
+
+  /** The reason's name for a refusal code (`adapter-engine-unknown`, ...). */
+  adapterReason(code) {
+    this.x.emon_adapter_reason(code);
+    const t = this.outText();
+    this.outFree();
+    return t;
+  }
+
+  /** The index, among the OIL engines `oens` (in registration order), of the adapter a request of the OIL engine `oen` goes to, or -1 (kin's `ad-route`). */
+  adapterRoute(oen, oens) {
+    return this.withBytes(new Uint8Array(Int32Array.from(oens).buffer), (p) => this.x.emon_adapter_route(oen, p, oens.length));
+  }
+
   /** The language a model read a word in, as a request packs it. */
   ocrWordLang(model) {
     const cps = Int32Array.from(Array.from(model, (c) => c.codePointAt(0)));

@@ -4,27 +4,31 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Emon } from '../../host/js/src/index.js';
-import { tesseractPort } from '../../host/js/src/tesseract.js';
-import { ppocrPort, ppocrLexicon } from '../../host/js/src/ppocr.js';
+import { tesseractAdapter } from '../../host/js/src/tesseract.js';
+import { ppocrEngine, ppocrLexicon } from '../../host/js/src/ppocr.js';
 const require = createRequire(new URL('../../host/js/package.json', import.meta.url));
 const [mode, input, recording, output] = process.argv.slice(2);
 const emonWasm = fs.readFileSync('.cache/emon-wasm-ppocr/target/wasm32-unknown-unknown/release/emon.wasm');
 const emon = await Emon.load(emonWasm);
-let ocr, model, ortLoads = 0;
+let ocr, engines, model, ortLoads = 0;
 const options = { ocrEngine: 'ppocr', keepEvidence: true };
 if (mode === 'record') {
   const ortPath = require.resolve('onnxruntime-web/wasm');
   const corePath = require.resolve('tesseract.js-core/tesseract-core-simd-lstm.wasm.js');
-  const incumbent = tesseractPort({ createWorker: require('tesseract.js').createWorker,
+  const tesseract = tesseractAdapter({ createWorker: require('tesseract.js').createWorker,
     workerOptions: { langPath: path.resolve('.cache/tessdata'), gzip: false, corePath, cacheMethod: 'none' } });
   const lexicon = ppocrLexicon({ createCore: require(corePath),
     coreOptions: { wasmBinary: fs.readFileSync(corePath.replace(/\.wasm\.js$/, '.wasm')) },
     traineddata: fs.readFileSync('.cache/tessdata/eng.traineddata') });
   const models = Object.fromEntries(['ch_PP-OCRv5_det_mobile.onnx', 'ch_ppocr_mobile_v2.0_cls_mobile.onnx', 'en_PP-OCRv5_rec_mobile.onnx']
     .map(n => [n, fs.readFileSync(`.cache/ppocr/${n}`)]));
-  ocr = ppocrPort({ incumbent, wasm: emonWasm, lexicon, models,
+  // one registry: Tesseract's adapter, then PP-OCR's (D925)
+  engines = emon.engines();
+  await engines.add(tesseract);
+  await engines.add(ppocrEngine({ wasm: emonWasm, lexicon, models,
     loadOrt: () => { ortLoads++; return import(pathToFileURL(ortPath)); }, wasmPaths: path.dirname(ortPath) + '/',
-    ortWasm: fs.readFileSync(path.join(path.dirname(ortPath), 'ort-wasm-simd-threaded.wasm')) });
+    ortWasm: fs.readFileSync(path.join(path.dirname(ortPath), 'ort-wasm-simd-threaded.wasm')) }));
+  ocr = engines.port();
   options.ports = { ocr }; options.record = true; options.producer = ocr.producer;
 } else if (mode === 'replay' || mode === 'replay-default') {
   if (mode === 'replay-default') options.ocrEngine = 'tesseract';

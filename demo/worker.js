@@ -15,10 +15,10 @@
 //
 // NESTED WORKERS. tesseract.js runs its engine in a Worker of its own, and a Worker starting a Worker is not everywhere (Safari had none before 15.5). When
 // this one cannot, the page does the OCR: this file asks it with the request's PNG and the few numbers kin's policy computed from the module (the models, the
-// language of the words, the block types), and it answers with the recogniser's result (`app.js`, the same `tesseractPort`).
+// language of the words, the block types), and it answers with the recogniser's result (`app.js`, the same `tesseractAdapter`).
 import { Emon } from './sdk/index.js';
 import { pdfiumRenderer } from './sdk/pdfium.js';
-import { tesseractPort } from './sdk/tesseract.js';
+import { tesseractAdapter } from './sdk/tesseract.js';
 
 const url = (p) => new URL(p, import.meta.url).href;
 const nested = typeof Worker === 'function' && !new URL(self.location.href).searchParams.has('ocr-main');
@@ -31,7 +31,7 @@ const renderer = pdfiumRenderer({ module: () => import('./vendor/pdfium/pdfium.m
 
 // tesseract.js, loaded by the first OCR request
 const createWorker = async (...a) => (await import('./vendor/tesseract/tesseract.esm.min.js')).default.createWorker(...a);
-const local = tesseractPort({
+const local = tesseractAdapter({
   createWorker,
   languages: ['eng'],
   workerOptions: { workerPath: url('./vendor/tesseract/worker.min.js'), corePath: url('./vendor/tesseract/core'), langPath: url('./vendor/tesseract/lang'), cacheMethod: 'none', gzip: true, workerBlobURL: false },
@@ -82,7 +82,7 @@ let recognising = 0;
 const ocr = async (req) => {
   recognising += 1;
   stage('recognising', { count: recognising, onPage: !nested });
-  return (nested ? local : remote)(req);
+  return (nested ? local.read : remote)(req);
 };
 
 async function convert({ id, file, options }) {

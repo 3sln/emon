@@ -33,24 +33,28 @@ third-party CDN URL defaults. URLs are fetched only when explicitly supplied.
 
 ```js
 import { Emon } from '@3sln/emon';
-import { ppocrPort, ppocrLexicon } from '@3sln/emon-ppocr';
+import { ppocrEngine, ppocrLexicon } from '@3sln/emon-ppocr';
+import { tesseractAdapter } from '@3sln/emon/tesseract';
 
 // Supplied by the application:
 // optionalWasm: compiled WebAssembly.Module, bytes, or a hosted URL
-// incumbent: the existing tesseractPort(...) fulfiller
+// tesseract: the Tesseract adapter, tesseractAdapter(...)
 // createCore: tesseract-core-simd-lstm.wasm.js's factory
 // coreOptions: local locateFile or wasmBinary for that factory
 // englishData: pinned tessdata_fast eng.traineddata URL or bytes
 // modelSources: { 'ch_PP-OCRv5_det_mobile.onnx': URL_or_bytes, ... }
 const lexicon = ppocrLexicon({ createCore, coreOptions, traineddata: englishData });
-const ocr = ppocrPort({
-  incumbent, wasm: optionalWasm, lexicon,
+const emon = await Emon.load(optionalWasm);
+const engines = emon.engines();
+await engines.add(tesseract);
+await engines.add(ppocrEngine({
+  wasm: optionalWasm, lexicon,
   loadOrt: () => import('onnxruntime-web/wasm'),
   wasmPaths: new URL('/vendor/ort-1.22.0/', location.href).href,
   ortWasm: new URL('/vendor/ort-1.22.0/ort-wasm-simd-threaded.wasm', location.href),
   models: modelSources,
-});
-const emon = await Emon.load(optionalWasm);
+}));
+const ocr = engines.port();
 const model = await emon.convert(input, {
   ocrEngine: 'ppocr', ports: { ocr }, record: true,
   producer: ocr.producer,
@@ -74,7 +78,7 @@ In Node, supply filesystem bytes for the wasm modules, models and traineddata,
 and a filesystem directory for `wasmPaths`; the adapter does not read files.
 The Node and browser qualification drivers provide executable examples.
 The dedicated dictionary instance never recognizes or learns document words.
-Ordinary OCR requests continue to use the incumbent fulfiller.
+Ordinary OCR requests go to the Tesseract adapter: the registry routes each request to the engine it names.
 
 ORT and its three sessions load on the first PP request. The configuration is
 fixed to the hash-pinned ORT 1.22.0 ordinary SIMD wasm build, one thread,

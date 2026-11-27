@@ -111,7 +111,9 @@ using System.IO;
 
 var config = emon.Api.Options.Config.Defaults();
 config.Renderer = emon.Ffi.Pdfium.Open(null); // the library: $EMON_PDFIUM_LIB, then the system's search
-config.Ocr = emon.Ffi.Tess.Open(null);        // the models: $TESSDATA_PREFIX and the usual places; the libraries: $EMON_TESS_LIB
+using var engines = new emon.Api.OcrEngines();   // OCR engines are registered adapters, never wired in
+engines.Defaults(emon.Api.Options.Defaults());   // lib/emon/adapters beside the application, or $EMON_ADAPTER_DIR
+config.Ocr = engines;
 var engine = new emon.Api.Engine(config);
 var inputs = new List<emon.Api.Input> { emon.Api.Input.Bytes(File.ReadAllBytes("scan.pdf")) };
 var model = engine.Convert(inputs, emon.Api.Options.Defaults());
@@ -135,12 +137,22 @@ ships to fill it.
   it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the csharp host: 373 entries, and 18 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the csharp host: 409 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
 | Name | Signature |
 |---|---|
+| `emon.Api.AdapterInfo` | `sealed class` |
+| `emon.Api.AdapterInfo.Caps` | `int` |
+| `emon.Api.AdapterInfo.Config` | `string` |
+| `emon.Api.AdapterInfo.Engine` | `int` |
+| `emon.Api.AdapterInfo.Flags` | `int` |
+| `emon.Api.AdapterInfo.Measured` | `int` |
+| `emon.Api.AdapterInfo.Name` | `string` |
+| `emon.Api.AdapterInfo.Needs` | `int` |
+| `emon.Api.AdapterInfo.Observed` | `string` |
+| `emon.Api.AdapterInfo.Producer` | `List<string[]>` |
 | `emon.Api.Asset` | `sealed class` |
 | `emon.Api.Asset#Bytes()` | `byte[]` |
 | `emon.Api.Asset#Dpi()` | `int` |
@@ -192,6 +204,15 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Engine.Converted.Model` | `readonly Model` |
 | `emon.Api.Engine.Converted.Stats` | `readonly RunStats` |
 | `emon.Api.Engine.Converted.Transcript` | `readonly emon.Planrun.Transcript` |
+| `emon.Api.IAdapter` | `interface : IDisposable` |
+| `emon.Api.IAdapter#Info()` | `AdapterInfo` |
+| `emon.Api.IAdapter#Read(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `Reading` |
+| `emon.Api.IAdapter.Async` | `const int = 1` |
+| `emon.Api.IAdapter.Failed` | `const int` |
+| `emon.Api.IAdapter.Ok` | `const int = 0` |
+| `emon.Api.IAdapter.Remote` | `const int` |
+| `emon.Api.IAdapter.Threadsafe` | `const int` |
+| `emon.Api.IAdapter.Unsupported` | `const int` |
 | `emon.Api.IByteSource` | `interface : emon.RenderPort.ISource` |
 | `emon.Api.IByteSource#AsSlice()` | `byte[]` |
 | `emon.Api.IByteSource#CopyOf(byte[])` | `static IByteSource` |
@@ -323,6 +344,18 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Node#Sources()` | `List<string>` |
 | `emon.Api.Node#Text()` | `string` |
 | `emon.Api.Node#ToString()` | `override string` |
+| `emon.Api.OcrEngines` | `sealed class : IOcr,IDisposable` |
+| `emon.Api.OcrEngines#Add(IAdapter)` | `void` |
+| `emon.Api.OcrEngines#AllowRemote(bool)` | `void` |
+| `emon.Api.OcrEngines#Defaults(Options)` | `void` |
+| `emon.Api.OcrEngines#Describe()` | `List<AdapterInfo>` |
+| `emon.Api.OcrEngines#Dispose()` | `void` |
+| `emon.Api.OcrEngines#Fulfil(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `emon.Planrun.Answer` |
+| `emon.Api.OcrEngines#Load(string,string,string)` | `void` |
+| `emon.Api.OcrEngines#Notes()` | `List<string>` |
+| `emon.Api.OcrEngines#Producer()` | `List<string[]>` |
+| `emon.Api.OcrEngines#SetAdapterDir(string)` | `void` |
+| `emon.Api.OcrEngines#SetTessdata(string)` | `void` |
 | `emon.Api.Options` | `sealed class` |
 | `emon.Api.Options#Copy()` | `Options` |
 | `emon.Api.Options#Defaults()` | `static Options` |
@@ -405,6 +438,11 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Options.Parsed.Producer` | `readonly List<string[]>` |
 | `emon.Api.Options.Parsed.Record` | `bool` |
 | `emon.Api.Options.PpOcr` | `bool` |
+| `emon.Api.Reading` | `sealed class` |
+| `emon.Api.Reading.Binary` | `emon.Port.Bitmap` |
+| `emon.Api.Reading.Reason` | `string` |
+| `emon.Api.Reading.Rec` | `int[]` |
+| `emon.Api.Reading.Status` | `int` |
 | `emon.Api.RunStats` | `sealed class` |
 | `emon.Api.RunStats.Attempts` | `int` |
 | `emon.Api.RunStats.BytesFetched` | `long` |
@@ -519,21 +557,16 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 
 | Name | Signature |
 |---|---|
+| `emon.Ffi.AdapterLib` | `sealed unsafe class : IAdapter` |
+| `emon.Ffi.AdapterLib#Dispose()` | `void` |
+| `emon.Ffi.AdapterLib#Info()` | `AdapterInfo` |
+| `emon.Ffi.AdapterLib#Open(string,string,string)` | `static AdapterLib` |
+| `emon.Ffi.AdapterLib#Read(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `Reading` |
 | `emon.Ffi.Pdfium` | `sealed unsafe class : RenderPort.IRenderer` |
 | `emon.Ffi.Pdfium#ExactCrop()` | `bool` |
 | `emon.Ffi.Pdfium#Layers()` | `int` |
 | `emon.Ffi.Pdfium#Open(string)` | `static Pdfium` |
 | `emon.Ffi.Pdfium#Render(RenderPort.ISource,byte[],RenderPort.Request)` | `Port.Bitmap` |
-| `emon.Ffi.PpOcr` | `sealed unsafe class : emon.Api.IOcr,IDisposable` |
-| `emon.Ffi.PpOcr#Dispose()` | `void` |
-| `emon.Ffi.PpOcr#Fulfil(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `emon.Planrun.Answer` |
-| `emon.Ffi.PpOcr#Open(string,emon.Api.IOcr)` | `static PpOcr` |
-| `emon.Ffi.PpOcr#Producer()` | `List<string[]>` |
-| `emon.Ffi.Tess` | `sealed unsafe class : emon.Api.IOcr` |
-| `emon.Ffi.Tess#Fulfil(Planrun.Request,Dictionary<int,Port.Bitmap>,bool)` | `Planrun.Answer` |
-| `emon.Ffi.Tess#Open(string)` | `static Tess` |
-| `emon.Ffi.Tess#Producer()` | `List<string[]>` |
-| `emon.Ffi.Tess#WithDefaultDpi(int)` | `Tess` |
 | `emon.Ffi.Unavailable` | `sealed class : System.Exception` |
 | `emon.Ffi.Unavailable#.ctor(string)` | `ctor` |
 | `emon.Ffi.Unavailable#.ctor(string,System.Exception)` | `ctor` |

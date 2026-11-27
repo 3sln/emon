@@ -1,5 +1,5 @@
 // No default URLs, automatic inference downloads or required ORT dependency.
-export { ppocrPort, ppocrAdapter, ppocrLexicon } from './ppocr.js';
+export { ppocrEngine, ppocrAdapter, ppocrLexicon } from './ppocr.js';
 
 /** Read the pinned model payload from a caller-selected native release tar.gz.
  * Keep ORT's platform files out of the browser filesystem. The port and lexicon

@@ -365,6 +365,29 @@ pub unsafe extern "C" fn emon_ocr_word_lang(ptr: u32, ncells: u32) -> i32 {
     guard(|| shared::ocr_word_lang(&ints_from(ptr, ncells)))
 }
 
+// The adapter registry's rules (D925), kin's: the JS SDK's `Engines` asks them here. 0 when an adapter built for ABI `abi` that answers as the OIL engine `oen`, declares `caps` (of
+// which `measured` are measured), reads with the pack kinds `needs` and sets `flags` may register; else kin's reason code.
+#[no_mangle]
+pub extern "C" fn emon_adapter_check(abi: i32, oen: i32, caps: i32, measured: i32, needs: i32, flags: i32) -> i32 {
+    guard(|| shared::adapter_register_check(abi, oen, caps, measured, needs, flags))
+}
+
+// The reason's name (`adapter-engine-unknown`, ...) in OUT. Answers its length.
+#[no_mangle]
+pub extern "C" fn emon_adapter_reason(code: i32) -> i32 {
+    guard(|| {
+        let s = shared::adapter_reason(code);
+        put_str(&s);
+        s.len() as i32
+    })
+}
+
+// The index, among the registered OIL engines (`iptr`/`icells`: one i32 each, in registration order), of the adapter a request of the OIL engine `oen` goes to, or -1.
+#[no_mangle]
+pub unsafe extern "C" fn emon_adapter_route(oen: i32, iptr: u32, icells: u32) -> i32 {
+    guard(|| shared::adapter_route(oen, &ints_from(iptr, icells)))
+}
+
 // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a
 // canonical PNG in OUT: what the host's recogniser reads. Answers the PNG's length, or -1.
 #[no_mangle]

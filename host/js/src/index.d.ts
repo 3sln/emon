@@ -58,6 +58,39 @@ export interface OcrRequest {
 /** An OCR port: `null` or `undefined` answers `unsupported`; a rejection answers `failed`. */
 export type OcrPort = (request: OcrRequest) => Promise<object | null | undefined>;
 
+/**
+ * An OCR engine, registered with `emon.engines().add(...)` (D925): the OIL engine it answers as (1 tesseract, 2 ppocr, 3 apple-vision, 4 mlkit-text, 5 windows-media-ocr), what it
+ * declares, and `read`, in the OCR port's form. `@3sln/emon/tesseract` and `@3sln/emon/ppocr` make them.
+ */
+export interface OcrAdapter {
+  name?: string;
+  engine: number;
+  caps?: number;
+  measured?: number;
+  /** the pack kinds it reads with: 1 recognizer, 2 osd, 4 detector, 8 classifier */
+  needs?: number;
+  /** 2 sends the pixels off the device (refused unless `allowRemote(true)`); 1 (async) is refused */
+  flags?: number;
+  producer?: Record<string, string>;
+  read(request: OcrRequest): Promise<object | null | undefined>;
+  close?(): void | Promise<void>;
+}
+
+/** The engine registry: kin's rules (`ad-register-check`, `ad-route`) over the adapters you register. */
+export class Engines {
+  /** Lets adapters that send the pixels off the device register (default no). Call it before registering them. */
+  allowRemote(allow: boolean): void;
+  /** Registers an adapter, held to kin's engine table; rejects with `usage` and the refusal's name (`adapter-engine-unknown`, `adapter-caps-beyond-engine`, ...). */
+  add(adapter: OcrAdapter): Promise<void>;
+  describe(): Array<{ name: string; engine: number; caps: number; measured: number; needs: number; flags: number; producer: Record<string, string> }>;
+  /** Why requests were left unread since the last call. */
+  notes(): string[];
+  producer(): Record<string, string>;
+  /** The `ports.ocr` of a conversion: routes each request by the engine it names. */
+  port(): OcrPort & { terminate(): Promise<void>; readonly producer: Record<string, string> };
+  close(): Promise<void>;
+}
+
 /** One page of a renderer's document. */
 export interface Rendered {
   width: number;
@@ -194,6 +227,8 @@ export class Emon {
   ): Promise<Emon>;
   readonly defaults: { chunk?: number };
   convert(input: Input | InputWithPassword | readonly Input[], options?: ConvertOptions): Promise<Model>;
+  /** An empty engine registry bound to this module; register each OCR engine with `add`, then pass `engines.port()` as `ports.ocr`. */
+  engines(): Engines;
   /** Stage 0 of each input, cheap. */
   intake(inputs: Input | InputWithPassword | Array<Input | InputWithPassword>, options?: ConvertOptions): Promise<IntakeResult[]>;
 }

@@ -26,8 +26,9 @@
 import { Wasm } from './wasm.js';
 import { toSource, bytesSource, blobSource, urlSource, streamSource, SourceChangedError, EmonError } from './sources.js';
 import { ocrRequest, encodeOcr, canonicalOcr } from './ocr.js';
+import { Engines } from './engines.js';
 
-export { bytesSource, blobSource, urlSource, streamSource, toSource, SourceChangedError, EmonError };
+export { bytesSource, blobSource, urlSource, streamSource, toSource, SourceChangedError, EmonError, Engines };
 
 // The WASM instance (`w`), a Model's handle (`h`) and an Asset's Model (`model`) are NOT public API (P11.4, D542): they are defined
 // non-enumerable, so they are not in `Object.keys`, a spread, `JSON.stringify` or a `for...in`, and `index.d.ts` does not declare them.
@@ -228,6 +229,14 @@ export class Emon {
   constructor(w, defaults = {}) {
     hide(this, 'w', w);
     this.defaults = defaults;
+  }
+
+  /**
+   * An empty engine registry bound to this module (D925): `await engines.add(adapter)` for each OCR engine (`tesseractAdapter`, `ppocrEngine`, your own), then
+   * `{ ports: { ocr: engines.port() } }`. Nothing is registered unless you add it.
+   */
+  engines() {
+    return new Engines(this.w);
   }
 
   _open(source, password, mode, options) {
