@@ -103,6 +103,42 @@
   (law-seam (test-t) 2 0 0 0 0 0 0)
   (law-seam (test-t) 2 0 0 0 1 0 3))
 
+(deftest test-an-overlap-does-not-hide-an-uncovered-cut
+  (law-seam (test-t) 2 0 4 0 1 5 3))
+
+(defn ^I32 law-shallow-cut [^TestT emon-t ^I32 confidence ^I32 expected-marks]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells cuts (new-cells)
+        ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells decisions (new-cells)
+        ^:mut ^I32 i 0 ^:mut ^I32 word 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (cells-push cuts 0) (cells-push cuts -1) (cells-push cuts 0) (cells-push cuts 0)
+    (law-line fl fw et 1 600 65)
+    (law-line fl fw et 2 100 66)
+    (ol-new ol 1 50 988 400 1000 50 988 400 988 0 0 0 3)
+    (ol-set ol 0 (olf-conf) 300)
+    (while (< i 3)
+      (do (set word (ow-new ow 1 50 988 80 1000 50 988 80 988 0 0
+                            (cells-len et) 1 0 confidence 0))
+          (ow-set ow word (owf-flags) (oe-clipped))
+          (cells-push et (+ 67 i))
+          (set i (+ i 1))))
+    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells) (new-cells) cuts
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               0 "a cut warning never deletes a reading")
+    (assert-eq (cells-len decisions) expected-marks "weak cut geometry needs uncertain OCR")
+    (return 0)))
+
+(deftest test-shallow-rule-strokes-do-not-make-a-confident-line-a-gap
+  (law-shallow-cut (test-t) 900 0)
+  (law-shallow-cut (test-t) 450 5))
+
 (deftest test-scan-mode-and-born-digital-pass-through
   (law-seam (test-t) 1 0 4 0 0 0 0)
   (law-seam (test-t) 2 1 4 0 0 0 0))
@@ -186,11 +222,20 @@
           (while (< x 50)
             (do (bitmap-set-u8 pixels x y 0 255) (set x (+ x 1))))
           (set y (+ y 1))))
-    (set x 12)
-    (while (< x 40)
-      (do (bitmap-set-u8 pixels x 10 0 20)
-          (bitmap-set-u8 pixels x 11 0 20)
-          (set x (+ x 12))))
+    (set y 10)
+    (while (< y 12)
+      (do (set x 12)
+          (while (< x 40)
+            (do (bitmap-set-u8 pixels x y 0 20) (set x (+ x 12))))
+          (set y (+ y 1))))
+    (ms-sample-cut pixels 1 cuts)
+    (assert-eq (cells-at cuts 1) -1 "a thin broken rule supplies shallow strokes only")
+    (set y 7)
+    (while (< y 10)
+      (do (set x 12)
+          (while (< x 40)
+            (do (bitmap-set-u8 pixels x y 0 20) (set x (+ x 12))))
+          (set y (+ y 1))))
     (ms-sample-cut pixels 1 cuts)
     (assert-eq (cells-at cuts 0) 0 "blank top")
     (assert-eq (cells-at cuts 1) 1 "glyphs continue through the lower edge")))
@@ -279,6 +324,30 @@
     (set word (wd-new fw page 50 y 400 (+ y 12) 50 y 400 y 0 0 start 8 line 900 -1))
     (ln-new fl page 50 y 400 (+ y 12) 50 y 400 y 0 0 word 1)
     (return 0)))
+
+(deftest test-distinct-items-can-have-the-same-name-inside-a-fuzzy-run
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 50 91)
+    (law-fragment-anchor fl fw et 1 870 49)
+    (law-line fl fw et 1 900 88)
+    (law-fragment-anchor fl fw et 1 930 50)
+    (law-fragment-anchor fl fw et 2 50 51)
+    (law-line fl fw et 2 80 88)
+    (law-fragment-anchor fl fw et 2 110 52)
+    (law-line fl fw et 2 400 92)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               0 "one equal name and fuzzy neighbors leave both items in the Model")
+    (assert-eq (ln-count fl) 8 "each item and all its amounts survive")
+    (assert-eq (cells-at decisions 2) 2 "report the fuzzy overlap for review")))
 
 (defn ^I32 law-covered-fragment [^TestT emon-t ^I32 shared]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
@@ -449,6 +518,37 @@
                        (new-cells) (new-cells) (new-cells) (new-cells))
                6 "drop the matching visual rows, including both segments on the later photo")
     (assert-eq (ln-count fl) 5 "each surviving item and price remains one original flow line")))
+
+(deftest test-a-strong-run-preserves-a-divergent-item
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells ledger (new-cells) ^:mut ^I32 i 0 ^:mut ^I32 item 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1)
+    (cells-push mask 1)
+    (law-line fl fw et 1 600 90)
+    (while (< i 4)
+      (do (law-priced-row fl fw et 1 (+ 700 (* i 40)) (+ 65 i))
+          (set i (+ i 1))))
+    (set i 0)
+    (while (< i 4)
+      (do (set item (+ 65 i))
+          (if (== i 1) (set item 88))
+          (law-priced-row fl fw et 2 (+ 40 (* i 40)) item)
+          (set i (+ i 1))))
+    (law-line fl fw et 2 350 81)
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
+                       ledger (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               4 "only the equal rows with a second exact neighbor are removed")
+    (assert-eq (ledger-count ledger) 4 "only supported equal rows go in the drop ledger")
+    (assert-eq (ln-count fl) 10 "both versions of the divergent item and the isolated match survive")
+    (assert-eq (cells-at decisions 2) 2 "the divergent item has a possible-duplicate mark")
+    (assert-eq (cells-at decisions 7) 1 "the equal rows have an overlap mark")))
 
 (deftest test-correlation-threshold-separates-moderate-from-weak-agreement
   (let [^Cells pixels (new-cells)]

@@ -9,6 +9,7 @@
 (def buckets ["gap" "abut" "partial" "1" "2-3" "4+"])
 (def traps ["clean" "identical" "asymmetric" "repeat" "separator" "different-pages"])
 (def seam-metric "model-v3")
+(def false-merge-metric "missing-model-row-v1")
 (def scratch (fs/path (or (System/getenv "EMON_SCRATCH") ".cache/scratch") "multishot"))
 (def corpus (fs/path (or (System/getenv "EMON_MULTISHOT_CORPUS") "corpus")))
 (defn read-json [f] (json/parse-string (slurp (str f)) true))
@@ -255,7 +256,7 @@
                       (mapcat #(walk % regions) children))))]
     (into [] (mapcat #(walk % {}) (cons (:body model) (:furniture model))))))
 
-(defn output-candidates [tokens pieces row-index row]
+(defn output-candidates [tokens pieces row-index row coverage similarity]
   (let [expected (vec (if (re-matches #"[-=*_.]{3,}" (:text row)) ["::rule"] (words (:text row))))
         n (count expected)
         vocabulary (set expected)]
@@ -283,32 +284,34 @@
                          length (- end start)]
                    :let [hits (common expected (map :token span))
                          score (/ (* 2.0 hits) (+ n length))]
-                   :when (and (>= hits (* 0.75 n)) (>= score 0.8))
+                   :when (and (>= hits (* coverage n)) (>= score similarity))
                    :let [distance (/ (reduce + (subvec proximity start end)) length)]]
                {:row row-index :page page :start start :end end
                 :score score :distance distance}))))
        pieces))))
 
-(defn output-occurrences [rows pieces tokens]
-  ;; At equal text similarity, give each physical row a reading before assigning a second
-  ;; one on the same photo. This also handles equal rows in the same paragraph region.
-  (let [candidates (sort-by (juxt (comp - :score) :distance :start :row :page)
-                            (mapcat #(output-candidates tokens pieces %1 %2) (range) rows))
-        allocate (fn [result matches unique?]
-                   (reduce (fn [{:keys [used assigned] :as current} {:keys [start end row page] :as match}]
-                             (let [span (range start end)
-                                   key [page row]]
-                               (if (or (some used span) (and unique? (assigned key)))
-                                 current
-                                 (-> current
-                                     (update :used into span)
-                                     (update :assigned conj key)
-                                     (update-in [:rows row] (fnil conj []) match)))))
-                           result matches))]
-    (:rows (reduce (fn [result same-score]
-                     (allocate (allocate result same-score true) same-score false))
-                   {:used #{} :assigned #{} :rows {}}
-                   (partition-by :score candidates)))))
+(defn output-occurrences
+  ([rows pieces tokens] (output-occurrences rows pieces tokens 0.75 0.8))
+  ([rows pieces tokens coverage similarity]
+   ;; At equal text similarity, give each physical row a reading before assigning a second
+   ;; one on the same photo. This also handles equal rows in the same paragraph region.
+   (let [candidates (sort-by (juxt (comp - :score) :distance :start :row :page)
+                             (mapcat #(output-candidates tokens pieces %1 %2 coverage similarity) (range) rows))
+         allocate (fn [result matches unique?]
+                    (reduce (fn [{:keys [used assigned] :as current} {:keys [start end row page] :as match}]
+                              (let [span (range start end)
+                                    key [page row]]
+                                (if (or (some used span) (and unique? (assigned key)))
+                                  current
+                                  (-> current
+                                      (update :used into span)
+                                      (update :assigned conj key)
+                                      (update-in [:rows row] (fnil conj []) match)))))
+                            result matches))]
+     (:rows (reduce (fn [result same-score]
+                      (allocate (allocate result same-score true) same-score false))
+                    {:used #{} :assigned #{} :rows {}}
+                    (partition-by :score candidates))))))
 
 (defn vertical-cut? [piece row edge]
   (let [[_ top _ bottom] (get (:boxes piece) row)
@@ -331,28 +334,71 @@
                         (and last-left first-right (< last-left i first-right)))))
              indices)))
 
-(defn false-merges [case pieces dropped seams occurrences]
-  (let [order (:order case)
-        neighbors (reduce (fn [pairs {:keys [left right kind]}]
-                            (if (= kind "overlap")
-                              (-> pairs (update left (fnil conj []) right)
-                                  (update right (fnil conj []) left))
-                              pairs))
-                          {} seams)]
-    (count (remove (fn [{:keys [page] :as row}]
-                     (let [index (order (dec page))
-                           piece (pieces index)]
-                       (some (fn [other-page]
-                               (let [other-index (order (dec other-page))
-                                     other (pieces other-index)]
-                                 (some (fn [i]
-                                         (and (row-read? (get-in case [:rows i]) (get-in piece [:boxes i]) [row])
-                                              (or (and (>= (get (:visible piece) i) 0.97)
-                                                       (>= (get (:visible other) i) 0.97))
-                                                  (some #(= other-index (:page %)) (get occurrences i)))))
-                                       (range (count (:rows case))))))
-                             (get neighbors page))))
-                   dropped))))
+(defn shares-axis? [a b c d]
+  (> (- (min b d) (max a c)) (* 0.25 (min (- b a) (- d c)))))
+
+(defn removed-gold-row [rows piece {text :text [x0 y0 x1 y1] :box}]
+  (let [tokens (words text)]
+    (->> rows
+         (keep-indexed
+          (fn [i row]
+            (let [[a b c d] (get (:boxes piece) i)
+                  hits (common tokens (words (:text row)))]
+              (when (and (pos? (get (:visible piece) i))
+                         (shares-axis? x0 x1 a c) (shares-axis? y0 y1 b d)
+                         (or (pos? hits)
+                             (and (re-matches #"[-=*_.]{3,}" text)
+                                  (re-matches #"[-=*_.]{3,}" (:text row)))))
+                {:row i :hits hits :score (match-score (:text row) text)
+                 :distance (/ (abs (- (+ y0 y1) (+ b d))) (max 1 (- y1 y0) (- d b)))}))))
+         (sort-by (juxt (comp - :hits) (comp - :score) :distance :row))
+         first :row)))
+
+(defn false-merge-rows [case pieces dropped before after]
+  ;; Count a missing gold row once, even when OCR emitted several removed segments.
+  ;; Compare readings in the Models. Crop visibility and overlap marks cannot prove survival.
+  (let [order (:order case)]
+    (into (sorted-set)
+          (keep (fn [{:keys [page] :as read}]
+                  (when (and (<= 1 page (count order)) (or (not (:other case)) (= page 1)))
+                    (let [p (order (dec page))
+                          row (removed-gold-row (:rows case) (pieces p) read)]
+                      (when (and (some #(= p (:page %)) (before row))
+                                 (not (after row)))
+                        row)))))
+          dropped)))
+
+(defn ordered-words? [expected tokens]
+  (empty? (reduce (fn [remaining token]
+                    (if (= (first remaining) token) (next remaining) remaining))
+                  expected tokens)))
+
+(defn omit-surviving-table-rows [missing case pieces model]
+  ;; A Model table row can put the labels of two gold rows in one cell and
+  ;; their amounts in another. The words may be separated in document order.
+  (when (seq missing)
+    (let [expected (mapv (comp words :text) (:rows case))
+          unique (frequencies expected)
+          table-rows (mapv #(output-tokens (assoc model :body % :furniture []) nil)
+                           (filter #(= "row" (:kind %)) (model-nodes model)))]
+      (remove
+       (fn [i]
+         (let [pattern (expected i)]
+           (and (> (count pattern) 1)
+                (= 1 (get unique pattern))
+                (some (fn [[physical piece]]
+                        (when (pos? (get (:visible piece) i))
+                          (let [[x0 y0 x1 y1] (get (:boxes piece) i)
+                                page (inc (.indexOf (:order case) physical))
+                                projected? (fn [token]
+                                             (some (fn [[a b c d]]
+                                                     (and (shares-axis? x0 x1 a c)
+                                                          (shares-axis? y0 y1 b d)))
+                                                   (get (:regions token) page)))]
+                            (some #(ordered-words? pattern (map :token (filter projected? %)))
+                                  table-rows))))
+                      pieces))))
+       missing))))
 
 (defn ambiguous-duplicate-rows [rows]
   (let [bags (mapv #(frequencies (words (:text %))) rows)]
@@ -461,18 +507,24 @@
         nonadjacent-gaps (nonadjacent-gap-counts order seams)
         source-order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
         joined-order (mapv #(order (dec %)) source-order)
-        concat-occ (output-occurrences (:rows case) physical-pieces
-                                       (into [] (mapcat #(output-tokens (:model (separate %)) %) physical-order)))
-        actual-occ (if actual
-                     (let [tokens (mapv (fn [t] (update t :regions
-                                                      #(into {} (for [[p box] % :when (<= p (count physical-order))]
-                                                                  [(order (dec p)) box]))))
-                                        (output-tokens (:model actual) nil))]
-                       (output-occurrences (:rows case) physical-pieces tokens))
-                     concat-occ)
+        concat-tokens (into [] (mapcat #(output-tokens (:model (separate %)) %) physical-order))
+        actual-tokens (when actual
+                        (mapv (fn [t] (update t :regions
+                                             #(into {} (for [[p box] % :when (<= p (count physical-order))]
+                                                         [(order (dec p)) box]))))
+                              (output-tokens (:model actual) nil)))
+        concat-occ (output-occurrences (:rows case) physical-pieces concat-tokens)
+        actual-occ (if actual (output-occurrences (:rows case) physical-pieces actual-tokens) concat-occ)
         ambiguous (ambiguous-duplicate-rows (:rows case))
         concat-dup (duplicate-events (apply dissoc concat-occ ambiguous) (count pieces))
         actual-dup (duplicate-events (apply dissoc actual-occ ambiguous) (count pieces))
+        drops (seq (dropped-seam-reads (:model actual)))
+        false-merge-rows (when drops
+                           ;; A whole row can still be read with a few OCR substitutions or splits.
+                           (let [missing (false-merge-rows case pieces drops
+                                                           (output-occurrences (:rows case) physical-pieces concat-tokens 0.70 0.72)
+                                                           (output-occurrences (:rows case) physical-pieces actual-tokens 0.70 0.72))]
+                             (omit-surviving-table-rows missing case physical-pieces (:model actual))))
         scan-total (total-count (:total case) (text-of scan))
         concat-total (total-count (:total case) concat-text)
         actual-total (total-count (:total case) final-text)
@@ -487,13 +539,16 @@
                                           (count (evidence-occurrences case physical-pieces after)))
                      :evidence_missing_concat (- (count (:rows case))
                                                  (count (evidence-occurrences case physical-pieces before)))
-                     :false-merges (false-merges case pieces (dropped-seam-reads (:model actual)) seams actual-occ)
+                     :false-merges (count false-merge-rows)
+                     :clean-gap (if (and (= "clean" (:kind case))
+                                         (some #{"possible-gap" "seam-gap"} (map :kind seams))) 1 0)
                      :changed-clean (if (and control (some #{"clean" "different-pages"} [(:kind case)])
                                              (not= (:canonical actual) (:canonical control))) 1 0)
                      :changed-repeat (if (and control (some #{"identical" "repeat"} [(:kind case)])
                                               (not= (:canonical actual) (:canonical control))) 1 0)}]
     {:kind (:kind case)
      :order source-order
+     :false-merge-rows (vec false-merge-rows)
      :output-duplicates (mapv (fn [event]
                                 (assoc event :marks (vec (seam-marks order seams (:left event) (:right event)))))
                               (remove #(= (:left %) (:right %))
@@ -578,7 +633,7 @@
                                                    (pos? (get-in % [:actual :dup])))
                                             (:seams score))
                 checks (select-keys (:checks score)
-                                    [:changed-clean :changed-repeat :false-merges :total-missing :total-duplicates])]
+                                    [:changed-clean :clean-gap :changed-repeat :false-merges :total-missing :total-duplicates])]
             (when (or (pos? unflagged) disallowed-duplicate? (not= lost lost-flagged)
                       (pos? spurious-gap) (some pos? (vals checks)))
               {:id (:id case) :kind (:kind case) :seams seams :checks checks})))
@@ -635,10 +690,10 @@
         disallowed-duplicate? (some (fn [[bucket score]]
                                       (and (not= "1" (name bucket)) (pos? (get-in score [:actual :dup]))))
                                     buckets)
-        {:keys [changed-clean changed-repeat total-missing total-duplicates false-merges]} (:checks result)
+        {:keys [changed-clean clean-gap changed-repeat total-missing total-duplicates false-merges]} (:checks result)
         {:keys [actual concat scan]} (:words result)]
     (when (or (pos? unflagged) disallowed-duplicate? (not= lost lost-flagged)
-              (pos? changed-clean) (pos? changed-repeat) (pos? total-missing)
+              (pos? changed-clean) (pos? clean-gap) (pos? changed-repeat) (pos? total-missing)
               (pos? total-duplicates) (pos? false-merges)
               (< (:recall actual) (:recall concat))
               (< (:recall actual) (- (:recall scan) 0.05))
@@ -772,6 +827,7 @@
                                            keep (assoc :case-scores rows)))]))]
                 (let [data {:seed seed :mode mode :input (if tiff "tiff" "images")
                             :seam-metric seam-metric
+                            :false-merge-metric false-merge-metric
                             :cases hashes :engines results}]
                   (spit (str result-file) (str (json/generate-string data {:pretty true}) "\n"))
                   (when reference (compare-sweep! reference (json/parse-string (json/generate-string data) true)))

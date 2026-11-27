@@ -800,9 +800,9 @@ func msDarkEdge(bitmap *port.Bitmap, x int32, y int32, channels int32) int32 {
 	return 0
 }
 
-func msCutInk(bitmap *port.Bitmap, y int32, inward int32, left int32, right int32) int32 {
+func msCutInk(bitmap *port.Bitmap, y int32, inward int32, left int32, right int32, depth int32) int32 {
 	// Narrow dark strokes crossing the outermost rows corroborate a physical cut, even when OCR omits
-	// the fragment. Require several separate strokes to reject page borders and isolated noise.
+	// the fragment. For page-wide evidence, require the strokes to extend beyond thin printed rules.
 	var w int32 = port.BitmapW(bitmap)
 	var channels int32 = port.BitmapChannels(bitmap)
 	var x int32 = left
@@ -819,7 +819,7 @@ func msCutInk(bitmap *port.Bitmap, y int32, inward int32, left int32, right int3
 				inside += 1
 			}
 			lastInside = x
-			if msDarkEdge(bitmap, x, y, channels) == 1 {
+			if (msDarkEdge(bitmap, x, y, channels) == 1) && ((depth == 1) || ((msDarkEdge(bitmap, x, y+(2*inward), channels) == 1) && (msDarkEdge(bitmap, x, y+(depth*inward), channels) == 1))) {
 				if (x - last) > 1 {
 					strokes += 1
 				}
@@ -834,17 +834,27 @@ func msCutInk(bitmap *port.Bitmap, y int32, inward int32, left int32, right int3
 	return 0
 }
 
+func msBitmapCut(bitmap *port.Bitmap, y int32, inward int32, w int32) int32 {
+	if msCutInk(bitmap, y, inward, 0, w, 4) == 1 {
+		return 1
+	}
+	if msCutInk(bitmap, y, inward, 0, w, 1) == 1 {
+		return -1
+	}
+	return 0
+}
+
 func MsSampleCut(bitmap *port.Bitmap, page int32, cuts *port.Cells) int32 {
 	var h int32 = port.BitmapH(bitmap)
 	var w int32 = port.BitmapW(bitmap)
 	for port.CellsLen(cuts) < (page * 2) {
 		port.CellsPush(cuts, 0)
 	}
-	if h < 3 {
+	if h < 5 {
 		return 0
 	}
-	port.CellsSet(cuts, (page*2)-2, msCutInk(bitmap, 0, 1, 0, w))
-	port.CellsSet(cuts, (page*2)-1, msCutInk(bitmap, h-1, -1, 0, w))
+	port.CellsSet(cuts, (page*2)-2, msBitmapCut(bitmap, 0, 1, w))
+	port.CellsSet(cuts, (page*2)-1, msBitmapCut(bitmap, h-1, -1, w))
 	return 0
 }
 
@@ -872,9 +882,9 @@ func MsLineCuts(bitmap *port.Bitmap, lines *port.Cells, selection *port.Cells, s
 			left = msPixel(evidence.OlGet(lines, line, evidence.LhX0())-x0, w, x1-x0)
 			right = msPixel(evidence.OlGet(lines, line, evidence.LhX1())-x0, w, x1-x0)
 			if top <= bottom {
-				cut = msCutInk(bitmap, 0, 1, left, right)
+				cut = msCutInk(bitmap, 0, 1, left, right, 1)
 			} else {
-				cut = msCutInk(bitmap, h-1, -1, left, right)
+				cut = msCutInk(bitmap, h-1, -1, left, right, 1)
 			}
 		}
 		port.CellsPush(cuts, cut)
@@ -1099,7 +1109,7 @@ func msRunScore(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, 
 		}
 		if msKey(keys, la, 2) == 2 {
 			sim = MsSimilarity(codepoints, msKey(keys, la, 0), msKey(keys, la, 1), msKey(keys, lb, 0), msKey(keys, lb, 1), row)
-			if (sim < 450) || ((n == 1) && (sim < 850)) {
+			if (sim < 450) || ((n == 1) && (sim < 850) && ((sim < 780) || (msMin(msKey(keys, la, 1), msKey(keys, lb, 1)) < 8))) {
 				return 0
 			}
 			if sim < 780 {
@@ -1251,9 +1261,27 @@ func msFragmentCovered(et *port.Cells, ow *port.Cells, first int32, count int32,
 	return 0
 }
 
+func msFragmentConfident(ow *port.Cells, first int32, count int32) int32 {
+	var index int32 = first
+	var confidence int32 = 0
+	if (first < 0) || (count < 3) {
+		return 0
+	}
+	for index < (first + count) {
+		confidence += evidence.OwGet(ow, index, evidence.HdConf())
+		index += 1
+	}
+	if confidence >= (count * 700) {
+		return 1
+	}
+	return 0
+}
+
 func msGapEdge(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, keys *port.Cells, pages *port.Cells, cuts *port.Cells, page int32, bottom int32, neighbor *port.Cells, firstNeighbor int32, lastNeighbor int32, dropped *port.Cells, context int32) int32 {
+	// Thin rule ink can make the OCR line box touch the frame while leaving its words intact.
 	var height int32 = model.PageH(pages, page-1)
 	var pixels int32 = model.PagePxH(pages, page-1)
+	var cut int32 = msCut(cuts, page, bottom)
 	var i int32 = 0
 	var edge int32 = 0
 	var covered int32 = 0
@@ -1271,7 +1299,7 @@ func msGapEdge(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, f
 			}
 			first = evidence.OlGet(ol, i, evidence.LhFirst())
 			count = evidence.OlGet(ol, i, evidence.LhCount())
-			if ((edge == 0) || ((pixels > 0) && ((int64(edge) * int64(pixels)) <= (int64(height) * int64(4))) && ((int64(edge) * int64(pixels)) >= (int64(height) * int64(-4))))) && ((count == 0) || ((first >= 0) && ((evidence.OwGet(ow, first, evidence.OwfFlags()) & evidence.OeClipped()) != 0))) {
+			if ((edge == 0) || ((pixels > 0) && ((int64(edge) * int64(pixels)) <= (int64(height) * int64(4))) && ((int64(edge) * int64(pixels)) >= (int64(height) * int64(-4))))) && ((count == 0) || ((first >= 0) && ((evidence.OwGet(ow, first, evidence.OwfFlags()) & evidence.OeClipped()) != 0))) && ((cut >= 0) || (msFragmentConfident(ow, first, count) == 0)) {
 				matches = 0
 				j = firstNeighbor
 				for (j < lastNeighbor) && (j < port.CellsLen(neighbor)) {
@@ -1296,7 +1324,22 @@ func msGapEdge(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, f
 	if (covered + uncovered) > 0 {
 		return covered + uncovered
 	}
-	return msCut(cuts, page, bottom)
+	return msMax(0, cut)
+}
+
+func msJoinGap(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, keys *port.Cells, pages *port.Cells, cuts *port.Cells, dropped *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells, overlap int32) int32 {
+	var na int32 = msMatchLeft(overlap)
+	var nb int32 = overlap % 32
+	var endA int32 = port.CellsLen(a)
+	var endB int32 = port.CellsLen(b)
+	if overlap > 0 {
+		endA = na + 2
+		endB = nb + 2
+	}
+	if ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, msMax(0, nb-1), endB, dropped, 0) & 1) != 0) || ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, msMax(0, na-1), endA, dropped, 0) & 1) != 0) {
+		return 1
+	}
+	return 0
 }
 
 func msDropLine(fl *port.Cells, fw *port.Cells, et *port.Cells, line int32, ledger *port.Cells, modelText *port.Cells) int32 {
@@ -1323,45 +1366,27 @@ func msDropLine(fl *port.Cells, fw *port.Cells, et *port.Cells, line int32, ledg
 	return 0
 }
 
-func msWordSame(fw *port.Cells, et *port.Cells, a int32, b int32) int32 {
-	var n int32 = evidence.WdGet(fw, a, evidence.HdTlen())
-	var sa int32 = evidence.WdGet(fw, a, evidence.HdTstart())
-	var sb int32 = evidence.WdGet(fw, b, evidence.HdTstart())
-	var pos int32 = 0
-	if n != evidence.WdGet(fw, b, evidence.HdTlen()) {
-		return 0
-	}
-	for pos < n {
-		if msFold(port.CellsAt(et, sa+pos)) != msFold(port.CellsAt(et, sb+pos)) {
+func msRowLive(keys *port.Cells, dropped *port.Cells, line int32) int32 {
+	var segment int32 = line
+	for segment >= 0 {
+		if port.CellsAt(dropped, segment) == 1 {
 			return 0
 		}
-		pos += 1
+		segment = msKey(keys, segment, 3)
 	}
 	return 1
 }
 
-func msFuseRow(fl *port.Cells, fw *port.Cells, et *port.Cells, kept int32, other int32, edits *port.Cells) int32 {
-	// A confident alternative may repair a word when its neighbour is shared. Preserve the
-	// retained row's geometry, word gaps and page provenance.
-	var n int32 = evidence.LnGet(fl, kept, evidence.LhCount())
-	var a int32 = evidence.LnGet(fl, kept, evidence.LhFirst())
-	var b int32 = evidence.LnGet(fl, other, evidence.LhFirst())
-	var base int32 = evidence.LnCount(fl)
-	var i int32 = 0
-	var current int32 = 0
-	var donor int32 = 0
-	if (n < 2) || (n != evidence.LnGet(fl, other, evidence.LhCount())) {
-		return 0
+func msDropRow(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, line int32, dropped *port.Cells, ledger *port.Cells, modelText *port.Cells) int32 {
+	var segment int32 = line
+	var count int32 = 0
+	for segment >= 0 {
+		msDropLine(fl, fw, et, segment, ledger, modelText)
+		port.CellsSet(dropped, segment, 1)
+		count += 1
+		segment = msKey(keys, segment, 3)
 	}
-	for i < n {
-		current = a + i
-		donor = b + i
-		if (evidence.WdGet(fw, donor, evidence.HdConf()) > (150 + evidence.WdGet(fw, current, evidence.HdConf()))) && (evidence.WdGet(fw, current, evidence.HdConf()) < 750) && (evidence.WdGet(fw, donor, evidence.HdConf()) >= 800) && (msWordSame(fw, et, current, donor) == 0) && (((i > 0) && (msWordSame(fw, et, current-1, donor-1) == 1)) || (((i + 1) < n) && (msWordSame(fw, et, current+1, donor+1) == 1))) {
-			port.CellsSet(edits, base+current, donor)
-		}
-		i += 1
-	}
-	return 0
+	return count
 }
 
 func msRebuild(fl *port.Cells, fw *port.Cells, dropped *port.Cells, newLines *port.Cells, newWords *port.Cells) int32 {
@@ -1369,22 +1394,13 @@ func msRebuild(fl *port.Cells, fw *port.Cells, dropped *port.Cells, newLines *po
 	var word int32 = 0
 	var stop int32 = 0
 	var first int32 = 0
-	var donor int32 = 0
-	var target int32 = 0
 	for i < evidence.LnCount(fl) {
 		if port.CellsAt(dropped, i) == 0 {
 			word = evidence.LnGet(fl, i, evidence.LhFirst())
 			stop = word + evidence.LnGet(fl, i, evidence.LhCount())
 			first = player.FwCount(newWords)
 			for word < stop {
-				target = player.FwCount(newWords)
 				player.FwCopyWord(newWords, fw, word, evidence.LnCount(newLines))
-				donor = port.CellsAt(dropped, evidence.LnCount(fl)+word)
-				if donor >= 0 {
-					evidence.WdSet(newWords, target, evidence.HdTstart(), evidence.WdGet(fw, donor, evidence.HdTstart()))
-					evidence.WdSet(newWords, target, evidence.HdTlen(), evidence.WdGet(fw, donor, evidence.HdTlen()))
-					evidence.WdSet(newWords, target, evidence.HdConf(), evidence.WdGet(fw, donor, evidence.HdConf()))
-				}
 				word += 1
 			}
 			var count int32 = evidence.LnGet(fl, i, evidence.LhCount())
@@ -1460,7 +1476,8 @@ func msPairMatch(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, a *po
 		n += 1
 	}
 	var band int32 = msWordAlign(keys, codepoints, a, b, aw, bw, wordRow)
-	if (best == 0) || (((band / 32) % 1024) > ((best / 32) % 1024)) {
+	// Prefer identifiable row pairs when both matchers cover the same number of content rows.
+	if (best == 0) || (msMatchRows(band) > msMatchRows(best)) {
 		return band
 	}
 	return best
@@ -1534,35 +1551,27 @@ func msPair(fl *port.Cells, keys *port.Cells, codepoints *port.Cells, left int32
 		}
 	}
 	if msMatchRows(match) < 3 {
-		if (port.CellsLen(a) > 3) && (msKey(keys, port.CellsAt(a, 0), 8) == 1) {
+		if (port.CellsLen(a) > 1) && (msKey(keys, port.CellsAt(a, 0), 8) == 1) {
 			edge = port.CellsAt(a, 0)
 			msWithoutEdgeRow(a)
 			candidate = msPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow)
 			count = candidate % 32
-			if (msMatchRows(candidate) >= 3) && (count < port.CellsLen(b)) && (msRowSubset(keys, codepoints, edge, port.CellsAt(b, count)) == 1) {
-				port.CellsDrop(aw, 0)
-				port.CellsPush(aw, edge)
-				port.CellsDrop(bw, 0)
+			if (msLinkScore(candidate) > msLinkScore(match)) && (count < port.CellsLen(b)) && (msRowSubset(keys, codepoints, edge, port.CellsAt(b, count)) == 1) {
 				return candidate + msTrimmedFactor()
 			}
 			msRestoreEdgeRow(a, edge)
 		}
-		if (port.CellsLen(b) > 3) && (msKey(keys, port.CellsAt(b, 0), 8) == 1) {
+		if (port.CellsLen(b) > 1) && (msKey(keys, port.CellsAt(b, 0), 8) == 1) {
 			edge = port.CellsAt(b, 0)
 			msWithoutEdgeRow(b)
 			candidate = msPairMatch(fl, keys, codepoints, a, b, aw, bw, wordRow)
 			count = msMatchLeft(candidate)
-			if (msMatchRows(candidate) >= 3) && (count < port.CellsLen(a)) && (msRowSubset(keys, codepoints, edge, port.CellsAt(a, count)) == 1) {
-				port.CellsDrop(bw, 0)
-				port.CellsPush(bw, edge)
-				port.CellsDrop(aw, 0)
+			if (msLinkScore(candidate) > msLinkScore(match)) && (count < port.CellsLen(a)) && (msRowSubset(keys, codepoints, edge, port.CellsAt(a, count)) == 1) {
 				return candidate + msTrimmedFactor()
 			}
 			msRestoreEdgeRow(b, edge)
 		}
 	}
-	port.CellsDrop(aw, 0)
-	port.CellsDrop(bw, 0)
 	return match
 }
 
@@ -1602,6 +1611,140 @@ func msCopySplit(fl *port.Cells, fw *port.Cells, a *port.Cells, b *port.Cells, m
 	return split
 }
 
+func msSameWordBand(keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, na int32, nb int32, aw *port.Cells, bw *port.Cells) int32 {
+	// Fuzzy alignment discovers the seam. Deletion across different line breaks requires
+	// the same entire word stream, including words omitted by the alignment.
+	var an int32 = 4 * msWordStream(keys, codepoints, a, 1, aw)
+	var bn int32 = 4 * msWordStream(keys, codepoints, b, 0, bw)
+	var i int32 = 0
+	var j int32 = 0
+	var end int32 = 0
+	var k int32 = 0
+	var size int32 = 0
+	var sa int32 = 0
+	var sb int32 = 0
+	for (i < an) && (port.CellsAt(aw, i+2) >= na) {
+		i += 4
+	}
+	for (end < bn) && (port.CellsAt(bw, end+2) < nb) {
+		end += 4
+	}
+	if (end == 0) || ((an - i) != end) {
+		return 0
+	}
+	for j < end {
+		size = port.CellsAt(aw, i+1)
+		if size != port.CellsAt(bw, j+1) {
+			return 0
+		}
+		sa = port.CellsAt(aw, i)
+		sb = port.CellsAt(bw, j)
+		k = 0
+		for k < size {
+			if port.CellsAt(codepoints, sa+k) != port.CellsAt(codepoints, sb+k) {
+				return 0
+			}
+			k += 1
+		}
+		i += 4
+		j += 4
+	}
+	return 1
+}
+
+func msBandLive(keys *port.Cells, band *port.Cells, n int32, dropped *port.Cells) int32 {
+	var i int32 = 0
+	for i < n {
+		if msRowLive(keys, dropped, port.CellsAt(band, i)) == 0 {
+			return 0
+		}
+		i += 1
+	}
+	return 1
+}
+
+func msRemoveBand(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, band *port.Cells, n int32, dropped *port.Cells, ledger *port.Cells, modelText *port.Cells) int32 {
+	var i int32 = 0
+	var count int32 = 0
+	for i < n {
+		count += msDropRow(fl, fw, et, keys, port.CellsAt(band, i), dropped, ledger, modelText)
+		i += 1
+	}
+	return count
+}
+
+func msRowSupport(keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, n int32, i int32) int32 {
+	// An identical item name can recur with a different amount. A distinct exact
+	// neighbor supports the pair. Separators carry no independent vote.
+	var line int32 = port.CellsAt(a, n-i-1)
+	var before int32 = i - 1
+	var after int32 = i + 1
+	var above int32 = -1
+	var below int32 = -1
+	for (before >= 0) && (msKey(keys, port.CellsAt(b, before), 2) == 1) {
+		before -= 1
+	}
+	for (after < n) && (msKey(keys, port.CellsAt(b, after), 2) == 1) {
+		after += 1
+	}
+	if (before >= 0) && (msEqual(keys, codepoints, port.CellsAt(a, n-before-1), port.CellsAt(b, before)) == 1) {
+		above = port.CellsAt(b, before)
+	}
+	if (after < n) && (msEqual(keys, codepoints, port.CellsAt(a, n-after-1), port.CellsAt(b, after)) == 1) {
+		below = port.CellsAt(b, after)
+	}
+	if msKey(keys, line, 2) == 1 {
+		if (above >= 0) && (below >= 0) && (msEqual(keys, codepoints, above, below) == 0) {
+			return 1
+		}
+		return 0
+	}
+	if ((above >= 0) && (msEqual(keys, codepoints, line, above) == 0)) || ((below >= 0) && (msEqual(keys, codepoints, line, below) == 0)) {
+		return 1
+	}
+	return 0
+}
+
+func msDeduplicate(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, match int32, dropped *port.Cells, ledger *port.Cells, modelText *port.Cells, aw *port.Cells, bw *port.Cells) int32 {
+	// An overlap can be real while its copies disagree. Remove a row only when all
+	// its text has a surviving witness. A negative count denotes an incomplete reduction.
+	var na int32 = msMatchLeft(match)
+	var nb int32 = match % 32
+	var split int32 = msCopySplit(fl, fw, a, b, match)
+	var i int32 = 0
+	var la int32 = 0
+	var lb int32 = 0
+	var removed int32 = 0
+	var ambiguous int32 = 0
+	if msMatchKind(match) >= msWordCandidate() {
+		if (msBandLive(keys, a, na, dropped) == 1) && (msBandLive(keys, b, nb, dropped) == 1) && (msSameWordBand(keys, codepoints, a, b, na, nb, aw, bw) == 1) {
+			if split > 0 {
+				return msRemoveBand(fl, fw, et, keys, b, nb, dropped, ledger, modelText)
+			}
+			return msRemoveBand(fl, fw, et, keys, a, na, dropped, ledger, modelText)
+		}
+		return 0
+	}
+	for i < na {
+		la = port.CellsAt(a, na-i-1)
+		lb = port.CellsAt(b, i)
+		if (msEqual(keys, codepoints, la, lb) == 1) && ((na == 1) || (msRowSupport(keys, codepoints, a, b, na, i) == 1)) && (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) {
+			if i < split {
+				removed += msDropRow(fl, fw, et, keys, lb, dropped, ledger, modelText)
+			} else {
+				removed += msDropRow(fl, fw, et, keys, la, dropped, ledger, modelText)
+			}
+		} else {
+			ambiguous = 1
+		}
+		i += 1
+	}
+	if ambiguous == 1 {
+		return 0 - removed
+	}
+	return removed
+}
+
 func msWordPixels(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, na int32, nb int32) int32 {
 	// A word band can cross different OCR line boundaries. Compare only identifiable whole row pairs.
 	var i int32 = 0
@@ -1631,7 +1774,7 @@ func msConfirmPair(fl *port.Cells, fw *port.Cells, keys *port.Cells, codepoints 
 	if rows == 0 {
 		return 0
 	}
-	if (rows == 1) && ((na != 1) || (nb != 1) || (msEqual(keys, codepoints, port.CellsAt(a, 0), port.CellsAt(b, 0)) == 0)) {
+	if (rows == 1) && ((na != 1) || (nb != 1) || (match >= msTrimmedFactor()) || (msEqual(keys, codepoints, port.CellsAt(a, 0), port.CellsAt(b, 0)) == 0)) {
 		return 0
 	}
 	if (rows >= 3) && (msMatchQuality(match) >= msQualityCode(850)) && (kind < msWordOpen()) {
@@ -1859,7 +2002,7 @@ func msSkippedGaps(fl *port.Cells, fw *port.Cells, keys *port.Cells, pages *port
 		for j < end {
 			right = port.CellsAt(order, j-1)
 			candidate = 0
-			if (right != head) && (msOpenEdge(outgoing, first, left) == 1) && (msOpenEdge(incoming, first, right) == 1) && (port.CellsAt(scores, ((right-first)*n)+(left-first)) == 0) {
+			if (right != head) && (msOpenEdge(outgoing, first, left) == 1) && (msOpenEdge(incoming, first, right) == 1) && (port.CellsAt(scores, ((right-first)*n)+(left-first)) <= 0) {
 				msPageEdge(fl, keys, right, 0, b)
 				if ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, port.CellsLen(b), dropped, 0) & 1) != 0) && ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, port.CellsLen(a), dropped, 0) & 1) != 0) {
 					candidate = 1
@@ -1902,7 +2045,6 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 	var first int32 = 1
 	var end int32 = 1
 	var i int32 = 0
-	var line int32 = 0
 	var changes int32 = 0
 	var left int32 = 0
 	var right int32 = 0
@@ -1910,20 +2052,13 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 	var reverse int32 = 0
 	var accepted int32 = 0
 	var reverseAccepted int32 = 0
-	var split int32 = 0
-	var leftCount int32 = 0
-	var rightDrop int32 = 0
+	var removed int32 = 0
 	for page <= np {
 		port.CellsPush(order, page)
 		page += 1
 	}
 	for i < evidence.LnCount(fl) {
 		port.CellsPush(dropped, 0)
-		i += 1
-	}
-	i = 0
-	for i < player.FwCount(fw) {
-		port.CellsPush(dropped, -1)
 		i += 1
 	}
 	page = 1
@@ -1945,66 +2080,20 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 			forward = msPair(fl, keys, codepoints, left, right, a, b, aw, bw, wordRow)
 			accepted = msConfirmPair(fl, fw, keys, codepoints, offsets, pixels, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward)
 			if (accepted == 1) && (((port.CellsLen(outgoing) > 0) && (port.CellsAt(outgoing, left-first) == right)) || ((reverseAccepted == 0) && (msOpenEdge(outgoing, first, left) == 1) && (msOpenEdge(incoming, first, right) == 1))) {
-				leftCount = msMatchLeft(forward)
-				split = msCopySplit(fl, fw, a, b, forward)
-				rightDrop = split
-				if msMatchKind(forward) < msWordCandidate() {
-					i = 0
-					for i < leftCount {
-						if i < split {
-							msFuseRow(fl, fw, et, port.CellsAt(a, leftCount-i-1), port.CellsAt(b, i), dropped)
-						} else {
-							msFuseRow(fl, fw, et, port.CellsAt(b, i), port.CellsAt(a, leftCount-i-1), dropped)
-						}
-						i += 1
+				if msJoinGap(ol, ow, et, fl, fw, keys, pages, cuts, dropped, left, right, a, b, forward) == 1 {
+					msMark(seams, left, right, 3, 0)
+				}
+				removed = msDeduplicate(fl, fw, et, keys, codepoints, a, b, forward, dropped, ledger, modelText, aw, bw)
+				if (removed <= 0) || (forward >= msTrimmedFactor()) {
+					msMark(seams, left, right, 2, forward)
+				}
+				if removed != 0 {
+					msMark(seams, left, right, 1, forward)
+					if removed < 0 {
+						removed = 0 - removed
 					}
+					changes += removed
 				}
-				if (split > 0) && (msMatchKind(forward) >= msWordCandidate()) {
-					rightDrop = forward % 32
-				}
-				i = 0
-				for i < (leftCount - split) {
-					line = port.CellsAt(a, i)
-					for line >= 0 {
-						if port.CellsAt(dropped, line) == 0 {
-							msDropLine(fl, fw, et, line, ledger, modelText)
-							port.CellsSet(dropped, line, 1)
-							changes += 1
-						}
-						line = msKey(keys, line, 3)
-					}
-					i += 1
-				}
-				i = 0
-				for i < rightDrop {
-					line = port.CellsAt(b, i)
-					for line >= 0 {
-						if port.CellsAt(dropped, line) == 0 {
-							msDropLine(fl, fw, et, line, ledger, modelText)
-							port.CellsSet(dropped, line, 1)
-							changes += 1
-						}
-						line = msKey(keys, line, 3)
-					}
-					i += 1
-				}
-				if port.CellsLen(aw) > 0 {
-					line = port.CellsAt(aw, 0)
-					if port.CellsAt(dropped, line) == 0 {
-						msDropLine(fl, fw, et, line, ledger, modelText)
-						port.CellsSet(dropped, line, 1)
-						changes += 1
-					}
-				}
-				if port.CellsLen(bw) > 0 {
-					line = port.CellsAt(bw, 0)
-					if port.CellsAt(dropped, line) == 0 {
-						msDropLine(fl, fw, et, line, ledger, modelText)
-						port.CellsSet(dropped, line, 1)
-						changes += 1
-					}
-				}
-				msMark(seams, left, right, 1, forward)
 			} else {
 				if forward > 0 {
 					msMark(seams, left, right, 2, forward)
@@ -2012,8 +2101,8 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 				if reverse > 0 {
 					msMark(seams, right, left, 2, reverse)
 				}
-				if (reverseAccepted == 0) && (msOpenEdge(outgoing, first, left) == 1) && (msOpenEdge(incoming, first, right) == 1) && ((forward == 0) || ((msMatchKind(forward) >= msWordCandidate()) && (msMatchRows(forward) == 1))) {
-					if ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, 0, port.CellsLen(b), dropped, 0) & 1) != 0) || ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, 0, port.CellsLen(a), dropped, 0) & 1) != 0) {
+				if (reverseAccepted == 0) && (msOpenEdge(outgoing, first, left) == 1) && (msOpenEdge(incoming, first, right) == 1) {
+					if msJoinGap(ol, ow, et, fl, fw, keys, pages, cuts, dropped, left, right, a, b, 0) == 1 {
 						msMark(seams, left, right, 3, 0)
 					} else if ((end - first) > 16) && (forward == 0) && (reverse == 0) && (msCut(cuts, right, 1) == 1) && (msCut(cuts, left, 0) == 1) {
 						msMark(seams, right, left, 3, 0)
@@ -2043,7 +2132,7 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 func msPhotoPage(seams *port.Cells, cuts *port.Cells, page int32) int32 {
 	// A bitmap edge with cut text or a corroborated overlap classifies this raster page as a partial photo.
 	// The overlap can supply that evidence even when the photo has clean margins.
-	if ((page * 2) <= port.CellsLen(cuts)) && ((port.CellsAt(cuts, (page*2)-2) + port.CellsAt(cuts, (page*2)-1)) > 0) {
+	if (msCut(cuts, page, 0) > 0) || (msCut(cuts, page, 1) > 0) {
 		return 1
 	}
 	var i int32 = 0

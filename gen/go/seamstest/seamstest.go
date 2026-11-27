@@ -135,6 +135,50 @@ func TestCleanBreakAndClippedGap(emonT *testing.T) {
 	lawSeam(emonT, 2, 0, 0, 0, 1, 0, 3)
 }
 
+func TestAnOverlapDoesNotHideAnUncoveredCut(emonT *testing.T) {
+	lawSeam(emonT, 2, 0, 4, 0, 1, 5, 3)
+}
+
+func lawShallowCut(emonT *testing.T, confidence int32, expectedMarks int32) int32 {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var cuts *port.Cells = port.NewCells()
+	var ol *port.Cells = port.NewCells()
+	var ow *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var i int32 = 0
+	var word int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, -1)
+	port.CellsPush(cuts, 0)
+	port.CellsPush(cuts, 0)
+	lawLine(fl, fw, et, 1, 600, 65)
+	lawLine(fl, fw, et, 2, 100, 66)
+	evidence.OlNew(ol, 1, 50, 988, 400, 1000, 50, 988, 400, 988, 0, 0, 0, 3)
+	evidence.OlSet(ol, 0, evidence.OlfConf(), 300)
+	for i < 3 {
+		word = evidence.OwNew(ow, 1, 50, 988, 80, 1000, 50, 988, 80, 988, 0, 0, port.CellsLen(et), 1, 0, confidence, 0)
+		evidence.OwSet(ow, word, evidence.OwfFlags(), evidence.OeClipped())
+		port.CellsPush(et, 67+i)
+		i += 1
+	}
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, ol, ow, et, fl, fw, port.NewCells(), port.NewCells(), cuts, port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "a cut warning never deletes a reading")
+	port.AssertEq(emonT, port.CellsLen(decisions), expectedMarks, "weak cut geometry needs uncertain OCR")
+	return 0
+}
+
+func TestShallowRuleStrokesDoNotMakeAConfidentLineAGap(emonT *testing.T) {
+	lawShallowCut(emonT, 900, 0)
+	lawShallowCut(emonT, 450, 5)
+}
+
 func TestScanModeAndBornDigitalPassThrough(emonT *testing.T) {
 	lawSeam(emonT, 1, 0, 4, 0, 0, 0, 0)
 	lawSeam(emonT, 2, 1, 4, 0, 0, 0, 0)
@@ -242,11 +286,25 @@ func TestSeveralStrokesAtTheBitmapEdgeAreClippingEvidence(emonT *testing.T) {
 		}
 		y += 1
 	}
-	x = 12
-	for x < 40 {
-		port.BitmapSetU8(pixels, x, 10, 0, 20)
-		port.BitmapSetU8(pixels, x, 11, 0, 20)
-		x += 12
+	y = 10
+	for y < 12 {
+		x = 12
+		for x < 40 {
+			port.BitmapSetU8(pixels, x, y, 0, 20)
+			x += 12
+		}
+		y += 1
+	}
+	seams.MsSampleCut(pixels, 1, cuts)
+	port.AssertEq(emonT, port.CellsAt(cuts, 1), -1, "a thin broken rule supplies shallow strokes only")
+	y = 7
+	for y < 10 {
+		x = 12
+		for x < 40 {
+			port.BitmapSetU8(pixels, x, y, 0, 20)
+			x += 12
+		}
+		y += 1
 	}
 	seams.MsSampleCut(pixels, 1, cuts)
 	port.AssertEq(emonT, port.CellsAt(cuts, 0), 0, "blank top")
@@ -355,6 +413,30 @@ func lawFragmentAnchor(fl *port.Cells, fw *port.Cells, et *port.Cells, page int3
 	word = evidence.WdNew(fw, page, 50, y, 400, y+12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1)
 	evidence.LnNew(fl, page, 50, y, 400, y+12, 50, y, 400, y, 0, 0, word, 1)
 	return 0
+}
+
+func TestDistinctItemsCanHaveTheSameNameInsideAFuzzyRun(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 50, 91)
+	lawFragmentAnchor(fl, fw, et, 1, 870, 49)
+	lawLine(fl, fw, et, 1, 900, 88)
+	lawFragmentAnchor(fl, fw, et, 1, 930, 50)
+	lawFragmentAnchor(fl, fw, et, 2, 50, 51)
+	lawLine(fl, fw, et, 2, 80, 88)
+	lawFragmentAnchor(fl, fw, et, 2, 110, 52)
+	lawLine(fl, fw, et, 2, 400, 92)
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model")
+	port.AssertEq(emonT, evidence.LnCount(fl), 8, "each item and all its amounts survive")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "report the fuzzy overlap for review")
 }
 
 func lawCoveredFragment(emonT *testing.T, shared int32) int32 {
@@ -571,6 +653,42 @@ func TestTiltAwareRowsJoinItemAndPriceSegmentsForSeamMatching(emonT *testing.T) 
 	lawLine(fl, fw, et, 2, 350, 81)
 	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 6, "drop the matching visual rows, including both segments on the later photo")
 	port.AssertEq(emonT, evidence.LnCount(fl), 5, "each surviving item and price remains one original flow line")
+}
+
+func TestAStrongRunPreservesADivergentItem(emonT *testing.T) {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var ledger *port.Cells = port.NewCells()
+	var i int32 = 0
+	var item int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 600, 90)
+	for i < 4 {
+		lawPricedRow(fl, fw, et, 1, 700+(i*40), 65+i)
+		i += 1
+	}
+	i = 0
+	for i < 4 {
+		item = 65 + i
+		if i == 1 {
+			item = 88
+		}
+		lawPricedRow(fl, fw, et, 2, 40+(i*40), item)
+		i += 1
+	}
+	lawLine(fl, fw, et, 2, 350, 81)
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), ledger, port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 4, "only the equal rows with a second exact neighbor are removed")
+	port.AssertEq(emonT, model.LedgerCount(ledger), 4, "only supported equal rows go in the drop ledger")
+	port.AssertEq(emonT, evidence.LnCount(fl), 10, "both versions of the divergent item and the isolated match survive")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "the divergent item has a possible-duplicate mark")
+	port.AssertEq(emonT, port.CellsAt(decisions, 7), 1, "the equal rows have an overlap mark")
 }
 
 func TestCorrelationThresholdSeparatesModerateFromWeakAgreement(emonT *testing.T) {

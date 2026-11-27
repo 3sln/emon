@@ -57,6 +57,18 @@ Reports include the following counts.
   `possible-duplicate` mark. `matched-dup` counts extra copies on pairs with
   a confirmed overlap. The order diagnostics count unflagged extra copies
   and missed gaps whose source photos are out of physical order.
+- `false-merges` counts distinct gold rows that a separate-photo Model
+  emitted, the joined Model omitted, and a seam drop removed. The scorer
+  projects the drop onto the gold rows to attribute it, then looks for a
+  surviving occurrence in the joined Model across all photos. One row may
+  have several dropped OCR segments. A row recovered from any photo is
+  present even when neither crop shows its entire gold box. Row
+  presence requires 70% gold-token coverage and a word-overlap F1 of at
+  least 0.72. An exact reading of a unique gold row can also survive across
+  cells of the same Model table row, with intervening text from another gold
+  row. Per-case `false-merge-rows` lists the zero-based gold row indices.
+  Reports identify this check with `false-merge-metric`. The ratcheted
+  metrics retain their existing version.
 - `missing-output` and `missing-concat` count gold rows without an emitted
   match. `lost-rows` counts absent seam rows whose projected gold box
   crosses a joining crop edge or falls between the crops, with no complete

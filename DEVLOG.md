@@ -15048,3 +15048,15 @@ On 470 sweep seams, Round 5 reduces cross-photo duplicates from 204 to 101, unfl
 With the same policy on the held-out seeds, 921 has three flagged copies and three scored false merges. Seed 922 has no scored duplicates or false merges and flags all nine lost seams. Both fall below concatenation recall. P13.23 and P13.24 remain open.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Preserve divergent OCR readings at confirmed photo seams
+
+A geometrically shared gold row can be unreadable in one crop. The receipt gate now counts a false merge when a separate-photo Model contains a gold row, a seam decision removes a reading of that row, and the joined Model contains no surviving reading. Projecting the removed segments into the crop identifies the affected gold row. Several segments of one missing row count once. The row matcher tolerates small OCR substitutions and checks the whole joined Model for survival. An exact, unique gold reading can survive across cells in a single Model table row even when text from another row comes between its label and amount.
+
+A graded row or word-band match can still establish where two photos join. Deletion requires a live equivalent reading. In a multi-row run each removed content row needs a distinct exact neighboring row. Repeated item names can otherwise make a fuzzy alignment look like an overlap even when their amounts differ. Bands with different line breaks must preserve the complete ordered word stream. The seam keeps divergent readings and reports `possible-duplicate`. A fragment skipped during anchoring stays in the flow. Confidence chooses between equivalent readings.
+
+An uncovered clipped edge can carry a gap warning alongside an overlap or a possible duplicate. Page-wide raster evidence requires strokes to extend into the image. At edges with shallow strokes only, a clipped OCR box needs an uncertain reading to raise a gap warning. This handles thin printed rules that extend otherwise complete OCR boxes to the edge.
+
+On the 206-case Tesseract sweep for seed 920, the revised scorer counts 16 false merges for Round 5 and zero for Round 6. Round 6 recovers 107 matched tokens over Round 5 and finishes five below concatenation, at 0.736143 recall against 0.736341. It retains 179 duplicates, including 36 unflagged, and flags 187 of 210 lost seams. The clean control has a byte-identical Model and emits no gap warning. P13.23 and P13.24 remain open.
+
+- [ ] **Signed off** (maintainer)
