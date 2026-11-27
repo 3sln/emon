@@ -5083,33 +5083,8 @@
     (if (or (< last 0) (or (< balance 0) (or (< debit 0) (< credit 0)))) (return (== 0 1)))
     (return (== (+ (- last debit) credit) balance))))
 
-(defn ^I32 tb-link-order [^Cells tb ^Cells photo-order ^:mut ^Cells order ^:mut ^Cells ranks]
-  (cells-drop order 0) (cells-drop ranks 0)
-  (let [^:mut ^I32 i 0 ^:mut ^I32 t 0 ^:mut ^I32 page 0
-        ^I32 n (tb-rows-of tb TBS) ^I32 pages (cells-len photo-order)]
-    (while (< i pages) (do (cells-push ranks 0) (set i (+ i 1))))
-    (set i 0)
-    (while (< i pages)
-      (do (set page (cells-at photo-order i))
-          (cells-set ranks (- page 1) (+ i 1))
-          (set t (tb-skip tb 0 page))
-          (while (and (< t n) (== (cells-at tb (* t TBS)) page))
-            (do (cells-push order t) (set t (+ t 1))))
-          (set i (+ i 1))))
-    (return 0)))
-
-(defn ^I32 tb-link-at [^Cells order ^I32 i]
-  (if (== (cells-len order) 0) (return i))
-  (return (cells-at order i)))
-
-(defn ^I32 tb-link-rank [^Cells tb ^Cells ranks ^I32 table]
-  (let [^I32 page (cells-at tb (* table TBS))]
-    (if (== (cells-len ranks) 0) (return page))
-    (return (cells-at ranks (- page 1)))))
-
 (defn ^I32 tb-link [^:mut ^Cells tb ^:mut ^Cells tc ^Cells tw ^Cells tx ^Cells tq ^Cells wd ^Cells et ^:mut ^Cells ln
-                    ^Cells pages ^Cells tbk ^:mut ^Cells decisions ^:mut ^Cells keya ^:mut ^Cells keyb
-                    ^Cells order ^Cells ranks]
+                    ^Cells pages ^Cells tbk ^:mut ^Cells decisions ^:mut ^Cells keya ^:mut ^Cells keyb]
   (comment "Link the fragments of tables that go on across a page break (see the head of this section).")
   (let [^I32 n (tb-rows-of tb TBS)
         ^:mut ^I32 fit 0
@@ -5128,11 +5103,11 @@
     (cells-drop decisions 0)
     ;; Record the veto for other cross-page pairs as well: a table lies between.
     (while (< at n)
-      (do (set j (tb-link-at order at))
+      (do (set j at)
           (set before 0)
           (while (< before (- at 1))
-            (do (set a (tb-link-at order before))
-                (if (== (tb-link-rank tb ranks a) (- (tb-link-rank tb ranks j) 1))
+            (do (set a before)
+                (if (== (cells-at tb (* a TBS)) (- (cells-at tb (* j TBS)) 1))
                   (do (set reasons 8)
                       (tb-context-key ln wd et (cells-at tb (+ (* a TBS) 30)) keya)
                       (tb-context-key ln wd et (cells-at tb (+ (* j TBS) 30)) keyb)
@@ -5145,11 +5120,11 @@
           (set at (+ at 1))))
     (set at 1)
     (while (< at n)
-      (do (set j (tb-link-at order at))
-          (set a (tb-link-at order (- at 1)))
+      (do (set j at)
+          (set a (- at 1))
           (set head a)
           (if (!= (cells-at tb (+ (* a TBS) 21)) 0) (set head (- (cells-at tb (+ (* a TBS) 21)) 1)))
-          (if (and (== (tb-link-rank tb ranks a) (- (tb-link-rank tb ranks j) 1))
+          (if (and (== (cells-at tb (* a TBS)) (- (cells-at tb (* j TBS)) 1))
                    (== (cells-at tb (+ (* a TBS) 19)) 0))
             (do (set ok 1) (set score 0) (set reasons 0) (set unexplained 0)
                 (set contexta (cells-at tb (+ (* a TBS) 30)))
@@ -5207,7 +5182,7 @@
                       (cells-set tb (+ (* a TBS) 19) (+ j 1))
                       (cells-set tb (+ (* j TBS) 20) skip)
                       (cells-set tb (+ (* j TBS) 21) (+ head 1))
-                      (set span (+ (- (tb-link-rank tb ranks j) (tb-link-rank tb ranks head)) 1))
+                      (set span (+ (- (cells-at tb (* j TBS)) (cells-at tb (* head TBS))) 1))
                       (cells-set tb (+ (* head TBS) 18) span)
                       (tb-unfoot tb a tc)))))
           (set at (+ at 1))))
@@ -7274,7 +7249,7 @@
           (set k (+ k 1))))
     (return 0)))
 
-(defn ^I32 tb-build-mode [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np ^Cells photo-order
+(defn ^I32 tb-build-mode [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
                            ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
@@ -7391,8 +7366,7 @@
           (set qi qj)
           (set ui uj)
           (set p (+ p 1))))
-    (tb-link-order tb photo-order s3 s4)
-    (tb-link tb tc tw tx tq wd et ln pages tbk s0 s1 s2 s3 s4)
+    (tb-link tb tc tw tx tq wd et ln pages tbk s0 s1 s2)
     (set k 0)
     (while (< k (tb-rows-of tb TBS))
       (do (if (> (tb-head-amounts tb k wd et tc tw tx tbk s10 s7 s3) 0)
@@ -7414,7 +7388,7 @@
     (te-record tb tc tw tbk wd et s0)
     (return (tb-rows-of tb TBS))))
 
-(defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np ^Cells photo-order
+(defn ^:pub ^I32 tb-build [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
                            ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
@@ -7425,9 +7399,9 @@
                            ^Cells gl ^Cells mk ^Cells se ^Cells sc ^Cells ss ^Cells grg
                            ^:mut ^Cells g0 ^:mut ^Cells g1 ^:mut ^Cells g2 ^:mut ^Cells g3 ^:mut ^Cells g4 ^:mut ^Cells g5
                            ^:mut ^Cells tv ^Cells an]
-  (return (tb-build-mode wd ln et grl gfl np photo-order tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an 0)))
+  (return (tb-build-mode wd ln et grl gfl np tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an 0)))
 
-(defn ^:pub ^I32 tb-scored [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np ^Cells photo-order
+(defn ^:pub ^I32 tb-scored [^Cells wd ^:mut ^Cells ln ^Cells et ^Cells grl ^Cells gfl ^I32 np
                            ^:mut ^Cells tb ^:mut ^Cells tc ^:mut ^Cells tw ^:mut ^Cells tq ^:mut ^Cells tx
                            ^:mut ^Cells tbk ^:mut ^Cells tbo
                            ^:mut ^Cells s0 ^:mut ^Cells s1 ^:mut ^Cells s2 ^:mut ^Cells s3 ^:mut ^Cells s4
@@ -7438,4 +7412,4 @@
                            ^Cells gl ^Cells mk ^Cells se ^Cells sc ^Cells ss ^Cells grg
                            ^:mut ^Cells g0 ^:mut ^Cells g1 ^:mut ^Cells g2 ^:mut ^Cells g3 ^:mut ^Cells g4 ^:mut ^Cells g5
                            ^:mut ^Cells tv ^Cells an]
-  (return (tb-build-mode wd ln et grl gfl np photo-order tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an 1)))
+  (return (tb-build-mode wd ln et grl gfl np tb tc tw tq tx tbk tbo s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18 pages gl mk se sc ss grg g0 g1 g2 g3 g4 g5 tv an 1)))

@@ -1679,7 +1679,7 @@
     (cells-drop raw 0)
     (return k)))
 
-(defn ^:pub ^I32 pa-build [^Cells wd ^Cells et ^I32 npages ^Cells photo-order
+(defn ^:pub ^I32 pa-build [^Cells wd ^Cells et ^I32 npages
                            ^:mut ^Cells pages ^:mut ^Cells layout
                            ^:mut ^Cells nodes ^:mut ^Cells attrs ^:mut ^Cells regions ^:mut ^Cells text
                            ^:mut ^Cells ord ^:mut ^Cells raw ^:mut ^Cells tmp ^:mut ^Cells fr ^:mut ^Cells gp
@@ -1741,10 +1741,6 @@
     (cells-drop dbg 0)
     (while (<= position npages)
       (do (set p position)
-          (if (> (cells-len photo-order) 0)
-            (do (set p (cells-at photo-order (- position 1)))
-                (set r 0)
-                (set tcur 0)))
           (pa-collect ord lt p ix off)
           (set n (cells-len ord))
           (set nu (pa-upright-count lt ord))
@@ -1758,7 +1754,6 @@
           (set tcur (tb-skip tb tcur p))
           (while (and (< r nf) (< (cells-at cf (+ (* r CF_STRIDE) CF_PAGE)) p))
             (set r (+ r 1)))
-          (if (> (cells-len photo-order) 0) (set pend r))
           (set r1 r)
           (while (and (< r1 nf) (== (cells-at cf (+ (* r1 CF_STRIDE) CF_PAGE)) p)
                       (== (cells-at cf (+ (* r1 CF_STRIDE) CF_ROLE)) (rl-body)))
@@ -1844,13 +1839,6 @@
                       (set open 0)
                       (set prev -1)
                       (set tcur (pa-tables tb tcur p PA_ALL -1 wd lt et tc tw tq nodes attrs regions text raw tmp ledger hc))))))
-          (if (> (cells-len photo-order) 0)
-            (do (set r1 r)
-                (while (and (< r1 nf) (== (cells-at cf (+ (* r1 CF_STRIDE) CF_PAGE)) p))
-                  (set r1 (+ r1 1)))
-                (set pend (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend r1 1000000000 0 hc))
-                (set open 0)
-                (set prev -1)))
           (set position (+ position 1))))
     (pa-close wd lt et nodes attrs regions text raw tmp fr al ii cf lo gp med pend nf 1000000000 0 hc)
     (al-pass nodes attrs al tm)

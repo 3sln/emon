@@ -6571,45 +6571,7 @@ pub(crate) fn tb_link_balance(tb: &mut crate::port::Cells, tc: &mut crate::port:
     }
     return ((last - debit) + credit) == balance;
 }
-pub(crate) fn tb_link_order(tb: &mut crate::port::Cells, photo_order: &mut crate::port::Cells, mut order: &mut crate::port::Cells, mut ranks: &mut crate::port::Cells) -> i32 {
-    crate::port::cells_drop(order, 0);
-    crate::port::cells_drop(ranks, 0);
-    let mut i: i32 = 0;
-    let mut t: i32 = 0;
-    let mut page: i32 = 0;
-    let n: i32 = tb_rows_of(tb, TBS);
-    let pages: i32 = crate::port::cells_len(photo_order);
-    while i < pages {
-        crate::port::cells_push(ranks, 0);
-        i += 1;
-    }
-    i = 0;
-    while i < pages {
-        page = crate::port::cells_at(photo_order, i);
-        crate::port::cells_set(ranks, page - 1, i + 1);
-        t = tb_skip(tb, 0, page);
-        while (t < n) && (crate::port::cells_at(tb, t * TBS) == page) {
-            crate::port::cells_push(order, t);
-            t += 1;
-        }
-        i += 1;
-    }
-    return 0;
-}
-pub(crate) fn tb_link_at(order: &mut crate::port::Cells, i: i32) -> i32 {
-    if crate::port::cells_len(order) == 0 {
-        return i;
-    }
-    return crate::port::cells_at(order, i);
-}
-pub(crate) fn tb_link_rank(tb: &mut crate::port::Cells, ranks: &mut crate::port::Cells, table: i32) -> i32 {
-    let page: i32 = crate::port::cells_at(tb, table * TBS);
-    if crate::port::cells_len(ranks) == 0 {
-        return page;
-    }
-    return crate::port::cells_at(ranks, page - 1);
-}
-pub(crate) fn tb_link(mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tx: &mut crate::port::Cells, tq: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, pages: &mut crate::port::Cells, tbk: &mut crate::port::Cells, mut decisions: &mut crate::port::Cells, mut keya: &mut crate::port::Cells, mut keyb: &mut crate::port::Cells, order: &mut crate::port::Cells, ranks: &mut crate::port::Cells) -> i32 {
+pub(crate) fn tb_link(mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tx: &mut crate::port::Cells, tq: &mut crate::port::Cells, wd: &mut crate::port::Cells, et: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, pages: &mut crate::port::Cells, tbk: &mut crate::port::Cells, mut decisions: &mut crate::port::Cells, mut keya: &mut crate::port::Cells, mut keyb: &mut crate::port::Cells) -> i32 {
     // Link the fragments of tables that go on across a page break (see the head of this section).
     let n: i32 = tb_rows_of(tb, TBS);
     let mut fit: i32 = 0;
@@ -6632,11 +6594,11 @@ pub(crate) fn tb_link(mut tb: &mut crate::port::Cells, mut tc: &mut crate::port:
     let mut r: i32 = 0;
     crate::port::cells_drop(decisions, 0);
     while at < n {
-        j = tb_link_at(order, at);
+        j = at;
         before = 0;
         while before < (at - 1) {
-            a = tb_link_at(order, before);
-            if tb_link_rank(tb, ranks, a) == (tb_link_rank(tb, ranks, j) - 1) {
+            a = before;
+            if crate::port::cells_at(tb, a * TBS) == (crate::port::cells_at(tb, j * TBS) - 1) {
                 reasons = 8;
                 tb_context_key(ln, wd, et, crate::port::cells_at(tb, (a * TBS) + 30), keya);
                 tb_context_key(ln, wd, et, crate::port::cells_at(tb, (j * TBS) + 30), keyb);
@@ -6658,13 +6620,13 @@ pub(crate) fn tb_link(mut tb: &mut crate::port::Cells, mut tc: &mut crate::port:
     }
     at = 1;
     while at < n {
-        j = tb_link_at(order, at);
-        a = tb_link_at(order, at - 1);
+        j = at;
+        a = at - 1;
         head = a;
         if crate::port::cells_at(tb, (a * TBS) + 21) != 0 {
             head = crate::port::cells_at(tb, (a * TBS) + 21) - 1;
         }
-        if (tb_link_rank(tb, ranks, a) == (tb_link_rank(tb, ranks, j) - 1)) && (crate::port::cells_at(tb, (a * TBS) + 19) == 0) {
+        if (crate::port::cells_at(tb, a * TBS) == (crate::port::cells_at(tb, j * TBS) - 1)) && (crate::port::cells_at(tb, (a * TBS) + 19) == 0) {
             ok = 1;
             score = 0;
             reasons = 0;
@@ -6777,7 +6739,7 @@ pub(crate) fn tb_link(mut tb: &mut crate::port::Cells, mut tc: &mut crate::port:
                 crate::port::cells_set(tb, (a * TBS) + 19, j + 1);
                 crate::port::cells_set(tb, (j * TBS) + 20, skip);
                 crate::port::cells_set(tb, (j * TBS) + 21, head + 1);
-                span = (tb_link_rank(tb, ranks, j) - tb_link_rank(tb, ranks, head)) + 1;
+                span = (crate::port::cells_at(tb, j * TBS) - crate::port::cells_at(tb, head * TBS)) + 1;
                 crate::port::cells_set(tb, (head * TBS) + 18, span);
                 tb_unfoot(tb, a, tc);
             }
@@ -9974,7 +9936,7 @@ pub(crate) fn te_record(tb: &mut crate::port::Cells, tc: &mut crate::port::Cells
     }
     return 0;
 }
-pub(crate) fn tb_build_mode(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, photo_order: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells, scored: i32) -> i32 {
+pub(crate) fn tb_build_mode(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells, scored: i32) -> i32 {
     // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
     // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
     // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -10117,8 +10079,7 @@ pub(crate) fn tb_build_mode(wd: &mut crate::port::Cells, mut ln: &mut crate::por
         ui = uj;
         p += 1;
     }
-    tb_link_order(tb, photo_order, s3, s4);
-    tb_link(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2, s3, s4);
+    tb_link(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2);
     k = 0;
     while k < tb_rows_of(tb, TBS) {
         if tb_head_amounts(tb, k, wd, et, tc, tw, tx, tbk, s10, s7, s3) > 0 {
@@ -10144,9 +10105,9 @@ pub(crate) fn tb_build_mode(wd: &mut crate::port::Cells, mut ln: &mut crate::por
     te_record(tb, tc, tw, tbk, wd, et, s0);
     return tb_rows_of(tb, TBS);
 }
-pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, photo_order: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
-    return tb_build_mode(wd, ln, et, grl, gfl, np, photo_order, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0);
+pub fn tb_build(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
+    return tb_build_mode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0);
 }
-pub fn tb_scored(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, photo_order: &mut crate::port::Cells, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
-    return tb_build_mode(wd, ln, et, grl, gfl, np, photo_order, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1);
+pub fn tb_scored(wd: &mut crate::port::Cells, mut ln: &mut crate::port::Cells, et: &mut crate::port::Cells, grl: &mut crate::port::Cells, gfl: &mut crate::port::Cells, np: i32, mut tb: &mut crate::port::Cells, mut tc: &mut crate::port::Cells, mut tw: &mut crate::port::Cells, mut tq: &mut crate::port::Cells, mut tx: &mut crate::port::Cells, mut tbk: &mut crate::port::Cells, mut tbo: &mut crate::port::Cells, mut s0: &mut crate::port::Cells, mut s1: &mut crate::port::Cells, mut s2: &mut crate::port::Cells, mut s3: &mut crate::port::Cells, mut s4: &mut crate::port::Cells, mut s5: &mut crate::port::Cells, mut s6: &mut crate::port::Cells, mut s7: &mut crate::port::Cells, mut s8: &mut crate::port::Cells, mut s9: &mut crate::port::Cells, mut s10: &mut crate::port::Cells, mut s11: &mut crate::port::Cells, mut s12: &mut crate::port::Cells, mut s13: &mut crate::port::Cells, mut s14: &mut crate::port::Cells, mut s15: &mut crate::port::Cells, mut s16: &mut crate::port::Cells, mut s17: &mut crate::port::Cells, mut s18: &mut crate::port::Cells, pages: &mut crate::port::Cells, gl: &mut crate::port::Cells, mk: &mut crate::port::Cells, se: &mut crate::port::Cells, sc: &mut crate::port::Cells, ss: &mut crate::port::Cells, grg: &mut crate::port::Cells, mut g0: &mut crate::port::Cells, mut g1: &mut crate::port::Cells, mut g2: &mut crate::port::Cells, mut g3: &mut crate::port::Cells, mut g4: &mut crate::port::Cells, mut g5: &mut crate::port::Cells, mut tv: &mut crate::port::Cells, an: &mut crate::port::Cells) -> i32 {
+    return tb_build_mode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1);
 }

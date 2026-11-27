@@ -480,9 +480,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	}
 	furniture.FuFind(d.Fw, d.Fl, d.Et, d.Gl, d.Mk, m.Pages, np, d.Txt, d.Md, d.Lb, trust, c.Furn, s.Cd, s.Sl, s.Gr, s.Ford, s.Tx, s.Bh, s.Fo, s.Fp, s.Ft, s.Pl)
 	if c.Tabl == 1 {
-		tscore.TsBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Msorder, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
+		tscore.TsBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
 	} else {
-		table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Msorder, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
+		table.TbBuild(d.Fw, d.Fl, d.Et, d.Grl, d.Gfl, np, s.Tb, s.Tc, s.Tw, s.Tq, s.Tbx, s.Tbk, s.Tbo, s.S0, s.S1, s.S2, s.S3, s.S4, s.S5, s.S6, s.S7, s.S8, s.S9, s.S10, s.S11, s.S12, s.S13, s.S14, s.S15, s.S16, s.S17, s.S18, m.Pages, d.Gl, d.Mk, d.Se, d.Sc, d.Ss, s.Ta0, s.G0, s.G1, s.G2, s.G3, s.G4, s.G5, s.Tv, d.An)
 	}
 	table.TbSeamGaps(s.Tb, s.Seams)
 	if c.Keep != 0 {
@@ -690,7 +690,7 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	if ocrengine.OeRegister(ev.Oet, ev.Oruns, ev.Olines, ev.Owords, 2*enHybrid(c), s.S0) < 0 {
 		return 2
 	}
-	para.PaBuild(d.Fw, d.Et, np, s.Msorder, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
+	para.PaBuild(d.Fw, d.Et, np, m.Pages, m.Layout, m.Nodes, m.Attrs, m.Regions, m.Text, s.Ord, s.Raw, s.Tmp, s.Fr, s.Gp, s.Lt, s.Ls, s.Sd, s.It, s.Io, s.Rw, s.Gu, s.Ac, s.Tm, s.Cf, s.Lo, s.Pr, s.Dbg, s.Hc, s.Tb, s.Tc, s.Tw, s.Tq, m.Ledger, s.Ii, s.Al, s.Pix)
 	if kind == 0 {
 		enFigures(m, s, d, c.Level)
 	}

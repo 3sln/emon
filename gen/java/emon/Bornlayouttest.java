@@ -92,7 +92,7 @@ public final class Bornlayouttest {
         emon.Port.Cells nix = emon.Port.newCells();
         Notes.ntAnalyze(wd, lt, et, gl, sf, sc, pages, hc, rf, nb, mk, tw, nix);
         Lists.lsAnalyze(wd, lt, et, sf, pa, hc, cd, pi, lws, tw);
-        Para.paBuild(wd, et, npages, emon.Port.newCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
+        Para.paBuild(wd, et, npages, pages, layout, nodes, attrs, regions, text, ord, raw, tmp2, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr2, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.newCells());
         return 0;
     }
     public static int blFind(emon.Port.Cells nodes, int kind, int nth) {

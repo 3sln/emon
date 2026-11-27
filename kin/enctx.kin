@@ -50,7 +50,7 @@
       ^Cells fz0 ^Cells fz1 ^Cells fz2 ^Cells fz3 ^Cells fz4 ^Buf zb])
 
 (defctx ^:pub Scratch [^Cells seams ^Cells mskeys ^Cells mscode ^Cells msa ^Cells msb ^Cells msdrop ^Cells mslines ^Cells mswords
-                       ^Cells msorder ^Cells msaw ^Cells msbw ^Cells mswordrow
+                       ^Cells msaw ^Cells msbw ^Cells mswordrow
                         ^Cells cd ^Cells sl ^Cells gr ^Cells ford ^Cells tx ^Cells bh ^Cells fo ^Cells fp ^Cells ft ^Cells pl
       ^Cells tb ^Cells tc ^Cells tw ^Cells tq ^Cells tbx ^Cells tbk ^Cells tbo ^Cells s0 ^Cells s1 ^Cells s2 ^Cells s3 ^Cells s4
       ^Cells s5 ^Cells s6 ^Cells s7 ^Cells s8 ^Cells s9 ^Cells s10 ^Cells s11 ^Cells s12 ^Cells s13 ^Cells s14

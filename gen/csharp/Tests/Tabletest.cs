@@ -329,12 +329,12 @@ public static class Tabletest {
             Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
         }
         Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, np, emon.Port.NewCells(), tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.LcCopy(ln, lt);
-        Para.PaBuild(wd, et, np, emon.Port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         TtBrief(t, nodes, attrs, text);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }
@@ -418,12 +418,12 @@ public static class Tabletest {
             Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
         }
         Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, np, emon.Port.NewCells(), tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.LcCopy(ln, lt);
-        Para.PaBuild(wd, et, np, emon.Port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         TtBrief(t, nodes, attrs, text);
         if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return -1;
@@ -2178,7 +2178,7 @@ public static class Tabletest {
         Para.PaPages(pg, pages);
         int np = emon.Port.CellsLen(pages) / 16;
         Gfuse.GfDoc(pa, pts, mk, im, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, np, emon.Port.NewCells(), tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se2, sc2, ss2, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, emon.Port.NewCells());
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
@@ -2186,7 +2186,7 @@ public static class Tabletest {
         Columns.LcCopy(ln, lt);
         Initial.InDetect(wd, gl, fnt, et, np, loc, lt, ls, lo, tm, ii);
         Heading.HdAnalyze(wd, lt, et, gl, sf, sc, hc, ws, htmp, hpr, hptxt);
-        Para.PaBuild(wd, et, np, emon.Port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         if (Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st) != 0) {
             return 3;
         }
@@ -2359,7 +2359,7 @@ public static class Tabletest {
         TtAt(wd, ln, et, emon.Testport.TextBlob("100.00"), 40500, 16400, 0, 1);
         TtAt(wd, ln, et, emon.Testport.TextBlob("Total"), 7600, 18000, 1, 0);
         TtAt(wd, ln, et, emon.Testport.TextBlob("1,111.00"), 40500, 18000, 1, 1);
-        emon.Testport.AssertEq(Table.TbBuild(wd, ln, et, emon.Port.NewCells(), emon.Port.NewCells(), 1, emon.Port.NewCells(), tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), tbk, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "the amounts make one table");
+        emon.Testport.AssertEq(Table.TbBuild(wd, ln, et, emon.Port.NewCells(), emon.Port.NewCells(), 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), tbk, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 1, "the amounts make one table");
         emon.Testport.AssertEq(TtBodyAudit(wd, et, tb, tc, tw), 0, "the numeric-model fixture has unique body ownership");
         emon.Testport.AssertEq(Table.TbModelCol(tb, tbk, 0, 1, 3), 40500, "varying widths share their right anchor");
         emon.Testport.AssertEq(Table.TbModelCol(tb, tbk, 0, 1, 5), 3, "the numeric column is an amount column");
@@ -2448,7 +2448,7 @@ public static class Tabletest {
     internal static int TtOwnBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tbo) {
         emon.Port.Cells pages = emon.Port.NewCells();
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
-        Table.TbBuild(wd, ln, et, emon.Port.NewCells(), emon.Port.NewCells(), 1, emon.Port.NewCells(), tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), tbo, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, emon.Port.NewCells(), emon.Port.NewCells(), 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), tbo, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -2852,7 +2852,7 @@ public static class Tabletest {
         emon.Port.Cells gfl = emon.Port.NewCells();
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Gfuse.GfDoc(pa, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1, Gfuse.GfxMode(), grl, gfl, emon.Port.NewCells(), emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, 1, emon.Port.NewCells(), tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells());
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -4966,7 +4966,7 @@ public static class Tabletest {
         emon.Port.Cells gfl = emon.Port.NewCells();
         Model.PageNew(pages, 1, 61200, 79200, 0, Model.PkVector());
         Gfuse.GfDoc(pa, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), 1, Gfuse.GfxMode(), grl, gfl, emon.Port.NewCells(), emon.Port.NewCells());
-        Table.TbBuild(wd, ln, et, grl, gfl, 1, emon.Port.NewCells(), tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), an);
+        Table.TbBuild(wd, ln, et, grl, gfl, 1, tb, tc, tw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), pages, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), an);
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return -7;
         }
@@ -5653,12 +5653,12 @@ public static class Tabletest {
             Model.PageNew(pages, 2, 61200, 79200, 0, Model.PkVector());
         }
         Gfuse.GfDoc(pa, gpts, gmk, gim, np, Gfuse.GfxMode(), grl, gfl, cand, emon.Port.NewCells());
-        Table.TbScored(wd, ln, et, grl, gfl, np, emon.Port.NewCells(), tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
+        Table.TbScored(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, emon.Port.NewCells(), emon.Port.NewCells(), s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, t0e, t1e, t2e, t3e, t4e, t5e, t6e, t7e, t8e, t9e, t10e, t11e, t12e, an);
         if (TtBodyAudit(wd, et, tb, tc, tw) != 0) {
             return 7;
         }
         Columns.LcCopy(ln, lt);
-        Para.PaBuild(wd, et, np, emon.Port.NewCells(), pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
+        Para.PaBuild(wd, et, np, pages, layout, nodes, attrs, regions, text, ord, raw, tmp, fr, gp, lt, ls, sd, it, io, rw, gu, ac, tm, cf, lo, pr, dbg, hc, tb, tc, tw, tq, ledger, ii, al, emon.Port.NewCells());
         TtBrief(t, nodes, attrs, text);
         return Model.ModelCheck(nodes, attrs, regions, text, pages, ledger, layout, st);
     }

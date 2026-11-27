@@ -6565,45 +6565,7 @@ public static class Table {
         }
         return ((last - debit) + credit) == balance;
     }
-    internal static int TbLinkOrder(emon.Port.Cells tb, emon.Port.Cells photoOrder, emon.Port.Cells order, emon.Port.Cells ranks) {
-        emon.Port.CellsDrop(order, 0);
-        emon.Port.CellsDrop(ranks, 0);
-        int i = 0;
-        int t = 0;
-        int page = 0;
-        int n = TbRowsOf(tb, Tagtable.Tbs);
-        int pages = emon.Port.CellsLen(photoOrder);
-        while (i < pages) {
-            emon.Port.CellsPush(ranks, 0);
-            i += 1;
-        }
-        i = 0;
-        while (i < pages) {
-            page = emon.Port.CellsAt(photoOrder, i);
-            emon.Port.CellsSet(ranks, page - 1, i + 1);
-            t = TbSkip(tb, 0, page);
-            while ((t < n) && (emon.Port.CellsAt(tb, t * Tagtable.Tbs) == page)) {
-                emon.Port.CellsPush(order, t);
-                t += 1;
-            }
-            i += 1;
-        }
-        return 0;
-    }
-    internal static int TbLinkAt(emon.Port.Cells order, int i) {
-        if (emon.Port.CellsLen(order) == 0) {
-            return i;
-        }
-        return emon.Port.CellsAt(order, i);
-    }
-    internal static int TbLinkRank(emon.Port.Cells tb, emon.Port.Cells ranks, int table) {
-        int page = emon.Port.CellsAt(tb, table * Tagtable.Tbs);
-        if (emon.Port.CellsLen(ranks) == 0) {
-            return page;
-        }
-        return emon.Port.CellsAt(ranks, page - 1);
-    }
-    internal static int TbLink(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tq, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells pages, emon.Port.Cells tbk, emon.Port.Cells decisions, emon.Port.Cells keya, emon.Port.Cells keyb, emon.Port.Cells order, emon.Port.Cells ranks) {
+    internal static int TbLink(emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tx, emon.Port.Cells tq, emon.Port.Cells wd, emon.Port.Cells et, emon.Port.Cells ln, emon.Port.Cells pages, emon.Port.Cells tbk, emon.Port.Cells decisions, emon.Port.Cells keya, emon.Port.Cells keyb) {
         // Link the fragments of tables that go on across a page break (see the head of this section).
         int n = TbRowsOf(tb, Tagtable.Tbs);
         int fit = 0;
@@ -6626,11 +6588,11 @@ public static class Table {
         int r = 0;
         emon.Port.CellsDrop(decisions, 0);
         while (at < n) {
-            j = TbLinkAt(order, at);
+            j = at;
             before = 0;
             while (before < (at - 1)) {
-                a = TbLinkAt(order, before);
-                if (TbLinkRank(tb, ranks, a) == (TbLinkRank(tb, ranks, j) - 1)) {
+                a = before;
+                if (emon.Port.CellsAt(tb, a * Tagtable.Tbs) == (emon.Port.CellsAt(tb, j * Tagtable.Tbs) - 1)) {
                     reasons = 8;
                     TbContextKey(ln, wd, et, emon.Port.CellsAt(tb, (a * Tagtable.Tbs) + 30), keya);
                     TbContextKey(ln, wd, et, emon.Port.CellsAt(tb, (j * Tagtable.Tbs) + 30), keyb);
@@ -6652,13 +6614,13 @@ public static class Table {
         }
         at = 1;
         while (at < n) {
-            j = TbLinkAt(order, at);
-            a = TbLinkAt(order, at - 1);
+            j = at;
+            a = at - 1;
             head = a;
             if (emon.Port.CellsAt(tb, (a * Tagtable.Tbs) + 21) != 0) {
                 head = emon.Port.CellsAt(tb, (a * Tagtable.Tbs) + 21) - 1;
             }
-            if ((TbLinkRank(tb, ranks, a) == (TbLinkRank(tb, ranks, j) - 1)) && (emon.Port.CellsAt(tb, (a * Tagtable.Tbs) + 19) == 0)) {
+            if ((emon.Port.CellsAt(tb, a * Tagtable.Tbs) == (emon.Port.CellsAt(tb, j * Tagtable.Tbs) - 1)) && (emon.Port.CellsAt(tb, (a * Tagtable.Tbs) + 19) == 0)) {
                 ok = 1;
                 score = 0;
                 reasons = 0;
@@ -6771,7 +6733,7 @@ public static class Table {
                     emon.Port.CellsSet(tb, (a * Tagtable.Tbs) + 19, j + 1);
                     emon.Port.CellsSet(tb, (j * Tagtable.Tbs) + 20, skip);
                     emon.Port.CellsSet(tb, (j * Tagtable.Tbs) + 21, head + 1);
-                    span = (TbLinkRank(tb, ranks, j) - TbLinkRank(tb, ranks, head)) + 1;
+                    span = (emon.Port.CellsAt(tb, j * Tagtable.Tbs) - emon.Port.CellsAt(tb, head * Tagtable.Tbs)) + 1;
                     emon.Port.CellsSet(tb, (head * Tagtable.Tbs) + 18, span);
                     TbUnfoot(tb, a, tc);
                 }
@@ -9968,7 +9930,7 @@ public static class Table {
         }
         return 0;
     }
-    internal static int TbBuildMode(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells photoOrder, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an, int scored) {
+    internal static int TbBuildMode(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an, int scored) {
         // Find the tables of every page and claim their lines. `tb tc tw tq tx` are emptied first; s0..s18 are
         // scratch: rules, merged rules, fills, a sort order, x and y boundaries, the grid, word pairs, a copy of tb
         // rows, flags, the page's words, rows and chunks, channels, two coordinate lists, the row map, spans and
@@ -10111,8 +10073,7 @@ public static class Table {
             ui = uj;
             p += 1;
         }
-        TbLinkOrder(tb, photoOrder, s3, s4);
-        TbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2, s3, s4);
+        TbLink(tb, tc, tw, tx, tq, wd, et, ln, pages, tbk, s0, s1, s2);
         k = 0;
         while (k < TbRowsOf(tb, Tagtable.Tbs)) {
             if (TbHeadAmounts(tb, k, wd, et, tc, tw, tx, tbk, s10, s7, s3) > 0) {
@@ -10138,10 +10099,10 @@ public static class Table {
         TeRecord(tb, tc, tw, tbk, wd, et, s0);
         return TbRowsOf(tb, Tagtable.Tbs);
     }
-    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells photoOrder, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
-        return TbBuildMode(wd, ln, et, grl, gfl, np, photoOrder, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0);
+    public static int TbBuild(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
+        return TbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 0);
     }
-    public static int TbScored(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells photoOrder, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
-        return TbBuildMode(wd, ln, et, grl, gfl, np, photoOrder, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1);
+    public static int TbScored(emon.Port.Cells wd, emon.Port.Cells ln, emon.Port.Cells et, emon.Port.Cells grl, emon.Port.Cells gfl, int np, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells tx, emon.Port.Cells tbk, emon.Port.Cells tbo, emon.Port.Cells s0, emon.Port.Cells s1, emon.Port.Cells s2, emon.Port.Cells s3, emon.Port.Cells s4, emon.Port.Cells s5, emon.Port.Cells s6, emon.Port.Cells s7, emon.Port.Cells s8, emon.Port.Cells s9, emon.Port.Cells s10, emon.Port.Cells s11, emon.Port.Cells s12, emon.Port.Cells s13, emon.Port.Cells s14, emon.Port.Cells s15, emon.Port.Cells s16, emon.Port.Cells s17, emon.Port.Cells s18, emon.Port.Cells pages, emon.Port.Cells gl, emon.Port.Cells mk, emon.Port.Cells se, emon.Port.Cells sc, emon.Port.Cells ss, emon.Port.Cells grg, emon.Port.Cells g0, emon.Port.Cells g1, emon.Port.Cells g2, emon.Port.Cells g3, emon.Port.Cells g4, emon.Port.Cells g5, emon.Port.Cells tv, emon.Port.Cells an) {
+        return TbBuildMode(wd, ln, et, grl, gfl, np, tb, tc, tw, tq, tx, tbk, tbo, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, pages, gl, mk, se, sc, ss, grg, g0, g1, g2, g3, g4, g5, tv, an, 1);
     }
 }

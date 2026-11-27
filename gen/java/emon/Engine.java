@@ -400,9 +400,9 @@ public final class Engine {
         }
         Furniture.fuFind(d.fw, d.fl, d.et, d.gl, d.mk, m.pages, np, d.txt, d.md, d.lb, trust, c.furn, s.cd, s.sl, s.gr, s.ford, s.tx, s.bh, s.fo, s.fp, s.ft, s.pl);
         if (c.tabl == 1) {
-            Tscore.tsBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.msorder, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+            Tscore.tsBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
         } else {
-            Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.msorder, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
+            Table.tbBuild(d.fw, d.fl, d.et, d.grl, d.gfl, np, s.tb, s.tc, s.tw, s.tq, s.tbx, s.tbk, s.tbo, s.s0, s.s1, s.s2, s.s3, s.s4, s.s5, s.s6, s.s7, s.s8, s.s9, s.s10, s.s11, s.s12, s.s13, s.s14, s.s15, s.s16, s.s17, s.s18, m.pages, d.gl, d.mk, d.se, d.sc, d.ss, s.ta0, s.g0, s.g1, s.g2, s.g3, s.g4, s.g5, s.tv, d.an);
         }
         Table.tbSeamGaps(s.tb, s.seams);
         if (c.keep != 0) {
@@ -610,7 +610,7 @@ public final class Engine {
         if (Ocrengine.oeRegister(ev.oet, ev.oruns, ev.olines, ev.owords, 2 * enHybrid(c), s.s0) < 0) {
             return 2;
         }
-        Para.paBuild(d.fw, d.et, np, s.msorder, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
+        Para.paBuild(d.fw, d.et, np, m.pages, m.layout, m.nodes, m.attrs, m.regions, m.text, s.ord, s.raw, s.tmp, s.fr, s.gp, s.lt, s.ls, s.sd, s.it, s.io, s.rw, s.gu, s.ac, s.tm, s.cf, s.lo, s.pr, s.dbg, s.hc, s.tb, s.tc, s.tw, s.tq, m.ledger, s.ii, s.al, s.pix);
         if (kind == 0) {
             enFigures(m, s, d, c.level);
         }

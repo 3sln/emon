@@ -2072,7 +2072,7 @@ public static class Para {
         emon.Port.CellsDrop(raw, 0);
         return k;
     }
-    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells photoOrder, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al, emon.Port.Cells ix) {
+    public static int PaBuild(emon.Port.Cells wd, emon.Port.Cells et, int npages, emon.Port.Cells pages, emon.Port.Cells layout, emon.Port.Cells nodes, emon.Port.Cells attrs, emon.Port.Cells regions, emon.Port.Cells text, emon.Port.Cells ord, emon.Port.Cells raw, emon.Port.Cells tmp, emon.Port.Cells fr, emon.Port.Cells gp, emon.Port.Cells lt, emon.Port.Cells ls, emon.Port.Cells sd, emon.Port.Cells it, emon.Port.Cells io, emon.Port.Cells rw, emon.Port.Cells gu, emon.Port.Cells ac, emon.Port.Cells tm, emon.Port.Cells cf, emon.Port.Cells lo, emon.Port.Cells pr, emon.Port.Cells dbg, emon.Port.Cells hc, emon.Port.Cells tb, emon.Port.Cells tc, emon.Port.Cells tw, emon.Port.Cells tq, emon.Port.Cells ledger, emon.Port.Cells ii, emon.Port.Cells al, emon.Port.Cells ix) {
         // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
         // holds is not in the reading order at all.
         // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2129,11 +2129,6 @@ public static class Para {
         emon.Port.CellsDrop(dbg, 0);
         while (position <= npages) {
             p = position;
-            if (emon.Port.CellsLen(photoOrder) > 0) {
-                p = emon.Port.CellsAt(photoOrder, position - 1);
-                r = 0;
-                tcur = 0;
-            }
             PaCollect(ord, lt, p, ix, off);
             n = emon.Port.CellsLen(ord);
             nu = PaUprightCount(lt, ord);
@@ -2147,9 +2142,6 @@ public static class Para {
             tcur = Table.TbSkip(tb, tcur, p);
             while ((r < nf) && (emon.Port.CellsAt(cf, (r * CfStride) + CfPage) < p)) {
                 r += 1;
-            }
-            if (emon.Port.CellsLen(photoOrder) > 0) {
-                pend = r;
             }
             r1 = r;
             while ((r1 < nf) && (emon.Port.CellsAt(cf, (r1 * CfStride) + CfPage) == p) && (emon.Port.CellsAt(cf, (r1 * CfStride) + CfRole) == Model.RlBody())) {
@@ -2252,15 +2244,6 @@ public static class Para {
                     prev = -1;
                     tcur = PaTables(tb, tcur, p, PaAll, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
                 }
-            }
-            if (emon.Port.CellsLen(photoOrder) > 0) {
-                r1 = r;
-                while ((r1 < nf) && (emon.Port.CellsAt(cf, (r1 * CfStride) + CfPage) == p)) {
-                    r1 += 1;
-                }
-                pend = PaClose(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, r1, 1000000000, 0, hc);
-                open = 0;
-                prev = -1;
             }
             position += 1;
         }

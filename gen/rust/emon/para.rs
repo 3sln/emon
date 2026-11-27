@@ -2081,7 +2081,7 @@ pub(crate) fn pa_tables(tb: &mut crate::port::Cells, tcur: i32, p: i32, ymid2: i
     crate::port::cells_drop(raw, 0);
     return k;
 }
-pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, photo_order: &mut crate::port::Cells, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut ii: &mut crate::port::Cells, mut al: &mut crate::port::Cells, mut ix: &mut crate::port::Cells) -> i32 {
+pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages: i32, mut pages: &mut crate::port::Cells, mut layout: &mut crate::port::Cells, mut nodes: &mut crate::port::Cells, mut attrs: &mut crate::port::Cells, mut regions: &mut crate::port::Cells, mut text: &mut crate::port::Cells, mut ord: &mut crate::port::Cells, mut raw: &mut crate::port::Cells, mut tmp: &mut crate::port::Cells, mut fr: &mut crate::port::Cells, mut gp: &mut crate::port::Cells, mut lt: &mut crate::port::Cells, mut ls: &mut crate::port::Cells, mut sd: &mut crate::port::Cells, mut it: &mut crate::port::Cells, mut io: &mut crate::port::Cells, mut rw: &mut crate::port::Cells, mut gu: &mut crate::port::Cells, mut ac: &mut crate::port::Cells, mut tm: &mut crate::port::Cells, mut cf: &mut crate::port::Cells, mut lo: &mut crate::port::Cells, mut pr: &mut crate::port::Cells, mut dbg: &mut crate::port::Cells, mut hc: &mut crate::port::Cells, tb: &mut crate::port::Cells, tc: &mut crate::port::Cells, tw: &mut crate::port::Cells, tq: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut ii: &mut crate::port::Cells, mut al: &mut crate::port::Cells, mut ix: &mut crate::port::Cells) -> i32 {
     // Tables (`tb tc tw tq`, `emon.table`) are placed between the paragraphs by their tops; a line a table
     // holds is not in the reading order at all.
     // Append every page's lines to the Model as paragraphs under the document root (node 0, made by
@@ -2138,11 +2138,6 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
     crate::port::cells_drop(dbg, 0);
     while position <= npages {
         p = position;
-        if crate::port::cells_len(photo_order) > 0 {
-            p = crate::port::cells_at(photo_order, position - 1);
-            r = 0;
-            tcur = 0;
-        }
         pa_collect(ord, lt, p, ix, off);
         n = crate::port::cells_len(ord);
         nu = pa_upright_count(lt, ord);
@@ -2156,9 +2151,6 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
         tcur = tb_skip(tb, tcur, p);
         while (r < nf) && (crate::port::cells_at(cf, (r * CF_STRIDE) + CF_PAGE) < p) {
             r += 1;
-        }
-        if crate::port::cells_len(photo_order) > 0 {
-            pend = r;
         }
         r1 = r;
         while (r1 < nf) && (crate::port::cells_at(cf, (r1 * CF_STRIDE) + CF_PAGE) == p) && (crate::port::cells_at(cf, (r1 * CF_STRIDE) + CF_ROLE) == rl_body()) {
@@ -2261,15 +2253,6 @@ pub fn pa_build(wd: &mut crate::port::Cells, et: &mut crate::port::Cells, npages
                 prev = -1;
                 tcur = pa_tables(tb, tcur, p, PA_ALL, -1, wd, lt, et, tc, tw, tq, nodes, attrs, regions, text, raw, tmp, ledger, hc);
             }
-        }
-        if crate::port::cells_len(photo_order) > 0 {
-            r1 = r;
-            while (r1 < nf) && (crate::port::cells_at(cf, (r1 * CF_STRIDE) + CF_PAGE) == p) {
-                r1 += 1;
-            }
-            pend = pa_close(wd, lt, et, nodes, attrs, regions, text, raw, tmp, fr, al, ii, cf, lo, gp, med, pend, r1, 1000000000, 0, hc);
-            open = 0;
-            prev = -1;
         }
         position += 1;
     }
