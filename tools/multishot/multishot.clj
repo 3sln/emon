@@ -30,8 +30,14 @@
 (defn model-nodes [model]
   (mapcat nodes (cons (:body model) (:furniture model))))
 
+(defn node-text
+  "A heading's keyword number (`GST ID` in `GST ID : 0007`) is part of its text content."
+  [{:keys [text number]}]
+  (when (or text number)
+    (str/join " " (remove str/blank? [(when (string? number) number) text]))))
+
 (defn model-text [model]
-  (str/join " " (keep :text (model-nodes model))))
+  (str/join " " (keep node-text (model-nodes model))))
 
 (defn gold-rows [gold]
   (let [units (sort-by (fn [{[[_ _ y0 _ y1]] :at}] (+ y0 y1))
@@ -239,7 +245,7 @@
         lines))
 
 (defn output-tokens [model page]
-  (letfn [(walk [{:keys [text at children]} inherited]
+  (letfn [(walk [{:keys [text at children] :as node} inherited]
             (let [regions (if (seq at)
                             (reduce (fn [by-page [p x0 y0 x1 y1]]
                                       (let [{[width height] :px w :w h :h} (get (:pages model) (dec p))]
@@ -250,7 +256,7 @@
                                           by-page)))
                                     {} at)
                             inherited)
-                  tokens (if (re-matches #"[-=*_.]{3,}" (or text "")) ["::rule"] (words text))]
+                  tokens (if (re-matches #"[-=*_.]{3,}" (or text "")) ["::rule"] (words (node-text node)))]
               (concat (map #(hash-map :token % :regions regions) tokens)
                       (mapcat #(walk % regions) children))))]
     (into [] (mapcat #(walk % {}) (cons (:body model) (:furniture model))))))

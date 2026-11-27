@@ -1718,39 +1718,6 @@ func msNumbersAgree(keys *port.Cells, text *port.Cells, a int32, b int32) int32 
 	return 1
 }
 
-func msRowWordsEqual(keys *port.Cells, text *port.Cells, a int32, b int32) int32 {
-	// Ignore punctuation while comparing the sequence of letter and digit runs.
-	var i int32 = msKey(keys, a, 0)
-	var j int32 = msKey(keys, b, 0)
-	var endA int32 = i + msKey(keys, a, 1)
-	var endB int32 = j + msKey(keys, b, 1)
-	for (i < endA) || (j < endB) {
-		for (i < endA) && (scan.ScCpClass(port.CellsAt(text, i)) >= 2) {
-			i += 1
-		}
-		for (j < endB) && (scan.ScCpClass(port.CellsAt(text, j)) >= 2) {
-			j += 1
-		}
-		if (i == endA) || (j == endB) {
-			if (i == endA) && (j == endB) {
-				return 1
-			}
-			return 0
-		}
-		for (i < endA) && (j < endB) && (scan.ScCpClass(port.CellsAt(text, i)) < 2) && (scan.ScCpClass(port.CellsAt(text, j)) < 2) {
-			if port.CellsAt(text, i) != port.CellsAt(text, j) {
-				return 0
-			}
-			i += 1
-			j += 1
-		}
-		if ((i < endA) && (scan.ScCpClass(port.CellsAt(text, i)) < 2)) || ((j < endB) && (scan.ScCpClass(port.CellsAt(text, j)) < 2)) {
-			return 0
-		}
-	}
-	return 1
-}
-
 func msRowSimilarity(keys *port.Cells, text *port.Cells, a int32, b int32, row *port.Cells) int32 {
 	return MsSimilarity(text, msKey(keys, a, 0), msKey(keys, a, 1), msKey(keys, b, 0), msKey(keys, b, 1), row)
 }
@@ -1825,7 +1792,7 @@ func msDeduplicate(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Ce
 		la = port.CellsAt(a, na-i-1)
 		lb = port.CellsAt(b, i)
 		pixel = msPixelPair(fl, offsets, pixels, la, lb)
-		if (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) && ((msEqual(keys, codepoints, la, lb) == 1) || ((msKey(keys, la, 2) == 2) && (msKey(keys, lb, 2) == 2) && (msNumbersAgree(keys, codepoints, la, lb) == 1) && ((msRowWordsEqual(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (msRowSimilarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (msRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, msMax(pixel, fragment), row) == 1)) {
+		if (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) && (msEqual(keys, codepoints, la, lb) == 1) && ((na == 1) || (msRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, msMax(pixel, fragment), row) == 1)) {
 			if i < split {
 				removed += msDropRow(fl, fw, et, keys, lb, dropped, ledger, modelText)
 			} else {

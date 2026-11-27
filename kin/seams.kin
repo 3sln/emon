@@ -1063,24 +1063,6 @@
                 (set i (+ i 1)) (set j (+ j 1))))))
     (return 1)))
 
-(defn ^I32 ms-row-words-equal [^Cells keys ^Cells text ^I32 a ^I32 b]
-  (comment "Ignore punctuation while comparing the sequence of letter and digit runs.")
-  (let [^:mut ^I32 i (ms-key keys a 0) ^:mut ^I32 j (ms-key keys b 0)
-        ^I32 end-a (+ i (ms-key keys a 1)) ^I32 end-b (+ j (ms-key keys b 1))]
-    (while (or (< i end-a) (< j end-b))
-      (do (while (and (< i end-a) (>= (sc-cp-class (cells-at text i)) 2)) (set i (+ i 1)))
-          (while (and (< j end-b) (>= (sc-cp-class (cells-at text j)) 2)) (set j (+ j 1)))
-          (if (or (== i end-a) (== j end-b))
-            (do (if (and (== i end-a) (== j end-b)) (return 1))
-                (return 0)))
-          (while (and (< i end-a) (< j end-b)
-                      (< (sc-cp-class (cells-at text i)) 2) (< (sc-cp-class (cells-at text j)) 2))
-            (do (if (!= (cells-at text i) (cells-at text j)) (return 0))
-                (set i (+ i 1)) (set j (+ j 1))))
-          (if (or (and (< i end-a) (< (sc-cp-class (cells-at text i)) 2))
-                  (and (< j end-b) (< (sc-cp-class (cells-at text j)) 2))) (return 0))))
-    (return 1)))
-
 (defn ^I32 ms-row-similarity [^Cells keys ^Cells text ^I32 a ^I32 b ^:mut ^Cells row]
   (return (ms-similarity text (ms-key keys a 0) (ms-key keys a 1)
                          (ms-key keys b 0) (ms-key keys b 1) row)))
@@ -1139,11 +1121,7 @@
           (set lb (cells-at b i))
           (set pixel (ms-pixel-pair fl offsets pixels la lb))
           (if (and (== (ms-row-live keys dropped la) 1) (== (ms-row-live keys dropped lb) 1)
-                   (or (== (ms-equal keys codepoints la lb) 1)
-                       (and (== (ms-key keys la 2) 2) (== (ms-key keys lb 2) 2)
-                            (== (ms-numbers-agree keys codepoints la lb) 1)
-                            (or (== (ms-row-words-equal keys codepoints la lb) 1)
-                                (and (== pixel 1) (>= (ms-row-similarity keys codepoints la lb row) 900)))))
+                   (== (ms-equal keys codepoints la lb) 1)
                    (or (== na 1)
                        (== (ms-row-support fl keys codepoints offsets pixels a b na i (ms-max pixel fragment) row) 1)))
             (do (if (< i split)

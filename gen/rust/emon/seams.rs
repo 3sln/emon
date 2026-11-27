@@ -1632,38 +1632,6 @@ pub(crate) fn ms_numbers_agree(keys: &mut crate::port::Cells, text: &mut crate::
     }
     return 1;
 }
-pub(crate) fn ms_row_words_equal(keys: &mut crate::port::Cells, text: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
-    // Ignore punctuation while comparing the sequence of letter and digit runs.
-    let mut i: i32 = ms_key(keys, a, 0);
-    let mut j: i32 = ms_key(keys, b, 0);
-    let end_a: i32 = i + ms_key(keys, a, 1);
-    let end_b: i32 = j + ms_key(keys, b, 1);
-    while (i < end_a) || (j < end_b) {
-        while (i < end_a) && (sc_cp_class(crate::port::cells_at(text, i)) >= 2) {
-            i += 1;
-        }
-        while (j < end_b) && (sc_cp_class(crate::port::cells_at(text, j)) >= 2) {
-            j += 1;
-        }
-        if (i == end_a) || (j == end_b) {
-            if (i == end_a) && (j == end_b) {
-                return 1;
-            }
-            return 0;
-        }
-        while (i < end_a) && (j < end_b) && (sc_cp_class(crate::port::cells_at(text, i)) < 2) && (sc_cp_class(crate::port::cells_at(text, j)) < 2) {
-            if crate::port::cells_at(text, i) != crate::port::cells_at(text, j) {
-                return 0;
-            }
-            i += 1;
-            j += 1;
-        }
-        if ((i < end_a) && (sc_cp_class(crate::port::cells_at(text, i)) < 2)) || ((j < end_b) && (sc_cp_class(crate::port::cells_at(text, j)) < 2)) {
-            return 0;
-        }
-    }
-    return 1;
-}
 pub(crate) fn ms_row_similarity(keys: &mut crate::port::Cells, text: &mut crate::port::Cells, a: i32, b: i32, mut row: &mut crate::port::Cells) -> i32 {
     return ms_similarity(text, ms_key(keys, a, 0), ms_key(keys, a, 1), ms_key(keys, b, 0), ms_key(keys, b, 1), row);
 }
@@ -1735,7 +1703,7 @@ pub(crate) fn ms_deduplicate(fl: &mut crate::port::Cells, fw: &mut crate::port::
         la = crate::port::cells_at(a, na - i - 1);
         lb = crate::port::cells_at(b, i);
         pixel = ms_pixel_pair(fl, offsets, pixels, la, lb);
-        if (ms_row_live(keys, dropped, la) == 1) && (ms_row_live(keys, dropped, lb) == 1) && ((ms_equal(keys, codepoints, la, lb) == 1) || ((ms_key(keys, la, 2) == 2) && (ms_key(keys, lb, 2) == 2) && (ms_numbers_agree(keys, codepoints, la, lb) == 1) && ((ms_row_words_equal(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (ms_row_similarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (ms_row_support(fl, keys, codepoints, offsets, pixels, a, b, na, i, ms_max(pixel, fragment), row) == 1)) {
+        if (ms_row_live(keys, dropped, la) == 1) && (ms_row_live(keys, dropped, lb) == 1) && (ms_equal(keys, codepoints, la, lb) == 1) && ((na == 1) || (ms_row_support(fl, keys, codepoints, offsets, pixels, a, b, na, i, ms_max(pixel, fragment), row) == 1)) {
             if i < split {
                 removed += ms_drop_row(fl, fw, et, keys, lb, dropped, ledger, model_text);
             } else {

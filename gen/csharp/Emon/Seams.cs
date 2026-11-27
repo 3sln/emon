@@ -1630,38 +1630,6 @@ public static class Seams {
         }
         return 1;
     }
-    internal static int MsRowWordsEqual(emon.Port.Cells keys, emon.Port.Cells text, int a, int b) {
-        // Ignore punctuation while comparing the sequence of letter and digit runs.
-        int i = MsKey(keys, a, 0);
-        int j = MsKey(keys, b, 0);
-        int endA = i + MsKey(keys, a, 1);
-        int endB = j + MsKey(keys, b, 1);
-        while ((i < endA) || (j < endB)) {
-            while ((i < endA) && (Scan.ScCpClass(emon.Port.CellsAt(text, i)) >= 2)) {
-                i += 1;
-            }
-            while ((j < endB) && (Scan.ScCpClass(emon.Port.CellsAt(text, j)) >= 2)) {
-                j += 1;
-            }
-            if ((i == endA) || (j == endB)) {
-                if ((i == endA) && (j == endB)) {
-                    return 1;
-                }
-                return 0;
-            }
-            while ((i < endA) && (j < endB) && (Scan.ScCpClass(emon.Port.CellsAt(text, i)) < 2) && (Scan.ScCpClass(emon.Port.CellsAt(text, j)) < 2)) {
-                if (emon.Port.CellsAt(text, i) != emon.Port.CellsAt(text, j)) {
-                    return 0;
-                }
-                i += 1;
-                j += 1;
-            }
-            if (((i < endA) && (Scan.ScCpClass(emon.Port.CellsAt(text, i)) < 2)) || ((j < endB) && (Scan.ScCpClass(emon.Port.CellsAt(text, j)) < 2))) {
-                return 0;
-            }
-        }
-        return 1;
-    }
     internal static int MsRowSimilarity(emon.Port.Cells keys, emon.Port.Cells text, int a, int b, emon.Port.Cells row) {
         return MsSimilarity(text, MsKey(keys, a, 0), MsKey(keys, a, 1), MsKey(keys, b, 0), MsKey(keys, b, 1), row);
     }
@@ -1733,7 +1701,7 @@ public static class Seams {
             la = emon.Port.CellsAt(a, na - i - 1);
             lb = emon.Port.CellsAt(b, i);
             pixel = MsPixelPair(fl, offsets, pixels, la, lb);
-            if ((MsRowLive(keys, dropped, la) == 1) && (MsRowLive(keys, dropped, lb) == 1) && ((MsEqual(keys, codepoints, la, lb) == 1) || ((MsKey(keys, la, 2) == 2) && (MsKey(keys, lb, 2) == 2) && (MsNumbersAgree(keys, codepoints, la, lb) == 1) && ((MsRowWordsEqual(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (MsRowSimilarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (MsRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, MsMax(pixel, fragment), row) == 1))) {
+            if ((MsRowLive(keys, dropped, la) == 1) && (MsRowLive(keys, dropped, lb) == 1) && (MsEqual(keys, codepoints, la, lb) == 1) && ((na == 1) || (MsRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, MsMax(pixel, fragment), row) == 1))) {
                 if (i < split) {
                     removed += MsDropRow(fl, fw, et, keys, lb, dropped, ledger, modelText);
                 } else {
