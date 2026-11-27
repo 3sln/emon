@@ -314,14 +314,14 @@
     (assert-eq (cells-at decisions 2) 2 "retain both copies of a shortened word band")))
 
 (defn ^I32 law-fragment-anchor [^:mut ^Cells fl ^:mut ^Cells fw ^:mut ^Cells et
-                                ^I32 page ^I32 y ^I32 last]
+                                ^I32 page ^I32 y ^I32 prefix ^I32 last]
   (let [^I32 start (cells-len et) ^I32 line (ln-count fl)
         ^:mut ^I32 i 0 ^:mut ^I32 word 0]
-    (while (< i 7)
+    (while (< i prefix)
       (do (cells-push et (+ 65 i))
           (set i (+ i 1))))
     (cells-push et last)
-    (set word (wd-new fw page 50 y 400 (+ y 12) 50 y 400 y 0 0 start 8 line 900 -1))
+    (set word (wd-new fw page 50 y 400 (+ y 12) 50 y 400 y 0 0 start (+ prefix 1) line 900 -1))
     (ln-new fl page 50 y 400 (+ y 12) 50 y 400 y 0 0 word 1)
     (return 0)))
 
@@ -332,12 +332,12 @@
     (page-new pages 2 450 1000 0 (pk-image))
     (cells-push mask 1) (cells-push mask 1)
     (law-line fl fw et 1 50 91)
-    (law-fragment-anchor fl fw et 1 870 49)
+    (law-fragment-anchor fl fw et 1 870 7 49)
     (law-line fl fw et 1 900 88)
-    (law-fragment-anchor fl fw et 1 930 50)
-    (law-fragment-anchor fl fw et 2 50 51)
+    (law-fragment-anchor fl fw et 1 930 7 50)
+    (law-fragment-anchor fl fw et 2 50 7 51)
     (law-line fl fw et 2 80 88)
-    (law-fragment-anchor fl fw et 2 110 52)
+    (law-fragment-anchor fl fw et 2 110 7 52)
     (law-line fl fw et 2 400 92)
     (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
                        (new-cells) (new-cells) decisions
@@ -364,8 +364,8 @@
           (law-line fl fw et 2 50 88)
           (set expected 1)))
     (if (== shared 2)
-      (do (law-fragment-anchor fl fw et 1 957 88)
-          (law-fragment-anchor fl fw et 2 50 89)))
+      (do (law-fragment-anchor fl fw et 1 957 7 88)
+          (law-fragment-anchor fl fw et 2 50 7 89)))
     (set first (wd-count fw))
     (law-band-line fl fw et 2 80 5)
     (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 0 4)
@@ -549,6 +549,49 @@
     (assert-eq (ln-count fl) 10 "both versions of the divergent item and the isolated match survive")
     (assert-eq (cells-at decisions 2) 2 "the divergent item has a possible-duplicate mark")
     (assert-eq (cells-at decisions 7) 1 "the equal rows have an overlap mark")))
+
+(defn ^I32 law-graded-neighbor [^TestT emon-t ^I32 sampled ^I32 priced ^I32 expected]
+  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
+        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
+        ^Cells offsets (new-cells) ^Cells pixels (new-cells) ^:mut ^I32 i 0]
+    (page-new pages 1 450 1000 0 (pk-image))
+    (page-new pages 2 450 1000 0 (pk-image))
+    (cells-push mask 1) (cells-push mask 1)
+    (law-line fl fw et 1 50 90)
+    (law-fragment-anchor fl fw et 1 840 7 65)
+    (if (== priced 1) (law-fragment-anchor fl fw et 1 870 12 49) (law-line fl fw et 1 870 88))
+    (law-fragment-anchor fl fw et 1 900 7 67)
+    (law-fragment-anchor fl fw et 2 40 7 66)
+    (if (== priced 1) (law-fragment-anchor fl fw et 2 70 12 50) (law-line fl fw et 2 70 88))
+    (law-fragment-anchor fl fw et 2 100 7 68)
+    (law-line fl fw et 2 500 89)
+    (if (== sampled 1)
+      (do (while (< i (ln-count fl))
+            (do (ln-set fl i (lf-order) i)
+                (cells-push offsets -1)
+                (set i (+ i 1))))
+          (cells-set offsets 2 0)
+          (cells-set offsets 5 384)
+          (set i 0)
+          (while (< i 768)
+            (do (cells-push pixels (rem (* i 17) 128))
+                (set i (+ i 1))))))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels (new-cells)
+                       (new-cells) (new-cells) decisions
+                       (new-cells) (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells)
+                       (new-cells) (new-cells) (new-cells))
+               expected "the matching row needs corroboration and its amounts must agree")
+    (assert-eq (cells-at decisions 2) 2 "uncertain readings remain marked")
+    (return 0)))
+
+(deftest test-a-graded-neighbor-can-support-a-correlated-row
+  (law-graded-neighbor (test-t) 1 0 1)
+  (law-graded-neighbor (test-t) 0 0 0))
+
+(deftest test-correlation-keeps-different-amounts-on-identical-item-text
+  (law-graded-neighbor (test-t) 1 1 0))
 
 (deftest test-correlation-threshold-separates-moderate-from-weak-agreement
   (let [^Cells pixels (new-cells)]

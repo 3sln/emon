@@ -388,17 +388,17 @@ public static class Seamstest {
         emon.Testport.AssertEq(Seams.MsRun(2, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, offsets, pixels, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "correlated neighbors do not make up for a missing word");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 2, "retain both copies of a shortened word band");
     }
-    internal static int LawFragmentAnchor(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int page, int y, int last) {
+    internal static int LawFragmentAnchor(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int page, int y, int prefix, int last) {
         int start = emon.Port.CellsLen(et);
         int line = Evidence.LnCount(fl);
         int i = 0;
         int word = 0;
-        while (i < 7) {
+        while (i < prefix) {
             emon.Port.CellsPush(et, 65 + i);
             i += 1;
         }
         emon.Port.CellsPush(et, last);
-        word = Evidence.WdNew(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1);
+        word = Evidence.WdNew(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, prefix + 1, line, 900, -1);
         Evidence.LnNew(fl, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, word, 1);
         return 0;
     }
@@ -415,12 +415,12 @@ public static class Seamstest {
         emon.Port.CellsPush(mask, 1);
         emon.Port.CellsPush(mask, 1);
         LawLine(fl, fw, et, 1, 50, 91);
-        LawFragmentAnchor(fl, fw, et, 1, 870, 49);
+        LawFragmentAnchor(fl, fw, et, 1, 870, 7, 49);
         LawLine(fl, fw, et, 1, 900, 88);
-        LawFragmentAnchor(fl, fw, et, 1, 930, 50);
-        LawFragmentAnchor(fl, fw, et, 2, 50, 51);
+        LawFragmentAnchor(fl, fw, et, 1, 930, 7, 50);
+        LawFragmentAnchor(fl, fw, et, 2, 50, 7, 51);
         LawLine(fl, fw, et, 2, 80, 88);
-        LawFragmentAnchor(fl, fw, et, 2, 110, 52);
+        LawFragmentAnchor(fl, fw, et, 2, 110, 7, 52);
         LawLine(fl, fw, et, 2, 400, 92);
         emon.Testport.AssertEq(Seams.MsRun(2, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
         emon.Testport.AssertEq(Evidence.LnCount(fl), 8, "each item and all its amounts survive");
@@ -455,8 +455,8 @@ public static class Seamstest {
             expected = 1;
         }
         if (shared == 2) {
-            LawFragmentAnchor(fl, fw, et, 1, 957, 88);
-            LawFragmentAnchor(fl, fw, et, 2, 50, 89);
+            LawFragmentAnchor(fl, fw, et, 1, 957, 7, 88);
+            LawFragmentAnchor(fl, fw, et, 2, 50, 7, 89);
         }
         first = Evidence.WdCount(fw);
         LawBandLine(fl, fw, et, 2, 80, 5);
@@ -673,6 +673,63 @@ public static class Seamstest {
         emon.Testport.AssertEq(Evidence.LnCount(fl), 10, "both versions of the divergent item and the isolated match survive");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 2, "the divergent item has a possible-duplicate mark");
         emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 7), 1, "the equal rows have an overlap mark");
+    }
+    internal static int LawGradedNeighbor(int emonT, int sampled, int priced, int expected) {
+        emon.Port.Cells fl = emon.Port.NewCells();
+        emon.Port.Cells fw = emon.Port.NewCells();
+        emon.Port.Cells et = emon.Port.NewCells();
+        emon.Port.Cells pages = emon.Port.NewCells();
+        emon.Port.Cells mask = emon.Port.NewCells();
+        emon.Port.Cells decisions = emon.Port.NewCells();
+        emon.Port.Cells offsets = emon.Port.NewCells();
+        emon.Port.Cells pixels = emon.Port.NewCells();
+        int i = 0;
+        Model.PageNew(pages, 1, 450, 1000, 0, Model.PkImage());
+        Model.PageNew(pages, 2, 450, 1000, 0, Model.PkImage());
+        emon.Port.CellsPush(mask, 1);
+        emon.Port.CellsPush(mask, 1);
+        LawLine(fl, fw, et, 1, 50, 90);
+        LawFragmentAnchor(fl, fw, et, 1, 840, 7, 65);
+        if (priced == 1) {
+            LawFragmentAnchor(fl, fw, et, 1, 870, 12, 49);
+        } else {
+            LawLine(fl, fw, et, 1, 870, 88);
+        }
+        LawFragmentAnchor(fl, fw, et, 1, 900, 7, 67);
+        LawFragmentAnchor(fl, fw, et, 2, 40, 7, 66);
+        if (priced == 1) {
+            LawFragmentAnchor(fl, fw, et, 2, 70, 12, 50);
+        } else {
+            LawLine(fl, fw, et, 2, 70, 88);
+        }
+        LawFragmentAnchor(fl, fw, et, 2, 100, 7, 68);
+        LawLine(fl, fw, et, 2, 500, 89);
+        if (sampled == 1) {
+            while (i < Evidence.LnCount(fl)) {
+                Evidence.LnSet(fl, i, Evidence.LfOrder(), i);
+                emon.Port.CellsPush(offsets, -1);
+                i += 1;
+            }
+            emon.Port.CellsSet(offsets, 2, 0);
+            emon.Port.CellsSet(offsets, 5, 384);
+            i = 0;
+            while (i < 768) {
+                emon.Port.CellsPush(pixels, (i * 17) % 128);
+                i += 1;
+            }
+        }
+        emon.Testport.AssertEq(Seams.MsRun(2, 0, mask, pages, emon.Port.NewCells(), emon.Port.NewCells(), et, fl, fw, offsets, pixels, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), decisions, emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells(), emon.Port.NewCells()), expected, "the matching row needs corroboration and its amounts must agree");
+        emon.Testport.AssertEq(emon.Port.CellsAt(decisions, 2), 2, "uncertain readings remain marked");
+        return 0;
+    }
+    [Xunit.Fact]
+    public static void TestAGradedNeighborCanSupportACorrelatedRow() {
+        LawGradedNeighbor(0, 1, 0, 1);
+        LawGradedNeighbor(0, 0, 0, 0);
+    }
+    [Xunit.Fact]
+    public static void TestCorrelationKeepsDifferentAmountsOnIdenticalItemText() {
+        LawGradedNeighbor(0, 1, 1, 0);
     }
     [Xunit.Fact]
     public static void TestCorrelationThresholdSeparatesModerateFromWeakAgreement() {

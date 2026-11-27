@@ -1588,46 +1588,148 @@ public final class Seams {
         }
         return count;
     }
-    public static int msRowSupport(emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells a, emon.Port.Cells b, int n, int i) {
-        // An identical item name can recur with a different amount. A distinct exact
-        // neighbor supports the pair. Separators carry no independent vote.
-        int line = emon.Port.cellsAt(a, n - i - 1);
+    public static int msNextNumber(emon.Port.Cells text, int start, int end) {
+        int i = start;
+        int cp = 0;
+        while (i < end) {
+            cp = emon.Port.cellsAt(text, i);
+            if ((Ofmt.fmtDigit(cp) == 1) || (((cp == 43) || (cp == 45) || (cp == 46) || (cp == 44) || (cp == 8722)) && ((i + 1) < end) && (Ofmt.fmtDigit(emon.Port.cellsAt(text, i + 1)) == 1))) {
+                return i;
+            }
+            i += 1;
+        }
+        return end;
+    }
+    public static int msNumberEnd(emon.Port.Cells text, int start, int end) {
+        int i = start + 1;
+        int cp = 0;
+        while (i < end) {
+            cp = emon.Port.cellsAt(text, i);
+            if ((Ofmt.fmtDigit(cp) == 0) && (((cp != 46) && (cp != 44) && (cp != 47) && (cp != 45)) || ((i + 1) >= end) || (Ofmt.fmtDigit(emon.Port.cellsAt(text, i + 1)) == 0))) {
+                return i;
+            }
+            i += 1;
+        }
+        return end;
+    }
+    public static int msNumbersAgree(emon.Port.Cells keys, emon.Port.Cells text, int a, int b) {
+        // Preserve the sequence of prices, quantities and other numbers on this visual row.
+        int i = msKey(keys, a, 0);
+        int j = msKey(keys, b, 0);
+        int endA = i + msKey(keys, a, 1);
+        int endB = j + msKey(keys, b, 1);
+        int stopA = 0;
+        int stopB = 0;
+        while ((i < endA) || (j < endB)) {
+            i = msNextNumber(text, i, endA);
+            j = msNextNumber(text, j, endB);
+            if ((i == endA) || (j == endB)) {
+                if ((i == endA) && (j == endB)) {
+                    return 1;
+                }
+                return 0;
+            }
+            stopA = msNumberEnd(text, i, endA);
+            stopB = msNumberEnd(text, j, endB);
+            if ((stopA - i) != (stopB - j)) {
+                return 0;
+            }
+            while (i < stopA) {
+                if (emon.Port.cellsAt(text, i) != emon.Port.cellsAt(text, j)) {
+                    return 0;
+                }
+                i += 1;
+                j += 1;
+            }
+        }
+        return 1;
+    }
+    public static int msRowWordsEqual(emon.Port.Cells keys, emon.Port.Cells text, int a, int b) {
+        // Ignore punctuation while comparing the sequence of letter and digit runs.
+        int i = msKey(keys, a, 0);
+        int j = msKey(keys, b, 0);
+        int endA = i + msKey(keys, a, 1);
+        int endB = j + msKey(keys, b, 1);
+        while ((i < endA) || (j < endB)) {
+            while ((i < endA) && (Scan.scCpClass(emon.Port.cellsAt(text, i)) >= 2)) {
+                i += 1;
+            }
+            while ((j < endB) && (Scan.scCpClass(emon.Port.cellsAt(text, j)) >= 2)) {
+                j += 1;
+            }
+            if ((i == endA) || (j == endB)) {
+                if ((i == endA) && (j == endB)) {
+                    return 1;
+                }
+                return 0;
+            }
+            while ((i < endA) && (j < endB) && (Scan.scCpClass(emon.Port.cellsAt(text, i)) < 2) && (Scan.scCpClass(emon.Port.cellsAt(text, j)) < 2)) {
+                if (emon.Port.cellsAt(text, i) != emon.Port.cellsAt(text, j)) {
+                    return 0;
+                }
+                i += 1;
+                j += 1;
+            }
+            if (((i < endA) && (Scan.scCpClass(emon.Port.cellsAt(text, i)) < 2)) || ((j < endB) && (Scan.scCpClass(emon.Port.cellsAt(text, j)) < 2))) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    public static int msRowSimilarity(emon.Port.Cells keys, emon.Port.Cells text, int a, int b, emon.Port.Cells row) {
+        return msSimilarity(text, msKey(keys, a, 0), msKey(keys, a, 1), msKey(keys, b, 0), msKey(keys, b, 1), row);
+    }
+    public static int msNeighborSupport(emon.Port.Cells fl, emon.Port.Cells keys, emon.Port.Cells text, emon.Port.Cells offsets, emon.Port.Cells pixels, int la, int lb, int nearA, int nearB, int corroborated, emon.Port.Cells row) {
+        if ((msKey(keys, nearA, 2) != 2) || (msKey(keys, nearB, 2) != 2) || (msEqual(keys, text, la, nearA) == 1) || (msEqual(keys, text, lb, nearB) == 1)) {
+            return 0;
+        }
+        if (msEqual(keys, text, nearA, nearB) == 1) {
+            return 2;
+        }
+        if ((msNumbersAgree(keys, text, nearA, nearB) == 1) && (msRowSimilarity(keys, text, nearA, nearB, row) >= 780) && ((corroborated == 1) || (msPixelPair(fl, offsets, pixels, nearA, nearB) == 1))) {
+            return 1;
+        }
+        return 0;
+    }
+    public static int msRowSupport(emon.Port.Cells fl, emon.Port.Cells keys, emon.Port.Cells text, emon.Port.Cells offsets, emon.Port.Cells pixels, emon.Port.Cells a, emon.Port.Cells b, int n, int i, int corroborated, emon.Port.Cells row) {
+        int la = emon.Port.cellsAt(a, n - i - 1);
+        int lb = emon.Port.cellsAt(b, i);
         int before = i - 1;
         int after = i + 1;
-        int above = -1;
-        int below = -1;
+        int above = 0;
+        int below = 0;
         while ((before >= 0) && (msKey(keys, emon.Port.cellsAt(b, before), 2) == 1)) {
             before -= 1;
         }
         while ((after < n) && (msKey(keys, emon.Port.cellsAt(b, after), 2) == 1)) {
             after += 1;
         }
-        if ((before >= 0) && (msEqual(keys, codepoints, emon.Port.cellsAt(a, n - before - 1), emon.Port.cellsAt(b, before)) == 1)) {
-            above = emon.Port.cellsAt(b, before);
+        if (before >= 0) {
+            above = msNeighborSupport(fl, keys, text, offsets, pixels, la, lb, emon.Port.cellsAt(a, n - before - 1), emon.Port.cellsAt(b, before), corroborated, row);
         }
-        if ((after < n) && (msEqual(keys, codepoints, emon.Port.cellsAt(a, n - after - 1), emon.Port.cellsAt(b, after)) == 1)) {
-            below = emon.Port.cellsAt(b, after);
+        if (after < n) {
+            below = msNeighborSupport(fl, keys, text, offsets, pixels, la, lb, emon.Port.cellsAt(a, n - after - 1), emon.Port.cellsAt(b, after), corroborated, row);
         }
-        if (msKey(keys, line, 2) == 1) {
-            if ((above >= 0) && (below >= 0) && (msEqual(keys, codepoints, above, below) == 0)) {
+        if (msKey(keys, la, 2) == 1) {
+            if ((above == 2) && (below == 2) && (msEqual(keys, text, emon.Port.cellsAt(b, before), emon.Port.cellsAt(b, after)) == 0)) {
                 return 1;
             }
             return 0;
         }
-        if (((above >= 0) && (msEqual(keys, codepoints, line, above) == 0)) || ((below >= 0) && (msEqual(keys, codepoints, line, below) == 0))) {
+        if ((above + below) > 0) {
             return 1;
         }
         return 0;
     }
-    public static int msDeduplicate(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells a, emon.Port.Cells b, int match, emon.Port.Cells dropped, emon.Port.Cells ledger, emon.Port.Cells modelText, emon.Port.Cells aw, emon.Port.Cells bw) {
-        // An overlap can be real while its copies disagree. Remove a row only when all
-        // its text has a surviving witness. A negative count denotes an incomplete reduction.
+    public static int msDeduplicate(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells offsets, emon.Port.Cells pixels, emon.Port.Cells a, emon.Port.Cells b, int match, int fragment, emon.Port.Cells dropped, emon.Port.Cells ledger, emon.Port.Cells modelText, emon.Port.Cells aw, emon.Port.Cells bw, emon.Port.Cells row) {
+        // Remove only supported row pairs. A negative count denotes an incomplete reduction.
         int na = msMatchLeft(match);
         int nb = match % 32;
         int split = msCopySplit(fl, fw, a, b, match);
         int i = 0;
         int la = 0;
         int lb = 0;
+        int pixel = 0;
         int removed = 0;
         int ambiguous = 0;
         if (msMatchKind(match) >= msWordCandidate()) {
@@ -1637,12 +1739,15 @@ public final class Seams {
                 }
                 return msRemoveBand(fl, fw, et, keys, a, na, dropped, ledger, modelText);
             }
-            return 0;
+            if (na != nb) {
+                return 0;
+            }
         }
         while (i < na) {
             la = emon.Port.cellsAt(a, na - i - 1);
             lb = emon.Port.cellsAt(b, i);
-            if ((msEqual(keys, codepoints, la, lb) == 1) && ((na == 1) || (msRowSupport(keys, codepoints, a, b, na, i) == 1)) && (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1)) {
+            pixel = msPixelPair(fl, offsets, pixels, la, lb);
+            if ((msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) && ((msEqual(keys, codepoints, la, lb) == 1) || ((msKey(keys, la, 2) == 2) && (msKey(keys, lb, 2) == 2) && (msNumbersAgree(keys, codepoints, la, lb) == 1) && ((msRowWordsEqual(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (msRowSimilarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (msRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, msMax(pixel, fragment), row) == 1))) {
                 if (i < split) {
                     removed += msDropRow(fl, fw, et, keys, lb, dropped, ledger, modelText);
                 } else {
@@ -1678,6 +1783,14 @@ public final class Seams {
         }
         return 0;
     }
+    public static int msContinuity(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells pages, emon.Port.Cells cuts, emon.Port.Cells dropped, int left, int right, emon.Port.Cells a, emon.Port.Cells b, int match) {
+        int na = msMatchLeft(match);
+        int nb = match % 32;
+        if ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2)) {
+            return 1;
+        }
+        return 0;
+    }
     public static int msConfirmPair(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells codepoints, emon.Port.Cells offsets, emon.Port.Cells pixels, emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells pages, emon.Port.Cells cuts, emon.Port.Cells dropped, int left, int right, emon.Port.Cells a, emon.Port.Cells b, int match) {
         int kind = msMatchKind(match);
         int rows = msMatchRows(match);
@@ -1702,10 +1815,7 @@ public final class Seams {
                 return 1;
             }
         }
-        if ((msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2)) {
-            return 1;
-        }
-        return 0;
+        return msContinuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, match);
     }
     public static int msBestLink(emon.Port.Cells scores, emon.Port.Cells taken, int n, int at, int step) {
         int i = 0;
@@ -1986,7 +2096,8 @@ public final class Seams {
                     if (msJoinGap(ol, ow, et, fl, fw, keys, pages, cuts, dropped, left, right, a, b, forward) == 1) {
                         msMark(seams, left, right, 3, 0);
                     }
-                    removed = msDeduplicate(fl, fw, et, keys, codepoints, a, b, forward, dropped, ledger, modelText, aw, bw);
+                    int fragment = msContinuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
+                    removed = msDeduplicate(fl, fw, et, keys, codepoints, offsets, pixels, a, b, forward, fragment, dropped, ledger, modelText, aw, bw, wordRow);
                     if ((removed <= 0) || (forward >= msTrimmedFactor())) {
                         msMark(seams, left, right, 2, forward);
                     }

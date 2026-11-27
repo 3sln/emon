@@ -2,6 +2,7 @@
 ;; withheld clipped OCR lines. Evidence uses original source page numbers.
 (ns emon.seams
   (:require [emon.scan :refer [sc-cp-class sc-count-class]]
+            [emon.ofmt :refer [fmt-digit]]
             [emon.lang :refer [I32 I64 Cells Text Bitmap emit-ascii i64 i32 mul64]]
             [emon.port :refer [cells-at cells-set cells-push cells-drop cells-len cells-swap text-i32
                                bitmap-w bitmap-h bitmap-channels bitmap-u8]]
@@ -1029,51 +1030,130 @@
           (set i (+ i 1))))
     (return count)))
 
-(defn ^I32 ms-row-support [^Cells keys ^Cells codepoints ^Cells a ^Cells b ^I32 n ^I32 i]
-  (comment "An identical item name can recur with a different amount. A distinct exact")
-  (comment "neighbor supports the pair. Separators carry no independent vote.")
-  (let [^I32 line (cells-at a (- n i 1))
+(defn ^I32 ms-next-number [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i start ^:mut ^I32 cp 0]
+    (while (< i end)
+      (do (set cp (cells-at text i))
+          (if (or (== (fmt-digit cp) 1)
+                  (and (or (== cp 43) (== cp 45) (== cp 46) (== cp 44) (== cp 8722))
+                       (< (+ i 1) end) (== (fmt-digit (cells-at text (+ i 1))) 1)))
+            (return i))
+          (set i (+ i 1))))
+    (return end)))
+
+(defn ^I32 ms-number-end [^Cells text ^I32 start ^I32 end]
+  (let [^:mut ^I32 i (+ start 1) ^:mut ^I32 cp 0]
+    (while (< i end)
+      (do (set cp (cells-at text i))
+          (if (and (== (fmt-digit cp) 0)
+                   (or (and (!= cp 46) (!= cp 44) (!= cp 47) (!= cp 45))
+                       (>= (+ i 1) end) (== (fmt-digit (cells-at text (+ i 1))) 0)))
+            (return i))
+          (set i (+ i 1))))
+    (return end)))
+
+(defn ^I32 ms-numbers-agree [^Cells keys ^Cells text ^I32 a ^I32 b]
+  (comment "Preserve the sequence of prices, quantities and other numbers on this visual row.")
+  (let [^:mut ^I32 i (ms-key keys a 0) ^:mut ^I32 j (ms-key keys b 0)
+        ^I32 end-a (+ i (ms-key keys a 1)) ^I32 end-b (+ j (ms-key keys b 1))
+        ^:mut ^I32 stop-a 0 ^:mut ^I32 stop-b 0]
+    (while (or (< i end-a) (< j end-b))
+      (do (set i (ms-next-number text i end-a))
+          (set j (ms-next-number text j end-b))
+          (if (or (== i end-a) (== j end-b))
+            (do (if (and (== i end-a) (== j end-b)) (return 1))
+                (return 0)))
+          (set stop-a (ms-number-end text i end-a))
+          (set stop-b (ms-number-end text j end-b))
+          (if (!= (- stop-a i) (- stop-b j)) (return 0))
+          (while (< i stop-a)
+            (do (if (!= (cells-at text i) (cells-at text j)) (return 0))
+                (set i (+ i 1)) (set j (+ j 1))))))
+    (return 1)))
+
+(defn ^I32 ms-row-words-equal [^Cells keys ^Cells text ^I32 a ^I32 b]
+  (comment "Ignore punctuation while comparing the sequence of letter and digit runs.")
+  (let [^:mut ^I32 i (ms-key keys a 0) ^:mut ^I32 j (ms-key keys b 0)
+        ^I32 end-a (+ i (ms-key keys a 1)) ^I32 end-b (+ j (ms-key keys b 1))]
+    (while (or (< i end-a) (< j end-b))
+      (do (while (and (< i end-a) (>= (sc-cp-class (cells-at text i)) 2)) (set i (+ i 1)))
+          (while (and (< j end-b) (>= (sc-cp-class (cells-at text j)) 2)) (set j (+ j 1)))
+          (if (or (== i end-a) (== j end-b))
+            (do (if (and (== i end-a) (== j end-b)) (return 1))
+                (return 0)))
+          (while (and (< i end-a) (< j end-b)
+                      (< (sc-cp-class (cells-at text i)) 2) (< (sc-cp-class (cells-at text j)) 2))
+            (do (if (!= (cells-at text i) (cells-at text j)) (return 0))
+                (set i (+ i 1)) (set j (+ j 1))))
+          (if (or (and (< i end-a) (< (sc-cp-class (cells-at text i)) 2))
+                  (and (< j end-b) (< (sc-cp-class (cells-at text j)) 2))) (return 0))))
+    (return 1)))
+
+(defn ^I32 ms-row-similarity [^Cells keys ^Cells text ^I32 a ^I32 b ^:mut ^Cells row]
+  (return (ms-similarity text (ms-key keys a 0) (ms-key keys a 1)
+                         (ms-key keys b 0) (ms-key keys b 1) row)))
+
+(defn ^I32 ms-neighbor-support [^Cells fl ^Cells keys ^Cells text ^Cells offsets ^Cells pixels
+                               ^I32 la ^I32 lb ^I32 near-a ^I32 near-b ^I32 corroborated ^:mut ^Cells row]
+  (if (or (!= (ms-key keys near-a 2) 2) (!= (ms-key keys near-b 2) 2)
+          (== (ms-equal keys text la near-a) 1) (== (ms-equal keys text lb near-b) 1))
+    (return 0))
+  (if (== (ms-equal keys text near-a near-b) 1) (return 2))
+  (if (and (== (ms-numbers-agree keys text near-a near-b) 1)
+           (>= (ms-row-similarity keys text near-a near-b row) 780)
+           (or (== corroborated 1) (== (ms-pixel-pair fl offsets pixels near-a near-b) 1)))
+    (return 1))
+  (return 0))
+
+(defn ^I32 ms-row-support [^Cells fl ^Cells keys ^Cells text ^Cells offsets ^Cells pixels
+                          ^Cells a ^Cells b ^I32 n ^I32 i ^I32 corroborated ^:mut ^Cells row]
+  (let [^I32 la (cells-at a (- n i 1)) ^I32 lb (cells-at b i)
         ^:mut ^I32 before (- i 1) ^:mut ^I32 after (+ i 1)
-        ^:mut ^I32 above -1 ^:mut ^I32 below -1]
+        ^:mut ^I32 above 0 ^:mut ^I32 below 0]
     (while (and (>= before 0) (== (ms-key keys (cells-at b before) 2) 1))
       (set before (- before 1)))
     (while (and (< after n) (== (ms-key keys (cells-at b after) 2) 1))
       (set after (+ after 1)))
-    (if (and (>= before 0)
-             (== (ms-equal keys codepoints (cells-at a (- n before 1)) (cells-at b before)) 1))
-      (set above (cells-at b before)))
-    (if (and (< after n)
-             (== (ms-equal keys codepoints (cells-at a (- n after 1)) (cells-at b after)) 1))
-      (set below (cells-at b after)))
-    (if (== (ms-key keys line 2) 1)
-      (do (if (and (>= above 0) (>= below 0) (== (ms-equal keys codepoints above below) 0))
+    (if (>= before 0)
+      (set above (ms-neighbor-support fl keys text offsets pixels la lb (cells-at a (- n before 1))
+                                      (cells-at b before) corroborated row)))
+    (if (< after n)
+      (set below (ms-neighbor-support fl keys text offsets pixels la lb (cells-at a (- n after 1))
+                                      (cells-at b after) corroborated row)))
+    (if (== (ms-key keys la 2) 1)
+      (do (if (and (== above 2) (== below 2) (== (ms-equal keys text (cells-at b before) (cells-at b after)) 0))
             (return 1))
           (return 0)))
-    (if (or (and (>= above 0) (== (ms-equal keys codepoints line above) 0))
-            (and (>= below 0) (== (ms-equal keys codepoints line below) 0)))
-      (return 1))
+    (if (> (+ above below) 0) (return 1))
     (return 0)))
 
 (defn ^I32 ms-deduplicate [^Cells fl ^Cells fw ^Cells et ^Cells keys ^Cells codepoints
-                           ^Cells a ^Cells b ^I32 match ^:mut ^Cells dropped
-                           ^:mut ^Cells ledger ^:mut ^Cells model-text ^:mut ^Cells aw ^:mut ^Cells bw]
-  (comment "An overlap can be real while its copies disagree. Remove a row only when all")
-  (comment "its text has a surviving witness. A negative count denotes an incomplete reduction.")
+                           ^Cells offsets ^Cells pixels ^Cells a ^Cells b ^I32 match ^I32 fragment
+                           ^:mut ^Cells dropped ^:mut ^Cells ledger ^:mut ^Cells model-text
+                           ^:mut ^Cells aw ^:mut ^Cells bw ^:mut ^Cells row]
+  (comment "Remove only supported row pairs. A negative count denotes an incomplete reduction.")
   (let [^I32 na (ms-match-left match) ^I32 nb (rem match 32)
         ^I32 split (ms-copy-split fl fw a b match)
-        ^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 removed 0 ^:mut ^I32 ambiguous 0]
+        ^:mut ^I32 i 0 ^:mut ^I32 la 0 ^:mut ^I32 lb 0 ^:mut ^I32 pixel 0
+        ^:mut ^I32 removed 0 ^:mut ^I32 ambiguous 0]
     (if (>= (ms-match-kind match) (ms-word-candidate))
       (do (if (and (== (ms-band-live keys a na dropped) 1) (== (ms-band-live keys b nb dropped) 1)
                    (== (ms-same-word-band keys codepoints a b na nb aw bw) 1))
             (do (if (> split 0) (return (ms-remove-band fl fw et keys b nb dropped ledger model-text)))
                 (return (ms-remove-band fl fw et keys a na dropped ledger model-text))))
-          (return 0)))
+          (if (!= na nb) (return 0))))
     (while (< i na)
       (do (set la (cells-at a (- na i 1)))
           (set lb (cells-at b i))
-          (if (and (== (ms-equal keys codepoints la lb) 1)
-                   (or (== na 1) (== (ms-row-support keys codepoints a b na i) 1))
-                   (== (ms-row-live keys dropped la) 1) (== (ms-row-live keys dropped lb) 1))
+          (set pixel (ms-pixel-pair fl offsets pixels la lb))
+          (if (and (== (ms-row-live keys dropped la) 1) (== (ms-row-live keys dropped lb) 1)
+                   (or (== (ms-equal keys codepoints la lb) 1)
+                       (and (== (ms-key keys la 2) 2) (== (ms-key keys lb 2) 2)
+                            (== (ms-numbers-agree keys codepoints la lb) 1)
+                            (or (== (ms-row-words-equal keys codepoints la lb) 1)
+                                (and (== pixel 1) (>= (ms-row-similarity keys codepoints la lb row) 900)))))
+                   (or (== na 1)
+                       (== (ms-row-support fl keys codepoints offsets pixels a b na i (ms-max pixel fragment) row) 1)))
             (do (if (< i split)
                   (set removed (+ removed (ms-drop-row fl fw et keys lb dropped ledger model-text)))
                   (set removed (+ removed (ms-drop-row fl fw et keys la dropped ledger model-text)))))
@@ -1098,6 +1178,14 @@
           (set i (+ i 1))))
     (return 0)))
 
+(defn ^I32 ms-continuity [^Cells fl ^Cells fw ^Cells keys ^Cells ol ^Cells ow ^Cells et ^Cells pages
+                         ^Cells cuts ^Cells dropped ^I32 left ^I32 right ^Cells a ^Cells b ^I32 match]
+  (let [^I32 na (ms-match-left match) ^I32 nb (rem match 32)]
+    (if (or (== (ms-gap-edge ol ow et fl fw keys pages cuts left 1 b nb (+ nb 1) dropped 1) 2)
+            (== (ms-gap-edge ol ow et fl fw keys pages cuts right 0 a na (+ na 1) dropped 1) 2))
+      (return 1))
+    (return 0)))
+
 (defn ^I32 ms-confirm-pair [^Cells fl ^Cells fw ^Cells keys ^Cells codepoints ^Cells offsets ^Cells pixels
                             ^Cells ol ^Cells ow ^Cells et ^Cells pages ^Cells cuts ^Cells dropped
                             ^I32 left ^I32 right ^Cells a ^Cells b ^I32 match]
@@ -1117,10 +1205,7 @@
           (if (and (>= kind (ms-word-candidate))
                    (== (ms-word-pixels fl a b keys codepoints offsets pixels na nb) 1))
             (return 1))))
-    (if (or (== (ms-gap-edge ol ow et fl fw keys pages cuts left 1 b nb (+ nb 1) dropped 1) 2)
-            (== (ms-gap-edge ol ow et fl fw keys pages cuts right 0 a na (+ na 1) dropped 1) 2))
-      (return 1))
-    (return 0)))
+    (return (ms-continuity fl fw keys ol ow et pages cuts dropped left right a b match))))
 
 (defn ^I32 ms-best-link [^Cells scores ^Cells taken ^I32 n ^I32 at ^I32 step]
   (let [^:mut ^I32 i 0 ^:mut ^I32 score 0 ^:mut ^I32 best 0 ^:mut ^I32 pick -1]
@@ -1329,8 +1414,9 @@
                                   (== (ms-open-edge incoming first right) 1))))
                   (do (if (== (ms-join-gap ol ow et fl fw keys pages cuts dropped left right a b forward) 1)
                         (ms-mark seams left right 3 0))
-                      (set removed (ms-deduplicate fl fw et keys codepoints a b forward dropped
-                                                  ledger model-text aw bw))
+                      (let [^I32 fragment (ms-continuity fl fw keys ol ow et pages cuts dropped left right a b forward)]
+                        (set removed (ms-deduplicate fl fw et keys codepoints offsets pixels a b forward fragment
+                                                     dropped ledger model-text aw bw word-row)))
                       (if (or (<= removed 0) (>= forward (ms-trimmed-factor)))
                         (ms-mark seams left right 2 forward))
                       (if (!= removed 0)

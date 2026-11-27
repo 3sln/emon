@@ -373,17 +373,17 @@ public final class Seamstest {
         emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "correlated neighbors do not make up for a missing word");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "retain both copies of a shortened word band");
     }
-    public static int lawFragmentAnchor(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int page, int y, int last) {
+    public static int lawFragmentAnchor(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int page, int y, int prefix, int last) {
         int start = emon.Port.cellsLen(et);
         int line = Evidence.lnCount(fl);
         int i = 0;
         int word = 0;
-        while (i < 7) {
+        while (i < prefix) {
             emon.Port.cellsPush(et, 65 + i);
             i += 1;
         }
         emon.Port.cellsPush(et, last);
-        word = Evidence.wdNew(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1);
+        word = Evidence.wdNew(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, prefix + 1, line, 900, -1);
         Evidence.lnNew(fl, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, word, 1);
         return 0;
     }
@@ -399,12 +399,12 @@ public final class Seamstest {
         emon.Port.cellsPush(mask, 1);
         emon.Port.cellsPush(mask, 1);
         lawLine(fl, fw, et, 1, 50, 91);
-        lawFragmentAnchor(fl, fw, et, 1, 870, 49);
+        lawFragmentAnchor(fl, fw, et, 1, 870, 7, 49);
         lawLine(fl, fw, et, 1, 900, 88);
-        lawFragmentAnchor(fl, fw, et, 1, 930, 50);
-        lawFragmentAnchor(fl, fw, et, 2, 50, 51);
+        lawFragmentAnchor(fl, fw, et, 1, 930, 7, 50);
+        lawFragmentAnchor(fl, fw, et, 2, 50, 7, 51);
         lawLine(fl, fw, et, 2, 80, 88);
-        lawFragmentAnchor(fl, fw, et, 2, 110, 52);
+        lawFragmentAnchor(fl, fw, et, 2, 110, 7, 52);
         lawLine(fl, fw, et, 2, 400, 92);
         emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
         emon.Testport.assertEq(Evidence.lnCount(fl), 8, "each item and all its amounts survive");
@@ -439,8 +439,8 @@ public final class Seamstest {
             expected = 1;
         }
         if (shared == 2) {
-            lawFragmentAnchor(fl, fw, et, 1, 957, 88);
-            lawFragmentAnchor(fl, fw, et, 2, 50, 89);
+            lawFragmentAnchor(fl, fw, et, 1, 957, 7, 88);
+            lawFragmentAnchor(fl, fw, et, 2, 50, 7, 89);
         }
         first = Evidence.wdCount(fw);
         lawBandLine(fl, fw, et, 2, 80, 5);
@@ -649,6 +649,61 @@ public final class Seamstest {
         emon.Testport.assertEq(Evidence.lnCount(fl), 10, "both versions of the divergent item and the isolated match survive");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "the divergent item has a possible-duplicate mark");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 7), 1, "the equal rows have an overlap mark");
+    }
+    public static int lawGradedNeighbor(int emonT, int sampled, int priced, int expected) {
+        emon.Port.Cells fl = emon.Port.newCells();
+        emon.Port.Cells fw = emon.Port.newCells();
+        emon.Port.Cells et = emon.Port.newCells();
+        emon.Port.Cells pages = emon.Port.newCells();
+        emon.Port.Cells mask = emon.Port.newCells();
+        emon.Port.Cells decisions = emon.Port.newCells();
+        emon.Port.Cells offsets = emon.Port.newCells();
+        emon.Port.Cells pixels = emon.Port.newCells();
+        int i = 0;
+        Model.pageNew(pages, 1, 450, 1000, 0, Model.pkImage());
+        Model.pageNew(pages, 2, 450, 1000, 0, Model.pkImage());
+        emon.Port.cellsPush(mask, 1);
+        emon.Port.cellsPush(mask, 1);
+        lawLine(fl, fw, et, 1, 50, 90);
+        lawFragmentAnchor(fl, fw, et, 1, 840, 7, 65);
+        if (priced == 1) {
+            lawFragmentAnchor(fl, fw, et, 1, 870, 12, 49);
+        } else {
+            lawLine(fl, fw, et, 1, 870, 88);
+        }
+        lawFragmentAnchor(fl, fw, et, 1, 900, 7, 67);
+        lawFragmentAnchor(fl, fw, et, 2, 40, 7, 66);
+        if (priced == 1) {
+            lawFragmentAnchor(fl, fw, et, 2, 70, 12, 50);
+        } else {
+            lawLine(fl, fw, et, 2, 70, 88);
+        }
+        lawFragmentAnchor(fl, fw, et, 2, 100, 7, 68);
+        lawLine(fl, fw, et, 2, 500, 89);
+        if (sampled == 1) {
+            while (i < Evidence.lnCount(fl)) {
+                Evidence.lnSet(fl, i, Evidence.lfOrder(), i);
+                emon.Port.cellsPush(offsets, -1);
+                i += 1;
+            }
+            emon.Port.cellsSet(offsets, 2, 0);
+            emon.Port.cellsSet(offsets, 5, 384);
+            i = 0;
+            while (i < 768) {
+                emon.Port.cellsPush(pixels, (i * 17) % 128);
+                i += 1;
+            }
+        }
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expected, "the matching row needs corroboration and its amounts must agree");
+        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "uncertain readings remain marked");
+        return 0;
+    }
+    public static void testAGradedNeighborCanSupportACorrelatedRow() {
+        lawGradedNeighbor(0, 1, 0, 1);
+        lawGradedNeighbor(0, 0, 0, 0);
+    }
+    public static void testCorrelationKeepsDifferentAmountsOnIdenticalItemText() {
+        lawGradedNeighbor(0, 1, 1, 0);
     }
     public static void testCorrelationThresholdSeparatesModerateFromWeakAgreement() {
         emon.Port.Cells pixels = emon.Port.newCells();

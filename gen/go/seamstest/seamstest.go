@@ -400,17 +400,17 @@ func TestCorrelatedNeighborsCannotConfirmAShortenedWordBand(emonT *testing.T) {
 	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "retain both copies of a shortened word band")
 }
 
-func lawFragmentAnchor(fl *port.Cells, fw *port.Cells, et *port.Cells, page int32, y int32, last int32) int32 {
+func lawFragmentAnchor(fl *port.Cells, fw *port.Cells, et *port.Cells, page int32, y int32, prefix int32, last int32) int32 {
 	var start int32 = port.CellsLen(et)
 	var line int32 = evidence.LnCount(fl)
 	var i int32 = 0
 	var word int32 = 0
-	for i < 7 {
+	for i < prefix {
 		port.CellsPush(et, 65+i)
 		i += 1
 	}
 	port.CellsPush(et, last)
-	word = evidence.WdNew(fw, page, 50, y, 400, y+12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1)
+	word = evidence.WdNew(fw, page, 50, y, 400, y+12, 50, y, 400, y, 0, 0, start, prefix+1, line, 900, -1)
 	evidence.LnNew(fl, page, 50, y, 400, y+12, 50, y, 400, y, 0, 0, word, 1)
 	return 0
 }
@@ -427,12 +427,12 @@ func TestDistinctItemsCanHaveTheSameNameInsideAFuzzyRun(emonT *testing.T) {
 	port.CellsPush(mask, 1)
 	port.CellsPush(mask, 1)
 	lawLine(fl, fw, et, 1, 50, 91)
-	lawFragmentAnchor(fl, fw, et, 1, 870, 49)
+	lawFragmentAnchor(fl, fw, et, 1, 870, 7, 49)
 	lawLine(fl, fw, et, 1, 900, 88)
-	lawFragmentAnchor(fl, fw, et, 1, 930, 50)
-	lawFragmentAnchor(fl, fw, et, 2, 50, 51)
+	lawFragmentAnchor(fl, fw, et, 1, 930, 7, 50)
+	lawFragmentAnchor(fl, fw, et, 2, 50, 7, 51)
 	lawLine(fl, fw, et, 2, 80, 88)
-	lawFragmentAnchor(fl, fw, et, 2, 110, 52)
+	lawFragmentAnchor(fl, fw, et, 2, 110, 7, 52)
 	lawLine(fl, fw, et, 2, 400, 92)
 	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model")
 	port.AssertEq(emonT, evidence.LnCount(fl), 8, "each item and all its amounts survive")
@@ -468,8 +468,8 @@ func lawCoveredFragment(emonT *testing.T, shared int32) int32 {
 		expected = 1
 	}
 	if shared == 2 {
-		lawFragmentAnchor(fl, fw, et, 1, 957, 88)
-		lawFragmentAnchor(fl, fw, et, 2, 50, 89)
+		lawFragmentAnchor(fl, fw, et, 1, 957, 7, 88)
+		lawFragmentAnchor(fl, fw, et, 2, 50, 7, 89)
 	}
 	first = evidence.WdCount(fw)
 	lawBandLine(fl, fw, et, 2, 80, 5)
@@ -689,6 +689,64 @@ func TestAStrongRunPreservesADivergentItem(emonT *testing.T) {
 	port.AssertEq(emonT, evidence.LnCount(fl), 10, "both versions of the divergent item and the isolated match survive")
 	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "the divergent item has a possible-duplicate mark")
 	port.AssertEq(emonT, port.CellsAt(decisions, 7), 1, "the equal rows have an overlap mark")
+}
+
+func lawGradedNeighbor(emonT *testing.T, sampled int32, priced int32, expected int32) int32 {
+	var fl *port.Cells = port.NewCells()
+	var fw *port.Cells = port.NewCells()
+	var et *port.Cells = port.NewCells()
+	var pages *port.Cells = port.NewCells()
+	var mask *port.Cells = port.NewCells()
+	var decisions *port.Cells = port.NewCells()
+	var offsets *port.Cells = port.NewCells()
+	var pixels *port.Cells = port.NewCells()
+	var i int32 = 0
+	model.PageNew(pages, 1, 450, 1000, 0, model.PkImage())
+	model.PageNew(pages, 2, 450, 1000, 0, model.PkImage())
+	port.CellsPush(mask, 1)
+	port.CellsPush(mask, 1)
+	lawLine(fl, fw, et, 1, 50, 90)
+	lawFragmentAnchor(fl, fw, et, 1, 840, 7, 65)
+	if priced == 1 {
+		lawFragmentAnchor(fl, fw, et, 1, 870, 12, 49)
+	} else {
+		lawLine(fl, fw, et, 1, 870, 88)
+	}
+	lawFragmentAnchor(fl, fw, et, 1, 900, 7, 67)
+	lawFragmentAnchor(fl, fw, et, 2, 40, 7, 66)
+	if priced == 1 {
+		lawFragmentAnchor(fl, fw, et, 2, 70, 12, 50)
+	} else {
+		lawLine(fl, fw, et, 2, 70, 88)
+	}
+	lawFragmentAnchor(fl, fw, et, 2, 100, 7, 68)
+	lawLine(fl, fw, et, 2, 500, 89)
+	if sampled == 1 {
+		for i < evidence.LnCount(fl) {
+			evidence.LnSet(fl, i, evidence.LfOrder(), i)
+			port.CellsPush(offsets, -1)
+			i += 1
+		}
+		port.CellsSet(offsets, 2, 0)
+		port.CellsSet(offsets, 5, 384)
+		i = 0
+		for i < 768 {
+			port.CellsPush(pixels, (i*17)%128)
+			i += 1
+		}
+	}
+	port.AssertEq(emonT, seams.MsRun(2, 0, mask, pages, port.NewCells(), port.NewCells(), et, fl, fw, offsets, pixels, port.NewCells(), port.NewCells(), port.NewCells(), decisions, port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells(), port.NewCells()), expected, "the matching row needs corroboration and its amounts must agree")
+	port.AssertEq(emonT, port.CellsAt(decisions, 2), 2, "uncertain readings remain marked")
+	return 0
+}
+
+func TestAGradedNeighborCanSupportACorrelatedRow(emonT *testing.T) {
+	lawGradedNeighbor(emonT, 1, 0, 1)
+	lawGradedNeighbor(emonT, 0, 0, 0)
+}
+
+func TestCorrelationKeepsDifferentAmountsOnIdenticalItemText(emonT *testing.T) {
+	lawGradedNeighbor(emonT, 1, 1, 0)
 }
 
 func TestCorrelationThresholdSeparatesModerateFromWeakAgreement(emonT *testing.T) {

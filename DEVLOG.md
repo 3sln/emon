@@ -15060,3 +15060,11 @@ An uncovered clipped edge can carry a gap warning alongside an overlap or a poss
 On the 206-case Tesseract sweep for seed 920, the revised scorer counts 16 false merges for Round 5 and zero for Round 6. Round 6 recovers 107 matched tokens over Round 5 and finishes five below concatenation, at 0.736143 recall against 0.736341. It retains 179 duplicates, including 36 unflagged, and flags 187 of 210 lost seams. The clean control has a byte-identical Model and emits no gap warning. P13.23 and P13.24 remain open.
 
 - [ ] **Signed off** (maintainer)
+
+### D9xx — Corroborate graded photo seam row matches
+
+The seed 920 Model diff found 83 cross-photo duplicate events that Round 5 eliminated and Round 6 retained. Round 6 eliminated five events that Round 5 retained. The corrected loss audit found 16 gold rows erased by Round 5. In three losses the proposed alignment shifted across repeated rows. Other losses included differing quantities, OCR substitutions, and a missing label. Anchoring, run length, and graded neighboring text occurred in both groups.
+
+At a confirmed seam a row with an equivalent reading can use a distinct matching neighbor. A graded neighbor needs at least 0.78 text similarity, agreement on the ordered numbers, and corroboration from the row or neighbor pixels or a continuing clipped fragment. The row being deleted must have the same ordered words and numbers, or the same numbers with its own pixel corroboration and at least 0.90 text similarity. The pixel threshold remains 0.60. A word band with equal visual row counts can use these tests on individual corresponding rows. A band with different row counts requires the complete common word stream for deletion. An unresolved reading is kept with a `possible-duplicate` mark.
+
+- [ ] **Signed off** (maintainer)

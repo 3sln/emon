@@ -3,6 +3,7 @@
 
 use crate::emon::evidence::*;
 use crate::emon::model::*;
+use crate::emon::ofmt::*;
 use crate::emon::player::*;
 use crate::emon::scan::*;
 
@@ -1589,46 +1590,148 @@ pub(crate) fn ms_remove_band(fl: &mut crate::port::Cells, fw: &mut crate::port::
     }
     return count;
 }
-pub(crate) fn ms_row_support(keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, n: i32, i: i32) -> i32 {
-    // An identical item name can recur with a different amount. A distinct exact
-    // neighbor supports the pair. Separators carry no independent vote.
-    let line: i32 = crate::port::cells_at(a, n - i - 1);
+pub(crate) fn ms_next_number(text: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+    let mut i: i32 = start;
+    let mut cp: i32 = 0;
+    while i < end {
+        cp = crate::port::cells_at(text, i);
+        if (fmt_digit(cp) == 1) || (((cp == 43) || (cp == 45) || (cp == 46) || (cp == 44) || (cp == 8722)) && ((i + 1) < end) && (fmt_digit(crate::port::cells_at(text, i + 1)) == 1)) {
+            return i;
+        }
+        i += 1;
+    }
+    return end;
+}
+pub(crate) fn ms_number_end(text: &mut crate::port::Cells, start: i32, end: i32) -> i32 {
+    let mut i: i32 = start + 1;
+    let mut cp: i32 = 0;
+    while i < end {
+        cp = crate::port::cells_at(text, i);
+        if (fmt_digit(cp) == 0) && (((cp != 46) && (cp != 44) && (cp != 47) && (cp != 45)) || ((i + 1) >= end) || (fmt_digit(crate::port::cells_at(text, i + 1)) == 0)) {
+            return i;
+        }
+        i += 1;
+    }
+    return end;
+}
+pub(crate) fn ms_numbers_agree(keys: &mut crate::port::Cells, text: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // Preserve the sequence of prices, quantities and other numbers on this visual row.
+    let mut i: i32 = ms_key(keys, a, 0);
+    let mut j: i32 = ms_key(keys, b, 0);
+    let end_a: i32 = i + ms_key(keys, a, 1);
+    let end_b: i32 = j + ms_key(keys, b, 1);
+    let mut stop_a: i32 = 0;
+    let mut stop_b: i32 = 0;
+    while (i < end_a) || (j < end_b) {
+        i = ms_next_number(text, i, end_a);
+        j = ms_next_number(text, j, end_b);
+        if (i == end_a) || (j == end_b) {
+            if (i == end_a) && (j == end_b) {
+                return 1;
+            }
+            return 0;
+        }
+        stop_a = ms_number_end(text, i, end_a);
+        stop_b = ms_number_end(text, j, end_b);
+        if (stop_a - i) != (stop_b - j) {
+            return 0;
+        }
+        while i < stop_a {
+            if crate::port::cells_at(text, i) != crate::port::cells_at(text, j) {
+                return 0;
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    return 1;
+}
+pub(crate) fn ms_row_words_equal(keys: &mut crate::port::Cells, text: &mut crate::port::Cells, a: i32, b: i32) -> i32 {
+    // Ignore punctuation while comparing the sequence of letter and digit runs.
+    let mut i: i32 = ms_key(keys, a, 0);
+    let mut j: i32 = ms_key(keys, b, 0);
+    let end_a: i32 = i + ms_key(keys, a, 1);
+    let end_b: i32 = j + ms_key(keys, b, 1);
+    while (i < end_a) || (j < end_b) {
+        while (i < end_a) && (sc_cp_class(crate::port::cells_at(text, i)) >= 2) {
+            i += 1;
+        }
+        while (j < end_b) && (sc_cp_class(crate::port::cells_at(text, j)) >= 2) {
+            j += 1;
+        }
+        if (i == end_a) || (j == end_b) {
+            if (i == end_a) && (j == end_b) {
+                return 1;
+            }
+            return 0;
+        }
+        while (i < end_a) && (j < end_b) && (sc_cp_class(crate::port::cells_at(text, i)) < 2) && (sc_cp_class(crate::port::cells_at(text, j)) < 2) {
+            if crate::port::cells_at(text, i) != crate::port::cells_at(text, j) {
+                return 0;
+            }
+            i += 1;
+            j += 1;
+        }
+        if ((i < end_a) && (sc_cp_class(crate::port::cells_at(text, i)) < 2)) || ((j < end_b) && (sc_cp_class(crate::port::cells_at(text, j)) < 2)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+pub(crate) fn ms_row_similarity(keys: &mut crate::port::Cells, text: &mut crate::port::Cells, a: i32, b: i32, mut row: &mut crate::port::Cells) -> i32 {
+    return ms_similarity(text, ms_key(keys, a, 0), ms_key(keys, a, 1), ms_key(keys, b, 0), ms_key(keys, b, 1), row);
+}
+pub(crate) fn ms_neighbor_support(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, text: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, la: i32, lb: i32, near_a: i32, near_b: i32, corroborated: i32, mut row: &mut crate::port::Cells) -> i32 {
+    if (ms_key(keys, near_a, 2) != 2) || (ms_key(keys, near_b, 2) != 2) || (ms_equal(keys, text, la, near_a) == 1) || (ms_equal(keys, text, lb, near_b) == 1) {
+        return 0;
+    }
+    if ms_equal(keys, text, near_a, near_b) == 1 {
+        return 2;
+    }
+    if (ms_numbers_agree(keys, text, near_a, near_b) == 1) && (ms_row_similarity(keys, text, near_a, near_b, row) >= 780) && ((corroborated == 1) || (ms_pixel_pair(fl, offsets, pixels, near_a, near_b) == 1)) {
+        return 1;
+    }
+    return 0;
+}
+pub(crate) fn ms_row_support(fl: &mut crate::port::Cells, keys: &mut crate::port::Cells, text: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, n: i32, i: i32, corroborated: i32, mut row: &mut crate::port::Cells) -> i32 {
+    let la: i32 = crate::port::cells_at(a, n - i - 1);
+    let lb: i32 = crate::port::cells_at(b, i);
     let mut before: i32 = i - 1;
     let mut after: i32 = i + 1;
-    let mut above: i32 = -1;
-    let mut below: i32 = -1;
+    let mut above: i32 = 0;
+    let mut below: i32 = 0;
     while (before >= 0) && (ms_key(keys, crate::port::cells_at(b, before), 2) == 1) {
         before -= 1;
     }
     while (after < n) && (ms_key(keys, crate::port::cells_at(b, after), 2) == 1) {
         after += 1;
     }
-    if (before >= 0) && (ms_equal(keys, codepoints, crate::port::cells_at(a, n - before - 1), crate::port::cells_at(b, before)) == 1) {
-        above = crate::port::cells_at(b, before);
+    if before >= 0 {
+        above = ms_neighbor_support(fl, keys, text, offsets, pixels, la, lb, crate::port::cells_at(a, n - before - 1), crate::port::cells_at(b, before), corroborated, row);
     }
-    if (after < n) && (ms_equal(keys, codepoints, crate::port::cells_at(a, n - after - 1), crate::port::cells_at(b, after)) == 1) {
-        below = crate::port::cells_at(b, after);
+    if after < n {
+        below = ms_neighbor_support(fl, keys, text, offsets, pixels, la, lb, crate::port::cells_at(a, n - after - 1), crate::port::cells_at(b, after), corroborated, row);
     }
-    if ms_key(keys, line, 2) == 1 {
-        if (above >= 0) && (below >= 0) && (ms_equal(keys, codepoints, above, below) == 0) {
+    if ms_key(keys, la, 2) == 1 {
+        if (above == 2) && (below == 2) && (ms_equal(keys, text, crate::port::cells_at(b, before), crate::port::cells_at(b, after)) == 0) {
             return 1;
         }
         return 0;
     }
-    if ((above >= 0) && (ms_equal(keys, codepoints, line, above) == 0)) || ((below >= 0) && (ms_equal(keys, codepoints, line, below) == 0)) {
+    if (above + below) > 0 {
         return 1;
     }
     return 0;
 }
-pub(crate) fn ms_deduplicate(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32, mut dropped: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut model_text: &mut crate::port::Cells, mut aw: &mut crate::port::Cells, mut bw: &mut crate::port::Cells) -> i32 {
-    // An overlap can be real while its copies disagree. Remove a row only when all
-    // its text has a surviving witness. A negative count denotes an incomplete reduction.
+pub(crate) fn ms_deduplicate(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, et: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32, fragment: i32, mut dropped: &mut crate::port::Cells, mut ledger: &mut crate::port::Cells, mut model_text: &mut crate::port::Cells, mut aw: &mut crate::port::Cells, mut bw: &mut crate::port::Cells, mut row: &mut crate::port::Cells) -> i32 {
+    // Remove only supported row pairs. A negative count denotes an incomplete reduction.
     let na: i32 = ms_match_left(r#match);
     let nb: i32 = r#match % 32;
     let split: i32 = ms_copy_split(fl, fw, a, b, r#match);
     let mut i: i32 = 0;
     let mut la: i32 = 0;
     let mut lb: i32 = 0;
+    let mut pixel: i32 = 0;
     let mut removed: i32 = 0;
     let mut ambiguous: i32 = 0;
     if ms_match_kind(r#match) >= ms_word_candidate() {
@@ -1638,12 +1741,15 @@ pub(crate) fn ms_deduplicate(fl: &mut crate::port::Cells, fw: &mut crate::port::
             }
             return ms_remove_band(fl, fw, et, keys, a, na, dropped, ledger, model_text);
         }
-        return 0;
+        if na != nb {
+            return 0;
+        }
     }
     while i < na {
         la = crate::port::cells_at(a, na - i - 1);
         lb = crate::port::cells_at(b, i);
-        if (ms_equal(keys, codepoints, la, lb) == 1) && ((na == 1) || (ms_row_support(keys, codepoints, a, b, na, i) == 1)) && (ms_row_live(keys, dropped, la) == 1) && (ms_row_live(keys, dropped, lb) == 1) {
+        pixel = ms_pixel_pair(fl, offsets, pixels, la, lb);
+        if (ms_row_live(keys, dropped, la) == 1) && (ms_row_live(keys, dropped, lb) == 1) && ((ms_equal(keys, codepoints, la, lb) == 1) || ((ms_key(keys, la, 2) == 2) && (ms_key(keys, lb, 2) == 2) && (ms_numbers_agree(keys, codepoints, la, lb) == 1) && ((ms_row_words_equal(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (ms_row_similarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (ms_row_support(fl, keys, codepoints, offsets, pixels, a, b, na, i, ms_max(pixel, fragment), row) == 1)) {
             if i < split {
                 removed += ms_drop_row(fl, fw, et, keys, lb, dropped, ledger, model_text);
             } else {
@@ -1679,6 +1785,14 @@ pub(crate) fn ms_word_pixels(fl: &mut crate::port::Cells, a: &mut crate::port::C
     }
     return 0;
 }
+pub(crate) fn ms_continuity(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, dropped: &mut crate::port::Cells, left: i32, right: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32) -> i32 {
+    let na: i32 = ms_match_left(r#match);
+    let nb: i32 = r#match % 32;
+    if (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2) {
+        return 1;
+    }
+    return 0;
+}
 pub(crate) fn ms_confirm_pair(fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, codepoints: &mut crate::port::Cells, offsets: &mut crate::port::Cells, pixels: &mut crate::port::Cells, ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, dropped: &mut crate::port::Cells, left: i32, right: i32, a: &mut crate::port::Cells, b: &mut crate::port::Cells, r#match: i32) -> i32 {
     let kind: i32 = ms_match_kind(r#match);
     let rows: i32 = ms_match_rows(r#match);
@@ -1703,10 +1817,7 @@ pub(crate) fn ms_confirm_pair(fl: &mut crate::port::Cells, fw: &mut crate::port:
             return 1;
         }
     }
-    if (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb + 1, dropped, 1) == 2) || (ms_gap_edge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na + 1, dropped, 1) == 2) {
-        return 1;
-    }
-    return 0;
+    return ms_continuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, r#match);
 }
 pub(crate) fn ms_best_link(scores: &mut crate::port::Cells, taken: &mut crate::port::Cells, n: i32, at: i32, step: i32) -> i32 {
     let mut i: i32 = 0;
@@ -1987,7 +2098,8 @@ pub fn ms_run(np: i32, capture: i32, mask: &mut crate::port::Cells, pages: &mut 
                 if ms_join_gap(ol, ow, et, fl, fw, keys, pages, cuts, dropped, left, right, a, b, forward) == 1 {
                     ms_mark(seams, left, right, 3, 0);
                 }
-                removed = ms_deduplicate(fl, fw, et, keys, codepoints, a, b, forward, dropped, ledger, model_text, aw, bw);
+                let fragment: i32 = ms_continuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward);
+                removed = ms_deduplicate(fl, fw, et, keys, codepoints, offsets, pixels, a, b, forward, fragment, dropped, ledger, model_text, aw, bw, word_row);
                 if (removed <= 0) || (forward >= ms_trimmed_factor()) {
                     ms_mark(seams, left, right, 2, forward);
                 }

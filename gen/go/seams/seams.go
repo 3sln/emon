@@ -6,6 +6,7 @@ package seams
 import (
 	"emon/evidence"
 	"emon/model"
+	"emon/ofmt"
 	"emon/player"
 	"emon/port"
 	"emon/scan"
@@ -1673,47 +1674,155 @@ func msRemoveBand(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cel
 	return count
 }
 
-func msRowSupport(keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, n int32, i int32) int32 {
-	// An identical item name can recur with a different amount. A distinct exact
-	// neighbor supports the pair. Separators carry no independent vote.
-	var line int32 = port.CellsAt(a, n-i-1)
+func msNextNumber(text *port.Cells, start int32, end int32) int32 {
+	var i int32 = start
+	var cp int32 = 0
+	for i < end {
+		cp = port.CellsAt(text, i)
+		if (ofmt.FmtDigit(cp) == 1) || (((cp == 43) || (cp == 45) || (cp == 46) || (cp == 44) || (cp == 8722)) && ((i + 1) < end) && (ofmt.FmtDigit(port.CellsAt(text, i+1)) == 1)) {
+			return i
+		}
+		i += 1
+	}
+	return end
+}
+
+func msNumberEnd(text *port.Cells, start int32, end int32) int32 {
+	var i int32 = start + 1
+	var cp int32 = 0
+	for i < end {
+		cp = port.CellsAt(text, i)
+		if (ofmt.FmtDigit(cp) == 0) && (((cp != 46) && (cp != 44) && (cp != 47) && (cp != 45)) || ((i + 1) >= end) || (ofmt.FmtDigit(port.CellsAt(text, i+1)) == 0)) {
+			return i
+		}
+		i += 1
+	}
+	return end
+}
+
+func msNumbersAgree(keys *port.Cells, text *port.Cells, a int32, b int32) int32 {
+	// Preserve the sequence of prices, quantities and other numbers on this visual row.
+	var i int32 = msKey(keys, a, 0)
+	var j int32 = msKey(keys, b, 0)
+	var endA int32 = i + msKey(keys, a, 1)
+	var endB int32 = j + msKey(keys, b, 1)
+	var stopA int32 = 0
+	var stopB int32 = 0
+	for (i < endA) || (j < endB) {
+		i = msNextNumber(text, i, endA)
+		j = msNextNumber(text, j, endB)
+		if (i == endA) || (j == endB) {
+			if (i == endA) && (j == endB) {
+				return 1
+			}
+			return 0
+		}
+		stopA = msNumberEnd(text, i, endA)
+		stopB = msNumberEnd(text, j, endB)
+		if (stopA - i) != (stopB - j) {
+			return 0
+		}
+		for i < stopA {
+			if port.CellsAt(text, i) != port.CellsAt(text, j) {
+				return 0
+			}
+			i += 1
+			j += 1
+		}
+	}
+	return 1
+}
+
+func msRowWordsEqual(keys *port.Cells, text *port.Cells, a int32, b int32) int32 {
+	// Ignore punctuation while comparing the sequence of letter and digit runs.
+	var i int32 = msKey(keys, a, 0)
+	var j int32 = msKey(keys, b, 0)
+	var endA int32 = i + msKey(keys, a, 1)
+	var endB int32 = j + msKey(keys, b, 1)
+	for (i < endA) || (j < endB) {
+		for (i < endA) && (scan.ScCpClass(port.CellsAt(text, i)) >= 2) {
+			i += 1
+		}
+		for (j < endB) && (scan.ScCpClass(port.CellsAt(text, j)) >= 2) {
+			j += 1
+		}
+		if (i == endA) || (j == endB) {
+			if (i == endA) && (j == endB) {
+				return 1
+			}
+			return 0
+		}
+		for (i < endA) && (j < endB) && (scan.ScCpClass(port.CellsAt(text, i)) < 2) && (scan.ScCpClass(port.CellsAt(text, j)) < 2) {
+			if port.CellsAt(text, i) != port.CellsAt(text, j) {
+				return 0
+			}
+			i += 1
+			j += 1
+		}
+		if ((i < endA) && (scan.ScCpClass(port.CellsAt(text, i)) < 2)) || ((j < endB) && (scan.ScCpClass(port.CellsAt(text, j)) < 2)) {
+			return 0
+		}
+	}
+	return 1
+}
+
+func msRowSimilarity(keys *port.Cells, text *port.Cells, a int32, b int32, row *port.Cells) int32 {
+	return MsSimilarity(text, msKey(keys, a, 0), msKey(keys, a, 1), msKey(keys, b, 0), msKey(keys, b, 1), row)
+}
+
+func msNeighborSupport(fl *port.Cells, keys *port.Cells, text *port.Cells, offsets *port.Cells, pixels *port.Cells, la int32, lb int32, nearA int32, nearB int32, corroborated int32, row *port.Cells) int32 {
+	if (msKey(keys, nearA, 2) != 2) || (msKey(keys, nearB, 2) != 2) || (msEqual(keys, text, la, nearA) == 1) || (msEqual(keys, text, lb, nearB) == 1) {
+		return 0
+	}
+	if msEqual(keys, text, nearA, nearB) == 1 {
+		return 2
+	}
+	if (msNumbersAgree(keys, text, nearA, nearB) == 1) && (msRowSimilarity(keys, text, nearA, nearB, row) >= 780) && ((corroborated == 1) || (msPixelPair(fl, offsets, pixels, nearA, nearB) == 1)) {
+		return 1
+	}
+	return 0
+}
+
+func msRowSupport(fl *port.Cells, keys *port.Cells, text *port.Cells, offsets *port.Cells, pixels *port.Cells, a *port.Cells, b *port.Cells, n int32, i int32, corroborated int32, row *port.Cells) int32 {
+	var la int32 = port.CellsAt(a, n-i-1)
+	var lb int32 = port.CellsAt(b, i)
 	var before int32 = i - 1
 	var after int32 = i + 1
-	var above int32 = -1
-	var below int32 = -1
+	var above int32 = 0
+	var below int32 = 0
 	for (before >= 0) && (msKey(keys, port.CellsAt(b, before), 2) == 1) {
 		before -= 1
 	}
 	for (after < n) && (msKey(keys, port.CellsAt(b, after), 2) == 1) {
 		after += 1
 	}
-	if (before >= 0) && (msEqual(keys, codepoints, port.CellsAt(a, n-before-1), port.CellsAt(b, before)) == 1) {
-		above = port.CellsAt(b, before)
+	if before >= 0 {
+		above = msNeighborSupport(fl, keys, text, offsets, pixels, la, lb, port.CellsAt(a, n-before-1), port.CellsAt(b, before), corroborated, row)
 	}
-	if (after < n) && (msEqual(keys, codepoints, port.CellsAt(a, n-after-1), port.CellsAt(b, after)) == 1) {
-		below = port.CellsAt(b, after)
+	if after < n {
+		below = msNeighborSupport(fl, keys, text, offsets, pixels, la, lb, port.CellsAt(a, n-after-1), port.CellsAt(b, after), corroborated, row)
 	}
-	if msKey(keys, line, 2) == 1 {
-		if (above >= 0) && (below >= 0) && (msEqual(keys, codepoints, above, below) == 0) {
+	if msKey(keys, la, 2) == 1 {
+		if (above == 2) && (below == 2) && (msEqual(keys, text, port.CellsAt(b, before), port.CellsAt(b, after)) == 0) {
 			return 1
 		}
 		return 0
 	}
-	if ((above >= 0) && (msEqual(keys, codepoints, line, above) == 0)) || ((below >= 0) && (msEqual(keys, codepoints, line, below) == 0)) {
+	if (above + below) > 0 {
 		return 1
 	}
 	return 0
 }
 
-func msDeduplicate(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, codepoints *port.Cells, a *port.Cells, b *port.Cells, match int32, dropped *port.Cells, ledger *port.Cells, modelText *port.Cells, aw *port.Cells, bw *port.Cells) int32 {
-	// An overlap can be real while its copies disagree. Remove a row only when all
-	// its text has a surviving witness. A negative count denotes an incomplete reduction.
+func msDeduplicate(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, a *port.Cells, b *port.Cells, match int32, fragment int32, dropped *port.Cells, ledger *port.Cells, modelText *port.Cells, aw *port.Cells, bw *port.Cells, row *port.Cells) int32 {
+	// Remove only supported row pairs. A negative count denotes an incomplete reduction.
 	var na int32 = msMatchLeft(match)
 	var nb int32 = match % 32
 	var split int32 = msCopySplit(fl, fw, a, b, match)
 	var i int32 = 0
 	var la int32 = 0
 	var lb int32 = 0
+	var pixel int32 = 0
 	var removed int32 = 0
 	var ambiguous int32 = 0
 	if msMatchKind(match) >= msWordCandidate() {
@@ -1723,12 +1832,15 @@ func msDeduplicate(fl *port.Cells, fw *port.Cells, et *port.Cells, keys *port.Ce
 			}
 			return msRemoveBand(fl, fw, et, keys, a, na, dropped, ledger, modelText)
 		}
-		return 0
+		if na != nb {
+			return 0
+		}
 	}
 	for i < na {
 		la = port.CellsAt(a, na-i-1)
 		lb = port.CellsAt(b, i)
-		if (msEqual(keys, codepoints, la, lb) == 1) && ((na == 1) || (msRowSupport(keys, codepoints, a, b, na, i) == 1)) && (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) {
+		pixel = msPixelPair(fl, offsets, pixels, la, lb)
+		if (msRowLive(keys, dropped, la) == 1) && (msRowLive(keys, dropped, lb) == 1) && ((msEqual(keys, codepoints, la, lb) == 1) || ((msKey(keys, la, 2) == 2) && (msKey(keys, lb, 2) == 2) && (msNumbersAgree(keys, codepoints, la, lb) == 1) && ((msRowWordsEqual(keys, codepoints, la, lb) == 1) || ((pixel == 1) && (msRowSimilarity(keys, codepoints, la, lb, row) >= 900))))) && ((na == 1) || (msRowSupport(fl, keys, codepoints, offsets, pixels, a, b, na, i, msMax(pixel, fragment), row) == 1)) {
 			if i < split {
 				removed += msDropRow(fl, fw, et, keys, lb, dropped, ledger, modelText)
 			} else {
@@ -1766,6 +1878,15 @@ func msWordPixels(fl *port.Cells, a *port.Cells, b *port.Cells, keys *port.Cells
 	return 0
 }
 
+func msContinuity(fl *port.Cells, fw *port.Cells, keys *port.Cells, ol *port.Cells, ow *port.Cells, et *port.Cells, pages *port.Cells, cuts *port.Cells, dropped *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells, match int32) int32 {
+	var na int32 = msMatchLeft(match)
+	var nb int32 = match % 32
+	if (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb+1, dropped, 1) == 2) || (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na+1, dropped, 1) == 2) {
+		return 1
+	}
+	return 0
+}
+
 func msConfirmPair(fl *port.Cells, fw *port.Cells, keys *port.Cells, codepoints *port.Cells, offsets *port.Cells, pixels *port.Cells, ol *port.Cells, ow *port.Cells, et *port.Cells, pages *port.Cells, cuts *port.Cells, dropped *port.Cells, left int32, right int32, a *port.Cells, b *port.Cells, match int32) int32 {
 	var kind int32 = msMatchKind(match)
 	var rows int32 = msMatchRows(match)
@@ -1790,10 +1911,7 @@ func msConfirmPair(fl *port.Cells, fw *port.Cells, keys *port.Cells, codepoints 
 			return 1
 		}
 	}
-	if (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, left, 1, b, nb, nb+1, dropped, 1) == 2) || (msGapEdge(ol, ow, et, fl, fw, keys, pages, cuts, right, 0, a, na, na+1, dropped, 1) == 2) {
-		return 1
-	}
-	return 0
+	return msContinuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, match)
 }
 
 func msBestLink(scores *port.Cells, taken *port.Cells, n int32, at int32, step int32) int32 {
@@ -2083,7 +2201,8 @@ func MsRun(np int32, capture int32, mask *port.Cells, pages *port.Cells, ol *por
 				if msJoinGap(ol, ow, et, fl, fw, keys, pages, cuts, dropped, left, right, a, b, forward) == 1 {
 					msMark(seams, left, right, 3, 0)
 				}
-				removed = msDeduplicate(fl, fw, et, keys, codepoints, a, b, forward, dropped, ledger, modelText, aw, bw)
+				var fragment int32 = msContinuity(fl, fw, keys, ol, ow, et, pages, cuts, dropped, left, right, a, b, forward)
+				removed = msDeduplicate(fl, fw, et, keys, codepoints, offsets, pixels, a, b, forward, fragment, dropped, ledger, modelText, aw, bw, wordRow)
 				if (removed <= 0) || (forward >= msTrimmedFactor()) {
 					msMark(seams, left, right, 2, forward)
 				}

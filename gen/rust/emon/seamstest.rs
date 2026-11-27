@@ -389,17 +389,17 @@ fn test_correlated_neighbors_cannot_confirm_a_shortened_word_band() {
     crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "correlated neighbors do not make up for a missing word");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "retain both copies of a shortened word band");
 }
-pub(crate) fn law_fragment_anchor(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, last: i32) -> i32 {
+pub(crate) fn law_fragment_anchor(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, prefix: i32, last: i32) -> i32 {
     let start: i32 = crate::port::cells_len(et);
     let line: i32 = ln_count(fl);
     let mut i: i32 = 0;
     let mut word: i32 = 0;
-    while i < 7 {
+    while i < prefix {
         crate::port::cells_push(et, 65 + i);
         i += 1;
     }
     crate::port::cells_push(et, last);
-    word = wd_new(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, 8, line, 900, -1);
+    word = wd_new(fw, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, start, prefix + 1, line, 900, -1);
     ln_new(fl, page, 50, y, 400, y + 12, 50, y, 400, y, 0, 0, word, 1);
     return 0;
 }
@@ -416,12 +416,12 @@ fn test_distinct_items_can_have_the_same_name_inside_a_fuzzy_run() {
     crate::port::cells_push(mask, 1);
     crate::port::cells_push(mask, 1);
     law_line(fl, fw, et, 1, 50, 91);
-    law_fragment_anchor(fl, fw, et, 1, 870, 49);
+    law_fragment_anchor(fl, fw, et, 1, 870, 7, 49);
     law_line(fl, fw, et, 1, 900, 88);
-    law_fragment_anchor(fl, fw, et, 1, 930, 50);
-    law_fragment_anchor(fl, fw, et, 2, 50, 51);
+    law_fragment_anchor(fl, fw, et, 1, 930, 7, 50);
+    law_fragment_anchor(fl, fw, et, 2, 50, 7, 51);
     law_line(fl, fw, et, 2, 80, 88);
-    law_fragment_anchor(fl, fw, et, 2, 110, 52);
+    law_fragment_anchor(fl, fw, et, 2, 110, 7, 52);
     law_line(fl, fw, et, 2, 400, 92);
     crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
     crate::testport::assert_eq(ln_count(fl), 8, "each item and all its amounts survive");
@@ -456,8 +456,8 @@ pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
         expected = 1;
     }
     if shared == 2 {
-        law_fragment_anchor(fl, fw, et, 1, 957, 88);
-        law_fragment_anchor(fl, fw, et, 2, 50, 89);
+        law_fragment_anchor(fl, fw, et, 1, 957, 7, 88);
+        law_fragment_anchor(fl, fw, et, 2, 50, 7, 89);
     }
     first = wd_count(fw);
     law_band_line(fl, fw, et, 2, 80, 5);
@@ -674,6 +674,63 @@ fn test_a_strong_run_preserves_a_divergent_item() {
     crate::testport::assert_eq(ln_count(fl), 10, "both versions of the divergent item and the isolated match survive");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "the divergent item has a possible-duplicate mark");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 7), 1, "the equal rows have an overlap mark");
+}
+pub(crate) fn law_graded_neighbor(emon_t: i32, sampled: i32, priced: i32, expected: i32) -> i32 {
+    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let offsets: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let pixels: &mut crate::port::Cells = &mut crate::port::Cells::new();
+    let mut i: i32 = 0;
+    page_new(pages, 1, 450, 1000, 0, pk_image());
+    page_new(pages, 2, 450, 1000, 0, pk_image());
+    crate::port::cells_push(mask, 1);
+    crate::port::cells_push(mask, 1);
+    law_line(fl, fw, et, 1, 50, 90);
+    law_fragment_anchor(fl, fw, et, 1, 840, 7, 65);
+    if priced == 1 {
+        law_fragment_anchor(fl, fw, et, 1, 870, 12, 49);
+    } else {
+        law_line(fl, fw, et, 1, 870, 88);
+    }
+    law_fragment_anchor(fl, fw, et, 1, 900, 7, 67);
+    law_fragment_anchor(fl, fw, et, 2, 40, 7, 66);
+    if priced == 1 {
+        law_fragment_anchor(fl, fw, et, 2, 70, 12, 50);
+    } else {
+        law_line(fl, fw, et, 2, 70, 88);
+    }
+    law_fragment_anchor(fl, fw, et, 2, 100, 7, 68);
+    law_line(fl, fw, et, 2, 500, 89);
+    if sampled == 1 {
+        while i < ln_count(fl) {
+            ln_set(fl, i, lf_order(), i);
+            crate::port::cells_push(offsets, -1);
+            i += 1;
+        }
+        crate::port::cells_set(offsets, 2, 0);
+        crate::port::cells_set(offsets, 5, 384);
+        i = 0;
+        while i < 768 {
+            crate::port::cells_push(pixels, (i * 17) % 128);
+            i += 1;
+        }
+    }
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the matching row needs corroboration and its amounts must agree");
+    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "uncertain readings remain marked");
+    return 0;
+}
+#[test]
+fn test_a_graded_neighbor_can_support_a_correlated_row() {
+    law_graded_neighbor(0, 1, 0, 1);
+    law_graded_neighbor(0, 0, 0, 0);
+}
+#[test]
+fn test_correlation_keeps_different_amounts_on_identical_item_text() {
+    law_graded_neighbor(0, 1, 1, 0);
 }
 #[test]
 fn test_correlation_threshold_separates_moderate_from_weak_agreement() {
