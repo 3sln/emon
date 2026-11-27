@@ -42,11 +42,9 @@
       (do (set r (ol-new ol 1 50 993 400 1000 50 993 400 993 0 0 -1 0))
           (ol-set ol r (olf-conf) 300)))
     (law-line fl fw et 2 400 82)
-    (assert-eq (ms-run 2 capture mask pages ol (new-cells) et fl fw (new-cells) (new-cells) (new-cells) ledger text decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)) expected-drop "rows dropped")
+    (assert-eq (ms-run 2 capture mask pages ol (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) ledger text decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells)) expected-drop "rows dropped")
     (assert-eq (ledger-count ledger) expected-drop "dropped rows retained in ledger")
     (if (== expected-kind 0)
       (assert-eq (cells-len decisions) 0 "no seam on an ordinary break")
@@ -106,7 +104,7 @@
 (deftest test-an-overlap-does-not-hide-an-uncovered-cut
   (law-seam (test-t) 2 0 4 0 1 5 3))
 
-(defn ^I32 law-shallow-cut [^TestT emon-t ^I32 confidence ^I32 expected-marks]
+(defn ^I32 law-shallow-cut [^TestT emon-t ^I32 confidence ^I32 cut ^I32 expected-marks]
   (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
         ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells cuts (new-cells)
         ^Cells ol (new-cells) ^Cells ow (new-cells) ^Cells decisions (new-cells)
@@ -114,7 +112,7 @@
     (page-new pages 1 450 1000 0 (pk-image))
     (page-new pages 2 450 1000 0 (pk-image))
     (cells-push mask 1) (cells-push mask 1)
-    (cells-push cuts 0) (cells-push cuts -1) (cells-push cuts 0) (cells-push cuts 0)
+    (cells-push cuts 0) (cells-push cuts cut) (cells-push cuts 0) (cells-push cuts 0)
     (law-line fl fw et 1 600 65)
     (law-line fl fw et 2 100 66)
     (ol-new ol 1 50 988 400 1000 50 988 400 988 0 0 0 3)
@@ -125,94 +123,21 @@
           (ow-set ow word (owf-flags) (oe-clipped))
           (cells-push et (+ 67 i))
           (set i (+ i 1))))
-    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells) (new-cells) cuts
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells)
+           (new-cells) cuts (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                0 "a cut warning never deletes a reading")
     (assert-eq (cells-len decisions) expected-marks "weak cut geometry needs uncertain OCR")
     (return 0)))
 
 (deftest test-shallow-rule-strokes-do-not-make-a-confident-line-a-gap
-  (law-shallow-cut (test-t) 900 0)
-  (law-shallow-cut (test-t) 450 5))
+  (law-shallow-cut (test-t) 900 -1 0)
+  (law-shallow-cut (test-t) 450 -1 0)
+  (law-shallow-cut (test-t) 450 0 5))
 
 (deftest test-scan-mode-and-born-digital-pass-through
   (law-seam (test-t) 1 0 4 0 0 0 0)
   (law-seam (test-t) 2 1 4 0 0 0 0))
-
-(defn ^I32 law-reversed-link [^TestT emon-t ^I32 np ^I32 earlier]
-  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
-        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells order (new-cells)
-        ^Cells ledger (new-cells) ^Cells decisions (new-cells) ^:mut ^I32 i 0]
-    (while (< i np)
-      (do (page-new pages (+ i 1) 450 1000 0 (pk-image))
-          (cells-push mask 1)
-          (set i (+ i 1))))
-    (set i 0)
-    (while (< i 4)
-      (do (law-line fl fw et 1 (+ 20 (* i 30)) (+ 65 i))
-          (wd-set fw (- (ln-count fl) 1) (hd-conf) 950)
-          (set i (+ i 1))))
-    (law-line fl fw et 1 450 92)
-    (if (== np 3) (law-line fl fw et 2 450 93))
-    (law-line fl fw et earlier 50 91)
-    (set i 0)
-    (while (< i 4)
-      (do (law-line fl fw et earlier (+ 700 (* i 30)) (+ 65 i))
-          (set i (+ i 1))))
-    (assert-eq (ms-run np 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       ledger (new-cells) decisions (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
-               4 "remove the lower-confidence copy")
-    (assert-eq (cells-at order 0) earlier "the earlier source page starts the document")
-    (assert-eq (cells-at order 1) 1 "source page one follows")
-    (if (== np 3) (assert-eq (cells-at order 2) 2 "the unrelated page remains in the document"))
-    (assert-eq (cells-at decisions 0) earlier "the seam preserves upload provenance")
-    (assert-eq (ledger-page ledger 0) earlier "the earlier photo supplied the lower-confidence copy")
-    (assert-eq (ln-count fl) (+ np 4) "keep all distinct lines and one copy of the overlap")
-    (return 0)))
-
-(deftest test-reversed-photos-use-the-unique-anchored-order
-  (law-reversed-link (test-t) 2 2))
-
-(deftest test-a-confirmed-link-survives-a-disconnected-upload
-  (law-reversed-link (test-t) 3 3))
-
-(deftest test-the-stronger-of-two-anchored-links-resolves-the-order
-  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
-        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells order (new-cells)
-        ^Cells decisions (new-cells) ^:mut ^I32 i 0]
-    (while (< i 3)
-      (do (page-new pages (+ i 1) 450 1000 0 (pk-image))
-          (cells-push mask 1)
-          (set i (+ i 1))))
-    (set i 0)
-    (while (< i 5)
-      (do (law-line fl fw et 1 (+ 50 (* i 30)) (+ 65 i))
-          (set i (+ i 1))))
-    (law-line fl fw et 1 300 90)
-    (law-line fl fw et 2 50 91)
-    (set i 0)
-    (while (< i 5)
-      (do (law-line fl fw et 2 (+ 750 (* i 30)) (+ 65 i))
-          (set i (+ i 1))))
-    (set i 1)
-    (while (< i 5)
-      (do (law-line fl fw et 3 (+ 50 (* i 30)) (+ 65 i))
-          (set i (+ i 1))))
-    (law-line fl fw et 3 300 92)
-    (assert-eq (ms-run 3 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
-               5 "the five-line link wins over the four-line candidate")
-    (assert-eq (cells-at order 0) 2 "the strongest link starts at photo two")
-    (assert-eq (cells-at order 1) 1 "the strongest link ends at photo one")
-    (assert-eq (cells-at order 2) 3 "leave the competing photo in the document")))
 
 (deftest test-several-strokes-at-the-bitmap-edge-are-clipping-evidence
   (let [^Bitmap pixels (bms-put (new-bitmap-set) 1 50 12 1)
@@ -264,10 +189,9 @@
     (law-band-line fl fw et 1 900 3)
     (law-band-line fl fw et 2 50 4)
     (law-line fl fw et 2 500 92)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                0 "punctuation and an extra tail token do not prove an overlap on their own")
     (assert-eq (cells-at decisions 2) 2 "the OCR variant is still reported as a possible duplicate")))
 
@@ -304,12 +228,9 @@
     (while (< i 768)
       (do (cells-push pixels (rem (* i 17) 128))
           (set i (+ i 1))))
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels (new-cells)
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets
+           pixels (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                0 "correlated neighbors do not make up for a missing word")
     (assert-eq (cells-at decisions 2) 2 "retain both copies of a shortened word band")))
 
@@ -339,12 +260,9 @@
     (law-line fl fw et 2 80 88)
     (law-fragment-anchor fl fw et 2 110 7 52)
     (law-line fl fw et 2 400 92)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                0 "one equal name and fuzzy neighbors leave both items in the Model")
     (assert-eq (ln-count fl) 8 "each item and all its amounts survive")
     (assert-eq (cells-at decisions 2) 2 "report the fuzzy overlap for review")))
@@ -375,12 +293,9 @@
                          (wd-get fw (+ first i 1) (hd-tstart)) 2 0 300 0))
           (ow-set ow w (owf-flags) (oe-clipped))
           (set i (+ i 1))))
-    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells) (new-cells) cuts
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages ol ow et fl fw (new-cells)
+           (new-cells) cuts (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                expected "the full copy of the fragment corroborates an exact shared edge line")
     (assert-eq (ln-count fl) (+ 2 shared) "keep every distinct complete line")
     (if (== shared 1)
@@ -418,12 +333,9 @@
     (while (< i 768)
       (do (cells-push pixels (rem (* i 17) 128))
           (set i (+ i 1))))
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels cuts
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets
+           pixels cuts (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                0 "matching pixels and raster cuts do not prove single-row continuity")
     (assert-eq (cells-at decisions 2) 2 "keep a single-row candidate without textual continuity")
     (return 0)))
@@ -456,12 +368,9 @@
           (ln-new fl 2 50 (+ 40 (* i 13)) 140 (+ 53 (* i 13)) 50 53 140 53 0 0 word 2)
           (set i (+ i 2))))
     (law-line fl fw et 2 450 89)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                expected-drop "only a fully preserved word sequence can remove the later rows")
     (assert-eq (cells-at decisions 2) expected-kind "split and merged OCR lines share the same word band")
     (return 0)))
@@ -512,10 +421,9 @@
       (do (law-priced-row fl fw et 2 (+ 40 (* i 40)) (+ 65 i))
           (set i (+ i 1))))
     (law-line fl fw et 2 350 81)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                6 "drop the matching visual rows, including both segments on the later photo")
     (assert-eq (ln-count fl) 5 "each surviving item and price remains one original flow line")))
 
@@ -538,12 +446,9 @@
           (law-priced-row fl fw et 2 (+ 40 (* i 40)) item)
           (set i (+ i 1))))
     (law-line fl fw et 2 350 81)
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) (new-cells)
-                       ledger (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells)
+           (new-cells) (new-cells) ledger (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                4 "only the equal rows with a second exact neighbor are removed")
     (assert-eq (ledger-count ledger) 4 "only supported equal rows go in the drop ledger")
     (assert-eq (ln-count fl) 10 "both versions of the divergent item and the isolated match survive")
@@ -576,12 +481,9 @@
           (while (< i 768)
             (do (cells-push pixels (rem (* i 17) 128))
                 (set i (+ i 1))))))
-    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets pixels (new-cells)
-                       (new-cells) (new-cells) decisions
-                       (new-cells) (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells)
-                       (new-cells) (new-cells) (new-cells))
+    (assert-eq (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw offsets
+           pixels (new-cells) (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells) (new-cells) (new-cells) (new-cells)
+           (new-cells) (new-cells) (new-cells) (new-cells))
                expected "the matching row needs corroboration and its amounts must agree")
     (assert-eq (cells-at decisions 2) 2 "uncertain readings remain marked")
     (return 0)))
@@ -600,56 +502,6 @@
     (cells-push pixels 0) (cells-push pixels 100) (cells-push pixels 100) (cells-push pixels 100)
     (assert-eq (ms-ncc pixels 0 4 4) 1 "correlation about .71 corroborates")
     (assert-eq (ms-ncc pixels 0 8 4) 0 "correlation about .58 is too weak")))
-
-(deftest test-reversed-cuts-can-report-a-gap-without-changing-upload-order
-  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
-        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
-        ^Cells order (new-cells) ^Cells cuts (new-cells)]
-    (page-new pages 1 450 1000 0 (pk-image))
-    (page-new pages 2 450 1000 0 (pk-image))
-    (cells-push mask 1) (cells-push mask 1)
-    (cells-push cuts 1) (cells-push cuts 0) (cells-push cuts 0) (cells-push cuts 1)
-    (law-line fl fw et 1 140 66)
-    (law-line fl fw et 2 320 65)
-    (ms-run 2 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) cuts
-            (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
-            (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
-            (new-cells) (new-cells) (new-cells))
-    (assert-eq (cells-len order) 0 "unconfirmed order stays as uploaded")
-    (assert-eq (cells-at decisions 0) 2 "first physical edge comes from source two")
-    (assert-eq (cells-at decisions 1) 1 "second physical edge comes from source one")
-    (assert-eq (cells-at decisions 2) 3 "two opposing cut edges give gap evidence")))
-
-(defn ^I32 law-skipped-gap [^TestT emon-t ^I32 competing ^I32 left ^I32 right]
-  (let [^Cells fl (new-cells) ^Cells fw (new-cells) ^Cells et (new-cells)
-        ^Cells pages (new-cells) ^Cells mask (new-cells) ^Cells decisions (new-cells)
-        ^Cells order (new-cells) ^Cells cuts (new-cells)]
-    (page-new pages 1 450 1000 0 (pk-image))
-    (page-new pages 2 450 1000 0 (pk-image))
-    (page-new pages 3 450 1000 0 (pk-image))
-    (cells-push mask 1) (cells-push mask 1) (cells-push mask 1)
-    (cells-push cuts 1) (cells-push cuts 0)
-    (cells-push cuts competing) (cells-push cuts 0)
-    (cells-push cuts 0) (cells-push cuts 1)
-    (law-line fl fw et 1 140 66)
-    (law-line fl fw et 2 250 67)
-    (law-line fl fw et 3 320 65)
-    (ms-run 3 0 mask pages (new-cells) (new-cells) et fl fw (new-cells) (new-cells) cuts
-            (new-cells) (new-cells) decisions (new-cells) (new-cells) (new-cells)
-            (new-cells) (new-cells) (new-cells) (new-cells) order (new-cells) (new-cells)
-            (new-cells) (new-cells) (new-cells))
-    (assert-eq (cells-len order) 0 "the cuts alone do not establish order")
-    (assert-eq (cells-len decisions) 5 "only the opposing cuts give gap evidence")
-    (assert-eq (cells-at decisions 0) left "the reported source end")
-    (assert-eq (cells-at decisions 1) right "the reported source start")
-    (assert-eq (cells-at decisions 2) 3 "a corroborated cut gets a gap flag")
-    (return 0)))
-
-(deftest test-cut-edges-are-checked-across-an-intervening-photo
-  (law-skipped-gap (test-t) 0 3 1))
-
-(deftest test-competing-cut-edges-do-not-flag-every-pair
-  (law-skipped-gap (test-t) 1 1 2))
 
 (deftest test-pixel-correlation-needs-contrast-and-positive-covariance
   (let [^Cells pixels (new-cells)]

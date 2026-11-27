@@ -90,7 +90,7 @@ def generate(case, out):
     manifest = {"scan": str(scan), "pieces": pieces}
     if case.get("tiff", True):
         sequence = out / "sequence.tiff"
-        frames = [Image.open(pieces[i]["path"]).convert("RGB") for i in case["order"]]
+        frames = [Image.open(piece["path"]).convert("RGB") for piece in pieces]
         if case.get("other"):
             frames = [frames[0], ImageOps.exif_transpose(Image.open(case["other"])).convert("RGB")]
         frames[0].save(sequence, save_all=True, append_images=frames[1:], compression="tiff_lzw")

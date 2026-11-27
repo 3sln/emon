@@ -165,9 +165,9 @@ array of inputs in `convert`. The Babashka pod accepts an input map with an
 `:images` vector. Supply the photos in upload order.
 
 With `capture=auto`, emon compares the end of each raster page with the start
-of another and checks for cropped text. It can deduplicate a corroborated
-overlap and recover the reading order of linked photos. An uncertain overlap
+of the next and checks for cropped text. It can deduplicate a corroborated
+overlap. The upload order is authoritative: emon never reorders photos and
+compares only consecutive ones. An uncertain overlap
 keeps both copies and appears as `possible-duplicate` in evidence. Evidence
-uses original source page numbers. A verified change in reading order appears
-in `photoOrder`. A gap in a continued table yields a row flagged
+uses original source page numbers. A gap in a continued table yields a row flagged
 `seam-gap`, which HTML renders as unread.

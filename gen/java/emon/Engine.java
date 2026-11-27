@@ -394,9 +394,9 @@ public final class Engine {
         int trust = Pdfstruct.tgTrust(d.ss);
         int pending = 0;
         int w = 0;
-        Seams.msRun(np, c.capture, d.mask, m.pages, ev.olines, ev.owords, d.et, d.fl, d.fw, d.mspatch, d.mspixel, d.mscuts, m.ledger, m.text, s.seams, s.mskeys, s.mscode, s.msa, s.msb, s.msdrop, s.mslines, s.mswords, s.msorder, s.msincoming, s.msoutgoing, s.msaw, s.msbw, s.mswordrow);
+        Seams.msRun(np, c.capture, d.mask, m.pages, ev.olines, ev.owords, d.et, d.fl, d.fw, d.mspatch, d.mspixel, d.mscuts, m.ledger, m.text, s.seams, s.mskeys, s.mscode, s.msa, s.msb, s.msdrop, s.mslines, s.mswords, s.msaw, s.msbw, s.mswordrow);
         if (c.keep != 0) {
-            Seams.msEvidence(d.evidence, s.seams, s.msorder, d.mask, d.mscuts, c.capture);
+            Seams.msEvidence(d.evidence, s.seams, d.mask, d.mscuts, c.capture);
         }
         Furniture.fuFind(d.fw, d.fl, d.et, d.gl, d.mk, m.pages, np, d.txt, d.md, d.lb, trust, c.furn, s.cd, s.sl, s.gr, s.ford, s.tx, s.bh, s.fo, s.fp, s.ft, s.pl);
         if (c.tabl == 1) {

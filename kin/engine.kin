@@ -420,10 +420,9 @@
             (fd d mspatch) (fd d mspixel) (fd d mscuts)
             (fd m ledger) (fd m text) (fd s seams) (fd s mskeys) (fd s mscode) (fd s msa) (fd s msb)
             (fd s msdrop) (fd s mslines) (fd s mswords)
-            (fd s msorder) (fd s msincoming) (fd s msoutgoing)
             (fd s msaw) (fd s msbw) (fd s mswordrow))
     (if (!= (fd c keep) 0)
-      (ms-evidence (fd d evidence) (fd s seams) (fd s msorder) (fd d mask) (fd d mscuts) (fd c capture)))
+      (ms-evidence (fd d evidence) (fd s seams) (fd d mask) (fd d mscuts) (fd c capture)))
     ;; Running furniture (P4.3): found BEFORE the paragraphs, which then never see it, and written after them.
     (fu-find (fd d fw) (fd d fl) (fd d et) (fd d gl) (fd d mk) (fd m pages) np (fd d txt) (fd d md) (fd d lb) trust (fd c furn) (fd s cd) (fd s sl)
          (fd s gr) (fd s ford) (fd s tx) (fd s bh) (fd s fo) (fd s fp) (fd s ft) (fd s pl))

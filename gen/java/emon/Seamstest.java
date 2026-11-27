@@ -48,7 +48,7 @@ public final class Seamstest {
             Evidence.olSet(ol, r, Evidence.olfConf(), 300);
         }
         lawLine(fl, fw, et, 2, 400, 82);
-        emon.Testport.assertEq(Seams.msRun(2, capture, mask, pages, ol, emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), ledger, text, decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expectedDrop, "rows dropped");
+        emon.Testport.assertEq(Seams.msRun(2, capture, mask, pages, ol, emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), ledger, text, decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expectedDrop, "rows dropped");
         emon.Testport.assertEq(Model.ledgerCount(ledger), expectedDrop, "dropped rows retained in ledger");
         if (expectedKind == 0) {
             emon.Testport.assertEq(emon.Port.cellsLen(decisions), 0, "no seam on an ordinary break");
@@ -123,7 +123,7 @@ public final class Seamstest {
     public static void testAnOverlapDoesNotHideAnUncoveredCut() {
         lawSeam(0, 2, 0, 4, 0, 1, 5, 3);
     }
-    public static int lawShallowCut(int emonT, int confidence, int expectedMarks) {
+    public static int lawShallowCut(int emonT, int confidence, int cut, int expectedMarks) {
         emon.Port.Cells fl = emon.Port.newCells();
         emon.Port.Cells fw = emon.Port.newCells();
         emon.Port.Cells et = emon.Port.newCells();
@@ -140,7 +140,7 @@ public final class Seamstest {
         emon.Port.cellsPush(mask, 1);
         emon.Port.cellsPush(mask, 1);
         emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, -1);
+        emon.Port.cellsPush(cuts, cut);
         emon.Port.cellsPush(cuts, 0);
         emon.Port.cellsPush(cuts, 0);
         lawLine(fl, fw, et, 1, 600, 65);
@@ -153,102 +153,18 @@ public final class Seamstest {
             emon.Port.cellsPush(et, 67 + i);
             i += 1;
         }
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, ol, ow, et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "a cut warning never deletes a reading");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, ol, ow, et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "a cut warning never deletes a reading");
         emon.Testport.assertEq(emon.Port.cellsLen(decisions), expectedMarks, "weak cut geometry needs uncertain OCR");
         return 0;
     }
     public static void testShallowRuleStrokesDoNotMakeAConfidentLineAGap() {
-        lawShallowCut(0, 900, 0);
-        lawShallowCut(0, 450, 5);
+        lawShallowCut(0, 900, -1, 0);
+        lawShallowCut(0, 450, -1, 0);
+        lawShallowCut(0, 450, 0, 5);
     }
     public static void testScanModeAndBornDigitalPassThrough() {
         lawSeam(0, 1, 0, 4, 0, 0, 0, 0);
         lawSeam(0, 2, 1, 4, 0, 0, 0, 0);
-    }
-    public static int lawReversedLink(int emonT, int np, int earlier) {
-        emon.Port.Cells fl = emon.Port.newCells();
-        emon.Port.Cells fw = emon.Port.newCells();
-        emon.Port.Cells et = emon.Port.newCells();
-        emon.Port.Cells pages = emon.Port.newCells();
-        emon.Port.Cells mask = emon.Port.newCells();
-        emon.Port.Cells order = emon.Port.newCells();
-        emon.Port.Cells ledger = emon.Port.newCells();
-        emon.Port.Cells decisions = emon.Port.newCells();
-        int i = 0;
-        while (i < np) {
-            Model.pageNew(pages, i + 1, 450, 1000, 0, Model.pkImage());
-            emon.Port.cellsPush(mask, 1);
-            i += 1;
-        }
-        i = 0;
-        while (i < 4) {
-            lawLine(fl, fw, et, 1, 20 + (i * 30), 65 + i);
-            Evidence.wdSet(fw, Evidence.lnCount(fl) - 1, Evidence.hdConf(), 950);
-            i += 1;
-        }
-        lawLine(fl, fw, et, 1, 450, 92);
-        if (np == 3) {
-            lawLine(fl, fw, et, 2, 450, 93);
-        }
-        lawLine(fl, fw, et, earlier, 50, 91);
-        i = 0;
-        while (i < 4) {
-            lawLine(fl, fw, et, earlier, 700 + (i * 30), 65 + i);
-            i += 1;
-        }
-        emon.Testport.assertEq(Seams.msRun(np, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), ledger, emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), order, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 4, "remove the lower-confidence copy");
-        emon.Testport.assertEq(emon.Port.cellsAt(order, 0), earlier, "the earlier source page starts the document");
-        emon.Testport.assertEq(emon.Port.cellsAt(order, 1), 1, "source page one follows");
-        if (np == 3) {
-            emon.Testport.assertEq(emon.Port.cellsAt(order, 2), 2, "the unrelated page remains in the document");
-        }
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 0), earlier, "the seam preserves upload provenance");
-        emon.Testport.assertEq(Model.ledgerPage(ledger, 0), earlier, "the earlier photo supplied the lower-confidence copy");
-        emon.Testport.assertEq(Evidence.lnCount(fl), np + 4, "keep all distinct lines and one copy of the overlap");
-        return 0;
-    }
-    public static void testReversedPhotosUseTheUniqueAnchoredOrder() {
-        lawReversedLink(0, 2, 2);
-    }
-    public static void testAConfirmedLinkSurvivesADisconnectedUpload() {
-        lawReversedLink(0, 3, 3);
-    }
-    public static void testTheStrongerOfTwoAnchoredLinksResolvesTheOrder() {
-        emon.Port.Cells fl = emon.Port.newCells();
-        emon.Port.Cells fw = emon.Port.newCells();
-        emon.Port.Cells et = emon.Port.newCells();
-        emon.Port.Cells pages = emon.Port.newCells();
-        emon.Port.Cells mask = emon.Port.newCells();
-        emon.Port.Cells order = emon.Port.newCells();
-        emon.Port.Cells decisions = emon.Port.newCells();
-        int i = 0;
-        while (i < 3) {
-            Model.pageNew(pages, i + 1, 450, 1000, 0, Model.pkImage());
-            emon.Port.cellsPush(mask, 1);
-            i += 1;
-        }
-        i = 0;
-        while (i < 5) {
-            lawLine(fl, fw, et, 1, 50 + (i * 30), 65 + i);
-            i += 1;
-        }
-        lawLine(fl, fw, et, 1, 300, 90);
-        lawLine(fl, fw, et, 2, 50, 91);
-        i = 0;
-        while (i < 5) {
-            lawLine(fl, fw, et, 2, 750 + (i * 30), 65 + i);
-            i += 1;
-        }
-        i = 1;
-        while (i < 5) {
-            lawLine(fl, fw, et, 3, 50 + (i * 30), 65 + i);
-            i += 1;
-        }
-        lawLine(fl, fw, et, 3, 300, 92);
-        emon.Testport.assertEq(Seams.msRun(3, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), order, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 5, "the five-line link wins over the four-line candidate");
-        emon.Testport.assertEq(emon.Port.cellsAt(order, 0), 2, "the strongest link starts at photo two");
-        emon.Testport.assertEq(emon.Port.cellsAt(order, 1), 1, "the strongest link ends at photo one");
-        emon.Testport.assertEq(emon.Port.cellsAt(order, 2), 3, "leave the competing photo in the document");
     }
     public static void testSeveralStrokesAtTheBitmapEdgeAreClippingEvidence() {
         emon.Port.Bitmap pixels = emon.Port.bmsPut(emon.Port.newBitmapSet(), 1, 50, 12, 1);
@@ -325,7 +241,7 @@ public final class Seamstest {
         lawBandLine(fl, fw, et, 1, 900, 3);
         lawBandLine(fl, fw, et, 2, 50, 4);
         lawLine(fl, fw, et, 2, 500, 92);
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate");
     }
     public static void testCorrelatedNeighborsCannotConfirmAShortenedWordBand() {
@@ -370,7 +286,7 @@ public final class Seamstest {
             emon.Port.cellsPush(pixels, (i * 17) % 128);
             i += 1;
         }
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "correlated neighbors do not make up for a missing word");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "correlated neighbors do not make up for a missing word");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "retain both copies of a shortened word band");
     }
     public static int lawFragmentAnchor(emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells et, int page, int y, int prefix, int last) {
@@ -406,7 +322,7 @@ public final class Seamstest {
         lawLine(fl, fw, et, 2, 80, 88);
         lawFragmentAnchor(fl, fw, et, 2, 110, 7, 52);
         lawLine(fl, fw, et, 2, 400, 92);
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
         emon.Testport.assertEq(Evidence.lnCount(fl), 8, "each item and all its amounts survive");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "report the fuzzy overlap for review");
     }
@@ -451,7 +367,7 @@ public final class Seamstest {
             Evidence.owSet(ow, w, Evidence.owfFlags(), Evidence.oeClipped());
             i += 1;
         }
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, ol, ow, et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expected, "the full copy of the fragment corroborates an exact shared edge line");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, ol, ow, et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expected, "the full copy of the fragment corroborates an exact shared edge line");
         emon.Testport.assertEq(Evidence.lnCount(fl), 2 + shared, "keep every distinct complete line");
         if (shared == 1) {
             emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 1, "report the confirmed overlap");
@@ -502,7 +418,7 @@ public final class Seamstest {
             emon.Port.cellsPush(pixels, (i * 17) % 128);
             i += 1;
         }
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "matching pixels and raster cuts do not prove single-row continuity");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 0, "matching pixels and raster cuts do not prove single-row continuity");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "keep a single-row candidate without textual continuity");
         return 0;
     }
@@ -541,7 +457,7 @@ public final class Seamstest {
             i += 2;
         }
         lawLine(fl, fw, et, 2, 450, 89);
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expectedDrop, "only a fully preserved word sequence can remove the later rows");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expectedDrop, "only a fully preserved word sequence can remove the later rows");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), expectedKind, "split and merged OCR lines share the same word band");
         return 0;
     }
@@ -612,7 +528,7 @@ public final class Seamstest {
             i += 1;
         }
         lawLine(fl, fw, et, 2, 350, 81);
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 6, "drop the matching visual rows, including both segments on the later photo");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 6, "drop the matching visual rows, including both segments on the later photo");
         emon.Testport.assertEq(Evidence.lnCount(fl), 5, "each surviving item and price remains one original flow line");
     }
     public static void testAStrongRunPreservesADivergentItem() {
@@ -644,7 +560,7 @@ public final class Seamstest {
             i += 1;
         }
         lawLine(fl, fw, et, 2, 350, 81);
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), ledger, emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 4, "only the equal rows with a second exact neighbor are removed");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), ledger, emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), 4, "only the equal rows with a second exact neighbor are removed");
         emon.Testport.assertEq(Model.ledgerCount(ledger), 4, "only supported equal rows go in the drop ledger");
         emon.Testport.assertEq(Evidence.lnCount(fl), 10, "both versions of the divergent item and the isolated match survive");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "the divergent item has a possible-duplicate mark");
@@ -694,7 +610,7 @@ public final class Seamstest {
                 i += 1;
             }
         }
-        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expected, "the matching row needs corroboration and its amounts must agree");
+        emon.Testport.assertEq(Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, offsets, pixels, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells()), expected, "the matching row needs corroboration and its amounts must agree");
         emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 2, "uncertain readings remain marked");
         return 0;
     }
@@ -721,69 +637,6 @@ public final class Seamstest {
         emon.Port.cellsPush(pixels, 100);
         emon.Testport.assertEq(Seams.msNcc(pixels, 0, 4, 4), 1, "correlation about .71 corroborates");
         emon.Testport.assertEq(Seams.msNcc(pixels, 0, 8, 4), 0, "correlation about .58 is too weak");
-    }
-    public static void testReversedCutsCanReportAGapWithoutChangingUploadOrder() {
-        emon.Port.Cells fl = emon.Port.newCells();
-        emon.Port.Cells fw = emon.Port.newCells();
-        emon.Port.Cells et = emon.Port.newCells();
-        emon.Port.Cells pages = emon.Port.newCells();
-        emon.Port.Cells mask = emon.Port.newCells();
-        emon.Port.Cells decisions = emon.Port.newCells();
-        emon.Port.Cells order = emon.Port.newCells();
-        emon.Port.Cells cuts = emon.Port.newCells();
-        Model.pageNew(pages, 1, 450, 1000, 0, Model.pkImage());
-        Model.pageNew(pages, 2, 450, 1000, 0, Model.pkImage());
-        emon.Port.cellsPush(mask, 1);
-        emon.Port.cellsPush(mask, 1);
-        emon.Port.cellsPush(cuts, 1);
-        emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, 1);
-        lawLine(fl, fw, et, 1, 140, 66);
-        lawLine(fl, fw, et, 2, 320, 65);
-        Seams.msRun(2, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), order, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
-        emon.Testport.assertEq(emon.Port.cellsLen(order), 0, "unconfirmed order stays as uploaded");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 0), 2, "first physical edge comes from source two");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 1), 1, "second physical edge comes from source one");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 3, "two opposing cut edges give gap evidence");
-    }
-    public static int lawSkippedGap(int emonT, int competing, int left, int right) {
-        emon.Port.Cells fl = emon.Port.newCells();
-        emon.Port.Cells fw = emon.Port.newCells();
-        emon.Port.Cells et = emon.Port.newCells();
-        emon.Port.Cells pages = emon.Port.newCells();
-        emon.Port.Cells mask = emon.Port.newCells();
-        emon.Port.Cells decisions = emon.Port.newCells();
-        emon.Port.Cells order = emon.Port.newCells();
-        emon.Port.Cells cuts = emon.Port.newCells();
-        Model.pageNew(pages, 1, 450, 1000, 0, Model.pkImage());
-        Model.pageNew(pages, 2, 450, 1000, 0, Model.pkImage());
-        Model.pageNew(pages, 3, 450, 1000, 0, Model.pkImage());
-        emon.Port.cellsPush(mask, 1);
-        emon.Port.cellsPush(mask, 1);
-        emon.Port.cellsPush(mask, 1);
-        emon.Port.cellsPush(cuts, 1);
-        emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, competing);
-        emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, 0);
-        emon.Port.cellsPush(cuts, 1);
-        lawLine(fl, fw, et, 1, 140, 66);
-        lawLine(fl, fw, et, 2, 250, 67);
-        lawLine(fl, fw, et, 3, 320, 65);
-        Seams.msRun(3, 0, mask, pages, emon.Port.newCells(), emon.Port.newCells(), et, fl, fw, emon.Port.newCells(), emon.Port.newCells(), cuts, emon.Port.newCells(), emon.Port.newCells(), decisions, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), order, emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells(), emon.Port.newCells());
-        emon.Testport.assertEq(emon.Port.cellsLen(order), 0, "the cuts alone do not establish order");
-        emon.Testport.assertEq(emon.Port.cellsLen(decisions), 5, "only the opposing cuts give gap evidence");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 0), left, "the reported source end");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 1), right, "the reported source start");
-        emon.Testport.assertEq(emon.Port.cellsAt(decisions, 2), 3, "a corroborated cut gets a gap flag");
-        return 0;
-    }
-    public static void testCutEdgesAreCheckedAcrossAnInterveningPhoto() {
-        lawSkippedGap(0, 0, 3, 1);
-    }
-    public static void testCompetingCutEdgesDoNotFlagEveryPair() {
-        lawSkippedGap(0, 1, 1, 2);
     }
     public static void testPixelCorrelationNeedsContrastAndPositiveCovariance() {
         emon.Port.Cells pixels = emon.Port.newCells();

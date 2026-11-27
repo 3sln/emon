@@ -474,9 +474,9 @@ func enStage3(c *enctx.Cfg, d *enctx.Doc, ev *enctx.EvArenas, m *enctx.Arenas, s
 	var trust int32 = pdfstruct.TgTrust(d.Ss)
 	var pending int32 = 0
 	var w int32 = 0
-	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, ev.Owords, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msorder, s.Msincoming, s.Msoutgoing, s.Msaw, s.Msbw, s.Mswordrow)
+	seams.MsRun(np, c.Capture, d.Mask, m.Pages, ev.Olines, ev.Owords, d.Et, d.Fl, d.Fw, d.Mspatch, d.Mspixel, d.Mscuts, m.Ledger, m.Text, s.Seams, s.Mskeys, s.Mscode, s.Msa, s.Msb, s.Msdrop, s.Mslines, s.Mswords, s.Msaw, s.Msbw, s.Mswordrow)
 	if c.Keep != 0 {
-		seams.MsEvidence(d.Evidence, s.Seams, s.Msorder, d.Mask, d.Mscuts, c.Capture)
+		seams.MsEvidence(d.Evidence, s.Seams, d.Mask, d.Mscuts, c.Capture)
 	}
 	furniture.FuFind(d.Fw, d.Fl, d.Et, d.Gl, d.Mk, m.Pages, np, d.Txt, d.Md, d.Lb, trust, c.Furn, s.Cd, s.Sl, s.Gr, s.Ford, s.Tx, s.Bh, s.Fo, s.Fp, s.Ft, s.Pl)
 	if c.Tabl == 1 {

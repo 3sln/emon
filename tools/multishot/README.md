@@ -18,6 +18,8 @@ transport with a multi-frame TIFF. The distinct-page control participates in
 seam checks. Word accuracy excludes it because only its first input has gold
 from the receipt being scored. The report also includes the historical
 word aggregate for comparison with earlier runs.
+Crops are always uploaded in physical order: the upload order is
+authoritative (D918, D924) and the harness does not generate shuffled uploads.
 All seeds require zero unflagged cross-photo duplicates. A flagged
 `possible-duplicate` is allowed only on a seam with one shared row.
 
@@ -34,9 +36,11 @@ runs. Driver errors fail the sweep after the remaining cases have run.
 
 The seam metric version is recorded in each report. Ratchet comparisons
 require the same version. The seed 920 Tesseract reference covers 181 SROIE
-receipts, 19 CORD receipts and six traps. It uses the frozen Round 4 policy
-replayed with the `model-v3` scorer on the same crops. To measure that corpus
-against the reference, run
+receipts, 19 CORD receipts and six traps. It was re-based in D924
+(the shuffled uploads were removed from scope, so the crops changed) with the
+current policy and the `model-v3` scorer, measured on the spool runner
+(`bb spool-multishot`, x86-64; a reference is measured on one platform). To measure that corpus
+against the reference locally, run
 
 ```sh
 bb multishot --sweep --ocr-engine tesseract \
@@ -55,8 +59,7 @@ Reports include the following counts.
   occurrences within one photo for diagnosis.
   `unflagged` counts extra copies whose source pair lacks a
   `possible-duplicate` mark. `matched-dup` counts extra copies on pairs with
-  a confirmed overlap. The order diagnostics count unflagged extra copies
-  and missed gaps whose source photos are out of physical order.
+  a confirmed overlap.
 - `false-merges` counts distinct gold rows that a separate-photo Model
   emitted, the joined Model omitted, and a seam drop removed. The scorer
   projects the drop onto the gold rows to attribute it, then looks for a
@@ -78,8 +81,6 @@ Reports include the following counts.
 - `spurious-gap` counts gap flags on seams with no lost output row.
   In the partial and gap buckets it requires a clipped row with a complete
   copy in the neighboring crop.
-  A gap flag between photos that are nonadjacent in the physical document
-  also counts, once per source pair regardless of where that pair was uploaded.
 - `evidence_dup` retains the historical count based on surviving OCR lines
   from both photos and requires at least 97% projected visibility in each.
   `evidence_missing` and `evidence_missing_concat` count rows absent from

@@ -49,7 +49,7 @@ pub(crate) fn law_seam(emon_t: i32, capture: i32, born: i32, strong: i32, middle
         ol_set(ol, r, olf_conf(), 300);
     }
     law_line(fl, fw, et, 2, 400, 82);
-    crate::testport::assert_eq(ms_run(2, capture, mask, pages, ol, &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger, text, decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected_drop, "rows dropped");
+    crate::testport::assert_eq(ms_run(2, capture, mask, pages, ol, &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger, text, decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected_drop, "rows dropped");
     crate::testport::assert_eq(ledger_count(ledger), expected_drop, "dropped rows retained in ledger");
     if expected_kind == 0 {
         crate::testport::assert_eq(crate::port::cells_len(decisions), 0, "no seam on an ordinary break");
@@ -131,7 +131,7 @@ fn test_clean_break_and_clipped_gap() {
 fn test_an_overlap_does_not_hide_an_uncovered_cut() {
     law_seam(0, 2, 0, 4, 0, 1, 5, 3);
 }
-pub(crate) fn law_shallow_cut(emon_t: i32, confidence: i32, expected_marks: i32) -> i32 {
+pub(crate) fn law_shallow_cut(emon_t: i32, confidence: i32, cut: i32, expected_marks: i32) -> i32 {
     let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
     let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
@@ -148,7 +148,7 @@ pub(crate) fn law_shallow_cut(emon_t: i32, confidence: i32, expected_marks: i32)
     crate::port::cells_push(mask, 1);
     crate::port::cells_push(mask, 1);
     crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, -1);
+    crate::port::cells_push(cuts, cut);
     crate::port::cells_push(cuts, 0);
     crate::port::cells_push(cuts, 0);
     law_line(fl, fw, et, 1, 600, 65);
@@ -161,107 +161,20 @@ pub(crate) fn law_shallow_cut(emon_t: i32, confidence: i32, expected_marks: i32)
         crate::port::cells_push(et, 67 + i);
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "a cut warning never deletes a reading");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "a cut warning never deletes a reading");
     crate::testport::assert_eq(crate::port::cells_len(decisions), expected_marks, "weak cut geometry needs uncertain OCR");
     return 0;
 }
 #[test]
 fn test_shallow_rule_strokes_do_not_make_a_confident_line_a_gap() {
-    law_shallow_cut(0, 900, 0);
-    law_shallow_cut(0, 450, 5);
+    law_shallow_cut(0, 900, -1, 0);
+    law_shallow_cut(0, 450, -1, 0);
+    law_shallow_cut(0, 450, 0, 5);
 }
 #[test]
 fn test_scan_mode_and_born_digital_pass_through() {
     law_seam(0, 1, 0, 4, 0, 0, 0, 0);
     law_seam(0, 2, 1, 4, 0, 0, 0, 0);
-}
-pub(crate) fn law_reversed_link(emon_t: i32, np: i32, earlier: i32) -> i32 {
-    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let ledger: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mut i: i32 = 0;
-    while i < np {
-        page_new(pages, i + 1, 450, 1000, 0, pk_image());
-        crate::port::cells_push(mask, 1);
-        i += 1;
-    }
-    i = 0;
-    while i < 4 {
-        law_line(fl, fw, et, 1, 20 + (i * 30), 65 + i);
-        wd_set(fw, ln_count(fl) - 1, hd_conf(), 950);
-        i += 1;
-    }
-    law_line(fl, fw, et, 1, 450, 92);
-    if np == 3 {
-        law_line(fl, fw, et, 2, 450, 93);
-    }
-    law_line(fl, fw, et, earlier, 50, 91);
-    i = 0;
-    while i < 4 {
-        law_line(fl, fw, et, earlier, 700 + (i * 30), 65 + i);
-        i += 1;
-    }
-    crate::testport::assert_eq(ms_run(np, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger, &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 4, "remove the lower-confidence copy");
-    crate::testport::assert_eq(crate::port::cells_at(order, 0), earlier, "the earlier source page starts the document");
-    crate::testport::assert_eq(crate::port::cells_at(order, 1), 1, "source page one follows");
-    if np == 3 {
-        crate::testport::assert_eq(crate::port::cells_at(order, 2), 2, "the unrelated page remains in the document");
-    }
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 0), earlier, "the seam preserves upload provenance");
-    crate::testport::assert_eq(ledger_page(ledger, 0), earlier, "the earlier photo supplied the lower-confidence copy");
-    crate::testport::assert_eq(ln_count(fl), np + 4, "keep all distinct lines and one copy of the overlap");
-    return 0;
-}
-#[test]
-fn test_reversed_photos_use_the_unique_anchored_order() {
-    law_reversed_link(0, 2, 2);
-}
-#[test]
-fn test_a_confirmed_link_survives_a_disconnected_upload() {
-    law_reversed_link(0, 3, 3);
-}
-#[test]
-fn test_the_stronger_of_two_anchored_links_resolves_the_order() {
-    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mut i: i32 = 0;
-    while i < 3 {
-        page_new(pages, i + 1, 450, 1000, 0, pk_image());
-        crate::port::cells_push(mask, 1);
-        i += 1;
-    }
-    i = 0;
-    while i < 5 {
-        law_line(fl, fw, et, 1, 50 + (i * 30), 65 + i);
-        i += 1;
-    }
-    law_line(fl, fw, et, 1, 300, 90);
-    law_line(fl, fw, et, 2, 50, 91);
-    i = 0;
-    while i < 5 {
-        law_line(fl, fw, et, 2, 750 + (i * 30), 65 + i);
-        i += 1;
-    }
-    i = 1;
-    while i < 5 {
-        law_line(fl, fw, et, 3, 50 + (i * 30), 65 + i);
-        i += 1;
-    }
-    law_line(fl, fw, et, 3, 300, 92);
-    crate::testport::assert_eq(ms_run(3, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 5, "the five-line link wins over the four-line candidate");
-    crate::testport::assert_eq(crate::port::cells_at(order, 0), 2, "the strongest link starts at photo two");
-    crate::testport::assert_eq(crate::port::cells_at(order, 1), 1, "the strongest link ends at photo one");
-    crate::testport::assert_eq(crate::port::cells_at(order, 2), 3, "leave the competing photo in the document");
 }
 #[test]
 fn test_several_strokes_at_the_bitmap_edge_are_clipping_evidence() {
@@ -340,7 +253,7 @@ fn test_an_ocr_variant_needs_context_before_deduplication() {
     law_band_line(fl, fw, et, 1, 900, 3);
     law_band_line(fl, fw, et, 2, 50, 4);
     law_line(fl, fw, et, 2, 500, 92);
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "punctuation and an extra tail token do not prove an overlap on their own");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "the OCR variant is still reported as a possible duplicate");
 }
 #[test]
@@ -386,7 +299,7 @@ fn test_correlated_neighbors_cannot_confirm_a_shortened_word_band() {
         crate::port::cells_push(pixels, (i * 17) % 128);
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "correlated neighbors do not make up for a missing word");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "correlated neighbors do not make up for a missing word");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "retain both copies of a shortened word band");
 }
 pub(crate) fn law_fragment_anchor(mut fl: &mut crate::port::Cells, mut fw: &mut crate::port::Cells, mut et: &mut crate::port::Cells, page: i32, y: i32, prefix: i32, last: i32) -> i32 {
@@ -423,7 +336,7 @@ fn test_distinct_items_can_have_the_same_name_inside_a_fuzzy_run() {
     law_line(fl, fw, et, 2, 80, 88);
     law_fragment_anchor(fl, fw, et, 2, 110, 7, 52);
     law_line(fl, fw, et, 2, 400, 92);
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "one equal name and fuzzy neighbors leave both items in the Model");
     crate::testport::assert_eq(ln_count(fl), 8, "each item and all its amounts survive");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "report the fuzzy overlap for review");
 }
@@ -468,7 +381,7 @@ pub(crate) fn law_covered_fragment(emon_t: i32, shared: i32) -> i32 {
         ow_set(ow, w, owf_flags(), oe_clipped());
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the full copy of the fragment corroborates an exact shared edge line");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, ol, ow, et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the full copy of the fragment corroborates an exact shared edge line");
     crate::testport::assert_eq(ln_count(fl), 2 + shared, "keep every distinct complete line");
     if shared == 1 {
         crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 1, "report the confirmed overlap");
@@ -522,7 +435,7 @@ pub(crate) fn law_cut_and_pixel(emon_t: i32, cut: i32) -> i32 {
         crate::port::cells_push(pixels, (i * 17) % 128);
         i += 1;
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "matching pixels and raster cuts do not prove single-row continuity");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 0, "matching pixels and raster cuts do not prove single-row continuity");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "keep a single-row candidate without textual continuity");
     return 0;
 }
@@ -562,7 +475,7 @@ pub(crate) fn law_word_seam(emon_t: i32, variant: i32, expected_drop: i32, expec
         i += 2;
     }
     law_line(fl, fw, et, 2, 450, 89);
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected_drop, "only a fully preserved word sequence can remove the later rows");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected_drop, "only a fully preserved word sequence can remove the later rows");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), expected_kind, "split and merged OCR lines share the same word band");
     return 0;
 }
@@ -636,7 +549,7 @@ fn test_tilt_aware_rows_join_item_and_price_segments_for_seam_matching() {
         i += 1;
     }
     law_line(fl, fw, et, 2, 350, 81);
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 6, "drop the matching visual rows, including both segments on the later photo");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 6, "drop the matching visual rows, including both segments on the later photo");
     crate::testport::assert_eq(ln_count(fl), 5, "each surviving item and price remains one original flow line");
 }
 #[test]
@@ -669,7 +582,7 @@ fn test_a_strong_run_preserves_a_divergent_item() {
         i += 1;
     }
     law_line(fl, fw, et, 2, 350, 81);
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger, &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 4, "only the equal rows with a second exact neighbor are removed");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), ledger, &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), 4, "only the equal rows with a second exact neighbor are removed");
     crate::testport::assert_eq(ledger_count(ledger), 4, "only supported equal rows go in the drop ledger");
     crate::testport::assert_eq(ln_count(fl), 10, "both versions of the divergent item and the isolated match survive");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "the divergent item has a possible-duplicate mark");
@@ -719,7 +632,7 @@ pub(crate) fn law_graded_neighbor(emon_t: i32, sampled: i32, priced: i32, expect
             i += 1;
         }
     }
-    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the matching row needs corroboration and its amounts must agree");
+    crate::testport::assert_eq(ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, offsets, pixels, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new()), expected, "the matching row needs corroboration and its amounts must agree");
     crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 2, "uncertain readings remain marked");
     return 0;
 }
@@ -749,72 +662,6 @@ fn test_correlation_threshold_separates_moderate_from_weak_agreement() {
     crate::port::cells_push(pixels, 100);
     crate::testport::assert_eq(ms_ncc(pixels, 0, 4, 4), 1, "correlation about .71 corroborates");
     crate::testport::assert_eq(ms_ncc(pixels, 0, 8, 4), 0, "correlation about .58 is too weak");
-}
-#[test]
-fn test_reversed_cuts_can_report_a_gap_without_changing_upload_order() {
-    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let cuts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    page_new(pages, 1, 450, 1000, 0, pk_image());
-    page_new(pages, 2, 450, 1000, 0, pk_image());
-    crate::port::cells_push(mask, 1);
-    crate::port::cells_push(mask, 1);
-    crate::port::cells_push(cuts, 1);
-    crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, 1);
-    law_line(fl, fw, et, 1, 140, 66);
-    law_line(fl, fw, et, 2, 320, 65);
-    ms_run(2, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
-    crate::testport::assert_eq(crate::port::cells_len(order), 0, "unconfirmed order stays as uploaded");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 0), 2, "first physical edge comes from source two");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 1), 1, "second physical edge comes from source one");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 3, "two opposing cut edges give gap evidence");
-}
-pub(crate) fn law_skipped_gap(emon_t: i32, competing: i32, left: i32, right: i32) -> i32 {
-    let fl: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let fw: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let et: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let pages: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let mask: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let decisions: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let order: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    let cuts: &mut crate::port::Cells = &mut crate::port::Cells::new();
-    page_new(pages, 1, 450, 1000, 0, pk_image());
-    page_new(pages, 2, 450, 1000, 0, pk_image());
-    page_new(pages, 3, 450, 1000, 0, pk_image());
-    crate::port::cells_push(mask, 1);
-    crate::port::cells_push(mask, 1);
-    crate::port::cells_push(mask, 1);
-    crate::port::cells_push(cuts, 1);
-    crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, competing);
-    crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, 0);
-    crate::port::cells_push(cuts, 1);
-    law_line(fl, fw, et, 1, 140, 66);
-    law_line(fl, fw, et, 2, 250, 67);
-    law_line(fl, fw, et, 3, 320, 65);
-    ms_run(3, 0, mask, pages, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), et, fl, fw, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), cuts, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), decisions, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), order, &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new(), &mut crate::port::Cells::new());
-    crate::testport::assert_eq(crate::port::cells_len(order), 0, "the cuts alone do not establish order");
-    crate::testport::assert_eq(crate::port::cells_len(decisions), 5, "only the opposing cuts give gap evidence");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 0), left, "the reported source end");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 1), right, "the reported source start");
-    crate::testport::assert_eq(crate::port::cells_at(decisions, 2), 3, "a corroborated cut gets a gap flag");
-    return 0;
-}
-#[test]
-fn test_cut_edges_are_checked_across_an_intervening_photo() {
-    law_skipped_gap(0, 0, 3, 1);
-}
-#[test]
-fn test_competing_cut_edges_do_not_flag_every_pair() {
-    law_skipped_gap(0, 1, 1, 2);
 }
 #[test]
 fn test_pixel_correlation_needs_contrast_and_positive_covariance() {

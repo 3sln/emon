@@ -137,11 +137,9 @@
                      (range 1 pieces)))
         windows (mapv (fn [i lo hi] [lo hi (if (and (zero? i) (= kind "asymmetric")) 130 0)])
                       (range) (cons 0 (map second cuts))
-                      (concat (map first cuts) [(+ extra (:height source))]))
-        order (vec (range (count windows)))]
+                      (concat (map first cuts) [(+ extra (:height source))]))]
     (assoc source :rows rows :insert (cond-> [] insertion (conj insertion))
-           :seed (between rng Integer/MAX_VALUE) :kind kind :careful careful :windows windows
-           :order (if (and (not careful) (zero? (between rng 4))) (shuffled rng order) order))))
+           :seed (between rng Integer/MAX_VALUE) :kind kind :careful careful :windows windows)))
 
 (defn valid-design [source rng kind pieces]
   (or (some (fn [_]
@@ -358,11 +356,11 @@
 (defn false-merge-rows [case pieces dropped before after]
   ;; Count a missing gold row once, even when OCR emitted several removed segments.
   ;; Compare readings in the Models. Crop visibility and overlap marks cannot prove survival.
-  (let [order (:order case)]
+  (let [n (count pieces)]
     (into (sorted-set)
           (keep (fn [{:keys [page] :as read}]
-                  (when (and (<= 1 page (count order)) (or (not (:other case)) (= page 1)))
-                    (let [p (order (dec page))
+                  (when (and (<= 1 page n) (or (not (:other case)) (= page 1)))
+                    (let [p (dec page)
                           row (removed-gold-row (:rows case) (pieces p) read)]
                       (when (and (some #(= p (:page %)) (before row))
                                  (not (after row)))
@@ -390,7 +388,7 @@
                 (some (fn [[physical piece]]
                         (when (pos? (get (:visible piece) i))
                           (let [[x0 y0 x1 y1] (get (:boxes piece) i)
-                                page (inc (.indexOf (:order case) physical))
+                                page (inc physical)
                                 projected? (fn [token]
                                              (some (fn [[a b c d]]
                                                      (and (shares-axis? x0 x1 a c)
@@ -419,23 +417,13 @@
                   :let [left (:page a) right (:page b)]]
               {:row row :left left :right right :seam (min left (- page-count 2))})))
 
-(defn seam-marks [order seams left right]
-  (let [a (inc (.indexOf order left))
-        b (inc (.indexOf order right))]
+(defn seam-marks [seams left right]
+  (let [a (inc left)
+        b (inc right)]
     (keep (fn [{:keys [left right kind]}]
             (when (or (and (= a left) (= b right)) (and (= a right) (= b left)))
               kind))
           seams)))
-
-(defn nonadjacent-gap-counts [order seams]
-  (->> seams
-       (keep (fn [{:keys [left right kind]}]
-               (when (#{"possible-gap" "seam-gap"} kind)
-                 (let [[a b :as pair] (sort [(order (dec left)) (order (dec right))])]
-                   (when (> (- b a) 1) pair)))))
-       distinct
-       (map first)
-       frequencies))
 
 (defn evidence-occurrences [case pieces reads]
   (into #{}
@@ -445,7 +433,7 @@
                          (row-read? row (get (:boxes piece) i) (reads page)))]
           i)))
 
-(defn seam-score [case pieces i reads occurrences duplicates seams physical-order]
+(defn seam-score [case pieces i reads occurrences duplicates seams]
   (let [left (pieces i)
         right (pieces (inc i))
         shared (when-not (:other case) (:shared (seam-gold left right)))
@@ -454,11 +442,10 @@
                                          (row-read? (get-in case [:rows %]) (get-in right [:boxes %]) (reads (inc i))))
                                    shared))
         missing (when-not (:other case) (remove occurrences (lost-rows left right)))
-        marks (seam-marks (:order case) seams i (inc i))
+        marks (seam-marks seams i (inc i))
         gap? (some #{"possible-gap" "seam-gap"} marks)
-        in-order? (= (inc (.indexOf physical-order i)) (.indexOf physical-order (inc i)))
         events (map (fn [{:keys [left right] :as copy}]
-                      (assoc copy :marks (seam-marks (:order case) seams left right)))
+                      (assoc copy :marks (seam-marks seams left right)))
                     duplicates)
         same-photo (filter #(= (:left %) (:right %)) events)
         cross-photo (remove #(= (:left %) (:right %)) events)
@@ -471,12 +458,6 @@
      :same-photo-dup (count same-photo)
      :dup (count cross-photo) :unflagged (count unflagged)
      :matched-dup (count (filter #(some #{"overlap"} (:marks %)) cross-photo))
-     :out-of-order-unflagged (count (filter (fn [{:keys [left right]}]
-                                             (and (not= left right)
-                                                  (not= (inc (.indexOf physical-order left))
-                                                        (.indexOf physical-order right))))
-                                           unflagged))
-     :out-of-order-missed-gap (if (and (not in-order?) (seq missing) (not gap?)) 1 0)
      :lost-rows (count missing)
      :lost (if (seq missing) 1 0) :lost-flagged (if (and (seq missing) gap?) 1 0)
      :spurious-gap (if (and (empty? missing) gap?
@@ -484,35 +465,30 @@
                      1 0)}))
 
 (defn case-document [case manifest tiff]
-  (let [paths (mapv :path (:pieces manifest))
-        order (:order case)]
+  (let [paths (mapv :path (:pieces manifest))]
     (if tiff [(:sequence manifest)]
       (into ["--images"] (if-let [other (:other case)]
-                          [(paths (first order)) other]
-                          (mapv paths order))))))
+                          [(first paths) other]
+                          paths)))))
 
 (defn score-case [case manifest separate scan actual control]
   (let [pieces (:pieces manifest)
-        order (:order case)
-        physical-order (if (:other case) [(first order)] order)
+        physical-order (if (:other case) [0] (vec (range (count pieces))))
         physical-pieces (mapv (fn [i] [i (pieces i)]) physical-order)
         text-of #(model-text (:model %))
-        concat-text (str/join " " (map text-of (mapv separate order)))
+        concat-text (str/join " " (map text-of (mapv separate (range (count pieces)))))
         final-text (if actual (text-of actual) concat-text)
         before (mapv line-reads separate)
         after (if actual
                 (let [pages (group-by :page (line-reads actual))]
-                  (mapv #(get pages (inc (.indexOf order %))) (range (count pieces))))
+                  (mapv #(get pages (inc %)) (range (count pieces))))
                 before)
         seams (get-in actual [:evidence :seams])
-        nonadjacent-gaps (nonadjacent-gap-counts order seams)
-        source-order (get-in actual [:evidence :photoOrder] (mapv inc (range (count order))))
-        joined-order (mapv #(order (dec %)) source-order)
         concat-tokens (into [] (mapcat #(output-tokens (:model (separate %)) %) physical-order))
         actual-tokens (when actual
                         (mapv (fn [t] (update t :regions
                                              #(into {} (for [[p box] % :when (<= p (count physical-order))]
-                                                         [(order (dec p)) box]))))
+                                                         [(dec p) box]))))
                               (output-tokens (:model actual) nil)))
         concat-occ (output-occurrences (:rows case) physical-pieces concat-tokens)
         actual-occ (if actual (output-occurrences (:rows case) physical-pieces actual-tokens) concat-occ)
@@ -548,10 +524,9 @@
                      :changed-repeat (if (and control (some #{"identical" "repeat"} [(:kind case)])
                                               (not= (:canonical actual) (:canonical control))) 1 0)}]
     {:kind (:kind case)
-     :order source-order
      :false-merge-rows (vec false-merge-rows)
      :output-duplicates (mapv (fn [event]
-                                (assoc event :marks (vec (seam-marks order seams (:left event) (:right event)))))
+                                (assoc event :marks (vec (seam-marks seams (:left event) (:right event)))))
                               (remove #(= (:left %) (:right %))
                                       (mapcat actual-dup (range (dec (count pieces))))))
      :words {:scan (score-words (:rows case) (text-of scan))
@@ -560,9 +535,8 @@
      :checks case-checks
      :seams (mapv (fn [i left right]
                     {:bucket (if (:careful case) (:kind case) (:bucket (seam-gold left right)))
-                     :concat (seam-score case pieces i before concat-occ (concat-dup i) [] order)
-                     :actual (update (seam-score case pieces i after actual-occ (actual-dup i) seams joined-order)
-                                     :spurious-gap + (get nonadjacent-gaps i 0))})
+                     :concat (seam-score case pieces i before concat-occ (concat-dup i) [])
+                     :actual (seam-score case pieces i after actual-occ (actual-dup i) seams)})
                   (range) pieces (rest pieces))}))
 
 (defn run-case [bin engine mode case manifest tiff]
@@ -879,7 +853,7 @@
               (when sweep (spit checkpoint-file ""))
               (let [manifests (crop-cases python run-dir cases tiff)
                     hashes (mapv (fn [case manifest]
-                                   {:id (:id case) :kind (:kind case) :order (:order case)
+                                   {:id (:id case) :kind (:kind case)
                                     :pieces (if clipped
                                               (into (sorted-map) (map (fn [[edge reading]] [edge (:sha256 reading)])) manifest)
                                               (mapv :sha256 (:pieces manifest)))})

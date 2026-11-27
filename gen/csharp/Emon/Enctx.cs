@@ -456,8 +456,6 @@ public static class Enctx {
         public emon.Port.Cells Mslines = emon.Port.NewCells();
         public emon.Port.Cells Mswords = emon.Port.NewCells();
         public emon.Port.Cells Msorder = emon.Port.NewCells();
-        public emon.Port.Cells Msincoming = emon.Port.NewCells();
-        public emon.Port.Cells Msoutgoing = emon.Port.NewCells();
         public emon.Port.Cells Msaw = emon.Port.NewCells();
         public emon.Port.Cells Msbw = emon.Port.NewCells();
         public emon.Port.Cells Mswordrow = emon.Port.NewCells();
@@ -612,8 +610,6 @@ public static class Enctx {
             emon.Port.CellsCopyInto(c.Mslines, this.Mslines);
             emon.Port.CellsCopyInto(c.Mswords, this.Mswords);
             emon.Port.CellsCopyInto(c.Msorder, this.Msorder);
-            emon.Port.CellsCopyInto(c.Msincoming, this.Msincoming);
-            emon.Port.CellsCopyInto(c.Msoutgoing, this.Msoutgoing);
             emon.Port.CellsCopyInto(c.Msaw, this.Msaw);
             emon.Port.CellsCopyInto(c.Msbw, this.Msbw);
             emon.Port.CellsCopyInto(c.Mswordrow, this.Mswordrow);

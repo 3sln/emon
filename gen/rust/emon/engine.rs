@@ -435,9 +435,9 @@ pub(crate) fn en_stage3(c: &mut crate::emon::enctx::Cfg, d: &mut crate::emon::en
     let trust: i32 = tg_trust(&mut d.ss);
     let mut pending: i32 = 0;
     let mut w: i32 = 0;
-    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut ev.owords, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut d.mscuts, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords, &mut s.msorder, &mut s.msincoming, &mut s.msoutgoing, &mut s.msaw, &mut s.msbw, &mut s.mswordrow);
+    ms_run(np, c.capture, &mut d.mask, &mut m.pages, &mut ev.olines, &mut ev.owords, &mut d.et, &mut d.fl, &mut d.fw, &mut d.mspatch, &mut d.mspixel, &mut d.mscuts, &mut m.ledger, &mut m.text, &mut s.seams, &mut s.mskeys, &mut s.mscode, &mut s.msa, &mut s.msb, &mut s.msdrop, &mut s.mslines, &mut s.mswords, &mut s.msaw, &mut s.msbw, &mut s.mswordrow);
     if c.keep != 0 {
-        ms_evidence(&mut d.evidence, &mut s.seams, &mut s.msorder, &mut d.mask, &mut d.mscuts, c.capture);
+        ms_evidence(&mut d.evidence, &mut s.seams, &mut d.mask, &mut d.mscuts, c.capture);
     }
     fu_find(&mut d.fw, &mut d.fl, &mut d.et, &mut d.gl, &mut d.mk, &mut m.pages, np, &mut d.txt, &mut d.md, &mut d.lb, trust, c.furn, &mut s.cd, &mut s.sl, &mut s.gr, &mut s.ford, &mut s.tx, &mut s.bh, &mut s.fo, &mut s.fp, &mut s.ft, &mut s.pl);
     if c.tabl == 1 {
