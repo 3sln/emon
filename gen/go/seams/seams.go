@@ -1262,24 +1262,9 @@ func msFragmentCovered(et *port.Cells, ow *port.Cells, first int32, count int32,
 	return 0
 }
 
-func msFragmentConfident(ow *port.Cells, first int32, count int32) int32 {
-	var index int32 = first
-	var confidence int32 = 0
-	if (first < 0) || (count < 3) {
-		return 0
-	}
-	for index < (first + count) {
-		confidence += evidence.OwGet(ow, index, evidence.HdConf())
-		index += 1
-	}
-	if confidence >= (count * 700) {
-		return 1
-	}
-	return 0
-}
-
 func msGapEdge(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, fw *port.Cells, keys *port.Cells, pages *port.Cells, cuts *port.Cells, page int32, bottom int32, neighbor *port.Cells, firstNeighbor int32, lastNeighbor int32, dropped *port.Cells, context int32) int32 {
-	// Thin rule ink can make the OCR line box touch the frame while leaving its words intact.
+	// Thin rule ink can make the OCR line box touch the frame while leaving its words intact. An engine can also pad
+	// a complete line's box to the frame, so ink that is only a thin rule at the frame edge (a negative cut) never corroborates a clipped reading.
 	var height int32 = model.PageH(pages, page-1)
 	var pixels int32 = model.PagePxH(pages, page-1)
 	var cut int32 = msCut(cuts, page, bottom)
@@ -1300,7 +1285,7 @@ func msGapEdge(ol *port.Cells, ow *port.Cells, et *port.Cells, fl *port.Cells, f
 			}
 			first = evidence.OlGet(ol, i, evidence.LhFirst())
 			count = evidence.OlGet(ol, i, evidence.LhCount())
-			if ((edge == 0) || ((pixels > 0) && ((int64(edge) * int64(pixels)) <= (int64(height) * int64(4))) && ((int64(edge) * int64(pixels)) >= (int64(height) * int64(-4))))) && ((count == 0) || ((first >= 0) && ((evidence.OwGet(ow, first, evidence.OwfFlags()) & evidence.OeClipped()) != 0))) && ((cut >= 0) || (msFragmentConfident(ow, first, count) == 0)) {
+			if ((edge == 0) || ((pixels > 0) && ((int64(edge) * int64(pixels)) <= (int64(height) * int64(4))) && ((int64(edge) * int64(pixels)) >= (int64(height) * int64(-4))))) && ((count == 0) || ((first >= 0) && ((evidence.OwGet(ow, first, evidence.OwfFlags()) & evidence.OeClipped()) != 0))) && (cut >= 0) {
 				matches = 0
 				j = firstNeighbor
 				for (j < lastNeighbor) && (j < port.CellsLen(neighbor)) {

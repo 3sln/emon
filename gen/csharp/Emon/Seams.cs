@@ -1199,23 +1199,9 @@ public static class Seams {
         }
         return 0;
     }
-    internal static int MsFragmentConfident(emon.Port.Cells ow, int first, int count) {
-        int index = first;
-        int confidence = 0;
-        if ((first < 0) || (count < 3)) {
-            return 0;
-        }
-        while (index < (first + count)) {
-            confidence += Evidence.OwGet(ow, index, Evidence.HdConf());
-            index += 1;
-        }
-        if (confidence >= (count * 700)) {
-            return 1;
-        }
-        return 0;
-    }
     internal static int MsGapEdge(emon.Port.Cells ol, emon.Port.Cells ow, emon.Port.Cells et, emon.Port.Cells fl, emon.Port.Cells fw, emon.Port.Cells keys, emon.Port.Cells pages, emon.Port.Cells cuts, int page, int bottom, emon.Port.Cells neighbor, int firstNeighbor, int lastNeighbor, emon.Port.Cells dropped, int context) {
-        // Thin rule ink can make the OCR line box touch the frame while leaving its words intact.
+        // Thin rule ink can make the OCR line box touch the frame while leaving its words intact. An engine can also pad
+        // a complete line's box to the frame, so ink that is only a thin rule at the frame edge (a negative cut) never corroborates a clipped reading.
         int height = Model.PageH(pages, page - 1);
         int pixels = Model.PagePxH(pages, page - 1);
         int cut = MsCut(cuts, page, bottom);
@@ -1236,7 +1222,7 @@ public static class Seams {
                 }
                 first = Evidence.OlGet(ol, i, Evidence.LhFirst());
                 count = Evidence.OlGet(ol, i, Evidence.LhCount());
-                if (((edge == 0) || ((pixels > 0) && (unchecked(((long) edge) * ((long) pixels)) <= unchecked(((long) height) * ((long) 4))) && (unchecked(((long) edge) * ((long) pixels)) >= unchecked(((long) height) * ((long) -4))))) && ((count == 0) || ((first >= 0) && ((Evidence.OwGet(ow, first, Evidence.OwfFlags()) & Evidence.OeClipped()) != 0))) && ((cut >= 0) || (MsFragmentConfident(ow, first, count) == 0))) {
+                if (((edge == 0) || ((pixels > 0) && (unchecked(((long) edge) * ((long) pixels)) <= unchecked(((long) height) * ((long) 4))) && (unchecked(((long) edge) * ((long) pixels)) >= unchecked(((long) height) * ((long) -4))))) && ((count == 0) || ((first >= 0) && ((Evidence.OwGet(ow, first, Evidence.OwfFlags()) & Evidence.OeClipped()) != 0))) && (cut >= 0)) {
                     matches = 0;
                     j = firstNeighbor;
                     while ((j < lastNeighbor) && (j < emon.Port.CellsLen(neighbor))) {

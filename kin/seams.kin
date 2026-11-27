@@ -745,18 +745,10 @@
           (set start (+ start 1))))
     (return 0)))
 
-(defn ^I32 ms-fragment-confident [^Cells ow ^I32 first ^I32 count]
-  (let [^:mut ^I32 index first ^:mut ^I32 confidence 0]
-    (if (or (< first 0) (< count 3)) (return 0))
-    (while (< index (+ first count))
-      (do (set confidence (+ confidence (ow-get ow index (hd-conf))))
-          (set index (+ index 1))))
-    (if (>= confidence (* count 700)) (return 1))
-    (return 0)))
-
 (defn ^I32 ms-gap-edge [^Cells ol ^Cells ow ^Cells et ^Cells fl ^Cells fw ^Cells keys ^Cells pages
                        ^Cells cuts ^I32 page ^I32 bottom ^Cells neighbor ^I32 first-neighbor ^I32 last-neighbor ^Cells dropped ^I32 context]
-  (comment "Thin rule ink can make the OCR line box touch the frame while leaving its words intact.")
+  (comment "Thin rule ink can make the OCR line box touch the frame while leaving its words intact. An engine can also pad")
+  (comment "a complete line's box to the frame, so ink that is only a thin rule at the frame edge (a negative cut) never corroborates a clipped reading.")
   (let [^I32 height (page-h pages (- page 1)) ^I32 pixels (page-px-h pages (- page 1))
         ^I32 cut (ms-cut cuts page bottom)
         ^:mut ^I32 i 0 ^:mut ^I32 edge 0 ^:mut ^I32 covered 0 ^:mut ^I32 uncovered 0
@@ -773,7 +765,7 @@
                                   (>= (mul64 (i64 edge) (i64 pixels)) (mul64 (i64 height) (i64 -4)))))
                          (or (== count 0)
                              (and (>= first 0) (!= (bit-and (ow-get ow first (owf-flags)) (oe-clipped)) 0)))
-                         (or (>= cut 0) (== (ms-fragment-confident ow first count) 0)))
+                         (>= cut 0))
                   (do (set matches 0) (set j first-neighbor)
                       (while (and (< j last-neighbor) (< j (cells-len neighbor)))
                         (do (if (== (cells-at dropped (cells-at neighbor j)) 0)

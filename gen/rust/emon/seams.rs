@@ -1201,23 +1201,9 @@ pub(crate) fn ms_fragment_covered(et: &mut crate::port::Cells, ow: &mut crate::p
     }
     return 0;
 }
-pub(crate) fn ms_fragment_confident(ow: &mut crate::port::Cells, first: i32, count: i32) -> i32 {
-    let mut index: i32 = first;
-    let mut confidence: i32 = 0;
-    if (first < 0) || (count < 3) {
-        return 0;
-    }
-    while index < (first + count) {
-        confidence += ow_get(ow, index, hd_conf());
-        index += 1;
-    }
-    if confidence >= (count * 700) {
-        return 1;
-    }
-    return 0;
-}
 pub(crate) fn ms_gap_edge(ol: &mut crate::port::Cells, ow: &mut crate::port::Cells, et: &mut crate::port::Cells, fl: &mut crate::port::Cells, fw: &mut crate::port::Cells, keys: &mut crate::port::Cells, pages: &mut crate::port::Cells, cuts: &mut crate::port::Cells, page: i32, bottom: i32, neighbor: &mut crate::port::Cells, first_neighbor: i32, last_neighbor: i32, dropped: &mut crate::port::Cells, context: i32) -> i32 {
-    // Thin rule ink can make the OCR line box touch the frame while leaving its words intact.
+    // Thin rule ink can make the OCR line box touch the frame while leaving its words intact. An engine can also pad
+    // a complete line's box to the frame, so ink that is only a thin rule at the frame edge (a negative cut) never corroborates a clipped reading.
     let height: i32 = page_h(pages, page - 1);
     let pixels: i32 = page_px_h(pages, page - 1);
     let cut: i32 = ms_cut(cuts, page, bottom);
@@ -1238,7 +1224,7 @@ pub(crate) fn ms_gap_edge(ol: &mut crate::port::Cells, ow: &mut crate::port::Cel
             }
             first = ol_get(ol, i, lh_first());
             count = ol_get(ol, i, lh_count());
-            if ((edge == 0) || ((pixels > 0) && ((edge as i64).wrapping_mul(pixels as i64) <= (height as i64).wrapping_mul(4 as i64)) && ((edge as i64).wrapping_mul(pixels as i64) >= (height as i64).wrapping_mul(-4 as i64)))) && ((count == 0) || ((first >= 0) && ((ow_get(ow, first, owf_flags()) & oe_clipped()) != 0))) && ((cut >= 0) || (ms_fragment_confident(ow, first, count) == 0)) {
+            if ((edge == 0) || ((pixels > 0) && ((edge as i64).wrapping_mul(pixels as i64) <= (height as i64).wrapping_mul(4 as i64)) && ((edge as i64).wrapping_mul(pixels as i64) >= (height as i64).wrapping_mul(-4 as i64)))) && ((count == 0) || ((first >= 0) && ((ow_get(ow, first, owf_flags()) & oe_clipped()) != 0))) && (cut >= 0) {
                 matches = 0;
                 j = first_neighbor;
                 while (j < last_neighbor) && (j < crate::port::cells_len(neighbor)) {
