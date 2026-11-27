@@ -66,9 +66,15 @@ String str(JSObject o, String k) => (o[k] as JSString).toDart;
 void main() {
   late Emon bare;
   late bool haveEngines;
+  late bool optedOut;
 
   setUpAll(() async {
     haveEngines = await fetchBytes('${stage}emon/vendor/tesseract/tesseract.esm.min.js') != null;
+    // a missing engine is a FAILURE (the gate, `bb dart-web`); only the deliberate local opt-out (`--no-vendor`, which stages this marker) skips the OCR and render cases
+    optedOut = await fetchBytes('${stage}emon/no-engines') != null;
+    if (!haveEngines && !optedOut) {
+      fail('the tesseract.js and pdfium vendor files are not staged: run `bb dart --web-test` (it prepares the pinned set), or pass --no-vendor to skip the OCR and render cases locally');
+    }
     bare = await Emon.open(web: const WebAssets(sdk: '${stage}emon/sdk/', wasm: '${stage}emon/emon.wasm'));
   });
   tearDownAll(() => bare.close());
@@ -201,7 +207,7 @@ void main() {
 
     test('engines() lists them as built in', () async {
       if (!haveEngines) {
-        markTestSkipped('no vendor files staged (bb dart --web-test --vendor DIR)');
+        markTestSkipped('no engines staged (--no-vendor)');
         return;
       }
       final e = {for (final x in await full.engines()) x.name: x};
@@ -214,7 +220,7 @@ void main() {
     for (final name in ['image-statement.png', 'scan-plain.pdf']) {
       test('$name (OCR) equals the JS SDK\'s, byte for byte', () async {
         if (!haveEngines) {
-          markTestSkipped('no vendor files staged');
+          markTestSkipped('no engines staged (--no-vendor)');
           return;
         }
         final bytes = await sample(name);

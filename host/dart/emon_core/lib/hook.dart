@@ -97,6 +97,9 @@ String _fileName(OS os, String stem) {
 /// Fetch (or find) the C library for the target of [input], and declare each of [libraries] as a bundled code asset of its package.
 Future<void> addNativeAssets(BuildInput input, BuildOutputBuilder output, List<NativeLibrary> libraries) async {
   if (!input.config.buildCodeAssets) return;
+  // the browser tests (`dart test -p chrome`, `bb dart-web`) still run this hook for the host and need no native library: the file they leave declares none
+  // (a hook sees no environment variable of ours, so the signal is a file in the package; it is not under version control)
+  if (File.fromUri(input.packageRoot.resolve('.dart_tool/emon_native_skip')).existsSync()) return;
   final code = input.config.code;
   final triple = targetTriple(code);
   if (triple == null) return;

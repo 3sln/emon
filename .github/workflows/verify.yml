@@ -269,14 +269,22 @@ jobs:
       # package-check (bb package --check) builds the npm tarball with emon.wasm (the pinned nightly, for the unwinding std) and @3sln/pdfium-wasm, and runs the JS
       # consumer; without the wasm target the js host SKIPs, and a SKIP fails the gate. The same three steps as pages.yml.
       - name: The pinned nightly for the WebAssembly module (package-check)
-        if: contains(matrix.gates, 'package-check')
+        if: contains(matrix.gates, 'package-check') || contains(matrix.gates, 'dart-web')
         run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
       - name: pdfium's WebAssembly build (package-check)
-        if: contains(matrix.gates, 'package-check')
+        if: contains(matrix.gates, 'package-check') || contains(matrix.gates, 'dart-web')
         run: bb pdfium-fetch --platform wasm
       - name: tesseract.js and its model (package-check)
-        if: contains(matrix.gates, 'package-check')
+        if: contains(matrix.gates, 'package-check') || contains(matrix.gates, 'dart-web')
         run: npm ci --prefix host/js
+      - name: Dart SDK (dart-web)
+        if: contains(matrix.gates, 'dart-web')
+        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2 (the v1 tag's commit)
+        with:
+          sdk: stable
+      - name: Chrome (dart-web; preinstalled on ubuntu-latest, this fails if it is not)
+        if: contains(matrix.gates, 'dart-web')
+        run: google-chrome --version
       - name: bb gates ${{ matrix.gates }}
         run: bb gates ${{ matrix.gates }}
       - name: Optional PP npm package (separate from the default SDK)

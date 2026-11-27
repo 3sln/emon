@@ -13,9 +13,11 @@
 ;;   bb dart --stamp DIR [--publishable] [--sums SHA256SUMS]  copy host/dart to DIR with `0.0.0-dev` replaced by version.edn's version (--publishable: hosted dependencies, no publish_to: none: what pub.dev gets;
 ;;                                    --sums: also write the SHA-256 table of that release's SHA256SUMS into the COPY, as --sha-table does into the checkout: what `release-ops dart` attaches, D900)
 ;;   bb dart --web-stage DIR [--wasm FILE] [--vendor DIR]  stage the files the web backend runs on and the browser test reads (DEVLOG D9xx): the JS SDK (host/js/src) as DIR/emon/sdk, emon.wasm (default: the
-;;                                    staged npm package's, dist/stage/js, else the wasm build's output in .cache/emon-wasm) as DIR/emon/emon.wasm, the samples and fixtures the test converts, and, with --vendor
+;;                                    staged npm package's, dist/stage/js, else kin/scripts/emon-wasm-build's) as DIR/emon/emon.wasm, the samples and fixtures the test converts, and, with --vendor
 ;;                                    (a directory with `tesseract/` and `pdfium/`, as `bb demo` builds them), the engines as DIR/emon/vendor
-;;   bb dart --web-test [--wasm FILE] [--vendor DIR] [--platform P]  stage into host/dart/emon_core/test/web_stage and run `dart test -p chrome test/web` there (P: chrome, default); needs Chrome (CHROME_EXECUTABLE)
+;;   bb dart --web-test [--wasm FILE] [--vendor DIR | --no-vendor] [--platform P]  stage into host/dart/emon_core/test/web_stage and run `dart test -p chrome test/web` there (P: chrome, default); needs Chrome (CHROME_EXECUTABLE).
+;;                                    THE GATE `bb dart-web`: the vendor set (tesseract.js, its model and pdfium's wasm build) is the pinned one, prepared by default (pdfium.edn's SHA-256, package-lock.json's integrity
+;;                                    hashes; the same files the demo and Pages ship) and a missing engine FAILS the tests; --no-vendor is the local opt-out that skips the OCR and render cases (refused when CI is set)
 ;;   bb dart --analyze                `dart analyze` for every package
 ;;   bb dart --test                   `dart test` for every pure-Dart package (needs `EMON_NATIVE_DIR`: a directory with the C archive(s) of `bb package --host c`)
 ;;   bb dart --check                  the drift checks and --analyze
@@ -185,8 +187,49 @@
 (defn find-wasm []
   (or (opt "--wasm")
       (System/getenv "EMON_WASM")
-      (first (filter fs/exists? ["dist/stage/js/emon.wasm" ".cache/emon-wasm/target/wasm32-unknown-unknown/release/emon.wasm"]))
-      (die "no emon.wasm: build it (`bb package --host js`, or kin/scripts/wasm) or pass --wasm FILE")))
+      (first (filter fs/exists? ["dist/stage/js/emon.wasm"]))
+      ;; else build it from THIS tree (the pinned nightly, incremental; never a cached module of an older tree, which lacks the current exports)
+      (let [r (sh {} "kin/scripts/emon-wasm-build")]
+        (when (zero? (:exit r)) (str/trim (:out r))))
+      (die "no emon.wasm and it did not build: `bb package --host js`, kin/scripts/emon-wasm-build, or pass --wasm FILE")))
+
+;; THE VENDOR SET the OCR and render cases need (D9xx). The same pinned sources the demo and the Pages build use (tools/demo/build.clj): pdfium's WebAssembly build from
+;; tools/pdfium/pdfium.edn (`bb pdfium-fetch --platform wasm` checks the archive's SHA-256 before unpacking it), and tesseract.js, its LSTM cores and the English model from
+;; host/js/package-lock.json (`npm ci --prefix host/js` checks every package's integrity hash). Nothing else is downloaded.
+(def vendor-default ".cache/dart-web/vendor")
+
+(defn vendor-prepare! []
+  (let [pin (edn/read-string (slurp "tools/pdfium/pdfium.edn"))
+        pd (str ".cache/pdfium/" (str/replace (:version pin) "/" "-") "/wasm")
+        nm "host/js/node_modules"
+        tess-ok? #(fs/exists? (str nm "/tesseract.js/dist/worker.min.js"))]
+    (when-not (fs/exists? (str pd "/lib/pdfium.mjs"))
+      (say "fetching the pinned pdfium wasm build (bb pdfium-fetch --platform wasm)")
+      (sh! {} "bb" "pdfium-fetch" "--platform" "wasm"))
+    (when-not (tess-ok?)
+      (say "installing tesseract.js and its model (npm ci --prefix host/js)")
+      (sh! {} "npm" "ci" "--prefix" "host/js" "--no-audit" "--no-fund"))
+    (let [need (concat [(str pd "/lib/pdfium.mjs") (str pd "/lib/pdfium.wasm")]
+                       (for [f ["tesseract.esm.min.js" "worker.min.js"]] (str nm "/tesseract.js/dist/" f))
+                       (for [f ["tesseract-core-relaxedsimd-lstm.wasm.js" "tesseract-core-simd-lstm.wasm.js"]] (str nm "/tesseract.js-core/" f))
+                       [(str nm "/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz")])]
+      (doseq [f need :when (not (fs/exists? f))] (die "the vendor set is missing " f)))
+    (fs/delete-tree vendor-default)
+    (doseq [f ["pdfium.mjs" "pdfium.wasm" "LICENSE"]] (fs/create-dirs (str vendor-default "/pdfium")) (fs/copy (str pd (if (= f "LICENSE") "/" "/lib/") f) (str vendor-default "/pdfium/" f)))
+    (fs/create-dirs (str vendor-default "/tesseract/core"))
+    (fs/create-dirs (str vendor-default "/tesseract/lang"))
+    (doseq [f ["tesseract.esm.min.js" "worker.min.js"]] (fs/copy (str nm "/tesseract.js/dist/" f) (str vendor-default "/tesseract/" f)))
+    (doseq [f ["tesseract-core-relaxedsimd-lstm.wasm.js" "tesseract-core-simd-lstm.wasm.js"]] (fs/copy (str nm "/tesseract.js-core/" f) (str vendor-default "/tesseract/core/" f)))
+    (fs/copy (str nm "/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz") (str vendor-default "/tesseract/lang/eng.traineddata.gz"))
+    vendor-default))
+
+(defn vendor-dir
+  "The vendor directory the stage copies: --vendor DIR, else the pinned set prepared here; nil only with --no-vendor (a local opt-out, refused in CI)."
+  []
+  (cond (opt "--vendor") (opt "--vendor")
+        (flag? "--no-vendor") (do (when (System/getenv "CI") (die "--no-vendor is a local opt-out: CI runs the OCR and render cases"))
+                                  nil)
+        :else (vendor-prepare!)))
 
 (defn web-stage! [dir]
   (fs/delete-tree dir)
@@ -195,19 +238,23 @@
   (fs/copy (find-wasm) (str dir "/emon/emon.wasm"))
   (fs/create-dirs (str dir "/samples"))
   (doseq [s web-samples] (fs/copy s (str dir "/samples/" (fs/file-name s))))
-  (when-let [v (opt "--vendor")]
+  (if-let [v (vendor-dir)]
     (doseq [d ["tesseract" "pdfium"]]
       (when-not (fs/directory? (str v "/" d)) (die v " has no " d "/"))
-      (fs/copy-tree (str v "/" d) (str dir "/emon/vendor/" d))))
-  (say "staged the web backend's files in " dir (when-not (opt "--vendor") " (no engines: pass --vendor DIR for tesseract.js and pdfium)")))
+      (fs/copy-tree (str v "/" d) (str dir "/emon/vendor/" d)))
+    ;; the deliberate opt-out: the test reads this marker and skips (loudly) its OCR and render cases; without it a missing engine FAILS
+    (spit (str dir "/emon/no-engines") "--no-vendor\n"))
+  (say "staged the web backend's files in " dir (when (flag? "--no-vendor") " (NO engines: --no-vendor, the OCR and render cases will be skipped)")))
 
 (defn web-test! []
   (let [pkg (str dart-root "/emon_core")]
     (web-stage! (str pkg "/test/web_stage"))
     (sh! {:dir pkg} "dart" "pub" "get")
+    ;; the build hook runs for the host even under -p chrome; the browser needs no native library, so the hook is told to declare none (lib/hook.dart)
+    (spit (str pkg "/.dart_tool/emon_native_skip") "")
     (let [r (sh {:dir pkg} "dart" "test" "-p" (or (opt "--platform") "chrome") "test/web")]
       (print (:out r)) (print (:err r)) (flush)
-      (if (zero? (:exit r)) (say "ok   dart test -p chrome test/web") (die "the web tests failed")))))
+      (if (zero? (:exit r)) (say "  ok   dart test -p chrome test/web" (when (flag? "--no-vendor") " (without the engines)")) (die "the web tests failed")))))
 
 ;; ------------------------------------------------------------------------------------------------ main
 

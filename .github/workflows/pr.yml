@@ -82,6 +82,24 @@ jobs:
           path: emon
           fetch-depth: 0
       - uses: ./emon/.github/actions/setup
+      # the Dart web gate (bb dart-web) has no --fast variant and runs in full here: the pinned nightly (emon.wasm), pdfium's wasm build, tesseract.js and its model, a Dart SDK, Chrome
+      - name: The pinned nightly for the WebAssembly module (dart-web)
+        if: contains(matrix.full, 'dart-web')
+        run: rustup toolchain install nightly-2026-09-16 -c rust-src -t wasm32-unknown-unknown
+      - name: pdfium's WebAssembly build (dart-web)
+        if: contains(matrix.full, 'dart-web')
+        run: bb pdfium-fetch --platform wasm
+      - name: tesseract.js and its model (dart-web)
+        if: contains(matrix.full, 'dart-web')
+        run: npm ci --prefix host/js
+      - name: Dart SDK (dart-web)
+        if: contains(matrix.full, 'dart-web')
+        uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2 (the v1 tag's commit)
+        with:
+          sdk: stable
+      - name: Chrome (dart-web; preinstalled on ubuntu-latest, this fails if it is not)
+        if: contains(matrix.full, 'dart-web')
+        run: google-chrome --version
       - name: FAST variants (a labelled subset)
         if: matrix.fast != ''
         env:

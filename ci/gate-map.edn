@@ -70,7 +70,8 @@
   {:name "png-check" :gates ["png-check"] :corpus true}
   {:name "asset"     :gates ["asset"]}
   {:name "image"     :gates ["image"] :corpus true}
-  {:name "package"   :gates ["package-check"]}]
+  {:name "package"   :gates ["package-check"]}
+  {:name "dart-web"  :gates ["dart-web"]}]
 
  ;; :full and :fast are wall seconds on the maintainer's machine, warm caches, one gate at a time, `corpus/` absent (as on a pull request), while the machine was shared (load average
  ;; 15 to 110): read them as orders of magnitude, not as runner times. A cold GitHub runner adds the toolchain builds (Java, .NET, C, the pod), which the --fast variants mostly skip.
@@ -204,7 +205,7 @@
   {:glob "tools/oracle/**" :gates [] :why "python oracles for baselines (run by `bb baselines`); not gates"}
   {:glob "tools/parbench/**" :gates [] :why "a benchmark"}
   {:glob "tools/perf/**" :gates [] :why "the perf comparators (`bb perf`): a report, not a gate"}
-  {:glob "tools/pdfium/**" :gates ["render" "pdfium-wasm"] :why "the pinned pdfium and its fetcher (native and the wasm build): the render and pdfium-wasm transcripts are recorded with it"}
+  {:glob "tools/pdfium/**" :gates ["render" "pdfium-wasm" "dart-web"] :why "the pinned pdfium and its fetcher (native and the wasm build): the render and pdfium-wasm transcripts are recorded with it"}
   {:glob "tools/pdfium_wasm/**" :gates ["pdfium-wasm"] :why "the pdfium-wasm recorder (live, through the JS SDK in Node) and its digests"}
   {:glob "site/**" :gates [] :why "website content, styles and translations; fast core site and site-selftest hold it (D629)"}
   {:glob "tools/site/**" :gates [] :why "website generator and checks; fast core site and site-selftest hold them (D629)"}
@@ -230,8 +231,9 @@
   {:glob "host/java/**" :gates ["@host"] :hosts ["java"] :why "the Java host"}
   {:glob "host/csharp/**" :gates ["@host"] :hosts ["csharp"] :why "the C# host"}
   {:glob "host/c/**" :gates ["@host"] :hosts ["c"] :why "the C library and its header"}
-  {:glob "host/dart/**" :gates [] :why "the Dart and Flutter packages (K7, D884, D885, D895): `bb dart --check` (bindings and pack catalogue drift, analyze), `bb dart --test` and `bb package --host dart --check` need a Dart 3.10+ SDK, a C archive and (the plugin) a Flutter SDK: not a hosted gate yet (K5 owns the release pipeline)"}
-  {:glob "tools/dart.clj" :gates [] :why "`bb dart` (K7): the Dart packages' generator, stamp and test driver; not a gate"}
+  {:glob "host/dart/**" :gates ["dart-web"] :why "the Dart and Flutter packages (K7, D884, D885, D895): the Dart web backend's browser test (`bb dart-web`, D921: headless Chrome, dart2js, the wasm build and the JS SDK) is a hosted gate; `bb dart --check`, `bb dart --test` (needs a C archive) and `bb package --host dart --check` (a Flutter SDK for the plugin) are not yet (K5 owns the release pipeline)"}
+  {:glob "tools/dart.clj" :gates ["dart-web"] :why "`bb dart` (K7): the Dart packages' generator, stamp and test driver; its --web-test is the dart-web gate"}
+  {:glob "host/js/{src/**,package.json,package-lock.json}" :gates ["dart-web"] :why "the JS SDK, tesseract.js and its model are what the Dart web backend drives and the browser test stages (D921)"}
   {:glob ".github/workflows/pub.yml" :gates [] :why "the disabled pub.dev publish workflow (K7, D885): runs on a tag pushed by the release (K5, D905), only when EMON_PUB_ENABLED is true"}
   {:glob "host/pod/**" :gates ["@host"] :hosts ["pod"] :why "the babashka pod"}
   {:glob "host/{wasm,js}/**" :gates ["@host"] :hosts ["wasm"] :why "the WASM binding and the JS SDK"}
