@@ -5,6 +5,7 @@ import (
 	"os"
 
 	emon "github.com/3sln/emon/go"
+	"github.com/3sln/emon/go/adapterlib"
 	"github.com/3sln/emon/go/pdfium"
 )
 
@@ -18,6 +19,7 @@ func main() {
 	}
 	options := emon.DefaultOptions()
 	engines := emon.NewEngines() // OCR engines are registered adapters, never wired in
+	engines.SetLoader(adapterlib.Load) // opens adapter libraries (cgo, macOS and Linux)
 	defer engines.Close()
 	if err := engines.Defaults(options); err != nil { // lib/emon/adapters beside the program, or $EMON_ADAPTER_DIR
 		panic(err)

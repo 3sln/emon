@@ -1,10 +1,19 @@
 //go:build cgo && (darwin || linux)
 
-package emon
-
-// The Go host's loader of adapter libraries (DEVLOG D925, K3): `dlopen`, the one export `emon_ocr_adapter_v1` of `host/c/include/emon_adapter.h` (ABI 1) and the calls through
-// the adapter's function pointers. It copies buffers and decides nothing: registration, routing and the held-to-what-it-registered checks are `engines.go`'s, kin's. The library
-// needs nothing of libemon, and neither does this loader: this is how Go reaches Tesseract, through `libemon_ocr_tesseract`, instead of linking libtesseract (the twin it replaces).
+// Package adapterlib is the Go host's loader of adapter libraries (DEVLOG D925, K3): `dlopen`, the one export `emon_ocr_adapter_v1` of `host/c/include/emon_adapter.h` (ABI 1)
+// and the calls through the adapter's function pointers. It copies buffers and decides nothing: registration, routing and the held-to-what-it-registered checks are
+// `emon.Engines`', kin's. The library needs nothing of libemon, and neither does this loader: this is how Go reaches Tesseract, through `libemon_ocr_tesseract`, instead of
+// linking libtesseract (the twin it replaces).
+//
+// It is a package of its own, as `pdfium` is, because cgo changes how a program is built: the root package stays pure Go (so `CGO_ENABLED=0` and cross-compiles work, and a
+// program that only replays or brings its own engine links no C), and a program that loads adapter libraries imports this one and says so:
+//
+//	engines := emon.NewEngines()
+//	engines.SetLoader(adapterlib.Load)
+//
+// On macOS (Apple silicon) a cgo program is linked by the system linker, which signs it, and the Go linker then rewrites the file and breaks the signature, so the kernel kills it
+// at launch (exit 137): build it with `-ldflags=-w`, or sign it again (`codesign -s - -f ./program`).
+package adapterlib
 
 /*
 #cgo linux LDFLAGS: -ldl
@@ -62,6 +71,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"emon"
 	"emon/adapters"
 	"emon/ocr"
 	"emon/plan"
@@ -71,7 +81,7 @@ import (
 type libAdapter struct {
 	a    *C.emon_ocr_adapter
 	lib  unsafe.Pointer
-	info AdapterInfo
+	info emon.AdapterInfo
 }
 
 func statusText(st *C.emon_adapter_status, fallback string) (string, string) {
@@ -85,7 +95,8 @@ func statusText(st *C.emon_adapter_status, fallback string) (string, string) {
 	return r, m
 }
 
-func loadAdapter(path, config, packsDir string) (Adapter, error) {
+// Load opens the adapter library at path (`emon_ocr_adapter_v1`) with the adapter's own config (key=value lines) and the pack directory (or ""). It is an `emon.Loader`.
+func Load(path, config, packsDir string) (emon.Adapter, error) {
 	cp := C.CString(path)
 	defer C.free(unsafe.Pointer(cp))
 	var derr [512]C.char
@@ -122,7 +133,7 @@ func loadAdapter(path, config, packsDir string) (Adapter, error) {
 		C.ad_close(a)
 		return nil, fmt.Errorf("adapter-describe-failed: %s: %s", r, m)
 	}
-	info := AdapterInfo{Name: C.GoString(a.name), Engine: uint32(raw.engine), Caps: uint32(raw.caps), Measured: uint32(raw.native), Needs: uint32(raw.needs), Flags: uint32(raw.flags),
+	info := emon.AdapterInfo{Name: C.GoString(a.name), Engine: uint32(raw.engine), Caps: uint32(raw.caps), Measured: uint32(raw.native), Needs: uint32(raw.needs), Flags: uint32(raw.flags),
 		Config: C.GoString(raw.config), Observed: C.GoString(raw.observed)}
 	if info.Name == "" {
 		info.Name = "adapter"
@@ -135,7 +146,7 @@ func loadAdapter(path, config, packsDir string) (Adapter, error) {
 	return &libAdapter{a: a, lib: lib, info: info}, nil
 }
 
-func (l *libAdapter) Info() AdapterInfo { return l.info }
+func (l *libAdapter) Info() emon.AdapterInfo { return l.info }
 
 func (l *libAdapter) Close() {
 	if l.a != nil {
@@ -144,20 +155,20 @@ func (l *libAdapter) Close() {
 	}
 }
 
-func (l *libAdapter) Read(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (Reading, error) {
+func (l *libAdapter) Read(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (emon.Reading, error) {
 	b := bm[req.Field(plan.OcBitmap())]
 	if b == nil || len(b.D) == 0 || len(req.Rec) == 0 {
-		return Reading{}, &port.FulfilError{Msg: "ocr-adapter-invalid: " + l.info.Name + ": the request names no bitmap"}
+		return emon.Reading{}, &port.FulfilError{Msg: "ocr-adapter-invalid: " + l.info.Name + ": the request names no bitmap"}
 	}
 	if l.a == nil {
-		return Reading{}, &port.FulfilError{Msg: "ocr-adapter-invalid: " + l.info.Name + ": closed"}
+		return emon.Reading{}, &port.FulfilError{Msg: "ocr-adapter-invalid: " + l.info.Name + ": closed"}
 	}
 	rec := (*C.int32_t)(unsafe.Pointer(&req.Rec[0]))
 	n := C.size_t(len(req.Rec))
 	var st C.emon_adapter_status
 	if C.ad_supports(l.a, rec, n, &st) != 0 {
 		r, _ := statusText(&st, "unsupported")
-		return Reading{Status: AdapterUnsupported, Reason: r}, nil
+		return emon.Reading{Status: emon.AdapterUnsupported, Reason: r}, nil
 	}
 	img := C.emon_adapter_image{width: C.int32_t(b.W), height: C.int32_t(b.H), channels: C.int32_t(b.Ch), stride: C.int32_t(b.W * b.Ch), pixels: (*C.uint8_t)(unsafe.Pointer(&b.D[0])), dpi: C.int32_t(ocr.OcfDpi(req.Field(plan.OcFlags())))}
 	var out C.emon_adapter_answer
@@ -171,14 +182,14 @@ func (l *libAdapter) Read(req port.PlanRequest, bm port.PlanBitmaps, keepBinary 
 		if out.cells != nil || out.owner != nil {
 			C.ad_release(l.a, &out)
 		}
-		s := AdapterFailed
-		if int32(rc) == AdapterUnsupported {
-			s = AdapterUnsupported
+		s := emon.AdapterFailed
+		if int32(rc) == emon.AdapterUnsupported {
+			s = emon.AdapterUnsupported
 		}
-		return Reading{Status: s, Reason: r}, nil
+		return emon.Reading{Status: s, Reason: r}, nil
 	}
 	defer C.ad_release(l.a, &out)
-	r := Reading{}
+	r := emon.Reading{}
 	if out.cells != nil {
 		r.Rec = append([]int32(nil), unsafe.Slice((*int32)(unsafe.Pointer(out.cells)), int(out.ncells))...)
 	}

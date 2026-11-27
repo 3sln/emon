@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"emon"
+	"emon/adapterlib"
 	"emon/port"
 	"encoding/binary"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 func main() {
 	// PP-OCR alone, through the registry: the adapter library is registered, no Tesseract is
 	p := emon.NewEngines()
+	p.SetLoader(adapterlib.Load)
 	lib, models := os.Getenv("EMON_PPOCR_LIB"), os.Getenv("EMON_PPOCR_MODELS")
 	if lib == "" {
 		lib = ".cache/ppocr/libemon_ppocr_adapter." + map[bool]string{true: "dylib", false: "so"}[runtime.GOOS == "darwin"]

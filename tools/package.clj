@@ -166,13 +166,16 @@
 ;; ------------------------------------------------------------------------------------------------------ the Go module
 
 (def go-module "github.com/3sln/emon/go")
-(def go-public #{"port" "planrun" "pdfium"}) ; host packages an embedder names; every other package is generated or plumbing and goes under internal/
+(def go-public #{"port" "planrun" "pdfium" "adapterlib"}) ; host packages an embedder names; every other package is generated or plumbing and goes under internal/
 
 (defn- go-rewrite
   "The imports of the assembled module (`emon/X`) as the published module's."
   [text]
-  (str/replace text #"\"emon/(\w+)\""
-               (fn [[_ x]] (str "\"" go-module "/" (if (go-public x) x (str "internal/" x)) "\""))))
+  (-> text
+      (str/replace #"\"emon/(\w+)\""
+                   (fn [[_ x]] (str "\"" go-module "/" (if (go-public x) x (str "internal/" x)) "\"")))
+      ;; the root package, imported by the host packages that implement its ports (`adapterlib`)
+      (str/replace #"(?m)^(\s*)\"emon\"$" (str "$1emon \"" go-module "\""))))
 
 (defn- go-tree
   "dir -> the module tree: [rel-path text-or-source]."
@@ -186,6 +189,7 @@
       (into {} (for [f (gos "host/go/port") :when (not= f "testport.go")] (mk (str "port/" f) (str "host/go/port/" f))))
       (into {} (for [f (gos "host/go/planrun")] (mk (str "planrun/" f) (str "host/go/planrun/" f))))
       (into {} (for [f (gos "host/go/pdfium")] (mk (str "pdfium/" f) (str "host/go/pdfium/" f))))
+      (into {} (for [f (gos "host/go/adapterlib")] (mk (str "adapterlib/" f) (str "host/go/adapterlib/" f))))
       (into {} (for [f (gos "host/go/pngenc")] (mk (str "internal/pngenc/" f) (str "host/go/pngenc/" f))))
       {"go.mod" "release/pkg/go/go.mod"}
       common-files)))
@@ -198,10 +202,10 @@
         out (out-dir :go)
         modroot (str (stage-dir :go) "/zip/" go-module "@" tag)]
     ;; the tree a tag is cut from (the publish job, P11.10, commits it as go/ and tags go/vX.Y.Z)
-    (stage! tree files ["internal" "port" "planrun" "pdfium"])
+    (stage! tree files ["internal" "port" "planrun" "pdfium" "adapterlib"])
     (let [r (run {:dir tree :ok? false} "go" "build" "./...")]
       (when-not (zero? (:exit r)) (bad! "go build ./... of the module tree failed\n" (tail (str (:out r) (:err r)) 40))))
-    (let [r (run {:dir tree :ok? false} "go" "vet" "." "./port" "./planrun")]
+    (let [r (run {:dir tree :ok? false} "go" "vet" "." "./port" "./planrun" "./adapterlib")]
       (when-not (zero? (:exit r)) (bad! "go vet of the module tree failed\n" (tail (str (:out r) (:err r)) 40))))
     ;; the module zip: every entry under `module@version/`, no directory entries (what `go mod download` gives, golang.org/x/mod/zip)
     (fs/delete-tree (str (stage-dir :go) "/zip"))
@@ -1025,8 +1029,8 @@
           (str "import { readFile } from 'node:fs/promises';\n"
                "import { Emon } from '@3sln/emon';\n"
                "import { pdfiumRenderer } from '@3sln/emon/pdfium';\n"
-               "import { tesseractPort } from '@3sln/emon/tesseract';\n"
-               "if (typeof pdfiumRenderer !== 'function' || typeof tesseractPort !== 'function') throw new Error('subpath exports');\n"
+               "import { tesseractAdapter } from '@3sln/emon/tesseract';\n"
+               "if (typeof pdfiumRenderer !== 'function' || typeof tesseractAdapter !== 'function') throw new Error('subpath exports');\n"
                "const emon = await Emon.load(await readFile(new URL(import.meta.resolve('@3sln/emon/emon.wasm'))));\n"
                "const model = await emon.convert(await readFile('report.pdf'));\n"
                "if (Object.keys(model).some((k) => k === 'w' || k === 'h')) throw new Error('the handles are enumerable');\n"
@@ -1198,7 +1202,7 @@
 
 (defn- consume-js-ppocr [{:keys [files]} tmp]
   (run {:dir tmp} "npm" "install" "--ignore-scripts" "--no-audit" "--legacy-peer-deps" (first files))
-  (run {:dir tmp} "node" "--input-type=module" "-e" "import {ppocrPort, ppocrAdapter, ppocrLexicon, ppocrAssets} from '@3sln/emon-ppocr'; if (![ppocrPort,ppocrAdapter,ppocrLexicon,ppocrAssets].every(x=>typeof x === 'function')) process.exit(1)")
+  (run {:dir tmp} "node" "--input-type=module" "-e" "import {ppocrEngine, ppocrAdapter, ppocrLexicon, ppocrAssets} from '@3sln/emon-ppocr'; if (![ppocrEngine,ppocrAdapter,ppocrLexicon,ppocrAssets].every(x=>typeof x === 'function')) process.exit(1)")
   :checked)
 
 (def consumers {:dart consume-dart :ppocr consume-ppocr :js-ppocr consume-js-ppocr :rust consume-rust :go consume-go :java consume-java :csharp consume-csharp :js consume-js :c consume-c :pod consume-pod})

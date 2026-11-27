@@ -2,12 +2,12 @@ package emon
 
 // THE ENGINE REGISTRY, Go host (DEVLOG D925, K3; the twin of `host/rust/src/adapter.rs` and `host/c/include/emon_adapter.h`, D899).
 //
-// An OCR engine is an ADAPTER that is registered, never wired: a library with the one export `emon_ocr_adapter_v1` (`Engines.Load`, cgo, `adapter_cgo.go`) or an
+// An OCR engine is an ADAPTER that is registered, never wired: a library with the one export `emon_ocr_adapter_v1` (`Engines.Load`, cgo, `host/go/adapterlib`) or an
 // in-process value (`Engines.Add`). Kin decides every rule and this file only carries them out: what an adapter may declare (`adapters.AdRegisterCheck`, against the engine
 // table), which adapter a request goes to (`adapters.AdRoute`: the first registered for the OIL engine the request names), what an unread page is (`adapters.AdRefusal`) and
 // what an answer is held to (`adapters.AdAnswerCheck`, `oil.OilRecordCheckBitmap`). `*Engines` is itself the `Ocr` port: `Config.Ocr = engines`.
 //
-// Sync adapters only: one that says it is `AdapterAsync` is refused by name until this host has a mailbox. Remote adapters (pixels leave the device) are refused unless
+// Loading a library needs a loader (`SetLoader(adapterlib.Load)`, the cgo package `host/go/adapterlib`), so this package stays pure Go. Sync adapters only: one that says it is `AdapterAsync` is refused by name until this host has a mailbox. Remote adapters (pixels leave the device) are refused unless
 // `AllowRemote` was set first.
 
 import (
@@ -71,8 +71,12 @@ type Adapter interface {
 	Close()
 }
 
+// Loader opens the adapter library at path with its own config (key=value lines) and the pack directory (or ""): `adapterlib.Load`.
+type Loader func(path, config, packsDir string) (Adapter, error)
+
 // Engines is the registry. The zero value is not usable: NewEngines.
 type Engines struct {
+	loader      Loader
 	mu          sync.Mutex
 	entries     []*entry
 	allowRemote bool
@@ -89,6 +93,9 @@ type entry struct {
 
 // NewEngines is an empty registry: no adapter, nothing loaded, nothing fetched.
 func NewEngines() *Engines { return &Engines{} }
+
+// SetLoader names how adapter libraries are opened (`adapterlib.Load`). Without one `Load` and `Defaults` say so; `Add` of an in-process adapter needs none.
+func (e *Engines) SetLoader(l Loader) { e.mu.Lock(); e.loader = l; e.mu.Unlock() }
 
 // AllowRemote lets adapters that send the pixels off the device register (default no: documents may hold personal data). Call it before registering them.
 func (e *Engines) AllowRemote(allow bool) { e.mu.Lock(); e.allowRemote = allow; e.mu.Unlock() }
@@ -139,7 +146,13 @@ func hasProducerKey(p [][2]string, k string) bool {
 
 // Load registers the adapter library at path (`emon_ocr_adapter_v1`); config is the adapter's own `key=value` lines, packsDir the pack directory (or "").
 func (e *Engines) Load(path, config, packsDir string) error {
-	a, err := loadAdapter(path, config, packsDir)
+	e.mu.Lock()
+	load := e.loader
+	e.mu.Unlock()
+	if load == nil {
+		return errNoAdapterLoader
+	}
+	a, err := load(path, config, packsDir)
 	if err != nil {
 		return err
 	}
@@ -382,4 +395,4 @@ func (e *Engines) Fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary b
 	return a, nil
 }
 
-var errNoAdapterLoader = errors.New("this build cannot load adapter libraries (needs cgo on macOS or Linux)")
+var errNoAdapterLoader = errors.New("adapter-load-failed: no loader: engines.SetLoader(adapterlib.Load) (github.com/3sln/emon/go/adapterlib, cgo, macOS and Linux)")

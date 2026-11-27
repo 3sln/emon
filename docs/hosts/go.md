@@ -134,8 +134,10 @@ neither, a request for them is answered `unsupported` and the text layer stands 
   (`adapter-caps-beyond-engine`, `adapter-remote-refused`, ...); a request goes to the adapter registered for the engine it names; an adapter that cannot read leaves the page
   unread, never blank; an answer is held to what the adapter registered (`ocr-adapter-invalid`). `engines.SetTessdata(dir)` names the Tesseract models (else `$EMON_TESSDATA`,
   `$TESSDATA_PREFIX`, `share/emon/tessdata` beside the program); `engines.Describe()` lists the adapters; `engines.Notes()` says why requests were left unread; `engines.Close()`
-  ends them. Loading a library needs cgo (macOS and Linux); a build without it can still `Add` in-process adapters. Go links no Tesseract: there is no build tag, and the
-  Apple-silicon launch kill that a `-tags tesseract` build had (the Go linker rewriting a cgo binary's signature) no longer applies.
+  ends them. Loading a library is the package `github.com/3sln/emon/go/adapterlib` (cgo, macOS and Linux), which a program names with `engines.SetLoader(adapterlib.Load)`; the root package stays pure Go
+  (`CGO_ENABLED=0` and cross-compiles work, and `Add` of an in-process adapter needs no loader). Go links no Tesseract and has no build tag. **On macOS (Apple silicon) a program that imports
+  `adapterlib` is killed at launch** (exit 137) unless you build it with `-ldflags=-w` or sign it again, ad hoc: `codesign -s - -f ./yourbinary` (the Go linker rewrites the cgo
+  binary the system linker signed, which breaks the signature; `-w` leaves the DWARF out so nothing is rewritten).
 
 This program converts a scan with both. It is built by `bb package --check` against the built module, and on a machine that has pdfium and the Tesseract adapter library
 installed (`$EMON_ADAPTER_DIR`) also run (it prints a NOTE and skips that on one that does not, as a CI runner does):
@@ -146,6 +148,7 @@ import (
 	"os"
 
 	emon "github.com/3sln/emon/go"
+	"github.com/3sln/emon/go/adapterlib"
 	"github.com/3sln/emon/go/pdfium"
 )
 
@@ -153,20 +156,23 @@ renderer, err := pdfium.Open("") // "": $EMON_PDFIUM_LIB, then the system's sear
 if err != nil {
 	panic(err) // *pdfium.Unavailable: the library was not found
 }
-ocr, err := emon.NewTessOcr("") // "": $TESSDATA_PREFIX and the usual places (build with -tags tesseract)
-if err != nil {
+options := emon.DefaultOptions()
+engines := emon.NewEngines() // OCR engines are registered adapters, never wired in
+engines.SetLoader(adapterlib.Load) // opens adapter libraries (cgo, macOS and Linux)
+defer engines.Close()
+if err := engines.Defaults(options); err != nil { // lib/emon/adapters beside the program, or $EMON_ADAPTER_DIR
 	panic(err)
 }
 config := emon.DefaultConfig()
 config.Renderer = renderer
-config.Ocr = ocr
+config.Ocr = engines
 engine := emon.NewEngine(config)
 
 data, err := os.ReadFile("scan.pdf")
 if err != nil {
 	panic(err)
 }
-model, err := engine.Convert([]emon.Input{emon.BytesInput(data)}, emon.DefaultOptions())
+model, err := engine.Convert([]emon.Input{emon.BytesInput(data)}, options)
 if err != nil {
 	panic(err)
 }
@@ -188,12 +194,32 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 367 entries, and 11 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 401 entries, and 8 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
 | Name | Signature |
 |---|---|
+| `emon.Adapter` | `interface` |
+| `emon.Adapter.Close` | `()` |
+| `emon.Adapter.Info` | `() AdapterInfo` |
+| `emon.Adapter.Read` | `(req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (Reading, error)` |
+| `emon.AdapterAsync` | `const uint32 = 1` |
+| `emon.AdapterFailed` | `const int32 = 2` |
+| `emon.AdapterInfo` | `struct` |
+| `emon.AdapterInfo.Caps` | `field uint32` |
+| `emon.AdapterInfo.Config` | `field string` |
+| `emon.AdapterInfo.Engine` | `field uint32` |
+| `emon.AdapterInfo.Flags` | `field uint32` |
+| `emon.AdapterInfo.Measured` | `field uint32` |
+| `emon.AdapterInfo.Name` | `field string` |
+| `emon.AdapterInfo.Needs` | `field uint32` |
+| `emon.AdapterInfo.Observed` | `field string` |
+| `emon.AdapterInfo.Producer` | `field [][2]string` |
+| `emon.AdapterOK` | `const int32 = 0` |
+| `emon.AdapterRemote` | `const uint32 = 2` |
+| `emon.AdapterThreadsafe` | `const uint32 = 4` |
+| `emon.AdapterUnsupported` | `const int32 = 1` |
 | `emon.Asset` | `struct +unexported` |
 | `emon.Asset.Bytes` | `() []byte` |
 | `emon.Asset.DPI` | `() (int32, bool)` |
@@ -267,6 +293,19 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Engine.Intake` | `ptr (inputs []Input) ([]Intake, error)` |
 | `emon.Engine.Record` | `ptr (inputs []Input, opts Options) (*Model, *Transcript, error)` |
 | `emon.Engine.Replay` | `ptr (inputs []Input, opts Options, t *Transcript) (*Model, error)` |
+| `emon.Engines` | `struct +unexported` |
+| `emon.Engines.Add` | `ptr (a Adapter) error` |
+| `emon.Engines.AllowRemote` | `ptr (allow bool)` |
+| `emon.Engines.Close` | `ptr ()` |
+| `emon.Engines.Defaults` | `ptr (opts Options) error` |
+| `emon.Engines.Describe` | `ptr () []AdapterInfo` |
+| `emon.Engines.Fulfil` | `ptr (req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (port.PlanAnswer, error)` |
+| `emon.Engines.Load` | `ptr (path, config, packsDir string) error` |
+| `emon.Engines.Notes` | `ptr () []string` |
+| `emon.Engines.Producer` | `ptr () [][2]string` |
+| `emon.Engines.SetAdapterDir` | `ptr (dir string)` |
+| `emon.Engines.SetLoader` | `ptr (l Loader)` |
+| `emon.Engines.SetTessdata` | `ptr (dir string)` |
 | `emon.ErrDamaged` | `const [iota+11]` |
 | `emon.ErrEncryptionUnsupported` | `const [iota+7]` |
 | `emon.ErrIO` | `const [iota+15]` |
@@ -331,6 +370,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Kind` | `type int32` |
 | `emon.Kind.Name` | `() string` |
 | `emon.KindNamed` | `(name string) (Kind, bool)` |
+| `emon.Loader` | `type func(path, config, packsDir string) (Adapter, error)` |
 | `emon.Model` | `struct +unexported` |
 | `emon.Model.Asset` | `ptr (id int32) (Asset, bool)` |
 | `emon.Model.AssetFiles` | `ptr () []AssetFile` |
@@ -348,10 +388,9 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Model.ToJSON` | `ptr (o JSONOptions) string` |
 | `emon.NewBytesSource` | `(b []byte) *BytesSource` |
 | `emon.NewEngine` | `(cfg Config) *Engine` |
+| `emon.NewEngines` | `() *Engines` |
 | `emon.NewInput` | `(src ByteSource) Input` |
-| `emon.NewPpOcr` | `(dir string, incumbent Ocr) (*PpOcr, error)` |
 | `emon.NewSeekSource` | `(r io.ReadSeeker) (*SeekSource, error)` |
-| `emon.NewTessOcr` | `(tessdata string) (Ocr, error)` |
 | `emon.Node` | `struct +unexported` |
 | `emon.Node.Asset` | `() (Asset, bool)` |
 | `emon.Node.Attr` | `(name string) (Attr, bool)` |
@@ -423,11 +462,12 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.PdfPix.H` | `field int32` |
 | `emon.PdfPix.Px` | `field []byte` |
 | `emon.PdfPix.W` | `field int32` |
-| `emon.PpOcr` | `struct +unexported` |
-| `emon.PpOcr.Close` | `ptr ()` |
-| `emon.PpOcr.Fulfil` | `ptr (req port.PlanRequest, bitmaps port.PlanBitmaps, keep bool) (port.PlanAnswer, error)` |
-| `emon.PpOcr.Producer` | `ptr () [][2]string` |
 | `emon.ReaderAtInput` | `(r io.ReaderAt, size int64) Input` |
+| `emon.Reading` | `struct` |
+| `emon.Reading.Binary` | `field *port.Bitmap` |
+| `emon.Reading.Reason` | `field string` |
+| `emon.Reading.Rec` | `field []int32` |
+| `emon.Reading.Status` | `field int32` |
 | `emon.Region` | `struct` |
 | `emon.Region.Page` | `field int32` |
 | `emon.Region.X0` | `field int32` |
@@ -566,9 +606,6 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 
 | Name | Signature |
 |---|---|
-| `emon.TessOcr` | `struct +unexported` |
-| `emon.TessOcr.Fulfil` | `ptr (req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (port.PlanAnswer, error)` |
-| `emon.TessOcr.Producer` | `ptr () [][2]string` |
 | `pdfium.New` | `() *Pdfium` |
 | `pdfium.Open` | `(libDirOrFile string) (*Pdfium, error)` |
 | `pdfium.Pdfium` | `type struct` |

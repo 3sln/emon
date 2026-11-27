@@ -334,6 +334,7 @@ func main() {
 	var registry *emon.Engines
 	if (tess || opts.PpOcr || ppAlone) && replay == "" {
 		registry = emon.NewEngines()
+		registry.SetLoader(liveLoader())
 		registry.SetTessdata(tessdata)
 		if err := registry.Defaults(opts); err != nil {
 			usage(err.Error())

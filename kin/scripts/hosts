@@ -41,8 +41,7 @@
   (mapv (fn [[role file mods]] {:role role :file file :mods (set (remove str/blank? (str/split mods #"\s+")))})
         [[:driver  "host/rust/src/engine.rs"            "config enctx engine engines html json model plan planloop"]
          [:machine "host/rust/src/plan.rs"              "adapters engines plan planctx planloop pngcheck pngread transcript transcriptctx"]
-         [:driver "host/rust/src/session.rs" "ocr ocrport ocrtess oil plan"]
-         [:port    "host/rust/src/imgdec.rs"            "ccitt imgcheck pngcheck tiffcheck"]
+         [:driver "host/rust/src/session.rs" X            "ccitt imgcheck pngcheck tiffcheck"]
          [:port    "host/rust/src/pdfimg.rs"            "ccitt"]
          [:port    "host/rust/src/port.rs"              "limits"]
          [:port    "host/rust/src/render.rs"            "plan"]
@@ -51,7 +50,7 @@
          [:test "host/rust/tests/adapters.rs" "engines ocrengine oil"]
          [:port    "host/rust/src/ppocr_abi.rs" "engines ocrengine oil ocrport plan"]
          [:port    "host/go/engines.go" "adapters engines oil ocrport plan"]
-         [:port    "host/go/adapter_cgo.go" "adapters ocr plan"]
+         [:port    "host/go/adapterlib/adapterlib.go" "adapters ocr plan"]
          [:port "host/rust/src/ppocr.rs" "evidence ocr ocrengine ocrport oil plan"]
          ;; K8 (D901): the platform OCR ports are ports like tess.rs and ppocr.rs. They build OIL answers with the same builders, read a request's languages through kin's `emon.ocrloc` (the
          ;; locale tables of ruling 7) and its engine configuration (`emon.ocrengine`), and hold no policy: what an engine may declare, which locale a language is and what a request must say are kin's.

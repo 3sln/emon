@@ -18,14 +18,14 @@
 # `bb emit` is NOT run here: callers that must be current run it first.
 set -e
 cd "$(dirname "$0")/../.."
-# LIVE (D211, D539, D925): EMON_GO_LIVE=1 builds the same module with the `pdfium` tag (the driver's `--pdfium`: host/go/pdfium, cgo for dlopen only, nothing
+# LIVE (D211, D539, D925): EMON_GO_LIVE=1 builds the same module with the `adapters` tag (the driver loads adapter libraries: host/go/adapterlib, cgo for dlopen only) and the `pdfium` tag (the driver's `--pdfium`: host/go/pdfium, cgo for dlopen only, nothing
 # of pdfium is linked; the library is found at run time, EMON_PDFIUM_LIB) into .cache/emon-go-live; it is NOT a gate's (a gate replays a transcript). OCR engines are
-# adapter libraries the registry loads at run time (host/go/engines.go: EMON_ADAPTER_DIR, EMON_PPOCR_LIB), so no engine is linked and no build tag names one.
+# adapter libraries the registry loads at run time (host/go/engines.go: EMON_ADAPTER_DIR, EMON_PPOCR_LIB), so no engine is linked.
 mod=.cache/emon-go
 tags=""
 # `emontest` (P11.4, D542): the driver's test hooks (host/go/testhooks.go: SetNoRetarget); never a consumer's, and not in the published module
 build_tags="-tags emontest"
-if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags pdfium"; build_tags="-tags pdfium,emontest"; fi
+if [ "${EMON_GO_LIVE:-}" = 1 ]; then mod=.cache/emon-go-live; tags="-tags pdfium,adapters"; build_tags="-tags pdfium,adapters,emontest"; fi
 mkdir -p "$mod/port" "$mod/pngenc" "$mod/planrun" "$mod/cmd/emon-go"
 
 put() { cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
@@ -40,7 +40,7 @@ for d in gen/go/*/; do
 done
 for d in "$mod"/*/; do
   m=$(basename "$d")
-  case "$m" in port|pngenc|planrun|pdfium|cmd) continue ;; esac
+  case "$m" in port|pngenc|planrun|pdfium|adapterlib|cmd) continue ;; esac
   case " $keep " in *" $m "*) ;; *) rm -rf "$d" ;; esac
 done
 for f in host/go/port/*.go; do
@@ -50,8 +50,9 @@ done
 put host/go/pngenc/pngenc.go "$mod/pngenc/pngenc.go"
 for f in host/go/planrun/*.go; do put "$f" "$mod/planrun/$(basename "$f")"; done
 for f in host/go/*.go; do put "$f" "$mod/$(basename "$f")"; done
-mkdir -p "$mod/pdfium"
+mkdir -p "$mod/pdfium" "$mod/adapterlib"
 for f in host/go/pdfium/*.go; do put "$f" "$mod/pdfium/$(basename "$f")"; done
+for f in host/go/adapterlib/*.go; do put "$f" "$mod/adapterlib/$(basename "$f")"; done
 for f in test/driver/go/*.go; do put "$f" "$mod/cmd/emon-go/$(basename "$f")"; done
 printf 'module emon\n\ngo 1.21\n' > "$mod/go.mod.new"
 put "$mod/go.mod.new" "$mod/go.mod"
