@@ -31,3 +31,6 @@ __pycache__/
 tools/perf/target-checked/
 /dist/
 /.cpcache/
+
+# spool workspace lease markers
+.spool-leases/
