@@ -1181,9 +1181,9 @@
       "keep": true,
       "reason": "derived PP qualification artifact; regenerate with bb ppocr-hosts --record-qualification",
       "regeneratable": false,
-      "digest": "baff9ee9cd26af7b980ecce3f488023d2fde2ef9df8a839011c678119d44bdb1",
-      "size": 1012222134,
-      "files": 3209
+      "digest": "08bdfb10fffc5ea0de11dccd00841702433094a7935fafdaeaf3ac057e62136e",
+      "size": 1016940026,
+      "files": 3462
     },
     {
       "id": "local-unregistered",

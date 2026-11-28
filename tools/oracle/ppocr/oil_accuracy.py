@@ -45,7 +45,10 @@ def main():
                         help='Development measurement only; writes partial-accuracy.json')
     args = parser.parse_args()
     cases = json.loads((args.qualification / 'replays.json').read_text())
-    references = {'sroie': (0.701436, 0.756857), 'cord': (0.469098, 0.696764)}
+    # D926 (ratchet authority, a directed change): re-based from D864's published .701436/.756857 and .469098/.696764
+    # (D919 still met them) to this run's values. D918's edge-clipped marks drop 23 clipped lines from the fixed 120
+    # (D919 had none), which costs CORD word recall .0038 and moves SROIE precision +.0006.
+    references = {'sroie': (0.701727, 0.756572), 'cord': (0.468941, 0.693002)}
     if args.partial_dataset:
         references = {args.partial_dataset: references[args.partial_dataset]}
         print('PARTIAL dataset measurement; full qualification is not accepted')
