@@ -44,10 +44,10 @@ public sealed unsafe class AdapterLib : IAdapter {
     /// <summary>Opens the adapter library at path.</summary>
     public static AdapterLib Open(string path, string config, string packsDir) {
         if (!NativeLibrary.TryLoad(path, out nint lib)) {
-            throw new Unavailable($"adapter-load-failed: {path} did not load");
+            throw new Unavailable($"adapter-runtime-missing: {path} did not load");
         }
         if (!NativeLibrary.TryGetExport(lib, "emon_ocr_adapter_v1", out nint sym)) {
-            throw new Unavailable($"adapter-load-failed: {path} has no emon_ocr_adapter_v1");
+            throw new Unavailable($"adapter-runtime-missing: {path} has no emon_ocr_adapter_v1");
         }
         using var a = new Native.Arena();
         Status st = default;

@@ -103,10 +103,10 @@ func Load(path, config, packsDir string) (emon.Adapter, error) {
 	var derr [512]C.char
 	lib := C.ad_dlopen(cp, &derr[0], C.size_t(len(derr)))
 	if lib == nil {
-		return nil, fmt.Errorf("adapter-load-failed: %s: %s", path, C.GoString(&derr[0]))
+		return nil, fmt.Errorf("adapter-runtime-missing: %s: %s", path, C.GoString(&derr[0]))
 	}
 	if C.ad_has_export(lib) == 0 {
-		return nil, fmt.Errorf("adapter-load-failed: %s has no emon_ocr_adapter_v1", path)
+		return nil, fmt.Errorf("adapter-runtime-missing: %s has no emon_ocr_adapter_v1", path)
 	}
 	var cfg, packs *C.char
 	if config != "" {

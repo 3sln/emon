@@ -54,9 +54,9 @@ public final class AdapterLib implements OcrEngines.Adapter {
             try {
                 lib = SymbolLookup.libraryLookup(Path.of(path).toAbsolutePath(), arena);
             } catch (Throwable e) {
-                throw new Unavailable("adapter-load-failed: " + path + " did not load");
+                throw new Unavailable("adapter-runtime-missing: " + path + " did not load");
             }
-            MemorySegment sym = lib.find("emon_ocr_adapter_v1").orElseThrow(() -> new Unavailable("adapter-load-failed: " + path + " has no emon_ocr_adapter_v1"));
+            MemorySegment sym = lib.find("emon_ocr_adapter_v1").orElseThrow(() -> new Unavailable("adapter-runtime-missing: " + path + " has no emon_ocr_adapter_v1"));
             MethodHandle opener = LINK.downcallHandle(sym, FunctionDescriptor.of(P, P, P, P));
             MemorySegment st = arena.allocate(STATUS);
             // locals, not conditionals inside the call: a conditional argument of invokeExact is typed Object and the call then fails with WrongMethodTypeException
