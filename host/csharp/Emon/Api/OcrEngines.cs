@@ -116,7 +116,7 @@ public sealed class OcrEngines : IOcr, IDisposable {
                 if (emon.Engines.PkEngineKind(eng) == emon.Engines.EkindOcr() && stem.Contains(n.Replace('-', '_'))) { engine = n; break; }
             }
         }
-        bool own = config != null && config.Split('\n').Any(l => l.StartsWith("tessdata="));
+        bool own = !string.IsNullOrEmpty(packsDir) || (config != null && config.Split('\n').Any(l => l.StartsWith("tessdata=")));
         if (string.IsNullOrEmpty(packsDir) && engine != "") {
             packsDir = packs.View(engine);
         }
