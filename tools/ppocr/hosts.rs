@@ -16,7 +16,7 @@ fn main() {
         let at = emon::emon::plan::rq_ocr(&mut request, 2, 1, 3, 0, 0, 0, 0, 0);
         emon::emon::plan::rq_ocr_lang(&mut request, 101, 110, 103, 0);
         emon::emon::plan::rq_ocr_end(&mut request, at);
-        emon::emon::ocrengine::oe_tag(&mut request, &mut emon::port::Cells::new(), 1);
+        emon::emon::ocrengine::oe_select(&mut request, at, 2);
         let n = emon::port::cells_len(&request);
         let mut out = Vec::new();
         for v in [n, image.width() as i32, image.height() as i32, 3] {

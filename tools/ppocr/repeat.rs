@@ -20,7 +20,7 @@ fn main() {
     let at = emon::emon::plan::rq_ocr(&mut request, 2, 1, 3, 0, 0, 0, 0, 0);
     emon::emon::plan::rq_ocr_lang(&mut request, 101, 110, 103, 0);
     emon::emon::plan::rq_ocr_end(&mut request, at);
-    emon::emon::ocrengine::oe_tag(&mut request, &mut Cells::new(), 1);
+    emon::emon::ocrengine::oe_select(&mut request, at, 2);
     let request = emon::plan::Request::new(
         (0..cells_len(&request))
             .map(|i| cells_at(&request, i))

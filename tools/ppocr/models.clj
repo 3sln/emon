@@ -21,7 +21,7 @@
 (def rust ".cache/emon-rs-ppocr/target/release/emon-rs")
 (def hosts [["rust" rust] ["go" ".cache/emon-go-live/emon-go"] ["java" ".cache/emon-java/emon-java"]
             ["csharp" ".cache/emon-cs/emon-cs"] ["c" ".cache/emon-c-live/emon-c"] ["pod" ".cache/emon-pod/emon-pod"] ["rust-native" ".cache/emon-rs-live/target/release/emon-rs"]])
-(def k2-hosts #{"c" "pod" "rust-native"})
+(def k2-hosts #{"c" "pod" "rust-native" "go" "java" "csharp"}) ; D925: every host registers the PP adapter through the registry, so a missing pack or runtime is K2's refusal name everywhere
 (def model-dir (str (fs/absolutize ".cache/ppocr")))
 (def tessdata (str out "/tessdata"))
 (let [pins (:models (edn/read-string (slurp "tools/tessdata/models.edn")))
@@ -59,6 +59,8 @@
    "EMON_OFFLINE" "1"
    "EMON_MODELS" (str models java.io.File/pathSeparator tessdata)
    "EMON_TESSDATA" tessdata
+   ;; Go, Java and C# register Tesseract (the hybrid's primary) from the adapter library, as the C driver is told to (D925): none is wired in
+   "EMON_ADAPTER_DIR" (str (fs/parent tess-adapter))
    "EMON_PPOCR_MODELS" models
    "EMON_PPOCR_LIB" adapter
    "TESSDATA_PREFIX" tessdata})
