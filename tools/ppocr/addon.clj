@@ -119,7 +119,7 @@
     (doseq [f (fs/list-dir "release/licenses") :when (fs/regular-file? f)] (fs/copy f (str stage "/licenses/" (fs/file-name f))))
     (doseq [file ["LICENSE" "ThirdPartyNotices.txt"] :when (fs/exists? (str ort "/" file))]
       (fs/copy (str ort "/" file) (str stage "/licenses/ORT-" file)))
-    (doseq [[src dst] [["LICENSE" "LICENSE"] ["THIRD_PARTY_NOTICES.md" "THIRD_PARTY_NOTICES.md"] ["docs/ppocr.md" "README.md"] ["host/native/include/emon_ppocr.h" "emon_ppocr.h"]]]
+    (doseq [[src dst] [["LICENSE" "LICENSE"] ["THIRD_PARTY_NOTICES.md" "THIRD_PARTY_NOTICES.md"] ["docs/ppocr.md" "README.md"]]]
       (fs/copy src (str stage "/" dst)))
     (spit (str stage "/SHA256SUMS") (apply str (for [f (sort (fs/glob stage "**")) :when (fs/regular-file? f)]
       (str (sha f) "  " (fs/relativize stage f) "\n"))))

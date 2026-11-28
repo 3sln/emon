@@ -851,6 +851,155 @@ public class EngineTest {
         }
     }
 
+
+    // The packs (D928): the hook's four decisions, never and a hook, a download the app supplies, events and cancel, engines() and prepare().
+    static byte[] realEnglish() throws Exception {
+        for (String c : new String[] {".cache/native/aarch64-apple-darwin/share/tessdata/eng.traineddata", ".cache/tessdata/eng.traineddata", "share/emon/tessdata/eng.traineddata"}) {
+            Path p = ROOT.resolve(c);
+            if (Files.isRegularFile(p)) {
+                return Files.readAllBytes(p);
+            }
+        }
+        return null;
+    }
+
+    static String lastNote(emon.api.OcrEngines e) {
+        List<String> n = e.notes();
+        return n.isEmpty() ? "" : n.get(n.size() - 1);
+    }
+
+    static void packSurface() throws Exception {
+        byte[] eng = realEnglish();
+        if (eng == null) {
+            System.out.println("  SKIP packs: no eng.traineddata under ROOT");
+            return;
+        }
+        byte[] tampered = eng.clone();
+        tampered[100] ^= 1;
+        Port.Cells c = Port.newCells();
+        emon.Plan.rqOcrEnd(c, emon.Plan.rqOcr(c, 7, 1, 3, 0, 0, 0, 0, 0));
+        Planrun.Request req = new Planrun.Request(Port.cellsVec(c));
+        Map<Integer, Port.Bitmap> bm = Map.of(1, new Port.Bitmap(4, 4, 1, new byte[16]));
+        Path root = Files.createTempDirectory("emon-packs-");
+        try {
+            java.util.function.Function<Integer, emon.api.OcrEngines> fresh = n -> {
+                emon.api.OcrEngines e = new emon.api.OcrEngines();
+                e.packs().setStore(root.resolve("store" + n));
+                StubAdapter a = new StubAdapter(1, 0, 4);
+                a.i.needs = 1;
+                a.r.status = emon.api.OcrEngines.FAILED;
+                a.r.reason = "stub-read";
+                e.add(a);
+                return e;
+            };
+            // never: the page is unread with pack-missing, the adapter is not asked, and a hook is not asked either
+            emon.api.OcrEngines e1 = fresh.apply(1);
+            int[] asked = {0};
+            e1.packs().onPackNeeded(r -> {
+                asked[0]++;
+                return emon.api.Packs.PackDecision.provideBytes(eng);
+            });
+            check(e1.fulfil(req, bm, false).rec[3] == emon.Plan.psUnsupported() && asked[0] == 0, "never wins over the hook (it is not asked)");
+            check(lastNote(e1).contains("pack-missing:tess-fast-eng"), "the page is unread with pack-missing");
+            String stateNever = e1.state();
+            check(stateNever.contains("\"name\":\"tesseract\"") && stateNever.contains("\"registered\":true") && stateNever.contains("\"state\":\"unavailable\""), "engines() says tesseract is registered and unavailable: " + stateNever);
+            check(e1.prepare("").contains("\"verdict\":\"blocked\""), "prepare is blocked under never");
+            // cache + provide: verified, kept, the adapter reads and is given its view
+            emon.api.OcrEngines e2 = fresh.apply(2);
+            e2.packs().setMode(emon.api.Packs.Mode.CACHE);
+            e2.packs().onPackNeeded(r -> {
+                asked[0]++;
+                check(r.pack.equals("tess-fast-eng") && r.engine.equals("tesseract") && r.bytes == eng.length, "the hook is told the pack");
+                return emon.api.Packs.PackDecision.provideBytes(eng);
+            });
+            e2.fulfil(req, bm, false);
+            check(asked[0] == 1 && lastNote(e2).equals("stub: failed stub-read") && Files.isRegularFile(root.resolve("store2/tess-fast-eng/eng.traineddata")), "provided bytes are verified, kept and the adapter reads");
+            check(Files.isRegularFile(root.resolve("store2/.views/tesseract/eng.traineddata")), "the adapter's view holds the pack");
+            check(e2.state().contains("\"installed\":true"), "engines() sees the installed pack");
+            e2.fulfil(req, bm, false);
+            check(asked[0] == 1, "an installed pack is not asked for again");
+            // tampered bytes are refused and nothing is kept
+            emon.api.OcrEngines e3 = fresh.apply(3);
+            e3.packs().setMode(emon.api.Packs.Mode.CACHE);
+            e3.packs().onPackNeeded(r -> emon.api.Packs.PackDecision.provideBytes(tampered));
+            e3.fulfil(req, bm, false);
+            check(lastNote(e3).contains("pack-hash-mismatch:tess-fast-eng") && !Files.exists(root.resolve("store3/tess-fast-eng/eng.traineddata")), "tampered bytes are refused and nothing is kept");
+            // a provided path (a file) and a decline
+            Path file = root.resolve("app-eng.traineddata");
+            Files.write(file, eng);
+            emon.api.OcrEngines e4 = fresh.apply(4);
+            e4.packs().setMode(emon.api.Packs.Mode.CACHE);
+            e4.packs().onPackNeeded(r -> emon.api.Packs.PackDecision.providePath(file.toString()));
+            e4.fulfil(req, bm, false);
+            check(lastNote(e4).equals("stub: failed stub-read"), "a provided path is verified and used");
+            emon.api.OcrEngines e5 = fresh.apply(5);
+            e5.packs().setMode(emon.api.Packs.Mode.CACHE);
+            e5.packs().onPackNeeded(r -> emon.api.Packs.PackDecision.decline());
+            e5.fulfil(req, bm, false);
+            check(lastNote(e5).contains("pack-missing:tess-fast-eng"), "a decline leaves the page unread");
+            // auto: a fetch with no download supplied, then with one: events and verification
+            emon.api.OcrEngines e6 = fresh.apply(6);
+            e6.packs().setMode(emon.api.Packs.Mode.AUTO);
+            check(e6.prepare("").contains("\"verdict\":\"downloadable\""), "prepare is downloadable under auto");
+            e6.fulfil(req, bm, false);
+            check(lastNote(e6).contains("pack-fetch-unavailable:tess-fast-eng"), "no download supplied: pack-fetch-unavailable (the library has no HTTP client)");
+            List<String> seen = new ArrayList<>();
+            e6.packs().onPackEvent(ev -> {
+                seen.add(ev.kind + (ev.byApp ? "a" : "l"));
+                return false;
+            });
+            e6.packs().setFetcher((pack, name, bytes, progress) -> {
+                progress.test(bytes / 2);
+                progress.test(bytes);
+                return eng;
+            });
+            e6.fulfil(req, bm, false);
+            check(seen.equals(List.of("1l", "2l", "2l", "3l")) && lastNote(e6).equals("stub: failed stub-read"), "a supplied download: START, PROGRESS, DONE, then the adapter reads: " + seen);
+            // the app's own ensure, and a cancel from the progress callback
+            emon.api.OcrEngines e7 = fresh.apply(7);
+            e7.packs().setMode(emon.api.Packs.Mode.AUTO);
+            List<String> seen7 = new ArrayList<>();
+            e7.packs().setFetcher((pack, name, bytes, progress) -> {
+                progress.test(bytes / 2);
+                return eng;
+            });
+            e7.packs().onPackEvent(ev -> {
+                seen7.add(ev.kind + (ev.byApp ? "a" : "l"));
+                return ev.kind == emon.api.Packs.EVENT_PROGRESS;
+            });
+            check(refusal(() -> e7.packs().ensure("tess-fast-eng")).startsWith("pack-fetch-cancelled:tess-fast-eng") && seen7.equals(List.of("1a", "2a", "5a")), "a cancel from the progress callback: " + seen7);
+            check(!Files.exists(root.resolve("store7/tess-fast-eng/eng.traineddata")), "a cancelled pack is not kept");
+            e7.packs().onPackEvent(null);
+            e7.packs().ensure("tess-fast-eng");
+            check(Files.isRegularFile(root.resolve("store7/tess-fast-eng/eng.traineddata")), "ensure fetches ahead of time");
+            // a download that is not the catalogue's
+            emon.api.OcrEngines e8 = fresh.apply(8);
+            e8.packs().setMode(emon.api.Packs.Mode.AUTO);
+            e8.packs().setFetcher((pack, name, bytes, progress) -> tampered);
+            check(refusal(() -> e8.packs().ensure("tess-fast-eng")).startsWith("pack-hash-mismatch:tess-fast-eng"), "a tampered download is refused");
+            // substitute: only another implementation of the same OIL engine
+            emon.api.OcrEngines e9 = fresh.apply(9);
+            e9.packs().setMode(emon.api.Packs.Mode.CACHE);
+            e9.packs().onPackNeeded(r -> emon.api.Packs.PackDecision.substitute("ppocr"));
+            e9.fulfil(req, bm, false);
+            check(lastNote(e9).contains("pack-substitute-differs:ppocr"), "another engine would answer under its own name");
+            e9.packs().onPackNeeded(r -> emon.api.Packs.PackDecision.substitute("tesseract"));
+            e9.fulfil(req, bm, false);
+            check(lastNote(e9).contains("pack-substitute-unavailable:tesseract"), "no other adapter of the engine is registered");
+            StubAdapter second = new StubAdapter(1, 0, 4);
+            second.i.name = "second";
+            second.r.status = emon.api.OcrEngines.FAILED;
+            second.r.reason = "second-read";
+            e9.add(second);
+            e9.fulfil(req, bm, false);
+            check(second.reads == 1 && lastNote(e9).equals("second: failed second-read"), "the app's substitute is another adapter of the same engine");
+        } finally {
+            try (var w = Files.walk(root)) {
+                w.sorted(java.util.Comparator.reverseOrder()).forEach(q -> q.toFile().delete());
+            }
+        }
+    }
+
     static void renderPort() throws Exception {
         FakeRenderer r = new FakeRenderer(false);
         RenderPort.Fulfiller f = RenderPort.Fulfiller.forInput(r, 0, new RenderPort.Input(ByteSource.of(new byte[4]), null));
@@ -1125,6 +1274,7 @@ public class EngineTest {
             run("assets", EngineTest::assets);
             run("decode-img: the host's codecs, the embedder's, and the payload", EngineTest::decodeImg);
             run("the engine registry: registration, routing, unread-never-blank, answers held to what was registered", EngineTest::engineRegistry);
+            run("the packs: hook decisions, verified bytes, the app's download, events, engines() and prepare()", EngineTest::packSurface);
             run("the Renderer port's fulfiller", EngineTest::renderPort);
             run("parallel: the serial Model and transcript, and the OCR of a multi-page scan overlapped", EngineTest::parallelModel);
             run("parallel: a renderer and an OCR port are called as often as in a serial run", EngineTest::parallelPorts);

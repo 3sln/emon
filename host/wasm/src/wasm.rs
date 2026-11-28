@@ -388,6 +388,68 @@ pub unsafe extern "C" fn emon_adapter_route(oen: i32, iptr: u32, icells: u32) ->
     guard(|| shared::adapter_route(oen, &ints_from(iptr, icells)))
 }
 
+// THE PACK RULES (D925, P13.16), kin's, for the JS SDK's `engines.packs`: each answers its text in OUT and its length.
+#[no_mangle]
+pub extern "C" fn emon_pack_catalogue() -> i32 {
+    guard(|| {
+        let s = shared::pack_catalogue();
+        put_str(&s);
+        s.len() as i32
+    })
+}
+
+// `ad-asks-hook` (bit 8 of the answer) and `ad-pack-action` (the low bits) for a pack: present (1/0), the pack mode, offline (1/0), a hook set (1/0), what the hook decided (0 none).
+#[no_mangle]
+pub extern "C" fn emon_pack_action(present: i32, mode: i32, offline: i32, hook: i32, decision: i32) -> i32 {
+    guard(|| shared::pack_action(present, mode, offline, hook, decision) | (shared::pack_asks(present, mode, offline, hook) << 8))
+}
+
+// The kin engine an OIL engine answers as (-1 when none), and the kin engine named by the UTF-8 at `ptr`.
+#[no_mangle]
+pub extern "C" fn emon_pack_oen_eng(oen: i32) -> i32 {
+    guard(|| shared::pack_oen_eng(oen))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn emon_pack_eng_find(ptr: u32, len: u32) -> i32 {
+    guard(|| shared::pack_eng_find(&String::from_utf8_lossy(bytes(ptr, len))))
+}
+
+// `pk-resolve`: JSON `{"rows":[[state,engine,pack,lang]..]}` or `{"error":..}` in OUT. `engines`, `langs` (packed), `installed` (pack codes): i32 arrays.
+#[no_mangle]
+pub unsafe extern "C" fn emon_pack_resolve(osd: i32, lptr: u32, ln: u32, eptr: u32, en: u32, iptr: u32, inn: u32) -> i32 {
+    guard(|| {
+        let s = shared::pack_resolve(osd != 0, &ints_from(lptr, ln), &ints_from(eptr, en), &ints_from(iptr, inn));
+        put_str(&s);
+        s.len() as i32
+    })
+}
+
+// `engines()`: the registered OIL engines, whether a renderer is registered, the pack codes held, the mode, offline, and the store's name (UTF-8) -> JSON in OUT.
+#[no_mangle]
+pub unsafe extern "C" fn emon_pack_describe(optr: u32, on: u32, renderer: i32, iptr: u32, inn: u32, mode: i32, offline: i32, sptr: u32, slen: u32) -> i32 {
+    guard(|| {
+        let s = shared::pack_describe(&ints_from(optr, on), renderer != 0, &ints_from(iptr, inn), mode, offline != 0, &String::from_utf8_lossy(bytes(sptr, slen)));
+        put_str(&s);
+        s.len() as i32
+    })
+}
+
+// `prepare(options)`: the options text, the pack codes held, the mode, offline -> JSON in OUT, or -1 with the message in OUT.
+#[no_mangle]
+pub unsafe extern "C" fn emon_pack_prepare(tptr: u32, tlen: u32, iptr: u32, inn: u32, mode: i32, offline: i32) -> i32 {
+    guard(|| match shared::pack_prepare(&String::from_utf8_lossy(bytes(tptr, tlen)), &ints_from(iptr, inn), mode, offline != 0) {
+        Ok(s) => {
+            put_str(&s);
+            s.len() as i32
+        }
+        Err(m) => {
+            put_str(&m);
+            -1
+        }
+    })
+}
+
 // The bitmap a request names (an `ocr` request's `bitmap` argument, or the answer of any request already answered), as a
 // canonical PNG in OUT: what the host's recogniser reads. Answers the PNG's length, or -1.
 #[no_mangle]

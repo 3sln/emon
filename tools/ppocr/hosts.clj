@@ -48,8 +48,8 @@
 (def ext (if (= "Mac OS X" (System/getProperty "os.name")) "dylib" "so"))
 (when (= ext "dylib") (run! "adapter-install-name" ["install_name_tool" "-id" "@rpath/libemon_ppocr_adapter.dylib" ".cache/ppocr/libemon_ppocr_adapter.dylib"]))
 (when (= ext "dylib") (run! "adapter-sign" ["codesign" "--force" "--sign" "-" ".cache/ppocr/libemon_ppocr_adapter.dylib"]))
-(run! "c-probe-build" ["cc" "-Wall" "-Wextra" "-Werror" "tools/ppocr/hosts.c" "-Ihost/native/include" "-L.cache/ppocr" "-lemon_ppocr_adapter" (str "-Wl,-rpath," (fs/absolutize ".cache/ppocr")) "-o" ".cache/ppocr/hosts-c"])
-(run! "c-contract-build" ["cc" "-Wall" "-Wextra" "-Werror" "tools/ppocr/contracts.c" "-Ihost/native/include" "-L.cache/ppocr" "-lemon_ppocr_adapter" (str "-Wl,-rpath," (fs/absolutize ".cache/ppocr")) "-o" ".cache/ppocr/contracts-c"])
+(run! "c-probe-build" ["cc" "-Wall" "-Wextra" "-Werror" "tools/ppocr/hosts.c" "-Ihost/c/include" "-L.cache/ppocr" "-lemon_ppocr_adapter" (str "-Wl,-rpath," (fs/absolutize ".cache/ppocr")) "-o" ".cache/ppocr/hosts-c"])
+(run! "c-contract-build" ["cc" "-Wall" "-Wextra" "-Werror" "tools/ppocr/contracts.c" "-Ihost/c/include" "-L.cache/ppocr" "-lemon_ppocr_adapter" (str "-Wl,-rpath," (fs/absolutize ".cache/ppocr")) "-o" ".cache/ppocr/contracts-c"])
 (run! "c-contract" [".cache/ppocr/contracts-c"])
 (def rows
  (mapv (fn [row]

@@ -34,7 +34,7 @@ stay in the worktree. Run it from the worktree root with
 existing `--tesseract` port configuration.
 
 Native host bindings share the exact Rust preprocessing and complete answer
-construction through `host/native/include/emon_ppocr.h` (ABI v1). Run
+construction through the adapter ABI (`host/c/include/emon_adapter.h`, `emon_ocr_adapter_v1`; the first `emon_ppocr_*_v1` exports are gone, D928). Run
 `bb tools/ppocr/build_shared.clj` after fetching the pinned optional assets;
 this builds `.cache/ppocr/libemon_ppocr_adapter.dylib`. It never downloads.
 Go, Java and C# load the adapter library through their `Engines` registry (`Engines.Load` in Go, `emon.api.OcrEngines.load`, `emon.Api.OcrEngines.Load`; D925): PP-OCR is a

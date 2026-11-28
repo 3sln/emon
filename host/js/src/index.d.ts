@@ -71,15 +71,49 @@ export interface OcrAdapter {
   needs?: number;
   /** 2 sends the pixels off the device (refused unless `allowRemote(true)`); 1 (async) is refused */
   flags?: number;
+  /** true: the adapter reads its models from packs (`engines.packs`): a request that needs one the app has not provided or fetched is left unread (`pack-missing:<id>`), and `read`'s second argument holds the verified files. Default false: the adapter brings its own models. */
+  packs?: boolean;
   producer?: Record<string, string>;
-  read(request: OcrRequest): Promise<object | null | undefined>;
+  read(request: OcrRequest, context?: { packs: Map<string, Uint8Array> }): Promise<object | null | undefined>;
   close?(): void | Promise<void>;
+}
+
+/** What the library tells the app's hook about a pack a conversion needs. */
+export interface PackNeed { pack: string; rev: number; engine: string; kind: string; licence: string; bytes: number; reason: string; requestEngine: string }
+/** What the hook decides: fetch (the app's `fetcher`), provide bytes (a one-file pack) or `{ [fileName]: bytes }`, decline (unread, `pack-missing:<id>`), or substitute another adapter of the same engine. */
+export type PackDecision = { action: 'fetch' } | { action: 'provide'; data: Uint8Array | Record<string, Uint8Array> } | { action: 'decline' } | { action: 'substitute'; engine: string };
+export interface PackFile { name: string; bytes: number; sha: string }
+export interface PackEvent { kind: 'start' | 'progress' | 'done' | 'failed' | 'cancelled'; pack: string; engine: string; done: number; total: number; initiator: 'library' | 'app'; message: string }
+/** Packs (D896, P13.16): verified model bytes, the app's hook, download and progress events. The library ships no HTTP client: `setFetcher` is the app's download. */
+export interface Packs {
+  readonly catalogue: { class: string; packs: Array<{ code: number; id: string; rev: number; engine: string; kind: string; licence: string; bytes: number; files: PackFile[] }> };
+  setMode(mode: 'never' | 'cache' | 'auto'): void;
+  readonly mode: 'never' | 'cache' | 'auto';
+  /** `EMON_OFFLINE=1` in Node. */
+  readonly offline: boolean;
+  onPackNeeded(hook: ((need: PackNeed) => PackDecision | Promise<PackDecision>) | null): void;
+  setFetcher(fetcher: ((pack: unknown, file: PackFile, progress: (done: number) => boolean) => Promise<Uint8Array>) | null): void;
+  onPackEvent(listener: (event: PackEvent) => boolean | void): () => void;
+  events(signal?: AbortSignal): AsyncIterable<PackEvent>;
+  cancel(): void;
+  /** Verifies and keeps the app's bytes for a pack; rejects `pack-hash-mismatch:<id>` / `pack-provide-failed:<id>`. */
+  install(id: string, data: Uint8Array | Record<string, Uint8Array>): Promise<void>;
+  /** Fetches packs ahead of time (mode `auto`, not offline, a fetcher set). */
+  ensure(ids: string[]): Promise<void>;
+  installed(): number[];
+  files(id: string): Map<string, Uint8Array> | null;
 }
 
 /** The engine registry: kin's rules (`ad-register-check`, `ad-route`) over the adapters you register. */
 export class Engines {
   /** Lets adapters that send the pixels off the device register (default no). Call it before registering them. */
   allowRemote(allow: boolean): void;
+  /** The pack mode, hook, download and events. */
+  readonly packs: Packs;
+  /** D896's `engines()`: every engine of kin's table with its state and why (the C ABI's JSON shape). */
+  state(options?: { renderer?: boolean }): { platform: string; mode: string; offline: boolean; store: string; engines: Array<{ name: string; kind: string; impl: string; state: string; registered: boolean; calibrated: boolean; caps: number; oen: number; role: string; needs: Array<{ id: string; kind: string; bytes: number; licence: string; installed: boolean }>; download_bytes: number; reason: string }> };
+  /** D896's `prepare(options)`: the packs a conversion needs and which are missing (the C ABI's JSON shape). */
+  prepare(options?: { ocr?: string; ocrEngine?: string; locale?: string }): { verdict: string; mode: string; offline: boolean; engines: string[]; languages: string[]; osd: boolean; packs: object[]; unsupported: object[]; missing: number; missing_bytes: number; conditional: number; conditional_bytes: number };
   /** Registers an adapter, held to kin's engine table; rejects with `usage` and the refusal's name (`adapter-engine-unknown`, `adapter-caps-beyond-engine`, ...). */
   add(adapter: OcrAdapter): Promise<void>;
   describe(): Array<{ name: string; engine: number; caps: number; measured: number; needs: number; flags: number; producer: Record<string, string> }>;

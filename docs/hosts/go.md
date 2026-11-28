@@ -194,7 +194,7 @@ adapter). JBIG2 and JPEG 2000 images are not decoded: `Config.PdfCodecs` is the 
   packages are under `internal/` and cannot be imported.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the go host: 401 entries, and 8 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the go host: 470 entries, and 8 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -282,6 +282,7 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.DefaultConfig` | `() Config` |
 | `emon.DefaultHTMLOptions` | `() HTMLOptions` |
 | `emon.DefaultOptions` | `() Options` |
+| `emon.DefaultPackStore` | `() string` |
 | `emon.Dropped` | `struct` |
 | `emon.Dropped.Page` | `field int32` |
 | `emon.Dropped.Reason` | `field string` |
@@ -302,10 +303,14 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Engines.Fulfil` | `ptr (req port.PlanRequest, bm port.PlanBitmaps, keepBinary bool) (port.PlanAnswer, error)` |
 | `emon.Engines.Load` | `ptr (path, config, packsDir string) error` |
 | `emon.Engines.Notes` | `ptr () []string` |
+| `emon.Engines.Packs` | `ptr () *Packs` |
+| `emon.Engines.Prepare` | `ptr (opts Options) (string, error)` |
 | `emon.Engines.Producer` | `ptr () [][2]string` |
 | `emon.Engines.SetAdapterDir` | `ptr (dir string)` |
 | `emon.Engines.SetLoader` | `ptr (l Loader)` |
+| `emon.Engines.SetRenderer` | `ptr (present bool)` |
 | `emon.Engines.SetTessdata` | `ptr (dir string)` |
+| `emon.Engines.State` | `ptr () string` |
 | `emon.ErrDamaged` | `const [iota+11]` |
 | `emon.ErrEncryptionUnsupported` | `const [iota+7]` |
 | `emon.ErrIO` | `const [iota+15]` |
@@ -437,6 +442,70 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Output` | `struct` |
 | `emon.Output.HTML` | `field *HTMLOptions` |
 | `emon.Output.JSON` | `field *JSONOptions` |
+| `emon.PackAction` | `type int32` |
+| `emon.PackDecision` | `struct` |
+| `emon.PackDecision.Action` | `field PackAction` |
+| `emon.PackDecision.Data` | `field []byte` |
+| `emon.PackDecision.Engine` | `field string` |
+| `emon.PackDecision.Path` | `field string` |
+| `emon.PackDecline` | `const PackAction = 3` |
+| `emon.PackEvent` | `struct` |
+| `emon.PackEvent.ByApp` | `field bool` |
+| `emon.PackEvent.Done` | `field uint64` |
+| `emon.PackEvent.Engine` | `field string` |
+| `emon.PackEvent.Kind` | `field PackEventKind` |
+| `emon.PackEvent.Message` | `field string` |
+| `emon.PackEvent.Pack` | `field string` |
+| `emon.PackEvent.Total` | `field uint64` |
+| `emon.PackEventCancelled` | `const PackEventKind = 5` |
+| `emon.PackEventDone` | `const PackEventKind = 3` |
+| `emon.PackEventFailed` | `const PackEventKind = 4` |
+| `emon.PackEventKind` | `type int32` |
+| `emon.PackEventProgress` | `const PackEventKind = 2` |
+| `emon.PackEventStart` | `const PackEventKind = 1` |
+| `emon.PackFetch` | `const PackAction = 1` |
+| `emon.PackFetcher` | `type func(pack PackInfo, file PackFile, progress func(done uint64) (cancel bool)) ([]byte, error)` |
+| `emon.PackFile` | `struct` |
+| `emon.PackFile.Bytes` | `field uint64` |
+| `emon.PackFile.Matches` | `(b []byte) bool` |
+| `emon.PackFile.Name` | `field string` |
+| `emon.PackFile.SHA` | `field [32]byte` |
+| `emon.PackInfo` | `struct` |
+| `emon.PackInfo.Bytes` | `field uint64` |
+| `emon.PackInfo.Code` | `field int32` |
+| `emon.PackInfo.Engine` | `field int32` |
+| `emon.PackInfo.EngineName` | `field string` |
+| `emon.PackInfo.Files` | `field []PackFile` |
+| `emon.PackInfo.ID` | `field string` |
+| `emon.PackInfo.Kind` | `field int32` |
+| `emon.PackInfo.KindName` | `field string` |
+| `emon.PackInfo.Licence` | `field string` |
+| `emon.PackInfo.Rev` | `field int32` |
+| `emon.PackProvide` | `const PackAction = 2` |
+| `emon.PackRequest` | `struct` |
+| `emon.PackRequest.Bytes` | `field uint64` |
+| `emon.PackRequest.Engine` | `field string` |
+| `emon.PackRequest.Kind` | `field string` |
+| `emon.PackRequest.Licence` | `field string` |
+| `emon.PackRequest.Pack` | `field string` |
+| `emon.PackRequest.Reason` | `field string` |
+| `emon.PackRequest.RequestEngine` | `field string` |
+| `emon.PackRequest.Rev` | `field int32` |
+| `emon.PackSubstitute` | `const PackAction = 4` |
+| `emon.Packs` | `struct +unexported` |
+| `emon.Packs.AddDir` | `ptr (dir string)` |
+| `emon.Packs.Cancel` | `ptr ()` |
+| `emon.Packs.Ensure` | `ptr (ids ...string) error` |
+| `emon.Packs.Mode` | `ptr () string` |
+| `emon.Packs.OnPackEvent` | `ptr (f func(PackEvent) bool)` |
+| `emon.Packs.OnPackNeeded` | `ptr (f func(PackRequest) PackDecision)` |
+| `emon.Packs.SetFetcher` | `ptr (f PackFetcher)` |
+| `emon.Packs.SetMode` | `ptr (mode string) error` |
+| `emon.Packs.SetStore` | `ptr (dir string) error` |
+| `emon.Packs.Store` | `ptr () string` |
+| `emon.Packs.TakeNotes` | `ptr () []string` |
+| `emon.Packs.View` | `ptr (engine string) (string, error)` |
+| `emon.PacksOffline` | `() bool` |
 | `emon.Page` | `struct` |
 | `emon.Page.HasLabel` | `field bool` |
 | `emon.Page.Height` | `field int32` |

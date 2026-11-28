@@ -83,16 +83,23 @@ type Engines struct {
 	adapterDir  string
 	tessdata    string
 	notes       []string
+	packs       *Packs
+	modeSet     bool
+	renderer    bool
 }
 
 type entry struct {
 	a    Adapter
 	info AdapterInfo
 	gate sync.Mutex // an adapter that is not thread safe is called one thread at a time
+	// engine is the kin engine whose packs the adapter reads (its view of the pack store); ownPacks is true for an adapter given its own model directory, which this
+	// registry does not manage packs for
+	engine   string
+	ownPacks bool
 }
 
 // NewEngines is an empty registry: no adapter, nothing loaded, nothing fetched.
-func NewEngines() *Engines { return &Engines{} }
+func NewEngines() *Engines { return &Engines{packs: newPacks()} }
 
 // SetLoader names how adapter libraries are opened (`adapterlib.Load`). Without one `Load` and `Defaults` say so; `Add` of an in-process adapter needs none.
 func (e *Engines) SetLoader(l Loader) { e.mu.Lock(); e.loader = l; e.mu.Unlock() }
@@ -107,7 +114,9 @@ func (e *Engines) SetAdapterDir(dir string) { e.mu.Lock(); e.adapterDir = dir; e
 func (e *Engines) SetTessdata(dir string) { e.mu.Lock(); e.tessdata = dir; e.mu.Unlock() }
 
 // Add registers an adapter. It is checked against kin's engine table (`ad-register-check`) and closed when it is refused; the error is the refusal's name and sentence.
-func (e *Engines) Add(a Adapter) error {
+func (e *Engines) Add(a Adapter) error { return e.add(a, "", false) }
+
+func (e *Engines) add(a Adapter, engine string, own bool) error {
 	info := a.Info()
 	if info.Name == "" {
 		info.Name = "adapter"
@@ -131,7 +140,12 @@ func (e *Engines) Add(a Adapter) error {
 	if !hasProducerKey(info.Producer, "engine") {
 		info.Producer = append([][2]string{{"engine", info.Name}}, info.Producer...)
 	}
-	e.entries = append(e.entries, &entry{a: a, info: info})
+	if engine == "" {
+		if eng := adapters.AdOenEng(int32(info.Engine)); eng >= 0 {
+			engine = engName(eng)
+		}
+	}
+	e.entries = append(e.entries, &entry{a: a, info: info, engine: engine, ownPacks: own})
 	return nil
 }
 
@@ -152,17 +166,50 @@ func (e *Engines) Load(path, config, packsDir string) error {
 	if load == nil {
 		return errNoAdapterLoader
 	}
+	engine := engineOfLibrary(path, config)
+	// an adapter given its own model directory (an explicit `tessdata=`, or packsDir) reads from it; else it is given its view of the pack store
+	own := packsDir != "" || strings.Contains("\n"+config, "\ntessdata=")
+	if !own && engine != "" {
+		view, err := e.packs.View(engine)
+		if err != nil {
+			return fmt.Errorf("pack-dir-missing: %v", err)
+		}
+		packsDir = view
+	}
 	a, err := load(path, config, packsDir)
 	if err != nil {
 		return err
 	}
-	return e.Add(a)
+	return e.add(a, engine, own)
+}
+
+// engineOfLibrary names the kin engine whose packs the adapter at path reads: `engine=<name>` in its config, else the OCR engine of kin's table whose name the file's carries.
+func engineOfLibrary(path, config string) string {
+	for _, l := range strings.Split(config, "\n") {
+		if v, ok := strings.CutPrefix(l, "engine="); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	stem := strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), "-", "_"))
+	for i := int32(0); i < engines.PkEngineCount(); i++ {
+		eng := engines.PkEngineAt(i)
+		if engines.PkEngineKind(eng) != engines.EkindOcr() {
+			continue
+		}
+		if n := engName(eng); strings.Contains(stem, strings.ReplaceAll(n, "-", "_")) {
+			return n
+		}
+	}
+	return ""
 }
 
 // Defaults is the turnkey: every `libemon_ocr_*` of the adapter directory, in name order. The Tesseract adapter is NOT loaded when the selection does not use Tesseract as its
 // reader or fallback (`pk-uses-tesseract`, D920): a PP-OCR-alone conversion registers PP-OCR only.
 func (e *Engines) Defaults(opts Options) error {
 	uses := engines.PkUsesTesseract(engines.PkOptionEngine(opts.OcrEngine)) == 1
+	if err := e.turnkeyPacks(); err != nil {
+		return err
+	}
 	libs, err := e.adapterLibs()
 	if err != nil {
 		return err
@@ -266,10 +313,10 @@ func (e *Engines) Describe() []AdapterInfo {
 // Notes returns, and clears, what adapters reported since the last call (why a request was left unread), one line each.
 func (e *Engines) Notes() []string {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	n := e.notes
 	e.notes = nil
-	return n
+	e.mu.Unlock()
+	return append(n, e.packs.TakeNotes()...)
 }
 
 // Close closes every adapter. The registry is empty after it.
@@ -345,6 +392,18 @@ func (e *Engines) Fulfil(req port.PlanRequest, bm port.PlanBitmaps, keepBinary b
 	}
 	if en == nil {
 		return refuse(adapters.AdsUnsupported())
+	}
+	// the packs the request needs, made present or refused (D896)
+	for i := 0; i < 2; i++ {
+		other, why := e.ensurePacks(en, &req)
+		if why != "" {
+			e.note(fmt.Sprintf("%s: unsupported %s", en.info.Name, why))
+			return refuse(adapters.AdsUnsupported())
+		}
+		if other == nil {
+			break
+		}
+		en = other
 	}
 	if en.info.Flags&AdapterThreadsafe == 0 {
 		en.gate.Lock()

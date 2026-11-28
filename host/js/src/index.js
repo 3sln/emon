@@ -236,7 +236,7 @@ export class Emon {
    * `{ ports: { ocr: engines.port() } }`. Nothing is registered unless you add it.
    */
   engines() {
-    return new Engines(this.w);
+    return new Engines(this.w, (o) => optionLines(o ?? {}, this.defaults?.chunk ?? 65536, false));
   }
 
   _open(source, password, mode, options) {

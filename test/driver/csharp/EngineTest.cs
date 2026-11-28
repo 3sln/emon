@@ -1071,6 +1071,132 @@ public static class EngineTest {
         } finally { Directory.Delete(dir); }
     }
 
+    // The packs (D896, D928): the hook, the app's fetcher, verification, offline, events, substitute, engines() and prepare().
+    static void EnginePacks() {
+        string eng = ".cache/native/dl/eng.traineddata";
+        if (!File.Exists(eng)) {
+            Out("SKIP the pack laws: " + eng + " is not on this machine");
+            return;
+        }
+        byte[] good = File.ReadAllBytes(eng);
+        byte[] bad = (byte[]) good.Clone();
+        bad[bad.Length / 2] ^= 1;
+        var c = emon.Port.NewCells();
+        emon.Plan.RqOcrEnd(c, emon.Plan.RqOcr(c, 7, 1, 3, 0, 0, 0, 0, 0));
+        var req = new emon.Planrun.Request(emon.Port.CellsVec(c));
+        var bm = new Dictionary<int, emon.Port.Bitmap> { { 1, new emon.Port.Bitmap(4, 4, 1, new byte[16]) } };
+        string root = Path.Combine(Path.GetTempPath(), "emon-packs-" + Guid.NewGuid().ToString("N"));
+        string prevOffline = Environment.GetEnvironmentVariable("EMON_OFFLINE");
+        string prevModels = Environment.GetEnvironmentVariable("EMON_MODELS");
+        Environment.SetEnvironmentVariable("EMON_OFFLINE", null);
+        Environment.SetEnvironmentVariable("EMON_MODELS", null);
+        int n = 0;
+        (OcrEngines, StubAdapter) Fresh(int mode) {
+            var e = new OcrEngines();
+            e.Packs.SetStore(Path.Combine(root, "s" + (n++)));
+            e.Packs.SetMode(mode);
+            var a = new StubAdapter(1) { R = new Reading { Status = IAdapter.Failed, Reason = "stub" } };
+            a.I.Needs = 1;
+            e.Add(a);
+            return (e, a);
+        }
+        bool Noted(OcrEngines e, string what) { return e.Notes().Any(x => x.Contains(what)); }
+        try {
+            int never = emon.Engines.PfetchNever(), cache = emon.Engines.PfetchCache(), auto = emon.Engines.PfetchAuto();
+            // never: the hook is not asked; the page is unread
+            var (e1, a1) = Fresh(never);
+            int asked = 0;
+            e1.Packs.OnPackNeeded(r => { asked++; return PackDecision.Provide(good); });
+            e1.Fulfil(req, bm, false);
+            Check(a1.Reads == 0 && asked == 0 && Noted(e1, "pack-missing:tess-fast-eng"), "never wins over the hook: unread, pack-missing");
+            // cache + provide: verified, kept, read
+            var (e2, a2) = Fresh(cache);
+            PackRequest seen = null;
+            e2.Packs.OnPackNeeded(r => { seen = r; return PackDecision.Provide(good); });
+            e2.Fulfil(req, bm, false);
+            Check(a2.Reads == 1 && seen != null && seen.Pack == "tess-fast-eng" && seen.Reason == "conversion" && seen.Bytes > 0, "a provided pack is verified, kept and the adapter reads");
+            Check(File.Exists(Path.Combine(e2.Packs.Store, "tess-fast-eng", "eng.traineddata")) && File.Exists(Path.Combine(e2.Packs.Store, ".views", "tesseract", "eng.traineddata")), "the store and the adapter's view hold it");
+            asked = 0;
+            e2.Packs.OnPackNeeded(r => { asked++; return PackDecision.Decline(); });
+            e2.Fulfil(req, bm, false);
+            Check(a2.Reads == 2 && asked == 0, "an installed pack is not asked about again");
+            Check(e2.State().Contains("\"name\":\"tesseract\"") && e2.Prepare("").Contains("\"id\":\"tess-fast-eng\",\"state\":\"installed\""), "engines() and prepare() see it");
+            // tampered bytes are refused and nothing is kept
+            var (e3, a3) = Fresh(cache);
+            e3.Packs.OnPackNeeded(r => PackDecision.Provide(bad));
+            e3.Fulfil(req, bm, false);
+            Check(a3.Reads == 0 && Noted(e3, "pack-hash-mismatch:tess-fast-eng") && !File.Exists(Path.Combine(e3.Packs.Store, "tess-fast-eng", "eng.traineddata")), "tampered bytes are refused and kept nowhere");
+            // decline
+            var (e4, a4) = Fresh(cache);
+            e4.Packs.OnPackNeeded(r => PackDecision.Decline());
+            e4.Fulfil(req, bm, false);
+            Check(a4.Reads == 0 && Noted(e4, "pack-missing:tess-fast-eng"), "a decline leaves the page unread");
+            // offline wins over the hook
+            Environment.SetEnvironmentVariable("EMON_OFFLINE", "1");
+            var (e5, a5) = Fresh(auto);
+            asked = 0;
+            e5.Packs.OnPackNeeded(r => { asked++; return PackDecision.Provide(good); });
+            e5.Fulfil(req, bm, false);
+            Check(a5.Reads == 0 && asked == 0 && e5.State().Contains("\"offline\":true"), "EMON_OFFLINE=1 wins over the hook");
+            Environment.SetEnvironmentVariable("EMON_OFFLINE", null);
+            // auto, the hook says fetch, nobody supplies a download: the library has no HTTP client
+            var (e6, a6) = Fresh(auto);
+            e6.Packs.OnPackNeeded(r => PackDecision.Fetch());
+            e6.Fulfil(req, bm, false);
+            Check(a6.Reads == 0 && Noted(e6, "pack-fetch-unavailable:tess-fast-eng"), "a fetch with no app download is pack-fetch-unavailable");
+            // the app's download, with progress events
+            var (e7, a7) = Fresh(auto);
+            var kinds = new List<PackEventKind>();
+            e7.Packs.OnPackEvent(ev => { kinds.Add(ev.Kind); return false; });
+            e7.Packs.SetFetcher((p, f, progress) => { progress(f.Bytes / 2); progress(f.Bytes); return good; });
+            e7.Fulfil(req, bm, false);
+            Check(a7.Reads == 1 && kinds.Count >= 3 && kinds[0] == PackEventKind.Start && kinds[^1] == PackEventKind.Done && kinds.Contains(PackEventKind.Progress), "a download reports start, progress and done and the adapter reads");
+            // Ensure, a download that is cancelled from the event stream, a failed one and a wrong one
+            var (e8, a8) = Fresh(auto);
+            var k8 = new List<PackEventKind>();
+            e8.Packs.OnPackEvent(ev => { k8.Add(ev.Kind); return ev.Kind == PackEventKind.Progress; });
+            e8.Packs.SetFetcher((p, f, progress) => { progress(f.Bytes / 2); return good; });
+            string err = "";
+            try { e8.Packs.Ensure("tess-fast-eng"); } catch (emon.Ffi.Unavailable x) { err = x.Message; }
+            Check(err.StartsWith("pack-fetch-cancelled:") && k8.Contains(PackEventKind.Cancelled) && !File.Exists(Path.Combine(e8.Packs.Store, "tess-fast-eng", "eng.traineddata")), "a cancel from the event stream stops the download and keeps nothing");
+            e8.Packs.OnPackEvent(null);
+            e8.Packs.SetFetcher((p, f, progress) => bad);
+            err = "";
+            try { e8.Packs.Ensure("tess-fast-eng"); } catch (emon.Ffi.Unavailable x) { err = x.Message; }
+            Check(err.StartsWith("pack-hash-mismatch:"), "a wrong download is refused: " + err);
+            e8.Packs.SetFetcher((p, f, progress) => throw new IOException("offline"));
+            err = "";
+            try { e8.Packs.Ensure("tess-fast-eng"); } catch (emon.Ffi.Unavailable x) { err = x.Message; }
+            Check(err.StartsWith("pack-fetch-failed:tess-fast-eng"), "a failed download is named: " + err);
+            e8.Packs.SetMode(cache);
+            err = "";
+            try { e8.Packs.Ensure("tess-fast-eng"); } catch (emon.Ffi.Unavailable x) { err = x.Message; }
+            Check(err.Contains("does not fetch"), "Ensure follows the mode");
+            // substitute: only another implementation of the same OIL engine
+            var (e9, a9) = Fresh(cache);
+            e9.Packs.OnPackNeeded(r => PackDecision.Substitute("ppocr"));
+            e9.Fulfil(req, bm, false);
+            Check(a9.Reads == 0 && Noted(e9, "pack-substitute-differs:ppocr"), "a substitute under another engine's name leaves the page unread");
+            var (e10, a10) = Fresh(cache);
+            var other = new StubAdapter(1) { R = new Reading { Status = IAdapter.Failed, Reason = "other" } };
+            e10.Add(other);
+            e10.Packs.OnPackNeeded(r => PackDecision.Substitute("tesseract"));
+            e10.Fulfil(req, bm, false);
+            Check(a10.Reads == 0 && other.Reads == 1, "a substitute of the same engine goes to the other adapter");
+            // engines() and prepare() before anything is installed
+            var (e11, _) = Fresh(auto);
+            string st = e11.State();
+            Check(st.Contains("\"mode\":\"auto\"") && st.Contains("\"state\":\"downloadable\"") && st.Contains("\"id\":\"tess-fast-eng\""), "engines(): the Tesseract engine is downloadable: " + st);
+            string pr = e11.Prepare("");
+            Check(pr.Contains("\"verdict\":\"downloadable\"") && pr.Contains("\"missing\":2") && pr.Contains("tess-fast-eng"), "prepare(): " + pr);
+            Check(new OcrEngines().State().Contains("\"registered\":false"), "an empty registry has no registered engine");
+        } finally {
+            Environment.SetEnvironmentVariable("EMON_OFFLINE", prevOffline);
+            Environment.SetEnvironmentVariable("EMON_MODELS", prevModels);
+            try { Directory.Delete(root, true); } catch (Exception) { }
+        }
+    }
+
     public static int Run() {
         var t = new Thread(() => {
             RunOne("the adapters give identical JSON and HTML", Adapters);
@@ -1088,6 +1214,7 @@ public static class EngineTest {
             RunOne("an image records its pixels and replays without a codec", ImageRecordReplay);
             RunOne("an OCR port reads an image and a scanned page; the transcript replays without it", OcrPort);
             RunOne("the engine registry: registration, routing, unread-never-blank, answers held to what was registered", EngineRegistry);
+            RunOne("the engine packs: hook, verification, offline, the app's download and its events, engines() and prepare()", EnginePacks);
             RunOne("assets", AssetsTest);
             RunOne("the Renderer port's fulfiller", RenderPortTest);
             RunOne("decode-img: the host's codecs, the embedder's, and the payload", DecodeImg);

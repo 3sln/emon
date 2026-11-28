@@ -88,6 +88,60 @@ export class Wasm {
     return this.withBytes(new Uint8Array(Int32Array.from(oens).buffer), (p) => this.x.emon_adapter_route(oen, p, oens.length));
   }
 
+  // THE PACK RULES ARE KIN'S TOO (`emon.engines`, `emon.adapters`, P13.16): the catalogue and what to do about a pack are asked of the module.
+  /** The pack catalogue (`pack_catalogue` of the module): the platform class, kin's codes and every pack with its files' SHA-256. */
+  packCatalogue() {
+    this.x.emon_pack_catalogue();
+    const t = this.outText();
+    this.outFree();
+    return JSON.parse(t);
+  }
+
+  /** `ad-pack-action` (and `ad-asks-hook`): `{ action, asks }` for a pack that is `present`, under `mode`, `offline`, a hook or none, and what the hook decided (0: nothing). */
+  packAction(present, mode, offline, hook, decision) {
+    const r = this.x.emon_pack_action(present ? 1 : 0, mode, offline ? 1 : 0, hook ? 1 : 0, decision | 0);
+    return { action: r & 255, asks: (r >> 8) === 1 };
+  }
+
+  /** The kin engine an OIL engine answers as, or -1. */
+  packOenEng(oen) {
+    return this.x.emon_pack_oen_eng(oen);
+  }
+
+  #i32s(a) {
+    return new Uint8Array(Int32Array.from(a).buffer);
+  }
+
+  #json(n) {
+    const t = this.outText();
+    this.outFree();
+    return n < 0 ? Object.assign(new Error(t), { packError: true }) : JSON.parse(t);
+  }
+
+  /** `pk-resolve`: rows `[state, engine, pack, lang]` for the kin engines, packed languages and held pack codes; throws kin's explanation. */
+  packResolve(osd, langs, engines, installed) {
+    const n = this.withBytes(this.#i32s(langs), (lp) => this.withBytes(this.#i32s(engines), (ep) => this.withBytes(this.#i32s(installed), (ip) => this.x.emon_pack_resolve(osd ? 1 : 0, lp, langs.length, ep, engines.length, ip, installed.length))));
+    const r = this.#json(n);
+    if (r.error !== undefined) throw new Error(r.error);
+    return r.rows;
+  }
+
+  /** `engines()` as the module's JSON (the shape of the C ABI's `emon_engines_describe`). */
+  packDescribe(oens, renderer, installed, mode, offline, store) {
+    const sb = new TextEncoder().encode(store);
+    const n = this.withBytes(this.#i32s(oens), (op) => this.withBytes(this.#i32s(installed), (ip) => this.withBytes(sb, (sp) => this.x.emon_pack_describe(op, oens.length, renderer ? 1 : 0, ip, installed.length, mode, offline ? 1 : 0, sp, sb.length))));
+    return this.#json(n);
+  }
+
+  /** `prepare(options)` over the option lines, as the module's JSON (the shape of the C ABI's `emon_prepare`); throws the options' error. */
+  packPrepare(optionLines, installed, mode, offline) {
+    const tb = new TextEncoder().encode(optionLines);
+    const n = this.withBytes(tb, (tp) => this.withBytes(this.#i32s(installed), (ip) => this.x.emon_pack_prepare(tp, tb.length, ip, installed.length, mode, offline ? 1 : 0)));
+    const r = this.#json(n);
+    if (r instanceof Error) throw r;
+    return r;
+  }
+
   /** The language a model read a word in, as a request packs it. */
   ocrWordLang(model) {
     const cps = Int32Array.from(Array.from(model, (c) => c.codePointAt(0)));

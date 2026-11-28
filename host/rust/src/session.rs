@@ -681,3 +681,257 @@ pub fn panic_message(p: Box<dyn std::any::Any + Send>) -> String {
         "a panic".to_string()
     }
 }
+
+// THE PACK RULES for a host that cannot link kin's Rust (the JS SDK asks the module, D925, P13.16): the catalogue, what a conversion needs (`pk-resolve`), what to do about a pack that
+// is missing (`ad-asks-hook`, `ad-pack-action`), the engines' states (`ad-engine-state`) and `prepare()` (`ad-verdict`). Pure functions of their arguments: no directory, no file.
+fn js_s(s: &str) -> String {
+    let mut o = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            '\n' => o.push_str("\\n"),
+            c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
+}
+
+// One pack of kin's catalogue, as the library's Rust host reads it (`packs.rs` is not in the browser build).
+struct PackLine {
+    code: i32,
+    id: String,
+    rev: i32,
+    engine: String,
+    kind: String,
+    licence: String,
+    bytes: u64,
+    files: Vec<(String, u64, String)>,
+}
+
+fn pack_line(p: i32) -> PackLine {
+    use emon::{engines as ke, packdata as kp};
+    let mut id = String::new();
+    kp::pkid_emit_name(&mut id, p);
+    let mut files = Vec::new();
+    for i in 0..ke::pk_pack_file_count(p) {
+        let mut name = String::new();
+        ke::pk_pack_file_name(p, i, &mut name);
+        let mut sha = String::new();
+        for w in 0..8 {
+            sha.push_str(&format!("{:08x}", ke::pk_pack_file_sha(p, i, w) as u32));
+        }
+        files.push((name, ke::pk_pack_file_bytes(p, i) as u64, sha));
+    }
+    let eng = ke::pk_pack_engine(p);
+    let mut engine = String::new();
+    if eng != 0 {
+        ke::eng_emit_name(&mut engine, eng);
+    } else {
+        engine.push_str("any");
+    }
+    let mut kind = String::new();
+    ke::pkind_emit_name(&mut kind, ke::pk_pack_kind(p));
+    let mut licence = String::new();
+    kp::plic_emit_name(&mut licence, ke::pk_pack_licence(p));
+    PackLine { code: p, id, rev: ke::pk_pack_rev(p), engine, kind, licence, bytes: ke::pk_pack_bytes(p) as u64, files }
+}
+
+fn pack_cells(v: &[i32]) -> Cells {
+    cells_of(v)
+}
+
+/// The catalogue as JSON: the platform class, every pack (code, id, engine, kind, licence, bytes, files with their SHA-256) and the codes kin names things by.
+pub fn pack_catalogue() -> String {
+    use emon::{engines as ke, adapters as ka};
+    let class = crate::plan::platform_class();
+    let mut cls = String::new();
+    ke::pcls_emit_name(&mut cls, class);
+    let mut packs = Vec::new();
+    for p in 1..=ke::pk_pack_count() {
+        if ke::pk_pack_known(p) != 1 {
+            continue;
+        }
+        let info = pack_line(p);
+        let files: Vec<String> = info.files.iter().map(|f| format!("{{\"name\":{},\"bytes\":{},\"sha\":{}}}", js_s(&f.0), f.1, js_s(&f.2))).collect();
+        packs.push(format!(
+            "{{\"code\":{},\"id\":{},\"rev\":{},\"engine\":{},\"kind\":{},\"licence\":{},\"bytes\":{},\"files\":[{}]}}",
+            info.code, js_s(&info.id), info.rev, js_s(&info.engine), js_s(&info.kind), js_s(&info.licence), info.bytes, files.join(",")
+        ));
+    }
+    format!(
+        "{{\"class\":{},\"pact\":{{\"use\":{},\"fetch\":{},\"provided\":{},\"substitute\":{}}},\"pfetch\":{{\"never\":{},\"auto\":{},\"cache\":{}}},\"pstate\":{{\"installed\":{},\"missing\":{},\"conditional\":{},\"unsupported\":{}}},\"ppocr\":{},\"packs\":[{}]}}",
+        js_s(&cls), ka::pact_use(), ka::pact_fetch(), ka::pact_provided(), ka::pact_substitute(), ke::pfetch_never(), ke::pfetch_auto(), ke::pfetch_cache(),
+        ke::pstate_installed(), ke::pstate_missing(), ke::pstate_conditional(), ke::pstate_unsupported(), ke::eng_ppocr(), packs.join(",")
+    )
+}
+
+/// kin's `ad-asks-hook`: is the app's hook asked about a pack that is `present` (1/0) under `mode`, `offline` and whether there is a hook?
+pub fn pack_asks(present: i32, mode: i32, offline: i32, hook: i32) -> i32 {
+    emon::adapters::ad_asks_hook(present, mode, offline, hook)
+}
+
+/// kin's `ad-pack-action`: what becomes of a pack, given what the hook decided (`decision`: 0 none, else the hook's action).
+pub fn pack_action(present: i32, mode: i32, offline: i32, hook: i32, decision: i32) -> i32 {
+    emon::adapters::ad_pack_action(present, mode, offline, hook, decision)
+}
+
+/// The kin engine (`eng`) an OIL engine answers as, or -1 (`ad-oen-eng`).
+pub fn pack_oen_eng(oen: i32) -> i32 {
+    emon::adapters::ad_oen_eng(oen)
+}
+
+/// kin's engine named `name` (`eng`), or -1.
+pub fn pack_eng_find(name: &str) -> i32 {
+    emon::engines::eng_find(name.as_bytes(), 0, name.len() as i32)
+}
+
+/// `pk-resolve` over `engines` (`eng`), packed `langs` and the codes of the packs held: rows of four (state, engine, pack, language) as JSON, or `{"error":...}`.
+pub fn pack_resolve(osd: bool, langs: &[i32], engines: &[i32], installed: &[i32]) -> String {
+    match resolve_rows(engines, langs, osd, installed) {
+        Err(msg) => format!("{{\"error\":{}}}", js_s(&msg)),
+        Ok(rows) => format!("{{\"rows\":[{}]}}", rows.iter().map(|r| format!("[{},{},{},{}]", r[0], r[1], r[2], r[3])).collect::<Vec<_>>().join(",")),
+    }
+}
+
+fn eng_name(eng: i32) -> String {
+    let mut s = String::new();
+    emon::engines::eng_emit_name(&mut s, eng);
+    s
+}
+
+/// D896's `engines()` as the module's JSON (the shape of the C ABI's `emon_engines_describe`). `registered_oens`: the OIL engines of the adapters registered; `renderer`: whether a
+/// renderer is registered; `installed`: the codes of the packs held; `store`: what the host calls its store.
+pub fn pack_describe(registered_oens: &[i32], renderer: bool, installed: &[i32], mode: i32, off: bool, store: &str) -> String {
+    use emon::{adapters as ka, engines as ke};
+    let class = crate::plan::platform_class();
+    let mut engines = Vec::new();
+    for i in 0..ke::pk_engine_count() {
+        let eng = ke::pk_engine_at(i);
+        if ke::pk_engine_on(eng, class) == 0 {
+            continue;
+        }
+        let name = eng_name(eng);
+        let registered = if ke::pk_engine_kind(eng) == ke::ekind_render() { renderer } else { ke::pk_engine_on(eng, class) == 1 && registered_oens.contains(&ke::pk_engine_oen(eng)) };
+        let rows: Vec<[i32; 4]> = if ke::pk_engine_kind(eng) == ke::ekind_ocr() && ke::pk_engine_needs(eng) != 0 { resolve_rows(&[eng], &[], false, installed).unwrap_or_default() } else { Vec::new() };
+        let missing: Vec<&[i32; 4]> = rows.iter().filter(|r| r[0] == ke::pstate_missing()).collect();
+        let state = ka::ad_engine_state(registered as i32, ke::pk_engine_impl(eng), ke::pk_engine_needs(eng), missing.len() as i32, mode, off as i32);
+        let mut state_name = String::new();
+        ka::est_emit_name(&mut state_name, state);
+        let reason = if !registered {
+            "no adapter is registered for it".to_string()
+        } else if state == ka::est_unavailable() {
+            if off { "EMON_OFFLINE=1".to_string() } else { "a pack is missing and the pack mode does not fetch".to_string() }
+        } else {
+            String::new()
+        };
+        let mut kind = String::new();
+        ke::ekind_emit_name(&mut kind, ke::pk_engine_kind(eng));
+        let mut imp = String::new();
+        ke::eimpl_emit_name(&mut imp, ke::pk_engine_impl(eng));
+        let mut role = String::new();
+        ke::erole_emit_name(&mut role, ke::pk_role_default(eng, class));
+        let needs: Vec<String> = rows
+            .iter()
+            .filter(|r| r[2] > 0)
+            .map(|r| {
+                let info = pack_line(r[2]);
+                format!("{{\"id\":{},\"kind\":{},\"bytes\":{},\"licence\":{},\"installed\":{}}}", js_s(&info.id), js_s(&info.kind), info.bytes, js_s(&info.licence), r[0] == ke::pstate_installed())
+            })
+            .collect();
+        let dl: u64 = missing.iter().map(|r| pack_line(r[2]).bytes).sum();
+        engines.push(format!(
+            "{{\"name\":{},\"kind\":{},\"impl\":{},\"state\":{},\"registered\":{},\"calibrated\":{},\"caps\":{},\"oen\":{},\"role\":{},\"needs\":[{}],\"download_bytes\":{},\"reason\":{}}}",
+            js_s(&name), js_s(&kind), js_s(&imp), js_s(&state_name), registered, ke::pk_engine_calibrated(eng) == 1, ke::pk_engine_caps(eng), ke::pk_engine_oen(eng), js_s(&role), needs.join(","), dl, js_s(&reason)
+        ));
+    }
+    let mut pcls = String::new();
+    ke::pcls_emit_name(&mut pcls, class);
+    let mut m = String::new();
+    ke::pfetch_emit_name(&mut m, mode);
+    format!("{{\"platform\":{},\"mode\":{},\"offline\":{},\"store\":{},\"engines\":[{}]}}", js_s(&pcls), js_s(&m), off, js_s(store), engines.join(","))
+}
+
+fn resolve_rows(engines: &[i32], langs: &[i32], osd: bool, installed: &[i32]) -> Result<Vec<[i32; 4]>, String> {
+    use emon::engines as ke;
+    let (mut l, mut e, mut i) = (pack_cells(langs), pack_cells(engines), pack_cells(installed));
+    let (mut out, mut scratch) = (Cells::new(), Cells::new());
+    let r = ke::pk_resolve(crate::plan::platform_class(), if osd { ke::pkf_osd() } else { 0 }, &mut l, &mut e, &mut i, &mut out, &mut scratch);
+    if r != 0 {
+        let mut msg = String::new();
+        ke::pk_explain(r, &mut out, &mut msg);
+        return Err(msg);
+    }
+    Ok((0..crate::port::cells_len(&out) / 4).map(|k| [crate::port::cells_at(&out, 4 * k), crate::port::cells_at(&out, 4 * k + 1), crate::port::cells_at(&out, 4 * k + 2), crate::port::cells_at(&out, 4 * k + 3)]).collect())
+}
+
+/// D896's `prepare(options)` over the options text (the grammar `Engine` parses), the packs held, the mode and offline: the C ABI's JSON.
+pub fn pack_prepare(options: &str, installed: &[i32], mode: i32, off: bool) -> Result<String, String> {
+    use emon::{adapters as ka, engines as ke};
+    let p = crate::engine::parse_options(options)?;
+    let never = p.options.ocr == crate::engine::OcrPolicy::Never;
+    let mut engines = vec![p.options.ocr_engine.registry_engine()];
+    if p.options.ocr_engine == crate::engine::OcrEngine::PpOcr {
+        engines.push(ke::eng_ppocr());
+    }
+    let osd = !never && p.options.ocr_engine.uses_tesseract();
+    let mut langs: Vec<i32> = Vec::new();
+    if let Some(l) = &p.options.locale {
+        let mut c = Cells::new();
+        for ch in l.chars() {
+            crate::port::cells_push(&mut c, ch as i32);
+        }
+        let lg = emon::scan::sc_lang(&mut c);
+        if lg > 0 {
+            langs.push(lg * 256);
+        }
+    }
+    let (rows, verdict): (Vec<[i32; 4]>, i32) = if never {
+        (Vec::new(), ka::pver_ready())
+    } else {
+        let (mut l, mut e, mut i) = (pack_cells(&langs), pack_cells(&engines), pack_cells(installed));
+        let (mut out, mut scratch) = (Cells::new(), Cells::new());
+        let r = ke::pk_resolve(crate::plan::platform_class(), if osd { ke::pkf_osd() } else { 0 }, &mut l, &mut e, &mut i, &mut out, &mut scratch);
+        if r != 0 {
+            let mut msg = String::new();
+            ke::pk_explain(r, &mut out, &mut msg);
+            return Err(msg);
+        }
+        let rows = (0..crate::port::cells_len(&out) / 4).map(|k| [crate::port::cells_at(&out, 4 * k), crate::port::cells_at(&out, 4 * k + 1), crate::port::cells_at(&out, 4 * k + 2), crate::port::cells_at(&out, 4 * k + 3)]).collect();
+        (rows, ka::ad_verdict(&mut out, mode, off as i32))
+    };
+    let mut vname = String::new();
+    ka::pver_emit_name(&mut vname, verdict);
+    let lang_name = |l: i32| -> String { [(l >> 24) & 255, (l >> 16) & 255, (l >> 8) & 255].iter().filter(|c| **c > 0).map(|c| *c as u8 as char).collect() };
+    let mut packs_json = Vec::new();
+    let mut unsupported = Vec::new();
+    let (mut missing, mut missing_bytes, mut conditional, mut conditional_bytes) = (0, 0u64, 0, 0u64);
+    for r in &rows {
+        if r[0] == ke::pstate_unsupported() {
+            unsupported.push(format!("{{\"engine\":{},\"language\":{}}}", js_s(&eng_name(r[1])), js_s(&lang_name(r[3]))));
+            continue;
+        }
+        let info = pack_line(r[2]);
+        let mut st = String::new();
+        ke::pstate_emit_name(&mut st, r[0]);
+        if r[0] == ke::pstate_missing() {
+            missing += 1;
+            missing_bytes += info.bytes;
+        }
+        if r[0] == ke::pstate_conditional() {
+            conditional += 1;
+            conditional_bytes += info.bytes;
+        }
+        packs_json.push(format!("{{\"id\":{},\"state\":{},\"engine\":{},\"kind\":{},\"bytes\":{},\"licence\":{},\"rev\":{}}}", js_s(&info.id), js_s(&st), js_s(&info.engine), js_s(&info.kind), info.bytes, js_s(&info.licence), info.rev));
+    }
+    let engine_names: Vec<String> = if never { Vec::new() } else { engines.iter().map(|e| js_s(&eng_name(*e))).collect() };
+    let lang_names: Vec<String> = if never { Vec::new() } else if langs.is_empty() { vec![js_s("eng")] } else { langs.iter().map(|l| js_s(&lang_name(*l))).collect() };
+    let mut m = String::new();
+    ke::pfetch_emit_name(&mut m, mode);
+    Ok(format!(
+        "{{\"verdict\":{},\"mode\":{},\"offline\":{},\"engines\":[{}],\"languages\":[{}],\"osd\":{},\"packs\":[{}],\"unsupported\":[{}],\"missing\":{},\"missing_bytes\":{},\"conditional\":{},\"conditional_bytes\":{}}}",
+        js_s(&vname), js_s(&m), off, engine_names.join(","), lang_names.join(","), osd, packs_json.join(","), unsupported.join(","), missing, missing_bytes, conditional, conditional_bytes
+    ))
+}

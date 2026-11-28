@@ -137,7 +137,7 @@ ships to fill it.
   it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the csharp host: 409 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the csharp host: 479 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -353,9 +353,13 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.OcrEngines#Fulfil(emon.Planrun.Request,Dictionary<int,emon.Port.Bitmap>,bool)` | `emon.Planrun.Answer` |
 | `emon.Api.OcrEngines#Load(string,string,string)` | `void` |
 | `emon.Api.OcrEngines#Notes()` | `List<string>` |
+| `emon.Api.OcrEngines#Prepare(string)` | `string` |
 | `emon.Api.OcrEngines#Producer()` | `List<string[]>` |
 | `emon.Api.OcrEngines#SetAdapterDir(string)` | `void` |
 | `emon.Api.OcrEngines#SetTessdata(string)` | `void` |
+| `emon.Api.OcrEngines#State()` | `string` |
+| `emon.Api.OcrEngines.Packs` | `Packs { get; }` |
+| `emon.Api.OcrEngines.RendererRegistered` | `bool` |
 | `emon.Api.Options` | `sealed class` |
 | `emon.Api.Options#Copy()` | `Options` |
 | `emon.Api.Options#Defaults()` | `static Options` |
@@ -438,6 +442,72 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.Api.Options.Parsed.Producer` | `readonly List<string[]>` |
 | `emon.Api.Options.Parsed.Record` | `bool` |
 | `emon.Api.Options.PpOcr` | `bool` |
+| `emon.Api.PackAction` | `enum` |
+| `emon.Api.PackAction.Decline` | `const = 3` |
+| `emon.Api.PackAction.Fetch` | `const = 1` |
+| `emon.Api.PackAction.None` | `const = 0` |
+| `emon.Api.PackAction.Provide` | `const = 2` |
+| `emon.Api.PackAction.Substitute` | `const = 4` |
+| `emon.Api.PackDecision` | `sealed class` |
+| `emon.Api.PackDecision#Decline()` | `static PackDecision` |
+| `emon.Api.PackDecision#Fetch()` | `static PackDecision` |
+| `emon.Api.PackDecision#Provide(byte[])` | `static PackDecision` |
+| `emon.Api.PackDecision#ProvidePath(string)` | `static PackDecision` |
+| `emon.Api.PackDecision#Substitute(string)` | `static PackDecision` |
+| `emon.Api.PackDecision.Action` | `PackAction` |
+| `emon.Api.PackDecision.Data` | `byte[]` |
+| `emon.Api.PackDecision.Engine` | `string` |
+| `emon.Api.PackDecision.Path` | `string` |
+| `emon.Api.PackEvent` | `sealed class` |
+| `emon.Api.PackEvent.ByApp` | `bool` |
+| `emon.Api.PackEvent.Done` | `long` |
+| `emon.Api.PackEvent.Engine` | `string` |
+| `emon.Api.PackEvent.Kind` | `PackEventKind` |
+| `emon.Api.PackEvent.Message` | `string` |
+| `emon.Api.PackEvent.Pack` | `string` |
+| `emon.Api.PackEvent.Total` | `long` |
+| `emon.Api.PackEventKind` | `enum` |
+| `emon.Api.PackEventKind.Cancelled` | `const = 5` |
+| `emon.Api.PackEventKind.Done` | `const = 3` |
+| `emon.Api.PackEventKind.Failed` | `const = 4` |
+| `emon.Api.PackEventKind.Progress` | `const = 2` |
+| `emon.Api.PackEventKind.Start` | `const = 1` |
+| `emon.Api.PackFile` | `sealed class` |
+| `emon.Api.PackFile#Matches(byte[])` | `bool` |
+| `emon.Api.PackFile.Bytes` | `long` |
+| `emon.Api.PackFile.Name` | `string` |
+| `emon.Api.PackFile.Sha` | `byte[]` |
+| `emon.Api.PackInfo` | `sealed class` |
+| `emon.Api.PackInfo.Bytes` | `long` |
+| `emon.Api.PackInfo.EngineName` | `string` |
+| `emon.Api.PackInfo.Files` | `List<PackFile>` |
+| `emon.Api.PackInfo.Id` | `string` |
+| `emon.Api.PackInfo.KindName` | `string` |
+| `emon.Api.PackInfo.Licence` | `string` |
+| `emon.Api.PackInfo.Rev` | `int` |
+| `emon.Api.PackRequest` | `sealed class` |
+| `emon.Api.PackRequest.Bytes` | `long` |
+| `emon.Api.PackRequest.Engine` | `string` |
+| `emon.Api.PackRequest.Kind` | `string` |
+| `emon.Api.PackRequest.Licence` | `string` |
+| `emon.Api.PackRequest.Pack` | `string` |
+| `emon.Api.PackRequest.Reason` | `string` |
+| `emon.Api.PackRequest.RequestEngine` | `string` |
+| `emon.Api.PackRequest.Rev` | `int` |
+| `emon.Api.Packs` | `sealed class` |
+| `emon.Api.Packs#AddDir(string)` | `void` |
+| `emon.Api.Packs#Cancel()` | `void` |
+| `emon.Api.Packs#DefaultStore()` | `static string` |
+| `emon.Api.Packs#Ensure(string[])` | `void` |
+| `emon.Api.Packs#Offline()` | `static bool` |
+| `emon.Api.Packs#OnPackEvent(Func<PackEvent,bool>)` | `void` |
+| `emon.Api.Packs#OnPackNeeded(Func<PackRequest,PackDecision>)` | `void` |
+| `emon.Api.Packs#SetFetcher(PackFetcher)` | `void` |
+| `emon.Api.Packs#SetMode(int)` | `void` |
+| `emon.Api.Packs#SetStore(string)` | `void` |
+| `emon.Api.Packs#TakeNotes()` | `List<string>` |
+| `emon.Api.Packs.Mode` | `int { get; }` |
+| `emon.Api.Packs.Store` | `string { get; }` |
 | `emon.Api.Reading` | `sealed class` |
 | `emon.Api.Reading.Binary` | `emon.Port.Bitmap` |
 | `emon.Api.Reading.Reason` | `string` |

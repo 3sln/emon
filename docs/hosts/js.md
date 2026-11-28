@@ -183,7 +183,7 @@ height, rgb }, close() } }` and an OCR port is `async (request) => result`; see 
 - The WebAssembly instance, a Model's handle and the constructors of `Emon`, `Model` and `Asset` are not public API.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the js host: 69 entries (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the js host: 72 entries (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -215,11 +215,14 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `@3sln/emon::Engines#add` | `async (adapter)` |
 | `@3sln/emon::Engines#allowRemote` | `(allow)` |
 | `@3sln/emon::Engines#close` | `async ()` |
-| `@3sln/emon::Engines#constructor` | `(w)` |
+| `@3sln/emon::Engines#constructor` | `(w, optionLines = () => '')` |
 | `@3sln/emon::Engines#describe` | `()` |
 | `@3sln/emon::Engines#notes` | `()` |
+| `@3sln/emon::Engines#packs` | `property` |
 | `@3sln/emon::Engines#port` | `()` |
+| `@3sln/emon::Engines#prepare` | `(options = {})` |
 | `@3sln/emon::Engines#producer` | `()` |
+| `@3sln/emon::Engines#state` | `({ renderer = false } = {})` |
 | `@3sln/emon::Model` | `class` |
 | `@3sln/emon::Model#[Symbol.dispose]` | `()` |
 | `@3sln/emon::Model#assets` | `get accessor` |

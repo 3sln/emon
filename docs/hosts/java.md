@@ -156,7 +156,7 @@ ships to fill it.
   cannot hide a package; `api/surface.edn` lists it as accidental, and it may change in any release.
 
 <!-- bb docs:begin api-index -->
-<details><summary>The public API of the java host: 431 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
+<details><summary>The public API of the java host: 490 entries, and 13 provisional (generated from <code>api/surface.edn</code>)</summary>
 
 Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per name; members are `Owner.member` or `Owner#member` or `Owner::member`.
 
@@ -465,9 +465,13 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.OcrEngines#fulfil(Planrun.Request,Map<Integer,Port.Bitmap>,boolean)` | `Planrun.Answer` |
 | `emon.api.OcrEngines#load(String,String,String)` | `void` |
 | `emon.api.OcrEngines#notes()` | `List<String>` |
+| `emon.api.OcrEngines#packs()` | `Packs` |
+| `emon.api.OcrEngines#prepare(String)` | `String` |
 | `emon.api.OcrEngines#producer()` | `List<String[]>` |
+| `emon.api.OcrEngines#rendererPresent(boolean)` | `void` |
 | `emon.api.OcrEngines#setAdapterDir(String)` | `void` |
 | `emon.api.OcrEngines#setTessdata(String)` | `void` |
+| `emon.api.OcrEngines#state()` | `String` |
 | `emon.api.OcrEngines.ASYNC` | `static final int = 1` |
 | `emon.api.OcrEngines.Adapter` | `interface extends AutoCloseable` |
 | `emon.api.OcrEngines.Adapter#close()` | `void` |
@@ -579,6 +583,61 @@ Frozen: `bb api-diff` fails on a removal or a change (DEVLOG D527). One row per 
 | `emon.api.Options.ocrEngine` | `int` |
 | `emon.api.Options.ocrScope` | `OcrScope` |
 | `emon.api.Options.ppOcr` | `boolean` |
+| `emon.api.Packs` | `final class` |
+| `emon.api.Packs#addDir(Path)` | `void` |
+| `emon.api.Packs#cancel()` | `void` |
+| `emon.api.Packs#defaultStore()` | `static Path` |
+| `emon.api.Packs#ensure(String...)` | `void` |
+| `emon.api.Packs#offline()` | `static boolean` |
+| `emon.api.Packs#onPackEvent(Predicate<PackEvent>)` | `void` |
+| `emon.api.Packs#onPackNeeded(Function<PackRequest,PackDecision>)` | `void` |
+| `emon.api.Packs#setFetcher(Fetcher)` | `void` |
+| `emon.api.Packs#setMode(Mode)` | `void` |
+| `emon.api.Packs#setStore(Path)` | `void` |
+| `emon.api.Packs#store()` | `Path` |
+| `emon.api.Packs#takeNotes()` | `List<String>` |
+| `emon.api.Packs.DECLINE` | `static final int` |
+| `emon.api.Packs.EVENT_CANCELLED` | `static final int` |
+| `emon.api.Packs.EVENT_DONE` | `static final int` |
+| `emon.api.Packs.EVENT_FAILED` | `static final int` |
+| `emon.api.Packs.EVENT_PROGRESS` | `static final int` |
+| `emon.api.Packs.EVENT_START` | `static final int = 1` |
+| `emon.api.Packs.FETCH` | `static final int = 1` |
+| `emon.api.Packs.Fetcher` | `interface` |
+| `emon.api.Packs.Fetcher#fetch(String,String,long,java.util.function.LongPredicate)` | `byte[] throws Exception` |
+| `emon.api.Packs.Mode` | `enum` |
+| `emon.api.Packs.Mode.AUTO` | `const` |
+| `emon.api.Packs.Mode.CACHE` | `const` |
+| `emon.api.Packs.Mode.NEVER` | `const` |
+| `emon.api.Packs.PROVIDE` | `static final int` |
+| `emon.api.Packs.PackDecision` | `static final class` |
+| `emon.api.Packs.PackDecision#decline()` | `static PackDecision` |
+| `emon.api.Packs.PackDecision#fetch()` | `static PackDecision` |
+| `emon.api.Packs.PackDecision#provideBytes(byte[])` | `static PackDecision` |
+| `emon.api.Packs.PackDecision#providePath(String)` | `static PackDecision` |
+| `emon.api.Packs.PackDecision#substitute(String)` | `static PackDecision` |
+| `emon.api.Packs.PackDecision.action` | `int` |
+| `emon.api.Packs.PackDecision.data` | `byte[]` |
+| `emon.api.Packs.PackDecision.engine` | `String` |
+| `emon.api.Packs.PackDecision.path` | `String` |
+| `emon.api.Packs.PackEvent` | `static final class` |
+| `emon.api.Packs.PackEvent.byApp` | `final boolean` |
+| `emon.api.Packs.PackEvent.done` | `final long` |
+| `emon.api.Packs.PackEvent.engine` | `final String` |
+| `emon.api.Packs.PackEvent.kind` | `final int` |
+| `emon.api.Packs.PackEvent.message` | `final String` |
+| `emon.api.Packs.PackEvent.pack` | `final String` |
+| `emon.api.Packs.PackEvent.total` | `final long` |
+| `emon.api.Packs.PackRequest` | `static final class` |
+| `emon.api.Packs.PackRequest.bytes` | `final long` |
+| `emon.api.Packs.PackRequest.engine` | `final String` |
+| `emon.api.Packs.PackRequest.kind` | `final String` |
+| `emon.api.Packs.PackRequest.licence` | `final String` |
+| `emon.api.Packs.PackRequest.pack` | `final String` |
+| `emon.api.Packs.PackRequest.reason` | `final String` |
+| `emon.api.Packs.PackRequest.requestEngine` | `final String` |
+| `emon.api.Packs.PackRequest.rev` | `final int` |
+| `emon.api.Packs.SUBSTITUTE` | `static final int` |
 | `emon.api.RunStats` | `final class` |
 | `emon.api.RunStats.attempts` | `int` |
 | `emon.api.RunStats.bytesFetched` | `long` |
